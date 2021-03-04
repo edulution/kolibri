@@ -77,4 +77,33 @@ export const prefixToColourMap = {
     dark: '#C2185B',
     accent: '#E91E63',*/
   },
+  /*colors for new courses*/
+    'level 1': {
+      light: '#D1DDE6',
+      dark: '#0072CE',
+      accent: '#6CACE4',
+    },
+    'level 2': {
+      light: '#D4EBBE',
+      dark: '#509E2F',
+      accent: '#84BD00',
+    },
+    'level 3': {
+      light: '#E0DBE3',
+      dark: '#440099',
+      accent: '#7474C1',
+
+    },
+
+    
+    'level 4': {
+      light: '#BBDDE6',
+      dark: '#004B87',
+      accent: '#005EB8',
+  },
+  'level 5': {
+      light: '#F9E547',
+      dark: '#FFA300',
+      accent: '#FFC72C',
+    },
 };
