@@ -4,6 +4,7 @@
     :title="$tr('prerequisitesText')"
     :submitText="$tr('close')"
     :cancelText="$tr('goToLesson')"
+    :cancelDisabled="isLearner"
     @submit="close"
     @cancel="goToLesson"
   >
@@ -20,7 +21,7 @@
         </li>
       </ul>
 
-    </section> ￼
+    </section>
 
   </KModal>
 
@@ -29,7 +30,7 @@
 
 <script>
 
-  import { mapState } from 'vuex';
+  import { mapGetters, mapState } from 'vuex';
   import KModal from 'kolibri.coreVue.components.KModal';
   /*import { validateLinkObject } from 'kolibri.utils.validators';*/
   import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
@@ -47,6 +48,7 @@
       KRouterLink,
     },
     computed: {
+      ...mapGetters(['isLearner']),
       ...mapState('topicsTree', ['modalShown', 'link', 'prerequisites']),
     },
     methods: {
