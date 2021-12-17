@@ -277,7 +277,7 @@
       },
       getImagePath() {
         var today = new Date().getDate();
-        let numOfPhotos = (today % 5) + 1;
+        let numOfPhotos = (today % 17) + 1;
         return require('./background' + numOfPhotos + '.jpg');
       },
       backgroundImageStyle() {
