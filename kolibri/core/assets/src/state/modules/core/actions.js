@@ -206,20 +206,6 @@ export function setSession(store, { session, clientNow }) {
 }
 
 /**
- * Makes the program pause/delay.
- *
- * @param {int} the time to pause in milliseconds.
- */
-
-function sleep(milliseconds) {
-  const date = Date.now();
-  let currentDate = null;
-  do {
-    currentDate = Date.now();
-  } while (currentDate - date < milliseconds);
-}
-
-/**
  * Signs in user.
  *
  * @param {object} store The store.
@@ -383,7 +369,8 @@ export function initContentSession(store, { channelId, contentId, contentKind })
             })
           );
 
-          const summaryData = Object.assign({
+          const summaryData = Object.assign(
+            {
               channel_id: channelId,
               content_id: contentId,
               kind: contentKind,
@@ -415,7 +402,8 @@ export function initContentSession(store, { channelId, contentId, contentKind })
     })
   );
 
-  const sessionData = Object.assign({
+  const sessionData = Object.assign(
+    {
       channel_id: channelId,
       content_id: contentId,
       kind: contentKind,
@@ -568,9 +556,9 @@ export function updateProgress(store, { progressPercent, forceSave = false }) {
   // TODO rtibbles: Delegate this to the renderers?
   progressPercent = progressPercent || 0;
   const sessionProgress = Math.min(1, sessionLog.progress + progressPercent);
-  const summaryProgress = summaryLog.id ?
-    Math.min(1, summaryLog.progress_before_current_session + sessionProgress) :
-    0;
+  const summaryProgress = summaryLog.id
+    ? Math.min(1, summaryLog.progress_before_current_session + sessionProgress)
+    : 0;
 
   return _updateProgress(store, sessionProgress, summaryProgress, forceSave);
 }
@@ -597,9 +585,9 @@ export function updateTimeSpent(store, forceSave = false) {
 
   /* Calculate new times based on how much time has passed since last save */
   const sessionTime = intervalTimer.getNewTimeElapsed() + sessionLog.time_spent;
-  const summaryTime = summaryLog.id ?
-    sessionTime + summaryLog.time_spent_before_current_session :
-    0;
+  const summaryTime = summaryLog.id
+    ? sessionTime + summaryLog.time_spent_before_current_session
+    : 0;
 
   /* Update the logging state with new timing information */
   store.commit('SET_LOGGING_TIME', { sessionTime, summaryTime, currentTime: now() });
@@ -810,7 +798,8 @@ export function initMasteryLog(store, { masterySpacingTime, masteryCriterion }) 
 }
 
 export function updateMasteryAttemptState(
-  store, { currentTime, correct, complete, firstAttempt, hinted, answerState, simpleAnswer, error }
+  store,
+  { currentTime, correct, complete, firstAttempt, hinted, answerState, simpleAnswer, error }
 ) {
   store.commit('UPDATE_LOGGING_MASTERY', { currentTime, correct, firstAttempt, hinted, error });
   store.commit('UPDATE_LOGGING_ATTEMPT', {
