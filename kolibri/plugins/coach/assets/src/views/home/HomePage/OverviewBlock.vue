@@ -22,7 +22,7 @@
               {{ $tr('coach', {count: coachNames.length}) }}
             </KLabeledIcon>
             <template slot="value">
-              <TruncatedItemList :items="coachNames" /></template>
+            <TruncatedItemList :items="coachNames" /></template>
           </HeaderTableRow>
           <HeaderTableRow>
             <KLabeledIcon slot="key">
@@ -52,73 +52,74 @@
   </KPageContainer>
 </template>
 <script>
-import { mapActions, mapState, mapGetters } from 'vuex';
-import { localeCompare } from 'kolibri.utils.i18n';
-import commonCoach from '../../common';
-import { Modals } from '../../../constants';
-/*  import { SubscriptionModals } from '../../../constants/subscriptionsConstants';
-  import SubscribeModal from '../../SubscribeModal';*/
-import CoachUserCreateModal from './CoachUserCreateModal';
 
-export default {
-  name: 'OverviewBlock',
-  metaInfo() {
-    return {
-      className: this.getClassName,
-    };
-  },
-  components: {
-    /*SubscribeModal,*/
-    CoachUserCreateModal,
-  },
-  mixins: [commonCoach],
-  props: {
-    showOnlyActive: Boolean,
-  },
-  $trs: {
-    back: 'All classes',
-    changeClass: 'Change class',
-    coach: '{count, plural, one {Coach} other {Coaches}}',
-    learner: '{count, plural, one {Learner} other {Learners}}',
-    newUserButtonLabel: 'Create New Learner',
-    /*subscriptionButtonLabel: 'Subscribe to Channels',*/
-  },
-  computed: {
-    ...mapGetters(['classListPageEnabled']),
-    ...mapState('userManagement', ['facilityUsers', 'modalShown']),
-    Modals: () => Modals,
-    /*SubscriptionModals: () => SubscriptionModals,*/
-    coachNames() {
-      return this.coaches.map(coach => coach.name);
+  import { mapActions, mapState, mapGetters } from 'vuex';
+  import { localeCompare } from 'kolibri.utils.i18n';
+  import commonCoach from '../../common';
+  import { Modals } from '../../../constants';
+  /*  import { SubscriptionModals } from '../../../constants/subscriptionsConstants';
+    import SubscribeModal from '../../SubscribeModal';*/
+  import CoachUserCreateModal from './CoachUserCreateModal';
+
+  export default {
+    name: 'OverviewBlock',
+    metaInfo() {
+      return {
+        className: this.getClassName,
+      };
     },
-    learnerNames() {
-      let learners = this.learners;
-      if (this.showOnlyActive) {
-        learners = this.filterByActive(learners);
-      }
-      return learners.map(learner => learner.name);
+    components: {
+      /*SubscribeModal,*/
+      CoachUserCreateModal,
     },
-    thisClassName() {
-      return this.className;
+    mixins: [commonCoach],
+    props: {
+      showOnlyActive: Boolean,
     },
-    thisClassId() {
-      return this.getClassId;
+    $trs: {
+      back: 'All classes',
+      changeClass: 'Change class',
+      coach: '{count, plural, one {Coach} other {Coaches}}',
+      learner: '{count, plural, one {Learner} other {Learners}}',
+      newUserButtonLabel: 'Create New Learner',
+      /*subscriptionButtonLabel: 'Subscribe to Channels',*/
     },
-  },
-  methods: {
-    ...mapActions('userManagement', ['displayModal']),
-    active(learner) {
-      return this.activeLearners.includes(learner.id);
+    computed: {
+      ...mapGetters(['classListPageEnabled']),
+      ...mapState('userManagement', ['facilityUsers', 'modalShown']),
+      Modals: () => Modals,
+      /*SubscriptionModals: () => SubscriptionModals,*/
+      coachNames() {
+        return this.coaches.map(coach => coach.name);
+      },
+      learnerNames() {
+        let learners = this.learners;
+        if (this.showOnlyActive) {
+          learners = this.filterByActive(learners);
+        }
+        return learners.map(learner => learner.name);
+      },
+      thisClassName() {
+        return this.className;
+      },
+      thisClassId() {
+        return this.getClassId;
+      },
     },
-    filterByActive(learners) {
-      const sortByKey = 'username';
-      const predicate = learner => this.active(learner);
-      return learners.filter(predicate).sort((a, b) => {
-        return localeCompare(a[sortByKey], b[sortByKey]);
-      });
+    methods: {
+      ...mapActions('userManagement', ['displayModal']),
+      active(learner) {
+        return this.activeLearners.includes(learner.id);
+      },
+      filterByActive(learners) {
+        const sortByKey = 'username';
+        const predicate = learner => this.active(learner);
+        return learners.filter(predicate).sort((a, b) => {
+          return localeCompare(a[sortByKey], b[sortByKey]);
+        });
+      },
     },
-  },
-};
+  };
 
 </script>
 <style lang="scss" scoped></style>
