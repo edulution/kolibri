@@ -7,19 +7,20 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
       <p>
         <BackLink
           :to="classRoute('HomePage', {})"
-          :text="$tr('back')"
+          :text="coreString('classHome')"
         />
       </p>
 
       <ActivityList
-        :notificationParams="notificationParams"
-        :noActivityString="$tr('noActivity')"
+        :noActivityString="$tr('noActivityLabel')"
         embeddedPageName="HomeActivityPage"
       />
 
@@ -31,6 +32,7 @@
 
 <script>
 
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import { nStringsMixin } from '../common/notifications/notificationStrings';
   import ActivityList from '../common/notifications/ActivityList';
@@ -40,19 +42,13 @@
     components: {
       ActivityList,
     },
-    mixins: [commonCoach, nStringsMixin],
-    computed: {
-      notificationParams() {
-        return {
-          collection_id: this.$route.params.classId,
-        };
-      },
-    },
+    mixins: [commonCoach, nStringsMixin, commonCoreStrings],
     $trs: {
-      back: 'Class home',
-      classActivity: 'Class activity',
-      noActivity: 'No activity in your class',
-      viewMore: 'View more',
+      noActivityLabel: {
+        message: 'No activity in your class',
+        context:
+          "Message displayed in the 'Class activity' section when there has been no activity in the class made by learners.",
+      },
     },
   };
 

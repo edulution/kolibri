@@ -8,7 +8,7 @@
         :key="index"
         :selected="isSelected(index)"
         :interaction="interaction"
-        @click.native="setCurrentInteractionIndex(index)"
+        @click.native="!isSelected(index) ? setCurrentInteractionIndex(index) : null"
       />
     </div>
 
@@ -23,17 +23,13 @@
 
 <script>
 
-  import responsiveElement from 'kolibri.coreVue.mixins.responsiveElement';
+  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
   import InteractionItem from './InteractionItem';
 
   export default {
     name: 'InteractionList',
     components: { InteractionItem },
-    mixins: [responsiveElement],
-    $trs: {
-      currAnswer: 'Attempt {value, number, integer}',
-      noInteractions: 'No attempts made on this question',
-    },
+    mixins: [responsiveElementMixin],
     props: {
       interactions: {
         type: Array,
@@ -62,6 +58,18 @@
       },
       isSelected(index) {
         return Number(this.selectedInteractionIndex) === index;
+      },
+    },
+    $trs: {
+      currAnswer: {
+        message: 'Attempt {value, number, integer}',
+        context:
+          'This text appears on a report when a coach reviews the answers a learner has given for a quiz. It can indicate how many times the learner has tried to answer a question, for example.\n\nThis helps the coach understand which questions learners had difficulties answering correctly.',
+      },
+      noInteractions: {
+        message: 'No attempts made on this question',
+        context:
+          "When a learner views their report, they can see how many times they attempted to answer a question in a quiz.\n\nIf the learner hasn't made any attempts at all to answer the question this message displays beside the question.",
       },
     },
   };

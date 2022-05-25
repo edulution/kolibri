@@ -1,25 +1,37 @@
 <template>
 
-  <KNavbar v-if="classId">
-    <KNavbarLink
-      :title="$tr('home')"
+  <Navbar v-if="classId">
+    <NavbarLink
+      :title="coreString('classHome')"
       :link="navRoute('HomePage')"
     >
-      <mat-svg name="dashboard" category="action" />
-    </KNavbarLink>
-    <KNavbarLink
-      :title="coachStrings.$tr('reportsLabel')"
+      <KIcon
+        icon="dashboard"
+        :color="$themeTokens.textInverted"
+        style="top: 0; width: 24px; height: 24px;"
+      />
+    </NavbarLink>
+    <NavbarLink
+      :title="coachString('reportsLabel')"
       :link="navRoute(PageNames.REPORTS_PAGE)"
     >
-      <mat-svg name="insert_chart" category="editor" />
-    </KNavbarLink>
-    <KNavbarLink
+      <KIcon
+        icon="reports"
+        :color="$themeTokens.textInverted"
+        style="top: 0; width: 24px; height: 24px;"
+      />
+    </NavbarLink>
+    <NavbarLink
       :title="$tr('plan')"
       :link="navRoute(PageNames.PLAN_PAGE)"
     >
-      <mat-svg name="edit" category="image" />
-    </KNavbarLink>
-  </KNavbar>
+      <KIcon
+        icon="edit"
+        :color="$themeTokens.textInverted"
+        style="top: 0; width: 24px; height: 24px;"
+      />
+    </NavbarLink>
+  </Navbar>
 
 </template>
 
@@ -27,22 +39,19 @@
 <script>
 
   import { mapState } from 'vuex';
-  import KNavbar from 'kolibri.coreVue.components.KNavbar';
-  import KNavbarLink from 'kolibri.coreVue.components.KNavbarLink';
+  import Navbar from 'kolibri.coreVue.components.Navbar';
+  import NavbarLink from 'kolibri.coreVue.components.NavbarLink';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { PageNames } from '../constants';
   import { coachStringsMixin } from './common/commonCoachStrings';
 
   export default {
     name: 'TopNavbar',
     components: {
-      KNavbar,
-      KNavbarLink,
+      Navbar,
+      NavbarLink,
     },
-    mixins: [coachStringsMixin],
-    $trs: {
-      home: 'Class Home',
-      plan: 'Plan',
-    },
+    mixins: [coachStringsMixin, commonCoreStrings],
     computed: {
       ...mapState('classSummary', { classId: 'id' }),
       PageNames() {
@@ -52,6 +61,13 @@
     methods: {
       navRoute(name) {
         return { name, params: { classId: this.classId } };
+      },
+    },
+    $trs: {
+      plan: {
+        message: 'Plan',
+        context:
+          "Translate as a VERB. Refers to the 'Plan' tab where coaches manage lessons, quizzes, and groups.",
       },
     },
   };

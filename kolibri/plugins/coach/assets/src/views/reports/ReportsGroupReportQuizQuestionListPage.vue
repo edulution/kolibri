@@ -1,36 +1,20 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="true"
-  >
-
-    <TopNavbar slot="sub-nav" />
-
-    <KPageContainer>
-
-      <ReportsGroupReportQuizHeader />
-
-      <h2>{{ coachStrings.$tr('overallLabel') }}</h2>
-      <CoreTable :emptyMessage="coachStrings.$tr('questionListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('questionLabel') }}</th>
-            <th>{{ coachStrings.$tr('helpNeededLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
+  <ReportsQuizBaseListPage @export="exportCSV">
+    <CoreTable :emptyMessage="coachString('questionListEmptyState')">
+      <template #headers>
+        <th>{{ coachString('questionLabel') }}</th>
+        <th>{{ coachString('helpNeededLabel') }}</th>
+      </template>
+      <template #tbody>
+        <transition-group tag="tbody" name="list">
           <tr v-for="tableRow in table" :key="tableRow.question_id">
             <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" question />
-                <KRouterLink
-                  :text="tableRow.title"
-                  :to="questionLink(tableRow.question_id)"
-                />
-              </KLabeledIcon>
+              <KRouterLink
+                :text="tableRow.title"
+                :to="questionLink(tableRow.question_id)"
+                icon="question"
+              />
             </td>
             <td>
               <LearnerProgressRatio
@@ -43,9 +27,9 @@
             </td>
           </tr>
         </transition-group>
-      </CoreTable>
-    </KPageContainer>
-  </CoreBase>
+      </template>
+    </CoreTable>
+  </ReportsQuizBaseListPage>
 
 </template>
 
@@ -55,25 +39,32 @@
   import { mapGetters } from 'vuex';
   import commonCoach from '../common';
   import LearnerProgressRatio from '../common/status/LearnerProgressRatio';
-  import ReportsGroupReportQuizHeader from './ReportsGroupReportQuizHeader';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsQuizBaseListPage from './ReportsQuizBaseListPage';
   import { PageNames } from './../../constants';
 
   export default {
     name: 'ReportsGroupReportQuizQuestionListPage',
     components: {
-      ReportsGroupReportQuizHeader,
+      ReportsQuizBaseListPage,
       LearnerProgressRatio,
     },
     mixins: [commonCoach],
     computed: {
       ...mapGetters('questionList', ['difficultQuestions']),
+      exam() {
+        return this.examMap[this.$route.params.quizId];
+      },
+      group() {
+        return this.groupMap[this.$route.params.groupId];
+      },
       table() {
-        const mapped = this.difficultQuestions.map(question => {
+        return this.difficultQuestions.map(question => {
           const tableRow = {};
           Object.assign(tableRow, question);
           return tableRow;
         });
-        return mapped;
       },
     },
     methods: {
@@ -83,9 +74,24 @@
           quizId: this.$route.params.quizId,
         });
       },
-    },
-    $trs: {
-      avgTimeSpentLabel: 'Average time spent',
+      exportCSV() {
+        const columns = [
+          {
+            name: this.coachString('questionLabel'),
+            key: 'title',
+          },
+          ...csvFields.helpNeeded(),
+        ];
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          group: this.group.name,
+          resource: this.exam.title,
+          difficultQuestions: this.coachString('difficultQuestionsLabel'),
+        });
+
+        exporter.export(this.table);
+      },
     },
   };
 
@@ -93,6 +99,8 @@
 
 
 <style lang="scss" scoped>
+
+  @import '../common/print-table';
 
   .stats {
     margin-right: 16px;

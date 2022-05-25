@@ -5,6 +5,10 @@
 # can be used to pass in a pre-build pex file or fixtures for tests
 docker/mnt/
 
+# other docker files
+docker-whl.cid
+docker-whl.iid
+
 # C extensions
 *.so
 
@@ -28,8 +32,6 @@ lib
 lib64
 pip
 
-# Build configurations
-kolibri/utils/build_config
 # This can be dynamically changed at build time, and it should never change otherwise
 requirements.txt
 
@@ -44,8 +46,8 @@ htmlcov/
 kolibrihome_test/
 
 # Translations
-*.mo
-kolibri/locale/en/
+kolibri/locale/**/LC_MESSAGES/*.csv
+kolibri/locale/en/LC_MESSAGES/profiles/*
 
 # Mr Developer
 .mr.developer.cfg
@@ -94,6 +96,9 @@ js-dist
 # Content App
 storage/*
 kolibri/content/content_db/*.sqlite3
+kolibri/core/content/contentschema/migrations/*
+# Check in h5p specific files
+!kolibri/core/content/static/h5p/
 
 # virtual environment
 venv/
@@ -120,6 +125,7 @@ build_tools/crowdin-cli.jar
 
 # Ignore pytest cache directory
 .pytest_cache/
+.pytest_kolibri_home
 
 # ignore source font files
 *.ttf
@@ -128,3 +134,12 @@ build_tools/crowdin-cli.jar
 
 # SQLite file
 SQLITE_MAX_VARIABLE_NUMBER.cache
+
+# don't ignore the TTF font for H5P
+!h5p-core-18.ttf
+
+# static c extensions cache folder
+cext_cache
+
+# ignore gzipped files
+*.gz

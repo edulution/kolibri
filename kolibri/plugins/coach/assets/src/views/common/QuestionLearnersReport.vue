@@ -1,56 +1,65 @@
 <template>
 
-  <MultiPaneLayout ref="multiPaneLayout">
-    <div slot="header">
-      <h1 class="title item-detail-section">
-        <ContentIcon
-          class="item-detail-icons"
-          :kind="kind"
-          :showTooltip="false"
+  <KPageContainer :topMargin="0">
+    <MultiPaneLayout ref="multiPaneLayout">
+      <template #header>
+        <div>
+          <h1 class="item-detail-section title">
+            <ContentIcon
+              class="item-detail-icons"
+              :kind="kind"
+              :showTooltip="false"
+            />
+            {{ title }}
+            <CoachContentLabel
+              class="item-detail-icons"
+              :value="exercise.num_coach_contents || 0"
+              :isTopic="false"
+            />
+          </h1>
+        </div>
+      </template>
+
+      <template v-if="learners.length > 0" #aside>
+        <QuestionDetailLearnerList
+          :learners="learners"
+          :selectedLearnerNumber="learnerIndex"
+          @select="navigateToNewAttempt($event)"
         />
-        {{ title }}
-        <CoachContentLabel
-          class="item-detail-icons"
-          :value="exercise.num_coach_contents || 0"
-          :isTopic="false"
-        />
-      </h1>
-    </div>
-    <template v-if="learners.length > 0">
-      <QuestionDetailLearnerList
-        slot="aside"
-        :learners="learners"
-        :selectedLearnerNumber="learnerIndex"
-        @select="navigateToNewAttempt($event)"
-      />
-      <div slot="main" class="exercise-section" :style="{ backgroundColor: $coreBgLight }">
-        <KCheckbox
-          :label="coachStrings.$tr('showCorrectAnswerLabel')"
-          :checked="showCorrectAnswer"
-          @change="toggleShowCorrectAnswer"
-        />
-        <InteractionList
-          v-if="!showCorrectAnswer"
-          :interactions="currentInteractionHistory"
-          :selectedInteractionIndex="interactionIndex"
-          @select="navigateToNewInteraction($event)"
-        />
-        <ContentRenderer
-          v-if="currentInteraction"
-          :itemId="currentLearner.item"
-          :assessment="true"
-          :allowHints="false"
-          :kind="exercise.kind"
-          :files="exercise.files"
-          :available="exercise.available"
-          :answerState="answerState"
-          :showCorrectAnswer="showCorrectAnswer"
-          :interactive="false"
-          :extraFields="exercise.extra_fields"
-        />
-      </div>
-    </template>
-  </MultiPaneLayout>
+      </template>
+      <template v-if="learners.length > 0" #main>
+        <div
+          class="exercise-section"
+          :style="{ backgroundColor: $themeTokens.surface }"
+        >
+          <KCheckbox
+            :label="coreString('showCorrectAnswerLabel')"
+            :checked="showCorrectAnswer"
+            @change="toggleShowCorrectAnswer"
+          />
+          <InteractionList
+            v-if="!showCorrectAnswer"
+            :interactions="currentInteractionHistory"
+            :selectedInteractionIndex="interactionIndex"
+            @select="navigateToNewInteraction($event)"
+          />
+          <KContentRenderer
+            v-if="currentInteraction"
+            :itemId="currentLearner.item"
+            :assessment="true"
+            :allowHints="false"
+            :kind="exercise.kind"
+            :files="exercise.files"
+            :available="exercise.available"
+            :answerState="answerState"
+            :showCorrectAnswer="showCorrectAnswer"
+            :interactive="false"
+            :extraFields="exercise.extra_fields"
+          />
+        </div>
+      </template>
+    </MultiPaneLayout>
+  </KPageContainer>
 
 </template>
 
@@ -58,27 +67,22 @@
 <script>
 
   import { mapGetters, mapState } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import ContentRenderer from 'kolibri.coreVue.components.ContentRenderer';
   import InteractionList from 'kolibri.coreVue.components.InteractionList';
-  import KCheckbox from 'kolibri.coreVue.components.KCheckbox';
   import MultiPaneLayout from 'kolibri.coreVue.components.MultiPaneLayout';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import QuestionDetailLearnerList from './QuestionDetailLearnerList';
 
   export default {
     name: 'QuestionLearnersReport',
     components: {
-      ContentRenderer,
       QuestionDetailLearnerList,
       InteractionList,
-      KCheckbox,
       MultiPaneLayout,
       CoachContentLabel,
     },
-    mixins: [commonCoach, themeMixin],
-    $trs: {},
+    mixins: [commonCoach, commonCoreStrings],
     data() {
       return {
         showCorrectAnswer: false,
@@ -89,7 +93,6 @@
         'exercise',
         'interactionIndex',
         'learnerId',
-        'questionNumber',
         'questionId',
         'title',
       ]),
@@ -146,6 +149,7 @@
 
   .exercise-section {
     padding: 16px;
+
     h3 {
       margin-top: 0;
     }

@@ -7,43 +7,40 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
-      <ReportsHeader />
-      <!-- TODO COACH
-      <KCheckbox :label="coachStrings.$tr('viewByGroupsLabel')" />
-      <h2>{{ coachStrings.$tr('overallLabel') }}</h2>
-       -->
-      <CoreTable :emptyMessage="coachStrings.$tr('learnerListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('nameLabel') }}</th>
-            <th>{{ coachStrings.$tr('groupsLabel') }}</th>
-            <th>{{ coachStrings.$tr('avgQuizScoreLabel') }}</th>
-            <th>{{ coachStrings.$tr('exercisesCompletedLabel') }}</th>
-            <th>{{ coachStrings.$tr('resourcesViewedLabel') }}</th>
-            <th>{{ coachStrings.$tr('lastActivityLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" person />
+      <ReportsHeader :title="$isPrint ? $tr('printLabel', { className }) : null" />
+      <ReportsControls @export="exportCSV" />
+      <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
+        <template #headers>
+          <th>{{ coachString('nameLabel') }}</th>
+          <th>{{ coachString('groupsLabel') }}</th>
+          <th>{{ coachString('avgScoreLabel') }}</th>
+          <th>{{ coachString('exercisesCompletedLabel') }}</th>
+          <th>{{ coachString('resourcesViewedLabel') }}</th>
+          <th>{{ coachString('lastActivityLabel') }}</th>
+        </template>
+        <template #tbody>
+          <transition-group tag="tbody" name="list">
+            <tr v-for="tableRow in table" :key="tableRow.id">
+              <td>
                 <KRouterLink
                   :text="tableRow.name"
                   :to="classRoute('ReportsLearnerReportPage', { learnerId: tableRow.id })"
+                  icon="person"
                 />
-              </KLabeledIcon>
-            </td>
-            <td><TruncatedItemList :items="tableRow.groups" /></td>
-            <td><Score :value="tableRow.avgScore" /></td>
-            <td>{{ coachStrings.$tr('integer', {value: tableRow.exercises}) }}</td>
-            <td>{{ coachStrings.$tr('integer', {value: tableRow.resources}) }}</td>
-            <td><ElapsedTime :date="tableRow.lastActivity" /></td>
-          </tr>
-        </transition-group>
+              </td>
+              <td><TruncatedItemList :items="tableRow.groups" /></td>
+              <td><Score :value="tableRow.avgScore" /></td>
+              <td>{{ $formatNumber(tableRow.exercises) }}</td>
+              <td>{{ $formatNumber(tableRow.resources) }}</td>
+              <td><ElapsedTime :date="tableRow.lastActivity" /></td>
+            </tr>
+          </transition-group>
+        </template>
       </CoreTable>
     </KPageContainer>
   </CoreBase>
@@ -53,23 +50,31 @@
 
 <script>
 
+  import sortBy from 'lodash/sortBy';
   import ElapsedTime from 'kolibri.coreVue.components.ElapsedTime';
   import commonCoach from '../common';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsControls from './ReportsControls';
   import ReportsHeader from './ReportsHeader';
 
   export default {
     name: 'ReportsLearnerListPage',
     components: {
+      ReportsControls,
       ReportsHeader,
       ElapsedTime,
     },
     mixins: [commonCoach],
     computed: {
       table() {
-        const sorted = this._.sortBy(this.learners, ['name']);
-        const mapped = sorted.map(learner => {
+        const sorted = sortBy(this.learners, ['name']);
+        return sorted.map(learner => {
           const groupNames = this.getGroupNames(
-            this._.map(this.groups.filter(group => group.member_ids.includes(learner.id)), 'id')
+            this._.map(
+              this.groups.filter(group => group.member_ids.includes(learner.id)),
+              'id'
+            )
           );
           const examStatuses = this.examStatuses.filter(status => learner.id === status.learner_id);
           const contentStatuses = this.contentStatuses.filter(
@@ -86,7 +91,6 @@
           Object.assign(augmentedObj, learner);
           return augmentedObj;
         });
-        return mapped;
       },
     },
     methods: {
@@ -102,15 +106,13 @@
           ...examStatuses,
           ...contentStatuses.filter(status => status.status !== this.STATUSES.notStarted),
         ];
-        if (!statuses.length) {
-          return null;
-        }
-        return this._.maxBy(statuses, 'last_activity').last_activity;
+
+        return statuses.length ? this.maxLastActivity(statuses) : null;
       },
       exercisesCompleted(contentStatuses) {
         const statuses = contentStatuses.filter(
           status =>
-            this.contentMap[status.content_id].kind === 'exercise' &&
+            this.contentIdIsForExercise(status.content_id) &&
             status.status === this.STATUSES.completed
         );
         return statuses.length;
@@ -118,10 +120,36 @@
       resourcesViewed(contentStatuses) {
         const statuses = contentStatuses.filter(
           status =>
-            this.contentMap[status.content_id].kind !== 'exercise' &&
+            !this.contentIdIsForExercise(status.content_id) &&
             status.status !== this.STATUSES.notStarted
         );
         return statuses.length;
+      },
+      exportCSV() {
+        const columns = [
+          ...csvFields.name(),
+          ...csvFields.list('groups', 'groupsLabel'),
+          ...csvFields.avgScore(true),
+          {
+            name: this.coachString('exercisesCompletedLabel'),
+            key: 'exercises',
+          },
+          {
+            name: this.coachString('resourcesViewedLabel'),
+            key: 'resources',
+          },
+          ...csvFields.lastActivity(),
+        ];
+
+        const fileName = this.$tr('printLabel', { className: this.className });
+        new CSVExporter(columns, fileName).export(this.table);
+      },
+    },
+    $trs: {
+      printLabel: {
+        message: '{className} Learners',
+        context:
+          "Title that displays on a printed copy of the 'Reports' > 'Learners' page. This shows if the user uses the 'Print' option by clicking on the printer icon.",
       },
     },
   };
@@ -129,4 +157,8 @@
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+</style>

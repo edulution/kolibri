@@ -7,16 +7,12 @@
 
     <div>
       <div class="ib">
-        <mat-svg
-          category="content"
-          name="filter_list"
-          class="filter-icon"
-        />
+        <KIcon class="icon" icon="filterList" />
         <KSelect
           :label="$tr('contentKindFilterLabel')"
           :options="contentKindFilterOptions"
           :inline="true"
-          :disabled="!contentKindFilterOptions.length"
+          :disabled="contentKindFilterOptions.length === 1"
           :value="contentKindValue"
           class="filter"
           @change="updateFilter('kind', $event)"
@@ -24,16 +20,12 @@
       </div>
 
       <div class="ib">
-        <mat-svg
-          category="navigation"
-          name="apps"
-          class="filter-icon"
-        />
+        <KIcon class="icon" icon="channel" />
         <KSelect
           :label="$tr('channelFilterLabel')"
           :options="channelFilterOptions"
           :inline="true"
-          :disabled="!channelFilterOptions.length"
+          :disabled="channelFilterOptions.length === 1"
           :value="channelValue"
           class="filter"
           @change="updateFilter('channel', $event)"
@@ -41,16 +33,12 @@
       </div>
 
       <div
-        v-show="roleFilterOptions.length > 0"
+        v-if="coachContentInResults"
         class="ib"
       >
-        <mat-svg
-          category="social"
-          name="person"
-          class="filter-icon"
-        />
+        <KIcon class="icon" icon="coachContent" />
         <KSelect
-          :label="$tr('roleFilterLabel')"
+          :label="$tr('coachResourcesLabel')"
           :options="roleFilterOptions"
           :inline="true"
           :disabled="!roleFilterOptions.length"
@@ -69,8 +57,8 @@
 
   import { mapGetters } from 'vuex';
   import find from 'lodash/find';
-  import KSelect from 'kolibri.coreVue.components.KSelect';
   import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   const kindFilterToLabelMap = {
     [ContentNodeKinds.TOPIC]: 'topics',
@@ -83,9 +71,7 @@
 
   export default {
     name: 'LessonsSearchFilters',
-    components: {
-      KSelect,
-    },
+    mixins: [commonCoreStrings],
     props: {
       searchResults: {
         type: Object,
@@ -111,15 +97,19 @@
       ...mapGetters({
         channels: 'getChannels',
       }),
+      noResults() {
+        return this.searchResults.results.length === 0;
+      },
       searchResultsSubheader() {
-        const msg =
-          this.searchResults.results.length === 0
-            ? 'noSearchResultsMessage'
-            : 'searchResultsMessage';
-        return this.$tr(msg, { searchTerm: this.searchTerm });
+        const trOptions = { searchTerm: this.searchTerm };
+        if (this.noResults) {
+          return this.$tr('noSearchResultsMessage', trOptions);
+        } else {
+          return this.$tr('searchResultsMessage', trOptions);
+        }
       },
       allFilter() {
-        return { label: this.$tr('all'), value: null };
+        return { label: this.coreString('allLabel'), value: null };
       },
       contentKindValue() {
         return find(this.contentKindFilterOptions, { value: this.value.kind }) || {};
@@ -137,29 +127,26 @@
       },
       channelFilterOptions() {
         const channelIds = this.searchResults.channel_ids;
-        const options = channelIds.map(id => find(this.channels, { id })).map(channel => ({
-          label: channel.title,
-          value: channel.id,
-        }));
+        const options = channelIds
+          .map(id => find(this.channels, { id }))
+          .map(channel => ({
+            label: channel.title,
+            value: channel.id,
+          }));
         return [this.allFilter, ...options];
       },
       roleValue() {
         return find(this.roleFilterOptions, { value: this.value.role }) || {};
       },
+      coachContentInResults() {
+        return Boolean(find(this.searchResults.results, result => result.num_coach_contents > 0));
+      },
       roleFilterOptions() {
-        if (this.searchResults.results.length === 0) {
-          return [];
-        }
-        const hasCoachContents = find(
-          this.searchResults.results,
-          result => result.num_coach_contents > 0
-        );
-        const options = [this.allFilter];
-        if (hasCoachContents) {
-          options.push({ label: this.$tr('coach'), value: 'coach' });
-        }
-        options.push({ label: this.$tr('nonCoach'), value: 'nonCoach' });
-        return options;
+        return [
+          // 'Show' is synonymous with 'All'
+          { label: this.coreString('showAction'), value: null },
+          { label: this.$tr('hideAction'), value: 'nonCoach' },
+        ];
       },
     },
     methods: {
@@ -171,20 +158,59 @@
       },
     },
     $trs: {
-      all: 'All',
-      audio: 'Audio',
-      channelFilterLabel: 'Channel:',
-      coach: 'Coach',
-      contentKindFilterLabel: 'Type:',
-      documents: 'Documents',
-      exercises: 'Exercises',
-      html5: 'Apps',
-      nonCoach: 'Non-coach',
-      roleFilterLabel: 'Show:',
-      topics: 'Topics',
-      videos: 'Videos',
-      searchResultsMessage: `Results for '{searchTerm}'`,
-      noSearchResultsMessage: `No results for '{searchTerm}'`,
+      audio: {
+        message: 'Audio',
+        context:
+          "A type of file that users can search for using the filter in the 'Manage lessons resources' screen.",
+      },
+      channelFilterLabel: {
+        message: 'Channel:',
+        context:
+          'Refers to an option in the search filter where users can search by different resource channel types.',
+      },
+      contentKindFilterLabel: {
+        message: 'Type:',
+        context:
+          'Title of a search filter. Refers to the type of resource material, for example, documents, videos, audio etc.',
+      },
+      documents: {
+        message: 'Documents',
+        context: 'Type of resource material.',
+      },
+      exercises: {
+        message: 'Exercises',
+        context: 'Type of resource material.',
+      },
+      html5: {
+        message: 'Apps',
+        context: 'Type of resource material.',
+      },
+      coachResourcesLabel: {
+        message: 'Coach resources:',
+        context:
+          "Title of search filter. Users have the option to either 'Show' or 'Hide' coach resources in a search.\n\nCoach resources can be lesson plans, professional development readings, training materials, etc. only viewable by coaches and not learners.",
+      },
+      topics: {
+        message: 'Folders',
+        context: 'A group of learning resource materials.',
+      },
+      videos: {
+        message: 'Videos',
+        context: 'Type of resource material.',
+      },
+      hideAction: {
+        message: 'Hide',
+        context:
+          "Users have the option to either 'Show' or 'Hide' coach resources.\n\nCoach resources can be lesson plans, professional development readings, training materials, etc. only viewable by coaches and not learners.",
+      },
+      searchResultsMessage: {
+        message: `Results for '{searchTerm}'`,
+        context: 'Indicates the results for a specific search term.',
+      },
+      noSearchResultsMessage: {
+        message: `No results for '{searchTerm}'`,
+        context: 'Message displayed if no results match the search term used.',
+      },
     },
   };
 
@@ -196,6 +222,10 @@
   .ib {
     position: relative;
     display: inline-block;
+  }
+
+  .icon {
+    margin-bottom: 16px;
   }
 
   .filter {

@@ -2,12 +2,15 @@
 
   <CoreBase
     :immersivePage="false"
-    :appBarTitle="coachStrings.$tr('coachLabel')"
+    :appBarTitle="coreString('coachLabel')"
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
+
     <KPageContainer>
       <PlanHeader />
       Learner list
@@ -19,7 +22,7 @@
 
 <script>
 
-  import commonCoach from '../common';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import PlanHeader from './PlanHeader';
 
   export default {
@@ -27,8 +30,7 @@
     components: {
       PlanHeader,
     },
-    mixins: [commonCoach],
-    $trs: {},
+    mixins: [commonCoreStrings],
   };
 
 </script>

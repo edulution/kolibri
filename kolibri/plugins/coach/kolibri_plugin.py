@@ -2,41 +2,62 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from . import hooks
 from kolibri.core.auth.constants.user_kinds import COACH
+from kolibri.core.device.utils import get_device_setting
 from kolibri.core.hooks import NavigationHook
 from kolibri.core.hooks import RoleBasedRedirectHook
 from kolibri.core.webpack import hooks as webpack_hooks
-from kolibri.plugins.base import KolibriPluginBase
+from kolibri.plugins import KolibriPluginBase
+from kolibri.plugins.hooks import register_hook
+from kolibri.utils import translation
+from kolibri.utils.translation import ugettext as _
 
 
 class Coach(KolibriPluginBase):
-    def url_module(self):
-        from . import urls
+    untranslated_view_urls = "api_urls"
+    can_manage_while_running = True
 
-        return urls
+    @property
+    def translated_view_urls(self):
+        # On an SoUD this plugin should be disabled. In lieu of properly
+        # disabling the plugin, we will just not register any urls for now
+        if not get_device_setting("subset_of_users_device", False):
+            return "urls"
+        return None
 
-    def url_slug(self):
-        return "^coach/"
+    def name(self, lang):
+        with translation.override(lang):
+            return _("Coach")
 
 
+@register_hook
 class CoachRedirect(RoleBasedRedirectHook):
-    role = COACH
+    roles = (COACH,)
 
     @property
     def url(self):
-        return self.plugin_url(Coach, "coach")
+        # Also disable attempting to redirect to the coach page
+        # if we are on a subset of users device.
+        if not get_device_setting("subset_of_users_device", False):
+            return self.plugin_url(Coach, "coach")
 
 
-class CoachNavItem(NavigationHook, webpack_hooks.WebpackBundleHook):
-    unique_slug = "coach_side_nav"
-    src_file = "assets/src/views/CoachSideNavEntry.vue"
+@register_hook
+class CoachNavItem(NavigationHook):
+    bundle_id = "side_nav"
 
 
+@register_hook
 class CoachAsset(webpack_hooks.WebpackBundleHook):
-    unique_slug = "coach_module"
-    src_file = "assets/src/app.js"
+    bundle_id = "app"
 
+    @property
+    def plugin_data(self):
+        from kolibri.core.content.models import ContentNode
 
-class CoachInclusionHook(hooks.CoachSyncHook):
-    bundle_class = CoachAsset
+        practice_quizzes_exist = ContentNode.objects.filter(
+            available=True, options__contains='"modality": "QUIZ"'
+        ).exists()
+        return {
+            "practice_quizzes_exist": practice_quizzes_exist,
+        }

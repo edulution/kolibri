@@ -2,102 +2,53 @@
 
   <form
     class="search-box"
-    @submit.prevent="search"
+    @submit.prevent="updateSearchQuery"
     @keydown.esc.prevent="handleEscKey"
   >
-    <div class="search-box-row">
-      <label class="visuallyhidden" for="searchfield">{{ $tr('searchBoxLabel') }}</label>
+    <div
+      class="search-box-row"
+      :style="{
+        backgroundColor: $themeTokens.surface,
+        borderColor: $themePalette.grey.v_300,
+        fontSize: '16px',
+      }"
+    >
+      <label class="visuallyhidden" for="searchfield">{{ coreString('searchLabel') }}</label>
       <input
-        id="searchfield"
+        :id="id"
         ref="searchInput"
-        v-model.trim="searchQuery"
+        v-model.trim="newSearchTerm"
         type="search"
-        :class="[ 'search-input', $computedClass(searchInputStyle) ]"
-        :style="{ color: $coreTextDefault }"
+        class="search-input"
+        :class="$computedClass(searchInputStyle)"
         dir="auto"
-        :placeholder="$tr('searchBoxLabel')"
+        :placeholder="coreString(placeholder)"
       >
       <div class="search-buttons-wrapper">
-        <UiIconButton
-          color="black"
+        <KIconButton
+          icon="clear"
+          :color="$themeTokens.text"
           size="small"
           class="search-clear-button"
-          :class="searchQuery === '' ? '' : 'search-clear-button-visible'"
-          :style="{ color: $coreTextDefault }"
-          :ariaLabel="$tr('clearButtonLabel')"
-          @click="searchQuery = ''"
+          :class="searchInputValue === '' ? '' : 'search-clear-button-visible'"
+          :ariaLabel="coreString('clearAction')"
+          @click="handleClickClear"
+        />
+        <KButton
+          :disabled="searchBarDisabled"
+          :primary="true"
+          :appearanceOverrides="{ minWidth: '36px', padding: 0 }"
+          :aria-label="coreString('startSearchButtonLabel')"
+          type="submit"
         >
-          <mat-svg
-            name="clear"
-            category="content"
-          />
-        </UiIconButton>
-
-        <div class="search-submit-button-wrapper" :style="{ backgroundColor: $coreActionDark }">
-          <UiIconButton
-            type="secondary"
-            color="white"
-            class="search-submit-button"
-            :disabled="!searchUpdate"
-            :class="{ 'rtl-icon': icon === 'arrow_forward' && isRtl }"
-            :ariaLabel="$tr('startSearchButtonLabel')"
-            @click="search"
-          >
-            <mat-svg
-              v-if="icon === 'search'"
-              name="search"
-              category="action"
+          <template #icon>
+            <KIcon
+              :icon="icon"
+              :style="{ width: '24px', height: '24px', top: '7px' }"
+              :color="$themeTokens.textInverted"
             />
-            <mat-svg
-              v-if="icon === 'arrow_forward'"
-              name="arrow_forward"
-              category="navigation"
-            />
-          </UiIconButton>
-        </div>
-      </div>
-    </div>
-    <div
-      v-if="filters"
-      class="filters"
-    >
-      <div
-        class="ib"
-      >
-        <mat-svg
-          category="content"
-          name="filter_list"
-          class="filter-icon"
-        />
-        <KSelect
-          ref="contentKindFilter"
-          :label="$tr('resourceType')"
-          :options="contentKindFilterOptions"
-          :inline="true"
-          :disabled="!contentKindFilterOptions.length"
-          :value="contentKindFilterSelection"
-          class="filter"
-          @change="updateFilter"
-        />
-      </div>
-      <div
-        class="ib"
-      >
-        <mat-svg
-          category="navigation"
-          name="apps"
-          class="filter-icon"
-        />
-        <KSelect
-          ref="channelFilter"
-          :label="$tr('channels')"
-          :options="channelFilterOptions"
-          :inline="true"
-          :disabled="!channelFilterOptions.length"
-          :value="channelFilterSelection"
-          class="filter"
-          @change="updateFilter"
-        />
+          </template>
+        </KButton>
       </div>
     </div>
   </form>
@@ -107,163 +58,104 @@
 
 <script>
 
-  import { mapGetters, mapState } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
-  import KSelect from 'kolibri.coreVue.components.KSelect';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
   import { PageNames } from '../constants';
-
-  const ALL_FILTER = null;
-
-  const kindFilterToLabelMap = {
-    [ContentNodeKinds.TOPIC]: 'topics',
-    [ContentNodeKinds.EXERCISE]: 'exercises',
-    [ContentNodeKinds.VIDEO]: 'videos',
-    [ContentNodeKinds.AUDIO]: 'audio',
-    [ContentNodeKinds.DOCUMENT]: 'documents',
-    [ContentNodeKinds.HTML5]: 'html5',
-  };
 
   export default {
     name: 'SearchBox',
-    $trs: {
-      searchBoxLabel: 'Search',
-      clearButtonLabel: 'Clear',
-      startSearchButtonLabel: 'Start search',
-      resourceType: 'Type',
-      all: 'All',
-      topics: 'Topics',
-      exercises: 'Exercises',
-      videos: 'Videos',
-      audio: 'Audio',
-      documents: 'Documents',
-      html5: 'Apps',
-      channels: 'Channels',
-    },
-    components: {
-      UiIconButton,
-      KSelect,
-    },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings, responsiveElementMixin],
     props: {
       icon: {
         type: String,
         default: 'search',
         validator(val) {
-          return ['search', 'arrow_forward'].includes(val);
+          return ['search', 'forward'].includes(val);
         },
       },
-      filters: {
-        type: Boolean,
-        default: false,
+      id: {
+        type: String,
+        default: 'searchfield',
+      },
+      placeholder: {
+        type: String,
+        default: 'searchLabel',
+      },
+      value: {
+        type: String,
+        default: null,
       },
     },
     data() {
       return {
-        searchQuery: this.$store.state.search.searchTerm,
-        contentKindFilterSelection: {},
-        channelFilterSelection: {},
+        searchInputValue: '',
       };
     },
     computed: {
-      ...mapGetters({
-        channels: 'getChannels',
-      }),
-      ...mapState('search', [
-        'searchTerm',
-        'channel_ids',
-        'content_kinds',
-        'kindFilter',
-        'channelFilter',
-      ]),
-      allFilter() {
-        return { label: this.$tr('all'), value: ALL_FILTER };
+      newSearchTerm: {
+        get() {
+          return this.searchInputValue === null ? this.currentSearchTerm : this.searchInputValue;
+        },
+        set(value) {
+          this.searchInputValue = value || '';
+        },
       },
-      contentKindFilterOptions() {
-        if (this.content_kinds.length) {
-          const options = Object.keys(kindFilterToLabelMap)
-            .filter(kind => this.content_kinds.includes(kind))
-            .map(kind => ({
-              label: this.$tr(kindFilterToLabelMap[kind]),
-              value: kind,
-            }));
-          return [this.allFilter, ...options];
-        }
-        return [];
+      currentSearchTerm() {
+        return this.value !== null ? this.value : this.$route.query.keywords;
       },
-      channelFilterOptions() {
-        if (this.channel_ids.length) {
-          const options = this.channels
-            .filter(channel => this.channel_ids.includes(channel.id))
-            .map(channel => ({
-              label: channel.title,
-              value: channel.id,
-            }));
-          return [this.allFilter, ...options];
-        }
-        return [];
-      },
-      filterUpdate() {
-        return (
-          this.contentKindFilterSelection.value !== this.kindFilter ||
-          this.channelFilterSelection.value !== this.channelFilter
-        );
-      },
-      searchUpdate() {
-        return this.searchQuery !== this.searchTerm || this.filterUpdate;
+      searchBarDisabled() {
+        // Disable the search bar if it has been cleared or has not been changed
+        return this.searchInputValue === '';
       },
       searchInputStyle() {
         return {
           '::placeholder': {
-            color: this.$coreTextAnnotation,
+            color: this.$themeTokens.annotation,
           },
+          color: this.$themeTokens.text,
+          textAlign: this.isRtl ? 'right' : '',
         };
       },
     },
     watch: {
-      searchTerm(val) {
-        this.searchQuery = val || '';
+      value(current) {
+        this.searchInputValue = current || '';
       },
-    },
-    beforeMount() {
-      this.contentKindFilterSelection =
-        this.contentKindFilterOptions.find(
-          option => option.value === this.$store.state.search.kindFilter
-        ) || this.allFilter;
-      this.channelFilterSelection =
-        this.channelFilterOptions.find(
-          option => option.value === this.$store.state.search.channelFilter
-        ) || this.allFilter;
     },
     methods: {
+      /**
+       * @public
+       */
+      focusSearchBox() {
+        this.$refs.searchInput.focus();
+      },
+      clearInput() {
+        this.searchInputValue = '';
+      },
       handleEscKey() {
-        if (this.searchQuery === '') {
+        if (this.searchInputValue === '') {
           this.$emit('closeDropdownSearchBox');
         } else {
-          this.searchQuery = '';
+          this.clearInput();
         }
       },
-      updateFilter() {
-        this.search(true);
+      handleClickClear() {
+        this.clearInput();
+        this.$refs.searchInput.focus();
       },
-      search(filterUpdate = false) {
-        if (this.searchQuery !== '') {
-          const query = {
-            searchTerm: this.searchQuery,
-          };
-          if (filterUpdate === true) {
-            if (this.$refs.contentKindFilter.selection.value) {
-              query.kind = this.$refs.contentKindFilter.selection.value;
-            }
-            if (this.$refs.channelFilter.selection.value) {
-              query.channel_id = this.$refs.channelFilter.selection.value;
-            }
-          }
-          this.$router.push({
-            name: PageNames.SEARCH,
-            query,
-          });
+      updateSearchQuery() {
+        if (this.value !== null) {
+          this.$emit('change', this.searchInputValue);
+        } else {
+          this.$router
+            .push({
+              name: PageNames.LIBRARY,
+              query: {
+                ...this.$route.query,
+                keywords: this.searchInputValue || this.$route.query.keywords,
+              },
+            })
+            .catch(() => {});
         }
       },
     },
@@ -273,6 +165,8 @@
 
 
 <style lang="scss" scoped>
+
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   .search-box {
     margin-right: 8px;
@@ -286,7 +180,9 @@
     display: table;
     width: 100%;
     max-width: 450px;
-    background-color: white;
+    overflow: hidden;
+    border: solid 1px;
+    border-radius: $radius;
   }
 
   .search-input {
@@ -297,7 +193,6 @@
     padding-left: 8px;
     margin: 0;
     vertical-align: middle;
-    background-color: white;
     border: 0;
 
     // removes the IE clear button
@@ -308,7 +203,7 @@
 
   .search-buttons-wrapper {
     display: table-cell;
-    width: 78px;
+    width: 80px;
     height: 36px;
     text-align: right;
     vertical-align: middle;
@@ -318,24 +213,12 @@
     width: 24px;
     height: 24px;
     margin-right: 6px;
-    margin-left: 6px;
     vertical-align: middle;
     visibility: hidden;
   }
 
   .search-clear-button-visible {
     visibility: visible;
-  }
-
-  .search-submit-button {
-    width: 36px;
-    height: 36px;
-    fill: white;
-  }
-
-  .search-submit-button-wrapper {
-    display: inline-block;
-    vertical-align: middle;
   }
 
   .filter-icon {

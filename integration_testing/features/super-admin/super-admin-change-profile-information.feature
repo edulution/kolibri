@@ -6,13 +6,25 @@ Feature: Super admin changes their own profile information
       And I am on the *User > Profile* page
 
   Scenario: Super admin changes username and full name
-  	 When I change my full name
-  	  And I change my username
-  	  And if my changes are valid (I did not leave the fields empty)
-  	  And I click the “Save changes” button
-  	 Then I see the *Profile details updated* inline notification
-      And I see the new full name and username on the profile page
+  	When I click the *Edit* button
+    Then I see the *Edit profile* page
+    When I change my full name
+      And I change my username
+      And if my changes are valid (I did not leave the fields empty)
+      And I click the “Save” button
+    Then I see the *Changes saved* snackbar notification
+    When I go back to my *Profile > Details* page
+    Then I see the new full name and username on the profile page
       And I see the new username in the user menu
+
+  Scenario: Super admin selects gender and birth year
+    When I click the *Edit* button
+    Then I see the *Edit profile* page
+    When I select my gender
+      And I select my birth year
+      And I click the “Save” button
+    Then I see the *Changes saved* snackbar notification
+      And I see my selected gender and birth year on the profile page
 
   Scenario: Super admin changes password
      When I click the “Change password” link
@@ -21,4 +33,4 @@ Feature: Super admin changes their own profile information
       And I re-enter the new password
       And if my changes are valid (I did not leave the fields empty, or entered two different passwords)
       And I click the “Update” button
-    Then I see the *Password updated* snackbar notification
+    Then I see the *Password changed* snackbar notification

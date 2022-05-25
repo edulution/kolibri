@@ -23,6 +23,7 @@
 <script>
 
   import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import {
     NotificationEvents,
     NotificationObjects,
@@ -31,22 +32,7 @@
 
   export default {
     name: 'NotificationsFilter',
-    mixins: [commonCoach],
-    $trs: {
-      allLabel: 'All',
-      appsLabel: 'Apps',
-      audioLabel: 'Audio',
-      bookLabel: 'Book',
-      eventTypeLabel: 'Event type',
-      dateLabel: 'Date',
-      documentsLabel: 'Documents',
-      exercisesLabel: 'Exercises',
-      needsHelpOnlyToggle: "Show only 'Needs help'",
-      progressTypeLabel: 'Progress type',
-      resourceTypeLabel: 'Resource type',
-      typeLabel: 'Type',
-      videosLabel: 'Videos',
-    },
+    mixins: [commonCoach, commonCoreStrings],
     props: {
       enabledFilters: {
         type: Object,
@@ -63,21 +49,21 @@
       progressTypeOptions() {
         return [
           {
-            label: this.$tr('allLabel'),
+            label: this.coreString('allLabel'),
             value: 'all',
           },
           {
-            label: this.coachStrings.$tr('helpNeededLabel'),
+            label: this.coachString('helpNeededLabel'),
             value: NotificationEvents.HELP_NEEDED,
             disabled: this.progressIsDisabled(NotificationEvents.HELP_NEEDED),
           },
           {
-            label: this.coachStrings.$tr('startedLabel'),
+            label: this.coachString('startedLabel'),
             value: NotificationEvents.STARTED,
             disabled: this.progressIsDisabled(NotificationEvents.STARTED),
           },
           {
-            label: this.coachStrings.$tr('completedLabel'),
+            label: this.coreString('completedLabel'),
             value: NotificationEvents.COMPLETED,
             disabled: this.progressIsDisabled(NotificationEvents.COMPLETED),
           },
@@ -86,16 +72,16 @@
       resourceTypeOptions() {
         return [
           {
-            label: this.$tr('allLabel'),
+            label: this.coreString('allLabel'),
             value: 'all',
           },
           {
-            label: this.coachStrings.$tr('lessonsLabel'),
+            label: this.coreString('lessonsLabel'),
             value: ContentNodeKinds.LESSON,
             disabled: this.resourceIsDisabled(NotificationObjects.LESSON),
           },
           {
-            label: this.coachStrings.$tr('quizzesLabel'),
+            label: this.coreString('quizzesLabel'),
             value: 'quiz',
             disabled: this.resourceIsDisabled(NotificationObjects.QUIZ),
           },
@@ -137,6 +123,37 @@
       },
       progressIsDisabled(value) {
         return !this.enabledFilters.progress.includes(value);
+      },
+    },
+    $trs: {
+      appsLabel: {
+        message: 'Apps',
+        context: 'Type of resource material.',
+      },
+      audioLabel: {
+        message: 'Audio',
+        context: 'Type of resource material.',
+      },
+      documentsLabel: {
+        message: 'Documents',
+        context: 'Type of resource material.',
+      },
+      exercisesLabel: {
+        message: 'Exercises',
+        context: 'Type of resource material.',
+      },
+      progressTypeLabel: {
+        message: 'Progress type',
+        context: 'Filter where coach can check learner progress based on different statuses.',
+      },
+      resourceTypeLabel: {
+        message: 'Resource type',
+        context:
+          'Coaches can filter learner activity by the type of resources they are working on.',
+      },
+      videosLabel: {
+        message: 'Videos',
+        context: 'Type of resource material.',
       },
     },
   };

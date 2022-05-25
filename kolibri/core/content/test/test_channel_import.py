@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import pickle
 import tempfile
 import uuid
 
@@ -17,25 +16,39 @@ from sqlalchemy import create_engine
 from .sqlalchemytesting import django_connection_engine
 from .test_content_app import ContentNodeTestBase
 from kolibri.core.content import models as content
+from kolibri.core.content.constants.kind_to_learningactivity import kind_activity_map
+from kolibri.core.content.constants.schema_versions import CONTENT_SCHEMA_VERSION
+from kolibri.core.content.constants.schema_versions import NO_VERSION
+from kolibri.core.content.constants.schema_versions import V020BETA1
+from kolibri.core.content.constants.schema_versions import V040BETA3
+from kolibri.core.content.constants.schema_versions import VERSION_1
+from kolibri.core.content.constants.schema_versions import VERSION_2
+from kolibri.core.content.constants.schema_versions import VERSION_3
+from kolibri.core.content.constants.schema_versions import VERSION_4
 from kolibri.core.content.models import AssessmentMetaData
 from kolibri.core.content.models import ChannelMetadata
-from kolibri.core.content.models import CONTENT_SCHEMA_VERSION
 from kolibri.core.content.models import ContentNode
 from kolibri.core.content.models import File
+from kolibri.core.content.models import Language
 from kolibri.core.content.models import LocalFile
-from kolibri.core.content.models import NO_VERSION
-from kolibri.core.content.models import V020BETA1
-from kolibri.core.content.models import V040BETA3
-from kolibri.core.content.models import VERSION_1
-from kolibri.core.content.utils.annotation import recurse_availability_up_tree
+from kolibri.core.content.utils.annotation import recurse_annotation_up_tree
 from kolibri.core.content.utils.annotation import (
     set_leaf_node_availability_from_local_file_availability,
 )
+from kolibri.core.content.utils.annotation import update_content_metadata
+from kolibri.core.content.utils.channel_import import BATCH_SIZE
 from kolibri.core.content.utils.channel_import import ChannelImport
 from kolibri.core.content.utils.channel_import import import_channel_from_local_db
-from kolibri.core.content.utils.channels import read_channel_metadata_from_db_file
-from kolibri.core.content.utils.paths import get_content_database_file_path
+from kolibri.core.content.utils.channel_import import topological_sort
 from kolibri.core.content.utils.sqlalchemybridge import get_default_db_string
+from kolibri.core.content.utils.sqlalchemybridge import load_metadata
+
+
+class UtilityTestCase(TestCase):
+    def test_topological_sort(self):
+        sorted_models = topological_sort([File, LocalFile, ContentNode])
+        self.assertGreater(sorted_models.index(File), sorted_models.index(ContentNode))
+        self.assertGreater(sorted_models.index(File), sorted_models.index(LocalFile))
 
 
 @patch("kolibri.core.content.utils.channel_import.Bridge")
@@ -55,7 +68,10 @@ class BaseChannelImportClassConstructorTestCase(TestCase):
         db_path_mock.return_value = "test"
         ChannelImport("test")
         BridgeMock.assert_has_calls(
-            [call(sqlite_file_path="test"), call(app_name="content")]
+            [
+                call(sqlite_file_path="test"),
+                call(app_name="content", schema_version=CONTENT_SCHEMA_VERSION),
+            ]
         )
 
     @patch("kolibri.core.content.utils.channel_import.get_content_database_file_path")
@@ -207,19 +223,6 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
     Testcase for the base channel import class table import method
     """
 
-    def test_no_models_unflushed_rows_passed_through(
-        self, apps_mock, tree_id_mock, BridgeMock
-    ):
-        channel_import = ChannelImport("test")
-        record_mock = MagicMock(spec=["__table__"])
-        channel_import.destination.get_class.return_value = record_mock
-        self.assertEqual(
-            0,
-            channel_import.table_import(
-                MagicMock(), lambda x, y: None, lambda x: [], 0
-            ),
-        )
-
     def test_no_merge_records_bulk_insert_no_flush(
         self, apps_mock, tree_id_mock, BridgeMock
     ):
@@ -228,9 +231,9 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
         record_mock.__table__.columns.items.return_value = [("test_attr", MagicMock())]
         channel_import.destination.get_class.return_value = record_mock
         channel_import.table_import(
-            MagicMock(), lambda x, y: "test_val", lambda x: [{}] * 100, 0
+            MagicMock(), lambda x, y: "test_val", lambda x: [{}] * (BATCH_SIZE // 10)
         )
-        channel_import.destination.session.flush.assert_not_called()
+        channel_import.destination.execute.assert_called_once()
 
     def test_no_merge_records_bulk_insert_flush(
         self, apps_mock, tree_id_mock, BridgeMock
@@ -240,43 +243,9 @@ class BaseChannelImportClassTableImportTestCase(TestCase):
         record_mock.__table__.columns.items.return_value = [("test_attr", MagicMock())]
         channel_import.destination.get_class.return_value = record_mock
         channel_import.table_import(
-            MagicMock(), lambda x, y: "test_val", lambda x: [{}] * 10000, 0
+            MagicMock(), lambda x, y: "test_val", lambda x: [{}] * (BATCH_SIZE + 1)
         )
-        channel_import.destination.session.flush.assert_called_once_with()
-
-    @patch("kolibri.core.content.utils.channel_import.merge_models", new=[])
-    def test_merge_records_merge_no_flush(self, apps_mock, tree_id_mock, BridgeMock):
-        from kolibri.core.content.utils.channel_import import merge_models
-
-        channel_import = ChannelImport("test")
-        record_mock = MagicMock(spec=["__table__"])
-        record_mock.__table__.columns.items.return_value = [("test_attr", MagicMock())]
-        channel_import.destination.get_class.return_value = record_mock
-        model_mock = MagicMock()
-        model_mock._meta.pk.name = "test_attr"
-        merge_models.append(model_mock)
-        channel_import.merge_record = Mock()
-        channel_import.table_import(
-            model_mock, lambda x, y: "test_val", lambda x: [{}] * 100, 0
-        )
-        channel_import.destination.session.flush.assert_not_called()
-
-    @patch("kolibri.core.content.utils.channel_import.merge_models", new=[])
-    def test_merge_records_merge_flush(self, apps_mock, tree_id_mock, BridgeMock):
-        from kolibri.core.content.utils.channel_import import merge_models
-
-        channel_import = ChannelImport("test")
-        record_mock = Mock(spec=["__table__"])
-        record_mock.__table__.columns.items.return_value = [("test_attr", MagicMock())]
-        channel_import.destination.get_class.return_value = record_mock
-        model_mock = Mock()
-        model_mock._meta.pk.name = "test_attr"
-        merge_models.append(model_mock)
-        channel_import.merge_record = Mock()
-        channel_import.table_import(
-            model_mock, lambda x, y: "test_val", lambda x: [{}] * 10000, 0
-        )
-        channel_import.destination.session.flush.assert_called_once_with()
+        self.assertEqual(channel_import.destination.execute.call_count, 2)
 
 
 @patch("kolibri.core.content.utils.channel_import.Bridge")
@@ -297,6 +266,8 @@ class BaseChannelImportClassOtherMethodsTestCase(TestCase):
             channel_import, "generate_table_mapper"
         ), patch.object(channel_import, "table_import"), patch.object(
             channel_import, "check_and_delete_existing_channel"
+        ), patch.object(
+            channel_import, "execute_post_operations"
         ):
             channel_import.import_channel_data()
             channel_import.generate_row_mapper.assert_called_once_with(
@@ -307,7 +278,7 @@ class BaseChannelImportClassOtherMethodsTestCase(TestCase):
             )
             channel_import.table_import.assert_called_once()
             channel_import.check_and_delete_existing_channel.assert_called_once()
-            channel_import.destination.session.commit.assert_called_once_with()
+            channel_import.execute_post_operations.assert_called_once()
 
     def test_end(self, apps_mock, tree_id_mock, BridgeMock):
         channel_import = ChannelImport("test")
@@ -321,27 +292,15 @@ class BaseChannelImportClassOtherMethodsTestCase(TestCase):
         channel_import.get_all_destination_tree_ids()
         channel_import.destination.assert_has_calls(
             [
-                call.session.query(class_mock.tree_id),
-                call.session.query().distinct(),
-                call.session.query().distinct().all(),
+                call.execute().fetchall(),
             ]
-        )
-
-    def test_base_table_mapper(self, apps_mock, tree_id_mock, BridgeMock):
-        channel_import = ChannelImport("test")
-        class_mock = Mock()
-        [record for record in channel_import.base_table_mapper(class_mock)]
-        channel_import.destination.assert_has_calls(
-            [call.session.query(class_mock), call.session.query().all()]
         )
 
 
 class MaliciousDatabaseTestCase(TestCase):
-    @patch("kolibri.core.content.utils.channel_import.update_content_metadata")
+    @patch("kolibri.core.content.utils.channel_import.set_channel_ancestors")
     @patch("kolibri.core.content.utils.channel_import.initialize_import_manager")
-    def test_non_existent_root_node(
-        self, initialize_manager_mock, update_content_metadata_mock
-    ):
+    def test_non_existent_root_node(self, initialize_manager_mock, ancestor_mock):
         import_mock = MagicMock()
         initialize_manager_mock.return_value = import_mock
         channel_id = "6199dde695db4ee4ab392222d5af1e5c"
@@ -404,8 +363,7 @@ class ContentImportTestBase(TransactionTestCase):
             "sqlite:///" + self.content_db_path, convert_unicode=True
         )
 
-        with open(SCHEMA_PATH_TEMPLATE.format(name=self.schema_name), "rb") as f:
-            metadata = pickle.load(f)
+        metadata = load_metadata(self.schema_name)
 
         data_path = DATA_PATH_TEMPLATE.format(name=self.data_name)
         with io.open(data_path, mode="r", encoding="utf-8") as f:
@@ -429,14 +387,9 @@ class ContentImportTestBase(TransactionTestCase):
             new=self.get_engine,
         ):
 
-            channel_metadata = read_channel_metadata_from_db_file(
-                get_content_database_file_path("6199dde695db4ee4ab392222d5af1e5c")
-            )
-
-            # Double check that we have actually created a valid content db that is recognized as having that schema
-            assert channel_metadata.inferred_schema_version == self.schema_name
-
             import_channel_from_local_db("6199dde695db4ee4ab392222d5af1e5c")
+            update_content_metadata("6199dde695db4ee4ab392222d5af1e5c")
+        self.content_engine.dispose()
 
     def get_engine(self, connection_string):
         if connection_string == get_default_db_string():
@@ -524,6 +477,44 @@ class NaiveImportTestCase(ContentNodeTestBase, ContentImportTestBase):
         with self.assertRaises(ContentNode.DoesNotExist):
             assert ContentNode.objects.get(pk=obj_id)
 
+    def test_residual_included_languages_deleted_after_reimport(self):
+        lang = Language.objects.create(id="en")
+        channel = ChannelMetadata.objects.first()
+        # Decrement current channel version to ensure reimport
+        channel.version -= 1
+        channel.included_languages.add(lang)
+        channel.save()
+        self.set_content_fixture()
+        channel = ChannelMetadata.objects.first()
+        self.assertEqual(channel.included_languages.count(), 0)
+
+    def test_prerequisites_not_duplicated(self):
+        prereqs = ContentNode.has_prerequisite.through.objects.all().count()
+        channel = ChannelMetadata.objects.first()
+        # Decrement current channel version to ensure reimport
+        channel.version -= 1
+        channel.save()
+        self.set_content_fixture()
+        new_prereqs = ContentNode.has_prerequisite.through.objects.all().count()
+        self.assertEqual(prereqs, new_prereqs)
+
+    def test_learning_activity_set(self):
+        # Do this to avoid doing this test on more up to date versions
+        try:
+            int_version = int(self.name)
+            if int_version >= 5:
+                return
+        except ValueError:
+            pass
+        for kind, learning_activity in kind_activity_map.items():
+            # For each defined mapping, make sure none have not been mapped
+            self.assertEqual(
+                ContentNode.objects.filter(kind=kind)
+                .exclude(learning_activities=learning_activity)
+                .count(),
+                0,
+            )
+
     def test_existing_localfiles_are_not_overwritten(self):
 
         with patch(
@@ -545,7 +536,7 @@ class NaiveImportTestCase(ContentNodeTestBase, ContentImportTestBase):
 
             # propagate availability up the tree
             set_leaf_node_availability_from_local_file_availability(channel_id)
-            recurse_availability_up_tree(channel_id=channel_id)
+            recurse_annotation_up_tree(channel_id=channel_id)
 
             # after reloading, channel should now be available
             channel.root.refresh_from_db()
@@ -560,8 +551,6 @@ class NaiveImportTestCase(ContentNodeTestBase, ContentImportTestBase):
             # after reloading, the files and their ancestor ContentNodes should all still be available
             channel.root.refresh_from_db()
             assert channel.root.available
-            assert channel.root.children.first().available
-            assert channel.root.children.first().files.all()[0].available
             assert channel.root.children.first().files.all()[0].local_file.available
 
 
@@ -588,6 +577,54 @@ class ImportLongDescriptionsTestCase(ContentImportTestBase, TransactionTestCase)
             ContentNode.objects.get(id="2e8bac07947855369fe2d77642dfc870").description,
             self.longdescription,
         )
+
+
+class Version4ImportTestCase(NaiveImportTestCase):
+    """
+    Integration test for import from no version import
+    """
+
+    name = VERSION_4
+
+    @classmethod
+    def tearDownClass(cls):
+        super(Version4ImportTestCase, cls).tearDownClass()
+
+    @classmethod
+    def setUpClass(cls):
+        super(Version4ImportTestCase, cls).setUpClass()
+
+
+class Version3ImportTestCase(NaiveImportTestCase):
+    """
+    Integration test for import from no version import
+    """
+
+    name = VERSION_3
+
+    @classmethod
+    def tearDownClass(cls):
+        super(Version3ImportTestCase, cls).tearDownClass()
+
+    @classmethod
+    def setUpClass(cls):
+        super(Version3ImportTestCase, cls).setUpClass()
+
+
+class Version2ImportTestCase(NaiveImportTestCase):
+    """
+    Integration test for import from no version import
+    """
+
+    name = VERSION_2
+
+    @classmethod
+    def tearDownClass(cls):
+        super(Version2ImportTestCase, cls).tearDownClass()
+
+    @classmethod
+    def setUpClass(cls):
+        super(Version2ImportTestCase, cls).setUpClass()
 
 
 class Version1ImportTestCase(NaiveImportTestCase):

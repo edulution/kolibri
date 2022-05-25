@@ -1,5 +1,6 @@
 from django.db import models
-from jsonfield import JSONField
+from django.db.utils import IntegrityError
+from django.utils import timezone
 
 from .permissions import UserCanReadExamAssignmentData
 from .permissions import UserCanReadExamData
@@ -8,6 +9,7 @@ from kolibri.core.auth.models import AbstractFacilityDataModel
 from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.permissions.base import RoleBasedPermissions
+from kolibri.core.fields import JSONField
 from kolibri.core.notifications.models import LearnerProgressNotification
 
 
@@ -35,7 +37,19 @@ class Exam(AbstractFacilityDataModel):
     question_count = models.IntegerField()
 
     """
-    This field contains different values depending on the 'data_model_version' field.
+    The `question_sources` field contains different values depending on the 'data_model_version' field.
+
+    V2:
+        Similar to V1, but with a `counter_in_exercise` field
+        [
+            {
+                "exercise_id": <exercise_pk>,
+                "question_id": <item_id_within_exercise>,
+                "title": <exercise_title>,
+                "counter_in_exercise": <unique_count_for_question>
+            },
+            ...
+        ]
 
     V1:
         JSON array describing the questions in this exam and the exercises they come from:
@@ -62,14 +76,14 @@ class Exam(AbstractFacilityDataModel):
     question_sources = JSONField(default=[], blank=True)
 
     """
-    This field is interpretted differently depending on the 'data_model_version' field.
+    This field is interpreted differently depending on the 'data_model_version' field.
 
     V1:
         Used to help select new questions from exercises at quiz creation time
 
     V0:
         Used to decide which questions are in an exam at runtime.
-        See convertExamQuestionSourcesV0V1 in exams/utils.js for details.
+        See convertExamQuestionSourcesV0V2 in exams/utils.js for details.
     """
     seed = models.IntegerField(default=1)
 
@@ -88,9 +102,17 @@ class Exam(AbstractFacilityDataModel):
         Collection, related_name="exams", blank=False, null=False
     )
     creator = models.ForeignKey(
-        FacilityUser, related_name="exams", blank=False, null=False
+        FacilityUser, related_name="exams", blank=False, null=True
     )
+
+    # To be set True when the quiz is first set to active=True
+    date_activated = models.DateTimeField(default=None, null=True, blank=True)
+
+    date_created = models.DateTimeField(auto_now_add=True, null=True)
+
+    # archive will be used on the frontend to indicate if a quiz is "closed"
     archive = models.BooleanField(default=False)
+    date_archived = models.DateTimeField(default=None, null=True, blank=True)
 
     def delete(self, using=None, keep_parents=False):
         """
@@ -99,9 +121,32 @@ class Exam(AbstractFacilityDataModel):
         LearnerProgressNotification.objects.filter(quiz_id=self.id).delete()
         super(Exam, self).delete(using, keep_parents)
 
+    def pre_save(self):
+        super(Exam, self).pre_save()
+
+        # maintain stricter enforcement on when creator is allowed to be null
+        if self._state.adding and self.creator is None:
+            raise IntegrityError("Exam must be saved with an creator")
+
+        # validate that datasets match so this would be syncable
+        if self.creator and self.creator.dataset_id != self.dataset_id:
+            # the only time creator can be null is if it's a superuser
+            # and if we set it to none HERE
+            if not self.creator.is_superuser:
+                raise IntegrityError("Exam must have creator in the same dataset")
+            self.creator = None
+
+    def save(self, *args, **kwargs):
+        # If archive is True during the save op, but there is no date_archived then
+        # this is the save that is archiving the object and we need to datestamp it
+        if getattr(self, "archive", False) is True:
+            if getattr(self, "date_archived") is None:
+                self.date_archived = timezone.now()
+        super(Exam, self).save(*args, **kwargs)
+
     """
     As we evolve this model in ways that migrations can't handle, certain fields may
-    become deprecated, and other fields may need to be interpretted differently. This
+    become deprecated, and other fields may need to be interpreted differently. This
     may happen when multiple versions of the model need to coexist in the same database.
 
     The 'data_model_version' field is used to keep track of the version of the model.
@@ -109,10 +154,10 @@ class Exam(AbstractFacilityDataModel):
     Certain fields that are only relevant for older model versions get prefixed
     with their version numbers.
     """
-    data_model_version = models.SmallIntegerField(default=0)
+    data_model_version = models.SmallIntegerField(default=2)
 
     def infer_dataset(self, *args, **kwargs):
-        return self.creator.dataset_id
+        return self.cached_related_dataset_lookup("collection")
 
     def calculate_partition(self):
         return self.dataset_id
@@ -144,11 +189,41 @@ class ExamAssignment(AbstractFacilityDataModel):
         Collection, related_name="assigned_exams", blank=False, null=False
     )
     assigned_by = models.ForeignKey(
-        FacilityUser, related_name="assigned_exams", blank=False, null=False
+        FacilityUser, related_name="assigned_exams", blank=False, null=True
     )
 
+    def pre_save(self):
+        super(ExamAssignment, self).pre_save()
+
+        # this shouldn't happen
+        if (
+            self.exam
+            and self.collection
+            and self.exam.dataset_id != self.collection.dataset_id
+        ):
+            raise IntegrityError(
+                "Exam assignment foreign models must be in same dataset"
+            )
+
+        # maintain stricter enforcement on when assigned_by is allowed to be null
+        # assignments aren't usually updated, but ensure only during creation
+        if self._state.adding and self.assigned_by is None:
+            raise IntegrityError("Exam assignment must be saved with an assigner")
+
+        # validate that datasets match so this would be syncable
+        if self.assigned_by and self.assigned_by.dataset_id != self.dataset_id:
+            # the only time assigned_by can be null is if it's a superuser
+            # and if we set it to none HERE
+            if not self.assigned_by.is_superuser:
+                # maintain stricter enforcement on when assigned_by is allowed to be null
+                raise IntegrityError(
+                    "Exam assignment must have assigner in the same dataset"
+                )
+            self.assigned_by = None
+
     def infer_dataset(self, *args, **kwargs):
-        return self.assigned_by.dataset_id
+        # infer from exam so assignments align with exams
+        return self.cached_related_dataset_lookup("exam")
 
     def calculate_source_id(self):
         return "{exam_id}:{collection_id}".format(
@@ -157,3 +232,53 @@ class ExamAssignment(AbstractFacilityDataModel):
 
     def calculate_partition(self):
         return self.dataset_id
+
+
+class IndividualSyncableExam(AbstractFacilityDataModel):
+    """
+    Represents a Exam and its assignment to a particular user
+    in such a way that it can be synced to a single-user device.
+    Note: This is not the canonical representation of a user's
+    relation to an exam (which is captured in an ExamAssignment
+    combined with a user's Membership in an associated Collection;
+    the purpose of this model is as a derived/denormalized
+    representation of a specific user's exam assignments).
+    """
+
+    morango_model_name = "individualsyncableexam"
+
+    user = models.ForeignKey(FacilityUser)
+    collection = models.ForeignKey(Collection)
+    exam_id = models.UUIDField()
+
+    serialized_exam = JSONField()
+
+    def infer_dataset(self, *args, **kwargs):
+        return self.cached_related_dataset_lookup("user")
+
+    def calculate_source_id(self):
+        return self.exam_id
+
+    def calculate_partition(self):
+        return "{dataset_id}:user-ro:{user_id}".format(
+            dataset_id=self.dataset_id, user_id=self.user_id
+        )
+
+    @classmethod
+    def serialize_exam(cls, exam):
+        serialized = exam.serialize()
+        for key in [
+            "active",
+            "creator_id",
+            "date_created",
+            "date_activated",
+            "collection_id",
+        ]:
+            serialized.pop(key, None)
+        return serialized
+
+    @classmethod
+    def deserialize_exam(cls, serialized_exam):
+        exam = Exam.deserialize(serialized_exam)
+        exam.active = True
+        return exam

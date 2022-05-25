@@ -21,10 +21,10 @@
           :showLabel="false"
           :checked="contentIsChecked(content)"
           :indeterminate="contentIsIndeterminate(content)"
-          @change="handleCheckboxChange(content.id, $event)"
+          @change="handleCheckboxChange(content, $event)"
         />
         <LessonContentCard
-          :class="{'with-checkbox': needCheckboxes}"
+          :class="{ 'with-checkbox': needCheckboxes }"
           :title="content.title"
           :thumbnail="content.thumbnail"
           :description="content.description"
@@ -32,6 +32,7 @@
           :message="contentCardMessage(content)"
           :link="contentCardLink(content)"
           :numCoachContents="content.num_coach_contents"
+          :isLeaf="content.is_leaf"
         />
       </li>
     </ul>
@@ -39,7 +40,7 @@
     <template>
       <KButton
         v-if="showButton"
-        :text="$tr('viewMoreButtonLabel')"
+        :text="coreString('viewMoreAction')"
         :primary="false"
         @click="$emit('moreresults')"
       />
@@ -49,7 +50,7 @@
       />
       <!-- TODO introduce messages in next version -->
       <p v-else-if="viewMoreButtonState === 'error'">
-        <mat-svg category="alert" name="error" />
+        <KIcon icon="error" />
         <!-- {{ $tr('moreResultsError') }} -->
       </p>
       <!-- <p v-else-if="viewMoreButtonState === 'no_more_results'">
@@ -63,19 +64,15 @@
 
 <script>
 
-  import KButton from 'kolibri.coreVue.components.KButton';
-  import KCheckbox from 'kolibri.coreVue.components.KCheckbox';
-  import KCircularLoader from 'kolibri.coreVue.components.KCircularLoader';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import LessonContentCard from './LessonContentCard';
 
   export default {
     name: 'ContentCardList',
     components: {
-      KButton,
-      KCheckbox,
-      KCircularLoader,
       LessonContentCard,
     },
+    mixins: [commonCoreStrings],
     props: {
       showSelectAll: {
         type: Boolean,
@@ -135,13 +132,15 @@
       },
     },
     methods: {
-      handleCheckboxChange(contentId, checked) {
-        this.$emit('change_content_card', { contentId, checked });
+      handleCheckboxChange(content, checked) {
+        this.$emit('change_content_card', { content, checked });
       },
     },
     $trs: {
-      selectAllCheckboxLabel: 'Select all',
-      viewMoreButtonLabel: 'View more',
+      selectAllCheckboxLabel: {
+        message: 'Select all',
+        context: 'Generic checkbox label used to select all elements in a list.',
+      },
       // noMoreResults: 'No more results',
       // moreResultsError: 'Failed to get more results',
     },

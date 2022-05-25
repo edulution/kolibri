@@ -28,12 +28,14 @@ except ImportError:
         kwds,
         typed,
         kwd_mark=(object(),),
-        fasttypes={int, str, frozenset, type(None)},
+        fasttypes=None,
         sorted=sorted,
         tuple=tuple,
         type=type,
         len=len,
-    ):  # NOQA @ReservedAssignment
+    ):
+        if fasttypes is None:
+            fasttypes = {int, str, frozenset, type(None)}
         "Make a cache key from optionally typed positional and keyword arguments"
         key = args
         if kwds:
@@ -76,7 +78,7 @@ except ImportError:
 
         def decorating_function(user_function):
 
-            cache = dict()
+            cache = {}
             # make statistics updateable non-locally
             stats = [0, 0]
             HITS, MISSES = 0, 1  # names for the stats fields
@@ -129,7 +131,7 @@ except ImportError:
                         if link is not None:
                             # record recent use of the key by moving it to the
                             # front of the list
-                            root, = nonlocal_root
+                            (root,) = nonlocal_root
                             link_prev, link_next, key, result = link
                             link_prev[NEXT] = link_next
                             link_next[PREV] = link_prev
@@ -141,7 +143,7 @@ except ImportError:
                             return result
                     result = user_function(*args, **kwds)
                     with lock:
-                        root, = nonlocal_root
+                        (root,) = nonlocal_root
                         if key in cache:
                             # getting here means that this same key was added to the
                             # cache while the lock was released.  since the link

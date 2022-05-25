@@ -17,6 +17,8 @@ class TestURLParsing(TestCase):
                 "http://192.168.0.1:8080/",
                 "http://192.168.0.1/",
                 "http://192.168.0.1:8008/",
+                "http://192.168.0.1:8000/",
+                "http://192.168.0.1:5000/",
                 "https://192.168.0.1/",
             ],
         )
@@ -29,6 +31,8 @@ class TestURLParsing(TestCase):
                 "http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:8080/",
                 "http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]/",
                 "http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:8008/",
+                "http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:8000/",
+                "http://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:5000/",
                 "https://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]/",
             ],
         )
@@ -41,6 +45,8 @@ class TestURLParsing(TestCase):
                 "http://www.nomansland.com:8080/",
                 "http://www.nomansland.com/",
                 "http://www.nomansland.com:8008/",
+                "http://www.nomansland.com:8000/",
+                "http://www.nomansland.com:5000/",
                 "https://www.nomansland.com/",
             ],
         )
@@ -54,6 +60,8 @@ class TestURLParsing(TestCase):
                 "http://www.nomansland.com:8080/",
                 "http://www.nomansland.com/",
                 "http://www.nomansland.com:8008/",
+                "http://www.nomansland.com:8000/",
+                "http://www.nomansland.com:5000/",
                 "https://www.nomansland.com:7007/",
                 "https://www.nomansland.com/",
             ],
@@ -67,10 +75,14 @@ class TestURLParsing(TestCase):
                 "http://www.nomansland.com:8080/mapath/",
                 "http://www.nomansland.com/mapath/",
                 "http://www.nomansland.com:8008/mapath/",
+                "http://www.nomansland.com:8000/mapath/",
+                "http://www.nomansland.com:5000/mapath/",
                 "https://www.nomansland.com/mapath/",
                 "http://www.nomansland.com:8080/",
                 "http://www.nomansland.com/",
                 "http://www.nomansland.com:8008/",
+                "http://www.nomansland.com:8000/",
+                "http://www.nomansland.com:5000/",
                 "https://www.nomansland.com/",
             ],
         )
@@ -83,6 +95,8 @@ class TestURLParsing(TestCase):
                 "http://www.nomansland.com:8080/",
                 "http://www.nomansland.com/",
                 "http://www.nomansland.com:8008/",
+                "http://www.nomansland.com:8000/",
+                "http://www.nomansland.com:5000/",
                 "https://www.nomansland.com/",
             ],
         )
@@ -96,6 +110,8 @@ class TestURLParsing(TestCase):
                 "http://www.nomansland.com:8080/",
                 "http://www.nomansland.com/",
                 "http://www.nomansland.com:8008/",
+                "http://www.nomansland.com:8000/",
+                "http://www.nomansland.com:5000/",
             ],
         )
 
@@ -128,7 +144,7 @@ class TestURLParsing(TestCase):
 class TestNetworkClientConnections(TestCase):
     def test_successful_connection_to_kolibri_address(self):
         nc = NetworkClient(address="kolibrihappyurl.qqq")
-        self.assertEqual(nc.base_url, "https://kolibrihappyurl.qqq/")
+        self.assertEqual(nc.base_url, "https://kolibrihappyurl.qqq")
 
     def test_unsuccessful_connection_to_unavailable_address(self):
         with self.assertRaises(errors.NetworkLocationNotFound):
@@ -140,11 +156,11 @@ class TestNetworkClientConnections(TestCase):
 
     def test_successful_connection_to_address_with_port80_timeout(self):
         nc = NetworkClient(address="timeoutonport80url.qqq")
-        self.assertEqual(nc.base_url, "http://timeoutonport80url.qqq:8080/")
+        self.assertEqual(nc.base_url, "http://timeoutonport80url.qqq:8080")
 
     def test_successful_connection_to_kolibri_base_url(self):
         nc = NetworkClient(base_url="https://kolibrihappyurl.qqq/")
-        self.assertEqual(nc.base_url, "https://kolibrihappyurl.qqq/")
+        self.assertEqual(nc.base_url, "https://kolibrihappyurl.qqq")
 
     def test_unsuccessful_connection_to_unavailable_base_url(self):
         with self.assertRaises(errors.NetworkLocationNotFound):
@@ -156,4 +172,4 @@ class TestNetworkClientConnections(TestCase):
 
     def test_unsuccessful_connection_to_base_url_with_timeout(self):
         with self.assertRaises(errors.NetworkLocationNotFound):
-            NetworkClient(base_url="http://timeoutonport80url.qqq/")
+            NetworkClient(base_url="http://timeoutonport80url.qqq")

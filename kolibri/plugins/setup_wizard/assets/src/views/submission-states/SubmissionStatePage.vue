@@ -6,7 +6,7 @@
       :delay="false"
     />
 
-    <h1 class="submission-state-page-header" :style="{ color: $coreAccentColor }">
+    <h1 class="submission-state-page-header" :style="{ color: $themeTokens.primary }">
       {{ header }}
     </h1>
 
@@ -21,13 +21,8 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KCircularLoader from 'kolibri.coreVue.components.KCircularLoader';
-
   export default {
     name: 'SubmissionStatePage',
-    components: { KCircularLoader },
-    mixins: [themeMixin],
     props: {
       header: {
         type: String,

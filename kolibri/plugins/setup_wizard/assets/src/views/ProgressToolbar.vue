@@ -2,21 +2,21 @@
 
   <UiToolbar
     class="progress-toolbar"
+    :style="{ backgroundColor: $themeTokens.appBar }"
     type="clear"
     textColor="white"
-    :removeNavIcon="!displayNavIcon"
+    :removeNavIcon="$attrs.removeNavIcon"
   >
-    <UiIconButton
-      slot="icon"
-      type="secondary"
-      color="white"
-      :class="{ 'rtl-icon': isRtl }"
-      @click="$emit('backButtonClicked')"
-    >
-      <mat-svg name="arrow_back" category="navigation" />
-    </UiIconButton>
-    {{ $tr('progressIndicator', {currentStep , totalSteps}) }}
-
+    <template #icon>
+      <KIconButton
+        icon="back"
+        :color="$themeTokens.textInverted"
+        @click="$emit('click_back')"
+      />
+    </template>
+    <span>
+      {{ title || coreString('kolibriLabel') }}
+    </span>
   </UiToolbar>
 
 </template>
@@ -24,42 +24,21 @@
 
 <script>
 
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import UiToolbar from 'kolibri.coreVue.components.UiToolbar';
-  import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
 
   export default {
     name: 'ProgressToolbar',
     components: {
       UiToolbar,
-      UiIconButton,
     },
-    $trs: {
-      progressIndicator: 'Step {currentStep, number} of {totalSteps, number}',
-    },
+    mixins: [commonCoreStrings],
     props: {
-      currentStep: {
-        type: Number,
-        required: true,
-      },
-      totalSteps: {
-        type: Number,
-        required: true,
-      },
-    },
-    computed: {
-      displayNavIcon() {
-        return this.currentStep > 1;
+      title: {
+        type: String,
+        default: null,
       },
     },
   };
 
 </script>
-
-
-<style lang="scss" scoped>
-
-  .progress-toolbar {
-    fill: white;
-  }
-
-</style>

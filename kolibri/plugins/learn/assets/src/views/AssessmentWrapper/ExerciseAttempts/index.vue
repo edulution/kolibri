@@ -15,7 +15,7 @@
       v-for="i in numSpaces"
       :key="`placeholder-${i}`"
       class="placeholder"
-      :style="{ borderBottom: `2px solid ${$coreTextAnnotation}` }"
+      :style="{ borderBottom: `2px solid ${$themeTokens.annotation}` }"
     >
     </div>
   </div>
@@ -25,13 +25,11 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import AnswerIcon from './AnswerIcon';
 
   export default {
     name: 'ExerciseAttempts',
     components: { AnswerIcon },
-    mixins: [themeMixin],
     props: {
       // Creates an empty space awaiting a new attempt
       waitingForAttempt: {
@@ -47,6 +45,7 @@
       // ordered from first to last
       log: {
         type: Array,
+        default: () => [],
         validator(arr) {
           return arr.every(val => ['right', 'wrong', 'hint', 'rectified'].includes(val));
         },

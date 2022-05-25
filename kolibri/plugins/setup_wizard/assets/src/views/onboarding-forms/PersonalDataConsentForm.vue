@@ -4,12 +4,12 @@
     <OnboardingForm
       :header="$tr('header')"
       :description="$tr('description')"
-      :submitText="submitText"
-      @submit="$emit('submit')"
+      :submitText="coreString('finishAction')"
+      @submit="handleSubmit"
     >
       <KButton
         ref="modalButton"
-        :text="$tr('moreInfo')"
+        :text="coreString('usageAndPrivacyLabel')"
         appearance="basic-link"
         @click="showModal = true"
       />
@@ -19,6 +19,7 @@
       v-if="showModal"
       hideUsersSection
       @cancel="closeModal"
+      @submit="closeModal"
     />
   </div>
 
@@ -27,23 +28,17 @@
 
 <script>
 
-  import KButton from 'kolibri.coreVue.components.KButton';
   import PrivacyInfoModal from 'kolibri.coreVue.components.PrivacyInfoModal';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import OnboardingForm from './OnboardingForm';
 
   export default {
     name: 'PersonalDataConsentForm',
     components: {
-      KButton,
       PrivacyInfoModal,
       OnboardingForm,
     },
-    props: {
-      submitText: {
-        type: String,
-        required: true,
-      },
-    },
+    mixins: [commonCoreStrings],
     data() {
       return {
         showModal: false,
@@ -70,12 +65,21 @@
           }
         });
       },
+      handleSubmit() {
+        this.$emit('click_next');
+      },
     },
     $trs: {
-      description:
-        'If you are setting up Kolibri to be used by other users, you or someone you delegate will be responsible for protecting and managing the user accounts and personal information stored on this device.',
-      header: 'Responsibilities as an administrator',
-      moreInfo: 'More information',
+      description: {
+        message:
+          'If you are setting up Kolibri to be used by other users, you or someone you delegate will be responsible for protecting and managing the user accounts and personal information stored on this device.',
+        context: "Description of the 'Responsibilities as an administrator' page.",
+      },
+      header: {
+        message: 'Responsibilities as an administrator',
+        context:
+          'When an admin sets up a Kolibri facility they need to take into consideration the relevant privacy laws and regulations. This is the title of that section in the set up process where they can view those regulations.',
+      },
     },
   };
 

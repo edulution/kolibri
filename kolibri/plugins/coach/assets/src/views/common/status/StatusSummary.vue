@@ -8,7 +8,7 @@
     tuned for readability over consistency. This means that it has a few intentional
     and perhaps a few unintentional edge cases.
 
-    See locahost:8000/coach/#/about/learnerStatusTypes for a parametric overview
+    See localhost:8000/coach/#/about/statuses for a parametric overview
     of the possible behaviors.
    -->
   <div :class="verbose ? 'multi-line' : 'single-line'">
@@ -40,7 +40,7 @@
     <LearnerProgressCount
       v-else-if="total === notStarted && !showAll"
       class="item"
-      :style="{ color: $coreGrey300 }"
+      :style="{ color: $themeTokens.textDisabled }"
       :verb="VERBS.notStarted"
       :icon="ICONS.nothing"
       :total="total"
@@ -87,9 +87,9 @@
         debug="ratio; has some needing help"
       />
       <LearnerProgressCount
-        v-if="showItem(!verbose)"
+        v-if="showItem(!verbose) || includeNotStarted"
         class="item"
-        :style="{ color: $coreGrey300 }"
+        :style="{ color: $themeTokens.textDisabled }"
         :verb="VERBS.notStarted"
         :icon="ICONS.nothing"
         :total="total"
@@ -139,7 +139,6 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import { VERBS, ICONS } from './constants';
   import LearnerProgressCount from './LearnerProgressCount';
   import LearnerProgressRatio from './LearnerProgressRatio';
@@ -152,7 +151,7 @@
       // eslint-disable-next-line vue/no-unused-components
       LearnerProgressRatio, // it is used, it's just referenced dynamically
     },
-    mixins: [tallyMixin, themeMixin],
+    mixins: [tallyMixin],
     props: {
       verbose: {
         type: Boolean,
@@ -169,6 +168,10 @@
       showNeedsHelp: {
         type: Boolean,
         default: true,
+      },
+      includeNotStarted: {
+        type: Boolean,
+        default: false,
       },
     },
     computed: {
@@ -217,13 +220,10 @@
 
   .single-line .item {
     display: inline-block;
+
     &:not(:last-child) {
       margin-right: 16px;
     }
-  }
-
-  .lighten {
-    color: #b3b3b3;
   }
 
 </style>

@@ -7,45 +7,46 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
-      <ReportsHeader />
-      <CoreTable :emptyMessage="coachStrings.$tr('groupListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('groupNameLabel') }}</th>
-            <th>{{ coachStrings.$tr('lessonsLabel') }}</th>
-            <th>{{ coachStrings.$tr('quizzesLabel') }}</th>
-            <th>{{ coachStrings.$tr('learnersLabel') }}</th>
-            <th>{{ coachStrings.$tr('avgQuizScoreLabel') }}</th>
-            <th>{{ coachStrings.$tr('lastActivityLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" group />
+      <ReportsHeader :title="$isPrint ? $tr('printLabel', { className }) : null" />
+      <ReportsControls @export="exportCSV" />
+      <CoreTable :emptyMessage="coachString('groupListEmptyState')">
+        <template #headers>
+          <th>{{ coachString('groupNameLabel') }}</th>
+          <th>{{ coreString('lessonsLabel') }}</th>
+          <th>{{ coreString('quizzesLabel') }}</th>
+          <th>{{ coreString('learnersLabel') }}</th>
+          <th>{{ coachString('avgScoreLabel') }}</th>
+          <th>{{ coachString('lastActivityLabel') }}</th>
+        </template>
+        <template #tbody>
+          <transition-group tag="tbody" name="list">
+            <tr v-for="tableRow in table" :key="tableRow.id">
+              <td>
                 <KRouterLink
                   :text="tableRow.name"
                   :to="classRoute('ReportsGroupReportPage', { groupId: tableRow.id })"
+                  icon="group"
                 />
-              </KLabeledIcon>
-            </td>
-            <td>
-              {{ coachStrings.$tr('integer', {value: tableRow.numLessons}) }}
-            </td>
-            <td>
-              {{ coachStrings.$tr('integer', {value: tableRow.numQuizzes}) }}
-            </td>
-            <td>
-              {{ coachStrings.$tr('integer', {value: tableRow.numLearners}) }}
-            </td>
-            <td><Score :value="tableRow.avgScore" /></td>
-            <td><ElapsedTime :date="tableRow.lastActivity" /></td>
-          </tr>
-        </transition-group>
+              </td>
+              <td>
+                {{ $formatNumber(tableRow.numLessons) }}
+              </td>
+              <td>
+                {{ $formatNumber(tableRow.numQuizzes) }}
+              </td>
+              <td>
+                {{ $formatNumber(tableRow.numLearners) }}
+              </td>
+              <td><Score :value="tableRow.avgScore" /></td>
+              <td><ElapsedTime :date="tableRow.lastActivity" /></td>
+            </tr>
+          </transition-group>
+        </template>
       </CoreTable>
     </KPageContainer>
   </CoreBase>
@@ -56,20 +57,26 @@
 <script>
 
   import ElapsedTime from 'kolibri.coreVue.components.ElapsedTime';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import sortBy from 'lodash/sortBy';
   import commonCoach from '../common';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsControls from './ReportsControls';
   import ReportsHeader from './ReportsHeader';
 
   export default {
     name: 'ReportsGroupListPage',
     components: {
+      ReportsControls,
       ReportsHeader,
       ElapsedTime,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
       table() {
-        const sorted = this._.sortBy(this.groups, ['name']);
-        const mapped = sorted.map(group => {
+        const sorted = sortBy(this.groups, ['name']);
+        return sorted.map(group => {
           const groupLessons = this.lessons.filter(
             lesson => lesson.groups.includes(group.id) || !lesson.groups.length
           );
@@ -87,7 +94,6 @@
           Object.assign(tableRow, group);
           return tableRow;
         });
-        return mapped;
       },
     },
     methods: {
@@ -109,10 +115,36 @@
               status.status !== this.STATUSES.notStarted && learnerIds.includes(status.learner_id)
           ),
         ];
-        if (!statuses.length) {
-          return null;
-        }
-        return this._.maxBy(statuses, 'last_activity').last_activity;
+
+        return statuses.length ? this.maxLastActivity(statuses) : null;
+      },
+      exportCSV() {
+        const columns = [
+          ...csvFields.name('groupNameLabel'),
+          {
+            name: this.coachString('lessonsLabel'),
+            key: 'numLessons',
+          },
+          {
+            name: this.coachString('quizzesLabel'),
+            key: 'numQuizzes',
+          },
+          {
+            name: this.coachString('learnersLabel'),
+            key: 'numLearners',
+          },
+          ...csvFields.avgScore(true),
+          ...csvFields.lastActivity(),
+        ];
+
+        const fileName = this.$tr('printLabel', { className: this.className });
+        new CSVExporter(columns, fileName).export(this.table);
+      },
+    },
+    $trs: {
+      printLabel: {
+        message: '{className} Groups',
+        context: 'Indicates the groups that are associated with a specific class.',
       },
     },
   };
@@ -120,4 +152,8 @@
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+</style>

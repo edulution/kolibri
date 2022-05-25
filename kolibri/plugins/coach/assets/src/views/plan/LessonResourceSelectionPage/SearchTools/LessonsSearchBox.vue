@@ -2,16 +2,19 @@
 
   <form
     class="box"
-    :class="searchClasses"
+    :style="{ borderColor: $themeTokens.annotation }"
     @submit.prevent="search"
     @keydown.esc.prevent="clearSearchTerm"
   >
-    <div class="box-row">
+    <div
+      class="box-row"
+      :style="{ borderColor: $themeTokens.fineLine }"
+    >
       <label
         class="visuallyhidden"
         for="searchfield"
       >
-        {{ $tr('searchBoxLabel') }}
+        {{ coreString('searchLabel') }}
       </label>
 
       <input
@@ -20,40 +23,31 @@
         type="search"
         class="input"
         :class="$computedClass(inputPlaceHolderStyle)"
-        :style="{ color: $coreTextDefault }"
+        :style="{ color: $themeTokens.text }"
         dir="auto"
-        :placeholder="$tr('searchBoxLabel')"
+        :placeholder="coreString('searchLabel')"
       >
 
       <div class="buttons-wrapper">
-        <UiIconButton
-          color="black"
+        <KIconButton
+          icon="clear"
+          :color="$themePalette.black"
           size="small"
           class="clear-button"
           :class="searchTerm === '' ? '' : 'clear-button-visible'"
-          :ariaLabel="$tr('clearButtonLabel')"
+          :ariaLabel="coreString('clearAction')"
           @click="clearSearchTerm"
-        >
-          <mat-svg
-            name="clear"
-            category="content"
-          />
-        </UiIconButton>
-
-        <div class="submit-button-wrapper" :style="{ backgroundColor: $coreActionDark }">
-          <UiIconButton
-            type="secondary"
-            color="white"
+        />
+        <div class="submit-button-wrapper" :style="{ backgroundColor: $themeTokens.primary }">
+          <KIconButton
+            icon="search"
+            :color="$themeTokens.textInverted"
             class="submit-button"
             :disabled="!searchTermHasChanged"
-            :ariaLabel="$tr('startSearchButtonLabel')"
+            :ariaLabel="coreString('startSearchButtonLabel')"
+            :style="{ fill: $themeTokens.textInverted }"
             @click="search"
-          >
-            <mat-svg
-              name="search"
-              category="action"
-            />
-          </UiIconButton>
+          />
         </div>
       </div>
     </div>
@@ -65,38 +59,24 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'LessonsSearchBox',
-    $trs: {
-      searchBoxLabel: 'Search',
-      clearButtonLabel: 'Clear',
-      startSearchButtonLabel: 'Start search',
-    },
-    components: {
-      UiIconButton,
-    },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings],
     data() {
       return {
         searchTerm: this.$route.params.searchTerm || '',
       };
     },
     computed: {
-      searchClasses() {
-        return this.$computedClass({
-          borderColor: this.$coreTextAnnotation,
-        });
-      },
       searchTermHasChanged() {
         return this.searchTerm !== this.$route.params.searchTerm;
       },
       inputPlaceHolderStyle() {
         return {
           '::placeholder': {
-            color: this.$coreTextAnnotation,
+            color: this.$themeTokens.annotation,
           },
         };
       },
@@ -107,7 +87,7 @@
         this.$refs.searchinput.focus();
       },
       search() {
-        if (this.searchTerm !== '') {
+        if (this.searchTerm !== '' && this.searchTermHasChanged) {
           this.$emit('searchterm', this.searchTerm);
         }
       },
@@ -119,10 +99,11 @@
 
 <style lang="scss" scoped>
 
+  @import '~kolibri-design-system/lib/styles/definitions';
+
+  // TODO - consolidate with kFilterTextbox
   .box {
     margin-right: 8px;
-    border-style: solid;
-    border-width: 1px;
   }
 
   .box-within-action-bar {
@@ -132,18 +113,20 @@
   .box-row {
     display: table;
     width: 100%;
-    background-color: white;
+    border-style: solid;
+    border-width: 2px;
+    border-radius: $radius;
   }
 
   .input {
+    position: relative;
+    left: 8px;
     display: table-cell;
     width: 100%;
     height: 36px;
     padding: 0;
-    padding-left: 8px;
     margin: 0;
     vertical-align: middle;
-    background-color: white;
     border: 0;
 
     // removes the IE clear button
@@ -154,7 +137,6 @@
 
   .buttons-wrapper {
     display: table-cell;
-    width: 78px;
     height: 36px;
     text-align: right;
     vertical-align: middle;
@@ -163,8 +145,8 @@
   .clear-button {
     width: 24px;
     height: 24px;
-    margin-right: 6px;
-    margin-left: 6px;
+    margin-right: 3px;
+    margin-left: 3px;
     vertical-align: middle;
     visibility: hidden;
   }
@@ -176,12 +158,13 @@
   .submit-button {
     width: 36px;
     height: 36px;
-    fill: white;
   }
 
   .submit-button-wrapper {
     display: inline-block;
     vertical-align: middle;
+    border-top-right-radius: 2px;
+    border-bottom-right-radius: 2px;
   }
 
   .filter-icon {

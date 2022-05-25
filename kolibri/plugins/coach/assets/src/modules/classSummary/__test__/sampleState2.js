@@ -13,6 +13,13 @@ export default {
       username: 'AnotherCoach',
     },
   },
+  adHocGroupsMap: {
+    ad_hoc_learner_id_1: {
+      id: 'ad_hoc_learner_id_1',
+      name: 'ad_hoc_learner_id_1',
+      member_ids: [],
+    },
+  },
   learnerMap: {
     learner_id_1: {
       id: 'learner_id_1',
@@ -856,6 +863,13 @@ export default {
       active: false,
       node_ids: ['node_29', 'node_32', 'node_30', 'node_31'],
       groups: [],
+    },
+    lesson_id_5: {
+      id: 'lesson_id_5',
+      title: 'The lesson with no resources',
+      active: true,
+      node_ids: [],
+      groups: ['group_id_2'],
     },
   },
 };

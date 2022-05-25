@@ -1,66 +1,70 @@
 <template>
 
-  <div :style="{ backgroundColor: $coreBgLight }">
-    <h3 class="header">
-      {{ $tr('header') }}
+  <div :style="{ backgroundColor: $themeTokens.surface }">
+    <h3
+      id="answer-history-label"
+      class="header"
+    >
+      {{ $tr('answerHistoryLabel') }}
     </h3>
 
-    <ul ref="attemptList" class="history-list">
+    <KSelect
+      v-if="isMobile"
+      class="history-select"
+      :value="selected"
+      aria-labelledby="answer-history-label"
+      :options="options"
+      :disabled="$attrs.disabled"
+      @change="handleDropdownChange($event.value)"
+    >
+      <template #display>
+        <AttemptLogItem
+          :isSurvey="isSurvey"
+          :attemptLog="attemptLogs[selectedQuestionNumber]"
+          displayTag="span"
+        />
+      </template>
+      <template #option="{ index }">
+        <AttemptLogItem
+          :isSurvey="isSurvey"
+          :attemptLog="attemptLogs[index]"
+          displayTag="span"
+        />
+      </template>
+    </KSelect>
+
+    <ul
+      v-else
+      ref="attemptList"
+      class="history-list"
+      role="listbox"
+      @keydown.home="setSelectedAttemptLog(0)"
+      @keydown.end="setSelectedAttemptLog(attemptLogs.length - 1)"
+      @keydown.up.prevent="setSelectedAttemptLog(previousQuestion(selectedQuestionNumber))"
+      @keydown.left.prevent="setSelectedAttemptLog(previousQuestion(selectedQuestionNumber))"
+      @keydown.down.prevent="setSelectedAttemptLog(nextQuestion(selectedQuestionNumber))"
+      @keydown.right.prevent="setSelectedAttemptLog(nextQuestion(selectedQuestionNumber))"
+    >
       <template v-for="(attemptLog, index) in attemptLogs">
         <li
           :key="index"
-          class="clickable attempt-item"
+          class="attempt-item"
           :style="{
-            borderBottom: `2px solid ${$coreTextDisabled}`,
-            backgroundColor: isSelected(index) ? $coreTextDisabled : '',
+            backgroundColor: isSelected(index) ? $themePalette.grey.v_100 : '',
           }"
-          @click="setSelectedAttemptLog(index)"
         >
-          <div class="title">
-            <mat-svg
-              v-if="attemptLog.noattempt"
-              class="item svg-item"
-              :style=" { fill: $coreTextAnnotation }"
-              category="navigation"
-              name="cancel"
-            />
-            <mat-svg
-              v-else-if="attemptLog.correct"
-              class="item svg-item"
-              :style="{ fill: $coreStatusCorrect }"
-              category="action"
-              name="check_circle"
-            />
-            <mat-svg
-              v-else-if="attemptLog.error"
-              class="svg-item"
-              :style=" { fill: $coreTextAnnotation }"
-              category="alert"
-              name="error_outline"
-            />
-            <mat-svg
-              v-else-if="!attemptLog.correct"
-              class="item svg-item"
-              :style="{ fill: $coreStatusWrong }"
-              category="navigation"
-              name="cancel"
-            />
-            <mat-svg
-              v-else-if="attemptLog.hinted"
-              class="item svg-item"
-              :style=" { fill: $coreTextAnnotation }"
-              category="action"
-              name="lightbulb_outline"
-            />
-            <h3 class="item">
-              {{ $tr('question', {questionNumber: attemptLog.questionNumber}) }}
-            </h3>
-          </div>
-          <CoachContentLabel
-            class="coach-content-label"
-            :value="attemptLog.num_coach_contents || 0"
-            :isTopic="false"
-          />
+          <a
+            ref="attemptListOption"
+            role="option"
+            class="attempt-item-anchor"
+            :aria-selected="isSelected(index).toString()"
+            :tabindex="isSelected(index) ? 0 : -1"
+            @click.prevent="setSelectedAttemptLog(index)"
+            @keydown.enter="setSelectedAttemptLog(index)"
+            @keydown.space.prevent="setSelectedAttemptLog(index)"
+          >
+            <AttemptLogItem :isSurvey="isSurvey" :attemptLog="attemptLog" displayTag="p" />
+          </a>
         </li>
       </template>
     </ul>
@@ -71,30 +75,49 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import AttemptLogItem from './AttemptLogItem';
 
   export default {
     name: 'AttemptLogList',
     components: {
-      CoachContentLabel,
+      AttemptLogItem,
     },
-    mixins: [themeMixin],
-    $trs: {
-      header: 'Answer history',
-      today: 'Today',
-      yesterday: 'Yesterday',
-      daysAgo: '{ daysElapsed } days ago',
-      question: 'Question { questionNumber, number }',
-    },
+    mixins: [commonCoreStrings, responsiveWindowMixin],
     props: {
       attemptLogs: {
         type: Array,
         required: true,
       },
+      isMobile: {
+        type: Boolean,
+        required: false,
+      },
       selectedQuestionNumber: {
         type: Number,
         required: true,
+      },
+      isSurvey: {
+        type: Boolean,
+        default: false,
+      },
+    },
+    computed: {
+      selected() {
+        return this.options.find(o => o.value === this.selectedQuestionNumber + 1) || {};
+      },
+      options() {
+        let label = '';
+        return this.attemptLogs.map(attemptLog => {
+          label = this.coreString('questionNumberLabel', {
+            questionNumber: attemptLog.questionNumber,
+          });
+          return {
+            value: attemptLog.questionNumber,
+            label: label,
+          };
+        });
       },
     },
     mounted() {
@@ -103,7 +126,13 @@
       });
     },
     methods: {
+      handleDropdownChange(value) {
+        this.$emit('select', value - 1);
+      },
       setSelectedAttemptLog(questionNumber) {
+        const listOption = this.$refs.attemptListOption[questionNumber];
+        listOption.focus();
+
         this.$emit('select', questionNumber);
         this.scrollToSelectedAttemptLog(questionNumber);
       },
@@ -111,12 +140,32 @@
         return Number(this.selectedQuestionNumber) === questionNumber;
       },
       scrollToSelectedAttemptLog(questionNumber) {
-        const selectedElement = this.$refs.attemptList.children[questionNumber];
+        let selectedElement;
+        if (
+          this.$refs.attemptListOption &&
+          this.$refs.attemptList &&
+          this.$refs.attemptList.children
+        ) {
+          selectedElement = this.$refs.attemptList.children[questionNumber];
+        }
         if (selectedElement) {
           const parent = this.$el.parentElement;
           parent.scrollTop =
             selectedElement.offsetHeight * (questionNumber + 1) - parent.offsetHeight / 2;
         }
+      },
+      previousQuestion(questionNumber) {
+        return questionNumber - 1 >= 0 ? questionNumber - 1 : this.attemptLogs.length - 1;
+      },
+      nextQuestion(questionNumber) {
+        return questionNumber + 1 < this.attemptLogs.length ? questionNumber + 1 : 0;
+      },
+    },
+    $trs: {
+      answerHistoryLabel: {
+        message: 'Answer history',
+        context:
+          'Indicates a record of answers that a learner has responded to questions in a quiz, for example.',
       },
     },
   };
@@ -126,51 +175,38 @@
 
 <style lang="scss" scoped>
 
-  .title {
-    display: inline-block;
-  }
-
-  .coach-content-label {
-    display: inline-block;
-    margin-left: 8px;
-    vertical-align: middle;
-  }
-
   .header {
     padding-top: 10px;
     padding-bottom: 10px;
-    padding-left: 20px;
+    padding-left: 16px;
     margin: 0;
   }
 
   .history-list {
     max-height: inherit;
+    padding-right: 0;
     padding-left: 0;
     margin: 0;
+    text-align: justify;
     list-style-type: none;
   }
 
-  .item {
-    display: inline-block;
-    height: 24px;
-  }
-
-  .svg-item {
-    width: 32px;
-    height: auto;
-    margin-right: 8px;
-    vertical-align: middle;
+  .history-select {
+    max-width: 90%;
+    padding-top: 16px;
+    margin: auto;
   }
 
   .attempt-item {
     display: block;
     min-width: 120px;
-    padding-left: 20px;
     clear: both;
   }
 
-  .clickable {
+  .attempt-item-anchor {
     display: block;
+    padding-right: 1vw;
+    padding-left: 1vw;
     cursor: pointer;
   }
 

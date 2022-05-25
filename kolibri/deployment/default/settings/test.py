@@ -13,4 +13,16 @@ if "KOLIBRI_HOME" not in os.environ:
 
 from .base import *  # noqa isort:skip @UnusedWildImport
 
-KOLIBRI_SKIP_AUTO_DATABASE_MIGRATION = False
+try:
+    process_cache = CACHES["process_cache"]  # noqa F405
+except KeyError:
+    process_cache = None
+
+# Create a dummy cache for each cache
+CACHES = {
+    key: {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}
+    for key in CACHES  # noqa F405
+}
+
+if process_cache:
+    CACHES["process_cache"] = process_cache

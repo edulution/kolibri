@@ -1,5 +1,5 @@
+import { sync } from 'vuex-router-sync';
 import forEach from 'lodash/forEach';
-import isPlainObject from 'lodash/isPlainObject';
 import router from 'kolibri.coreVue.router';
 import logger from 'kolibri.lib.logging';
 import Vue from 'kolibri.lib.vue';
@@ -54,6 +54,12 @@ export default class KolibriApp extends KolibriModule {
   }
 
   ready() {
+    // VueRouter instance needs to be defined to use vuex-router-sync
+    if (!router._vueRouter) {
+      router.initRouter();
+    }
+    sync(store, router);
+
     // Add the plugin-level mutations, getters, actions, but leave core module alone
     this.store.hotUpdate({
       actions: this.pluginModule.actions || {},
@@ -61,82 +67,20 @@ export default class KolibriApp extends KolibriModule {
       mutations: this.pluginModule.mutations || {},
     });
 
-    // Add the plugin state
+    if (typeof this.pluginModule.state !== 'function') {
+      throw TypeError('pluginModule.state must be a function returning a state object');
+    }
+
+    // Add the plugin state to the initial core module state
     this.store.replaceState({
       ...this.store.state,
-      ...this.pluginModule.state,
+      ...this.pluginModule.state(),
     });
 
     // Register plugin sub-modules
     forEach(this.pluginModule.modules, (module, name) => {
       store.registerModule(name, module);
     });
-
-    if (process.env.NODE_ENV !== 'production') {
-      /* eslint-disable no-inner-declarations */
-      // Register any schemas we have defined for vuex state
-      function registerSchema(schema, moduleName, subPaths = []) {
-        forEach(schema, (subSchema, propertyName) => {
-          // Must be a plain object to be a valid schema spec
-          // And have at least a default key, and one of type or validator
-          logging.debug(subSchema);
-          if (isPlainObject(subSchema)) {
-            if (
-              typeof subSchema.default !== 'undefined' &&
-              (subSchema.type || (subSchema.validator && subSchema.validator instanceof Function))
-            ) {
-              function getter(state) {
-                if (moduleName) {
-                  state = state[moduleName];
-                }
-                subPaths.forEach(path => {
-                  state = state[path];
-                });
-                return state[propertyName];
-              }
-              function callback(newValue) {
-                let fail = false;
-                if (subSchema.type) {
-                  if (subSchema.type === Object) {
-                    if (!isPlainObject(newValue)) {
-                      fail = true;
-                    }
-                  } else {
-                    fail = !(newValue instanceof subSchema.type);
-                  }
-                }
-                if (subSchema.validator) {
-                  if (!subSchema.validator(newValue)) {
-                    fail = true;
-                  }
-                }
-                if (fail) {
-                  logging.error(
-                    `Validation failed for property: ${[...subPaths, propertyName]} in module ${
-                      moduleName ? moduleName : 'root'
-                    }`
-                  );
-                }
-              }
-              logging.debug(getter, callback);
-              store.watch(getter, callback);
-            } else {
-              // Otherwise assume it is just a nested object structure
-              registerSchema(subSchema, moduleName, [...subPaths, propertyName]);
-            }
-          }
-        });
-      }
-      if (this.pluginModule.state.schema) {
-        registerSchema(this.pluginModule.state.schema);
-      }
-      forEach(this.pluginModule.modules, (module, name) => {
-        if (module.schema) {
-          registerSchema(module.schema, name);
-        }
-      });
-      /* eslint-enable */
-    }
 
     return heartbeat.startPolling().then(() => {
       this.store.dispatch('getNotifications');
@@ -149,7 +93,7 @@ export default class KolibriApp extends KolibriModule {
             {
               el: 'rootvue',
               store: store,
-              router: router.init(this.routes),
+              router: router.initRoutes(this.routes),
             },
             this.RootVue
           )

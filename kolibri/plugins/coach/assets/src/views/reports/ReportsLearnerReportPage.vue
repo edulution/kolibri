@@ -7,67 +7,69 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
 
       <ReportsLearnerHeader />
 
+      <ReportsControls :disableExport="true" />
+
       <KGrid>
-        <KGridItem :sizes="[100, 100, 50]" percentage>
-          <h2>{{ coachStrings.$tr('lessonsAssignedLabel') }}</h2>
-          <CoreTable :emptyMessage="coachStrings.$tr('lessonListEmptyState')">
-            <thead slot="thead">
-              <tr>
-                <th>{{ coachStrings.$tr('titleLabel') }}</th>
-                <th>{{ coachStrings.$tr('progressLabel') }}</th>
-              </tr>
-            </thead>
-            <transition-group slot="tbody" tag="tbody" name="list">
-              <tr v-for="tableRow in lessonsTable" :key="tableRow.id">
-                <td>
-                  <KLabeledIcon>
-                    <KIcon slot="icon" lesson />
+        <KGridItem :layout12="{ span: $isPrint ? 12 : 6 }">
+          <h2>{{ coachString('lessonsAssignedLabel') }}</h2>
+          <CoreTable :emptyMessage="coachString('lessonListEmptyState')">
+            <template #headers>
+              <th>{{ coachString('titleLabel') }}</th>
+              <th>{{ coreString('progressLabel') }}</th>
+            </template>
+            <template #tbody>
+              <transition-group tag="tbody" name="list">
+                <tr v-for="tableRow in lessonsTable" :key="tableRow.id">
+                  <td>
                     <KRouterLink
-                      :to="classRoute('ReportsLearnerReportLessonPage', { lessonId: tableRow.id })"
+                      :to="classRoute('ReportsLearnerReportLessonPage', {
+                        lessonId: tableRow.id
+                      })"
                       :text="tableRow.title"
+                      icon="lesson"
                     />
-                  </KLabeledIcon>
-                </td>
-                <td>
-                  <StatusSimple :status="tableRow.status" />
-                </td>
-              </tr>
-            </transition-group>
+                  </td>
+                  <td>
+                    <StatusSimple :status="tableRow.status" />
+                  </td>
+                </tr>
+              </transition-group>
+            </template>
           </CoreTable>
         </KGridItem>
-        <KGridItem :sizes="[100, 100, 50]" percentage>
-          <h2>{{ coachStrings.$tr('quizzesAssignedLabel') }}</h2>
-          <CoreTable :emptyMessage="coachStrings.$tr('quizListEmptyState')">
-            <thead slot="thead">
-              <tr>
-                <th>{{ coachStrings.$tr('titleLabel') }}</th>
-                <th>{{ coachStrings.$tr('progressLabel') }}</th>
-                <th>{{ coachStrings.$tr('scoreLabel') }}</th>
-              </tr>
-            </thead>
-            <transition-group slot="tbody" tag="tbody" name="list">
-              <tr v-for="tableRow in examsTable" :key="tableRow.id">
-                <td>
-                  <KLabeledIcon>
-                    <KIcon slot="icon" quiz />
+        <KGridItem :layout12="{ span: $isPrint ? 12 : 6 }">
+          <h2>{{ coachString('quizzesAssignedLabel') }}</h2>
+          <CoreTable :class="{ print: $isPrint }" :emptyMessage="coachString('quizListEmptyState')">
+            <template #headers>
+              <th>{{ coachString('titleLabel') }}</th>
+              <th>{{ coreString('progressLabel') }}</th>
+              <th>{{ coreString('scoreLabel') }}</th>
+            </template>
+            <template #tbody>
+              <transition-group tag="tbody" name="list">
+                <tr v-for="tableRow in examsTable" :key="tableRow.id">
+                  <td>
                     <KRouterLink
                       :to="quizLink(tableRow.id)"
                       :text="tableRow.title"
+                      icon="quiz"
                     />
-                  </KLabeledIcon>
-                </td>
-                <td>
-                  <StatusSimple :status="tableRow.statusObj.status" />
-                </td>
-                <td><Score :value="tableRow.statusObj.score" /></td>
-              </tr>
-            </transition-group>
+                  </td>
+                  <td>
+                    <StatusSimple :status="tableRow.statusObj.status" />
+                  </td>
+                  <td><Score :value="tableRow.statusObj.score" /></td>
+                </tr>
+              </transition-group>
+            </template>
           </CoreTable>
         </KGridItem>
       </KGrid>
@@ -80,48 +82,52 @@
 
 <script>
 
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import { PageNames } from '../../constants';
   import ReportsLearnerHeader from './ReportsLearnerHeader';
+  import ReportsControls from './ReportsControls';
 
   export default {
     name: 'ReportsLearnerReportPage',
     components: {
       ReportsLearnerHeader,
+      ReportsControls,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
       learner() {
         return this.learnerMap[this.$route.params.learnerId];
       },
       lessonsTable() {
-        const filtered = this.lessons.filter(lesson => this.isAssigned(lesson.groups));
-        const sorted = this._.sortBy(filtered, ['title', 'active']);
-        const mapped = sorted.map(lesson => {
+        const filtered = this.lessons.filter(lesson => this.isAssignedLesson(lesson));
+        const sorted = this._.orderBy(filtered, ['date_created'], ['desc']);
+        return sorted.map(lesson => {
           const tableRow = {
             status: this.getLessonStatusStringForLearner(lesson.id, this.learner.id),
           };
           Object.assign(tableRow, lesson);
           return tableRow;
         });
-        return mapped;
       },
       examsTable() {
-        const filtered = this.exams.filter(exam => this.isAssigned(exam.groups));
-        const sorted = this._.sortBy(filtered, ['title', 'active']);
-        const mapped = sorted.map(exam => {
+        const filtered = this.exams.filter(exam => this.isAssignedQuiz(exam));
+        const sorted = this._.orderBy(filtered, ['date_created'], ['desc']);
+        return sorted.map(exam => {
           const tableRow = {
             statusObj: this.getExamStatusObjForLearner(exam.id, this.learner.id),
           };
           Object.assign(tableRow, exam);
           return tableRow;
         });
-        return mapped;
       },
     },
     methods: {
-      isAssigned(groupIds) {
-        return this.getLearnersForGroups(groupIds).includes(this.learner.id);
+      isAssignedLesson(lesson) {
+        return this.getLearnersForLesson(lesson).includes(this.learner.id);
+      },
+      isAssignedQuiz(quiz) {
+        return this.getLearnersForExam(quiz).includes(this.learner.id);
       },
       quizLink(quizId) {
         return this.classRoute(PageNames.REPORTS_LEARNER_REPORT_QUIZ_PAGE_ROOT, { quizId });
@@ -133,6 +139,8 @@
 
 
 <style lang="scss" scoped>
+
+  @import '../common/print-table';
 
   table {
     min-width: 0;

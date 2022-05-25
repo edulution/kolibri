@@ -1,438 +1,239 @@
-import os
+import logging
 
-from django.apps.registry import AppRegistryNotReady
-from django.core.management import call_command
 from django.http.response import Http404
-from django.utils.translation import gettext_lazy as _
-from iceqube.common.classes import State
-from iceqube.exceptions import UserCancelledError
+from rest_framework import decorators
 from rest_framework import serializers
 from rest_framework import viewsets
-from rest_framework.decorators import list_route
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from six import string_types
-from sqlalchemy.orm.exc import NoResultFound
 
-from .client import get_client
-from kolibri.core.content.permissions import CanManageContent
-from kolibri.core.content.utils.channels import get_mounted_drives_with_channel_info
-from kolibri.core.content.utils.paths import get_content_database_file_path
-from kolibri.utils import conf
-
-try:
-    from django.apps import apps
-
-    apps.check_apps_ready()
-except AppRegistryNotReady:
-    import django
-
-    django.setup()
+from kolibri.core.tasks.exceptions import JobNotFound
+from kolibri.core.tasks.exceptions import JobNotRestartable
+from kolibri.core.tasks.job import State
+from kolibri.core.tasks.main import job_storage
+from kolibri.core.tasks.registry import TaskRegistry
 
 
-NETWORK_ERROR_STRING = _("There was a network error.")
-
-DISK_IO_ERROR_STRING = _("There was a disk access error.")
-
-CATCHALL_SERVER_ERROR_STRING = _("There was an unknown error.")
+logger = logging.getLogger(__name__)
 
 
-class TasksViewSet(viewsets.ViewSet):
-    permission_classes = (CanManageContent,)
+class TasksSerializer(serializers.Serializer):
+    """
+    At the moment this is purely for documentation purposes.
+    We generate a dummy serializer class that contains fields corresponding to each
+    of the tasks in the registry.
+    """
+
+    def get_fields(self):
+        fields = {}
+        for task_name, registered_task in TaskRegistry.items():
+            field = registered_task.validator(
+                required=False, label=task_name, allow_null=True
+            )
+            fields[task_name] = field
+
+        return fields
+
+
+class TasksViewSet(viewsets.GenericViewSet):
+    serializer_class = TasksSerializer
+
+    def validate_create_req_data(self, request):
+        """
+        Validates the request data received on POST /api/tasks/.
+
+        If `type` parameter is absent or not a string type then `ValidationError` is raised.
+
+        If `request.user` is authorized to initiate the `task` function, this returns
+        a list of `request.data` otherwise raises `PermissionDenied`.
+        """
+        if isinstance(request.data, list):
+            request_data_list = request.data
+        else:
+            request_data_list = [request.data]
+
+        validated_jobs = []
+
+        for request_data in request_data_list:
+            # Make sure the task is registered
+            registered_task = TaskRegistry.validate_task(request_data.get("type"))
+
+            job = registered_task.validate_job_data(request.user, request_data)
+
+            registered_task.check_job_permissions(request.user, job, self)
+
+            validated_jobs.append((registered_task, job))
+
+        return validated_jobs
+
+    def _job_to_response(self, job):
+        output = {
+            "status": job.state,
+            "type": job.func,
+            "exception": job.exception,
+            "traceback": job.traceback,
+            "percentage": job.percentage_progress,
+            "id": job.job_id,
+            "cancellable": job.cancellable,
+            "clearable": job.state in [State.FAILED, State.CANCELED, State.COMPLETED],
+            "facility_id": job.facility_id,
+            "extra_metadata": job.extra_metadata,
+        }
+        return output
 
     def list(self, request):
-        jobs_response = [_job_to_response(j) for j in get_client().all_jobs()]
+        """
+        Returns a list of jobs that `request.user` has permissions for.
+
+        Accepts a query parameter named `queue` that filters jobs by `queue`.
+        """
+        queue = request.query_params.get("queue", None)
+
+        all_jobs = job_storage.get_all_jobs(queue=queue)
+
+        jobs_response = []
+        for job in all_jobs:
+            try:
+                registered_task = TaskRegistry[job.func]
+                registered_task.check_job_permissions(request.user, job, self)
+                jobs_response.append(self._job_to_response(job))
+            except KeyError:
+                # Note: Temporarily including unregistered tasks until we complete
+                # our transition to to the new tasks API.
+                # After completing transition to the new tasks API, we won't be
+                # including unregistered tasks to the response list.
+                jobs_response.append(self._job_to_response(job))
+            except PermissionDenied:
+                # `request.user` do not have permission for this job hence
+                # we we will NOT append this job to the list.
+                pass
 
         return Response(jobs_response)
 
     def create(self, request):
-        # unimplemented. Call out to the task-specific APIs for now.
-        pass
+        """
+        Enqueues a registered task for async processing.
+
+        If the registered task has a validator then that validator is run with the
+        `request` object and the corresponding `request.data` as its arguments. The dict
+        returned by the validator is passed as keyword arguments to the task function.
+
+        If the registered task has no validator then `request.data` is passed as keyword
+        arguments to the task function.
+
+        API endpoint:
+            POST /api/tasks/tasks/
+
+        Request payload parameters:
+            - `task` (required): a string representing the dotted path to task function.
+            - Other key value pairs.
+
+        Keep in mind:
+            In the validator's returning dict we can add any valid keyword arguments for the Job
+            object, including args, kwargs, and extra_metadata.
+        """
+        validated_data = self.validate_create_req_data(request)
+
+        enqueued_jobs_response = []
+
+        # Once we have validated all the tasks, we are good to go!
+        for registered_task, job in validated_data:
+            # Use job_storage to enqueue rather than using the registered_task wrapper
+            # for ease of testing, so we only have to mock job_storage once.
+            job_id = job_storage.enqueue_job(
+                job, queue=registered_task.queue, priority=registered_task.priority
+            )
+            enqueued_jobs_response.append(
+                self._job_to_response(job_storage.get_job(job_id))
+            )
+
+        if len(enqueued_jobs_response) == 1:
+            enqueued_jobs_response = enqueued_jobs_response[0]
+
+        return Response(enqueued_jobs_response)
+
+    def _get_job_for_pk(self, request, pk):
+        try:
+            if not isinstance(pk, string_types):
+                raise JobNotFound
+            job = job_storage.get_job(job_id=pk)
+            registered_task = TaskRegistry[job.func]
+            registered_task.check_job_permissions(request.user, job, self)
+        except JobNotFound:
+            raise Http404("Job with {pk} not found".format(pk=pk))
+        except KeyError:
+            raise Http404(
+                "Job with {pk} found but '{funcstr}' is not registered.".format(
+                    pk=pk, funcstr=job.func
+                )
+            )
+        return job
 
     def retrieve(self, request, pk=None):
-        try:
-            task = _job_to_response(get_client().status(pk))
-            return Response(task)
-        except NoResultFound:
-            raise Http404("Task with {pk} not found".format(pk=pk))
+        """
+        Retrieve a task by id only if `request.user` has permissions for it otherwise
+        raises `PermissionDenied`.
+        """
+        return Response(self._job_to_response(self._get_job_for_pk(request, pk)))
 
-    def destroy(self, request, pk=None):
-        # unimplemented for now.
-        pass
+    @decorators.action(methods=["post"], detail=True)
+    def restart(self, request, pk=None):
+        """
+        Restarts a job with its job id given in the url parameter.
+        """
 
-    @list_route(methods=["post"])
-    def startremotechannelimport(self, request):
-
-        try:
-            channel_id = request.data["channel_id"]
-        except KeyError:
-            raise serializers.ValidationError("The channel_id field is required.")
-
-        baseurl = request.data.get(
-            "baseurl", conf.OPTIONS["Urls"]["CENTRAL_CONTENT_BASE_URL"]
-        )
-
-        job_metadata = {"type": "REMOTECHANNELIMPORT", "started_by": request.user.pk}
-
-        job_id = get_client().schedule(
-            call_command,
-            "importchannel",
-            "network",
-            channel_id,
-            baseurl=baseurl,
-            extra_metadata=job_metadata,
-            cancellable=True,
-        )
-        resp = _job_to_response(get_client().status(job_id))
-
-        return Response(resp)
-
-    @list_route(methods=["post"])
-    def startremotecontentimport(self, request):
+        job_to_restart = self._get_job_for_pk(request, pk)
 
         try:
-            channel_id = request.data["channel_id"]
-        except KeyError:
-            raise serializers.ValidationError("The channel_id field is required.")
-
-        # optional arguments
-        baseurl = request.data.get(
-            "baseurl", conf.OPTIONS["Urls"]["CENTRAL_CONTENT_BASE_URL"]
-        )
-        node_ids = request.data.get("node_ids", None)
-        exclude_node_ids = request.data.get("exclude_node_ids", None)
-
-        if node_ids and not isinstance(node_ids, list):
-            raise serializers.ValidationError("node_ids must be a list.")
-
-        if exclude_node_ids and not isinstance(exclude_node_ids, list):
-            raise serializers.ValidationError("exclude_node_ids must be a list.")
-
-        job_metadata = {"type": "REMOTECONTENTIMPORT", "started_by": request.user.pk}
-
-        job_id = get_client().schedule(
-            call_command,
-            "importcontent",
-            "network",
-            channel_id,
-            baseurl=baseurl,
-            node_ids=node_ids,
-            exclude_node_ids=exclude_node_ids,
-            extra_metadata=job_metadata,
-            track_progress=True,
-            cancellable=True,
-        )
-
-        resp = _job_to_response(get_client().status(job_id))
-
-        return Response(resp)
-
-    @list_route(methods=["post"])
-    def startdiskchannelimport(self, request):
-
-        # Load the required parameters
-        try:
-            channel_id = request.data["channel_id"]
-        except KeyError:
-            raise serializers.ValidationError("The channel_id field is required.")
-
-        try:
-            drive_id = request.data["drive_id"]
-        except KeyError:
-            raise serializers.ValidationError("The drive_id field is required.")
-
-        try:
-            drives = get_mounted_drives_with_channel_info()
-            drive = drives[drive_id]
-        except KeyError:
+            restarted_job_id = job_storage.restart_job(job_id=job_to_restart.job_id)
+        except JobNotRestartable:
             raise serializers.ValidationError(
-                "That drive_id was not found in the list of drives."
+                "Cannot restart job with state: {}".format(job_to_restart.state)
             )
 
-        job_metadata = {"type": "DISKCHANNELIMPORT", "started_by": request.user.pk}
-
-        job_id = get_client().schedule(
-            call_command,
-            "importchannel",
-            "disk",
-            channel_id,
-            drive.datafolder,
-            extra_metadata=job_metadata,
-            cancellable=True,
+        job_response = self._job_to_response(
+            job_storage.get_job(job_id=restarted_job_id)
         )
+        return Response(job_response)
 
-        resp = _job_to_response(get_client().status(job_id))
-        return Response(resp)
+    @decorators.action(methods=["post"], detail=True)
+    def cancel(self, request, pk=None):
+        """
+        Cancel a task with its job id given in the url parameter.
+        """
+        job_to_cancel = self._get_job_for_pk(request, pk)
 
-    @list_route(methods=["post"])
-    def startdiskcontentimport(self, request):
-
-        try:
-            channel_id = request.data["channel_id"]
-        except KeyError:
-            raise serializers.ValidationError("The channel_id field is required.")
-
-        try:
-            drive_id = request.data["drive_id"]
-        except KeyError:
-            raise serializers.ValidationError("The drive_id field is required.")
-
-        try:
-            drives = get_mounted_drives_with_channel_info()
-            drive = drives[drive_id]
-        except KeyError:
+        if not job_to_cancel.cancellable:
             raise serializers.ValidationError(
-                "That drive_id was not found in the list of drives."
+                "Cannot cancel job for task: {}".format(job_to_cancel.func)
             )
 
-        # optional arguments
-        node_ids = request.data.get("node_ids", None)
-        exclude_node_ids = request.data.get("exclude_node_ids", None)
+        job_storage.cancel_job(job_id=job_to_cancel.job_id)
 
-        if node_ids and not isinstance(node_ids, list):
-            raise serializers.ValidationError("node_ids must be a list.")
-
-        if exclude_node_ids and not isinstance(exclude_node_ids, list):
-            raise serializers.ValidationError("exclude_node_ids must be a list.")
-
-        job_metadata = {"type": "DISKCONTENTIMPORT", "started_by": request.user.pk}
-
-        job_id = get_client().schedule(
-            call_command,
-            "importcontent",
-            "disk",
-            channel_id,
-            drive.datafolder,
-            node_ids=node_ids,
-            exclude_node_ids=exclude_node_ids,
-            extra_metadata=job_metadata,
-            track_progress=True,
-            cancellable=True,
-        )
-
-        resp = _job_to_response(get_client().status(job_id))
-
-        return Response(resp)
-
-    @list_route(methods=["post"])
-    def startdeletechannel(self, request):
-        """
-        Delete a channel and all its associated content from the server
-        """
-
-        if "channel_id" not in request.data:
-            raise serializers.ValidationError("The 'channel_id' field is required.")
-
-        channel_id = request.data["channel_id"]
-
-        job_metadata = {"type": "DELETECHANNEL", "started_by": request.user.pk}
-
-        task_id = get_client().schedule(
-            call_command,
-            "deletechannel",
-            channel_id,
-            track_progress=True,
-            extra_metadata=job_metadata,
-        )
-
-        # attempt to get the created Task, otherwise return pending status
-        resp = _job_to_response(get_client().status(task_id))
-
-        return Response(resp)
-
-    @list_route(methods=["post"])
-    def startdiskexport(self, request):
-        """
-        Export a channel to a local drive, and copy content to the drive.
-
-        """
-
-        # Load the required parameters
-        try:
-            channel_id = request.data["channel_id"]
-        except KeyError:
-            raise serializers.ValidationError("The channel_id field is required.")
-
-        try:
-            drive_id = request.data["drive_id"]
-        except KeyError:
-            raise serializers.ValidationError("The drive_id field is required.")
-
-        # optional arguments
-        node_ids = request.data.get("node_ids", None)
-        exclude_node_ids = request.data.get("exclude_node_ids", None)
-
-        if node_ids and not isinstance(node_ids, list):
-            raise serializers.ValidationError("node_ids must be a list.")
-
-        if exclude_node_ids and not isinstance(exclude_node_ids, list):
-            raise serializers.ValidationError("exclude_node_ids must be a list.")
-
-        job_metadata = {"type": "DISKEXPORT", "started_by": request.user.pk}
-
-        task_id = get_client().schedule(
-            _localexport,
-            channel_id,
-            drive_id,
-            track_progress=True,
-            cancellable=True,
-            node_ids=node_ids,
-            exclude_node_ids=exclude_node_ids,
-            extra_metadata=job_metadata,
-        )
-
-        # attempt to get the created Task, otherwise return pending status
-        resp = _job_to_response(get_client().status(task_id))
-
-        return Response(resp)
-
-    @list_route(methods=["post"])
-    def canceltask(self, request):
-        """
-        Cancel a task with its task id given in the task_id parameter.
-        """
-
-        if "task_id" not in request.data:
-            raise serializers.ValidationError("The 'task_id' field is required.")
-        if not isinstance(request.data["task_id"], string_types):
-            raise serializers.ValidationError("The 'task_id' should be a string.")
-        try:
-            get_client().cancel(request.data["task_id"])
-        except NoResultFound:
-            pass
-        get_client().clear(force=True)
         return Response({})
 
-    @list_route(methods=["post"])
-    def cleartasks(self, request):
+    @decorators.action(methods=["post"], detail=True)
+    def clear(self, request, pk=None):
         """
-        Cancels all running tasks.
+        Delete a task that has succeeded, failed, or been cancelled.
         """
+        job_to_clear = self._get_job_for_pk(request, pk)
 
-        get_client().clear(force=True)
-        return Response({})
-
-    @list_route(methods=["post"])
-    def deletefinishedtasks(self, request):
-        """
-        Delete all tasks that have succeeded or failed.
-        """
-        get_client().clear()
-        return Response({})
-
-    @list_route(methods=["get"])
-    def localdrive(self, request):
-        drives = get_mounted_drives_with_channel_info()
-
-        # make sure everything is a dict, before converting to JSON
-        assert isinstance(drives, dict)
-        out = [mountdata._asdict() for mountdata in drives.values()]
-
-        return Response(out)
-
-    @list_route(methods=["post"])
-    def startexportlogcsv(self, request):
-        """
-        Dumps in csv format the required logs.
-        By default it will be dump contentsummarylog.
-
-        :param: logtype: Kind of log to dump, summary or session
-        :returns: An object with the job information
-
-        """
-        csv_export_filenames = {
-            "session": "content_session_logs.csv",
-            "summary": "content_summary_logs.csv",
-        }
-        log_type = request.data.get("logtype", "summary")
-        if log_type in csv_export_filenames.keys():
-            logs_dir = os.path.join(conf.KOLIBRI_HOME, "log_export")
-            filepath = os.path.join(logs_dir, csv_export_filenames[log_type])
-        else:
-            raise Http404(
-                "Impossible to create a csv export file for {}".format(log_type)
+        if job_to_clear.state not in (State.COMPLETED, State.FAILED, State.CANCELED):
+            raise serializers.ValidationError(
+                "Cannot clear job with state: {}".format(job_to_clear.state)
             )
-        if not os.path.isdir(logs_dir):
-            os.mkdir(logs_dir)
 
-        job_type = (
-            "EXPORTSUMMARYLOGCSV" if log_type == "summary" else "EXPORTSESSIONLOGCSV"
-        )
+        job_storage.clear(job_id=job_to_clear.job_id)
 
-        job_metadata = {"type": job_type, "started_by": request.user.pk}
+        return Response({})
 
-        job_id = get_client().schedule(
-            call_command,
-            "exportlogs",
-            log_type=log_type,
-            output_file=filepath,
-            overwrite="true",
-            extra_metadata=job_metadata,
-            track_progress=True,
-        )
-
-        resp = _job_to_response(get_client().status(job_id))
-
-        return Response(resp)
-
-
-def _localexport(
-    channel_id,
-    drive_id,
-    update_progress=None,
-    check_for_cancel=None,
-    node_ids=None,
-    exclude_node_ids=None,
-    extra_metadata=None,
-):
-    drives = get_mounted_drives_with_channel_info()
-    drive = drives[drive_id]
-
-    call_command(
-        "exportchannel",
-        channel_id,
-        drive.datafolder,
-        update_progress=update_progress,
-        check_for_cancel=check_for_cancel,
-    )
-    try:
-        call_command(
-            "exportcontent",
-            channel_id,
-            drive.datafolder,
-            node_ids=node_ids,
-            exclude_node_ids=exclude_node_ids,
-            update_progress=update_progress,
-            check_for_cancel=check_for_cancel,
-        )
-    except UserCancelledError:
-        try:
-            os.remove(
-                get_content_database_file_path(channel_id, datafolder=drive.datafolder)
-            )
-        except OSError:
-            pass
-        raise
-
-
-def _job_to_response(job):
-    if not job:
-        return {
-            "type": None,
-            "started_by": None,
-            "status": State.SCHEDULED,
-            "percentage": 0,
-            "progress": [],
-            "id": None,
-            "cancellable": False,
-        }
-    else:
-        return {
-            "type": getattr(job, "extra_metadata", {}).get("type"),
-            "started_by": getattr(job, "extra_metadata", {}).get("started_by"),
-            "status": job.state,
-            "exception": str(job.exception),
-            "traceback": str(job.traceback),
-            "percentage": job.percentage_progress,
-            "id": job.job_id,
-            "cancellable": job.cancellable,
-        }
+    @decorators.action(methods=["post"], detail=False)
+    def clearall(self, request):
+        """
+        Delete all tasks that have succeeded, failed, or been cancelled.
+        """
+        queue = request.data.get("queue", None)
+        job_storage.clear(queue=queue)
+        return Response({})

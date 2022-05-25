@@ -6,13 +6,15 @@
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
       <p>
         <BackLink
           :to="$router.getRoute('GroupsPage')"
-          :text="backLinkString"
+          :text="$tr('back')"
         />
 
       </p>
@@ -23,77 +25,62 @@
 
       <div v-else>
         <h1>
-          <KLabeledIcon>
-            <KIcon slot="icon" group />
-            {{ currentGroup.name }}
-          </KLabeledIcon>
+          <KLabeledIcon icon="group" :label="currentGroup.name" />
         </h1>
 
-        <KGrid>
-          <KGridItem
-            class="number-learners"
-            :size="50"
-            percentage
-          >
-            {{ coachStrings.$tr('numberOfLearners', { value: currentGroup.users.length }) }}
-          </KGridItem>
-          <KGridItem :size="50" percentage alignment="right">
+        <KFixedGrid numCols="2">
+          <KFixedGridItem span="1" class="number-learners">
+            {{ coachString('numberOfLearners', { value: currentGroup.users.length }) }}
+          </KFixedGridItem>
+          <KFixedGridItem span="1" alignment="right">
             <KRouterLink
               :primary="true"
               appearance="raised-button"
               :text="$tr('enrollButton')"
               :to="$router.getRoute('GroupEnrollPage')"
             />
-          </KGridItem>
-        </KGrid>
+          </KFixedGridItem>
+        </KFixedGrid>
 
         <CoreTable>
-          <thead slot="thead">
-            <tr>
-              <th>
-                {{ $tr('fullName') }}
-              </th>
-              <th>
-                {{ $tr('username') }}
-              </th>
-              <th></th>
-            </tr>
+          <template #headers>
+            <th>{{ coreString('fullNameLabel') }}</th>
+            <th>{{ coreString('usernameLabel') }}</th>
+            <th></th>
+          </template>
 
-          </thead>
-
-          <tbody slot="tbody">
-            <p v-if="currentGroup.users.length === 0">
-              {{ $tr('noLearnersInGroup') }}
-            </p>
-            <tr
-              v-for="user in currentGroup.users"
-              :key="user.id"
-            >
-              <td>
-                <KLabeledIcon>
-                  <KIcon slot="icon" person />
-                  {{ user.full_name }}
-                </KLabeledIcon>
-              </td>
-              <td>
-                {{ user.username }}
-              </td>
-              <td class="core-table-button-col">
-                <KButton
-                  :text="$tr('removeButton')"
-                  appearance="flat-button"
-                  @click="userForRemoval = user"
-                />
-              </td>
-            </tr>
-          </tbody>
+          <template #tbody>
+            <tbody>
+              <p v-if="currentGroup.users.length === 0">
+                {{ coachString('learnerListEmptyState') }}
+              </p>
+              <tr
+                v-for="user in currentGroup.users"
+                :key="user.id"
+              >
+                <td>
+                  <KLabeledIcon icon="person" :label="user.full_name" />
+                </td>
+                <td>
+                  {{ user.username }}
+                </td>
+                <td class="core-table-button-col">
+                  <KButton
+                    :text="coreString('removeAction')"
+                    appearance="flat-button"
+                    @click="userForRemoval = user"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </template>
         </CoreTable>
         <RemoveFromGroupModal
           v-if="userForRemoval"
           :groupName="currentGroup.name"
           :username="userForRemoval.full_name"
           @cancel="userForRemoval = null"
-          @confirm="removeSelectedUserFromGroup"
+          @submit="removeSelectedUserFromGroup"
         />
       </div>
     </KPageContainer>
@@ -105,13 +92,10 @@
 <script>
 
   import { mapState, mapActions } from 'vuex';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../../common';
-  import ReportsGroupHeader from '../../reports/ReportsGroupHeader';
   import RemoveFromGroupModal from './RemoveFromGroupModal';
-
-  const ReportsGroupHeaderStrings = crossComponentTranslator(ReportsGroupHeader);
 
   export default {
     name: 'GroupMembersPage',
@@ -131,7 +115,7 @@
       CoreTable,
       RemoveFromGroupModal,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoreStrings, commonCoach],
     data() {
       return {
         userForRemoval: null,
@@ -139,36 +123,38 @@
     },
     computed: {
       ...mapState('groups', ['groups']),
-      backLinkString() {
-        return ReportsGroupHeaderStrings.$tr('back');
-      },
       currentGroup() {
         return this.groups.find(g => g.id === this.$route.params.groupId);
       },
     },
     methods: {
       ...mapActions('groups', ['removeUsersFromGroup']),
-      ...mapActions(['createSnackbar']),
       removeSelectedUserFromGroup() {
         if (this.userForRemoval) {
           this.removeUsersFromGroup({
             userIds: [this.userForRemoval.id],
             groupId: this.currentGroup.id,
           }).then(() => {
-            this.createSnackbar(this.coachStrings.$tr('updatedNotification'));
+            this.showSnackbarNotification('learnersRemovedNoCount', { count: 1 });
             this.userForRemoval = null;
           });
         }
       },
     },
     $trs: {
-      groupsHeader: 'Groups',
-      enrollButton: 'Enroll learners',
-      fullName: 'Full name',
-      username: 'Username',
-      removeButton: 'Remove',
-      noLearnersInGroup: 'No learners in this group',
-      groupDoesNotExist: 'This group does not exist',
+      enrollButton: {
+        message: 'Enroll learners',
+        context:
+          'Button which allows user to add learners to a group once the group has been created.',
+      },
+      groupDoesNotExist: {
+        message: 'This group does not exist',
+        context: 'This message displays if a group no longer exists.',
+      },
+      back: {
+        message: 'All groups',
+        context: 'Link that takes the user back to the see all the group in the class.',
+      },
     },
   };
 

@@ -7,7 +7,9 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
       <p>
@@ -17,64 +19,73 @@
         />
       </p>
       <h1>
-        <KLabeledIcon>
-          <KIcon slot="icon" lesson />
+        <KLabeledIcon icon="lesson">
           {{ lesson.title }}
         </KLabeledIcon>
       </h1>
       <HeaderTable>
-        <HeaderTableRow>
-          <template slot="key">
-            {{ coachStrings.$tr('statusLabel') }}
+        <HeaderTableRow v-if="$isPrint">
+          <template #key>
+            {{ coreString('learnerLabel') }}
           </template>
-          <template slot="value">
+          <template #value>
+            {{ learner.name }}
+          </template>
+        </HeaderTableRow>
+        <HeaderTableRow v-show="!$isPrint">
+          <template #key>
+            {{ coachString('statusLabel') }}
+          </template>
+          <!--           <template #value>
             <LessonActive :active="lesson.active" />
+          </template> -->
+        </HeaderTableRow>
+        <HeaderTableRow v-show="!$isPrint">
+          <template #key>
+            {{ coachString('descriptionLabel') }}
+          </template>
+          <template #value>
+            <span dir="auto">
+              {{ lesson.description || coachString('descriptionMissingLabel') }}
+            </span>
           </template>
         </HeaderTableRow>
-        <!-- TODO COACH
-        <HeaderTableRow>
-          <template slot="key">{{ coachStrings.$tr('descriptionLabel') }}</template>
-          <template slot="value">Ipsum lorem</template>
-        </HeaderTableRow>
-         -->
       </HeaderTable>
 
+      <ReportsControls @export="exportCSV" />
+
       <CoreTable :emptyMessage="emptyMessage">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('titleLabel') }}</th>
-            <th>{{ coachStrings.$tr('progressLabel') }}</th>
-            <th>{{ coachStrings.$tr('timeSpentLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.node_id">
-            <td>
-              <KLabeledIcon>
-                <KBasicContentIcon slot="icon" :kind="tableRow.kind" />
-                <KRouterLink
-                  v-if="showLink(tableRow)"
-                  :text="tableRow.title"
-                  :to="classRoute(
-                    'ReportsLearnerReportLessonExercisePage',
-                    { exerciseId: tableRow.content_id }
-                  )"
+        <template #headers>
+          <th>{{ coachString('titleLabel') }}</th>
+          <th>{{ coreString('progressLabel') }}</th>
+          <th>{{ coreString('timeSpentLabel') }}</th>
+        </template>
+        <template #tbody>
+          <transition-group tag="tbody" name="list">
+            <tr v-for="tableRow in table" :key="tableRow.node_id">
+              <td>
+                <KLabeledIcon :icon="tableRow.kind">
+                  <KRouterLink
+                    v-if="showLink(tableRow)"
+                    :text="tableRow.title"
+                    :to="tableRow.link"
+                  />
+                  <template v-else>
+                    {{ tableRow.title }}
+                  </template>
+                </KLabeledIcon>
+              </td>
+              <td>
+                <StatusSimple :status="tableRow.statusObj.status" />
+              </td>
+              <td>
+                <TimeDuration
+                  :seconds="showTime(tableRow)"
                 />
-                <template v-else>
-                  {{ tableRow.title }}
-                </template>
-              </KLabeledIcon>
-            </td>
-            <td>
-              <StatusSimple :status="tableRow.statusObj.status" />
-            </td>
-            <td>
-              <TimeDuration
-                :seconds="showTime(tableRow)"
-              />
-            </td>
-          </tr>
-        </transition-group>
+              </td>
+            </tr>
+          </transition-group>
+        </template>
       </CoreTable>
     </KPageContainer>
   </CoreBase>
@@ -84,18 +95,22 @@
 
 <script>
 
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { PageNames } from '../../constants';
   import commonCoach from '../common';
-  import LessonSummaryPage from '../plan/LessonSummaryPage';
-
-  const LessonSummaryPageStrings = crossComponentTranslator(LessonSummaryPage);
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsControls from './ReportsControls';
 
   export default {
     name: 'ReportsLearnerReportLessonPage',
-    mixins: [commonCoach],
+    components: {
+      ReportsControls,
+    },
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
       emptyMessage() {
-        return LessonSummaryPageStrings.$tr('noResourcesInLesson');
+        return this.coachString('noResourcesInLessonLabel');
       },
       lesson() {
         return this.lessonMap[this.$route.params.lessonId];
@@ -105,15 +120,17 @@
       },
       table() {
         const contentArray = this.lesson.node_ids.map(node_id => this.contentNodeMap[node_id]);
-        const sorted = this._.sortBy(contentArray, ['title']);
-        const mapped = sorted.map(content => {
+        return contentArray.map(content => {
           const tableRow = {
             statusObj: this.getContentStatusObjForLearner(content.content_id, this.learner.id),
+            link: this.classRoute(PageNames.REPORTS_LEARNER_REPORT_LESSON_EXERCISE_PAGE_ROOT, {
+              exerciseId: content.content_id,
+              learnerId: this.learner.id,
+            }),
           };
           Object.assign(tableRow, content);
           return tableRow;
         });
-        return mapped;
       },
     },
     methods: {
@@ -129,13 +146,29 @@
         }
         return undefined;
       },
-    },
-    $trs: {
-      lessonProgressLabel: "'{lesson}' progress",
+      exportCSV() {
+        const columns = [
+          ...csvFields.title(),
+          ...csvFields.learnerProgress('statusObj.status'),
+          ...csvFields.timeSpent('statusObj.time_spent'),
+        ];
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          learner: this.learner.name,
+          lesson: this.lesson.title,
+        });
+
+        exporter.export(this.table);
+      },
     },
   };
 
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+</style>

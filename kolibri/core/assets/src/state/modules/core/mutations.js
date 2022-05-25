@@ -5,13 +5,6 @@ export default {
   CORE_SET_FACILITIES(state, facilities) {
     state.facilities = facilities;
   },
-  // Makes settings for wrong credentials 401 error
-  CORE_SET_LOGIN_ERROR(state, value) {
-    state.loginError = value;
-  },
-  CORE_SET_SIGN_IN_BUSY(state, isBusy) {
-    state.signInBusy = isBusy;
-  },
   CORE_SET_PAGE_LOADING(state, value) {
     const update = { loading: value };
     if (value) {
@@ -39,9 +32,6 @@ export default {
   },
   CORE_REMOVE_NOTIFICATION(state, notification_id) {
     state.notifications = state.notifications.filter(obj => obj.id !== notification_id);
-  },
-  SET_SCROLL_POSITION(state, scrollPosition) {
-    state.scrollPosition = scrollPosition;
   },
   CORE_SET_PAGE_VISIBILITY(state, visible) {
     state.pageVisible = visible;

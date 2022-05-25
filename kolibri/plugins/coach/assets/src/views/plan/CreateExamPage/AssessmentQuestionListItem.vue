@@ -2,7 +2,8 @@
 
   <li
     class="item-wrapper"
-    :class="{selected: isSelected, draggable}"
+    :class="{ draggable }"
+    :style="bgStyle"
   >
     <a
       tabindex="0"
@@ -11,15 +12,34 @@
       @click="handleSelect"
       @keyup.enter.stop.prevent="handleSelect"
     >
-      <span class="text">{{ text }}</span>
+      <span class="text">
+        {{ text }}
+        <KIcon
+          v-if="!available"
+          ref="missing"
+          icon="warning"
+          :style=" {
+            fill: $themePalette.orange.v_400, float: isRtl ? 'left' : 'right'
+          }"
+        />
+      </span>
       <CoachContentLabel
         class="coach-content-label"
         :value="isCoachContent ? 1 : 0"
         :isTopic="false"
       />
     </a>
+    <KTooltip
+      v-if="!available"
+      reference="missing"
+      placement="bottom"
+      style="position: relative;"
+      :refs="$refs"
+    >
+      {{ getMissingContentString('someResourcesMissingOrNotSupported') }}
+    </KTooltip>
     <div v-if="draggable" class="handle">
-      <KDragSortWidget
+      <DragSortWidget
         :isFirst="isFirst"
         :isLast="isLast"
         :moveUpText="$tr('moveExerciseUp')"
@@ -35,26 +55,17 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
-  import KDragSortWidget from 'kolibri.coreVue.components.KDragSortWidget';
+  import DragSortWidget from 'kolibri.coreVue.components.DragSortWidget';
+  import { coachStringsMixin } from '../../common/commonCoachStrings';
 
   export default {
     name: 'AssessmentQuestionListItem',
-    $trs: {
-      questionNum: 'Question {number, number, integer}:',
-      questionNumShort: '{number, number, integer}.',
-      preview: 'Preview',
-      view: 'View',
-      nthExerciseName: '{ name } ({number, number, integer})',
-      moveExerciseUp: 'Move this exercise up by one position',
-      moveExerciseDown: 'Move this exercise down by one position',
-    },
     components: {
       CoachContentLabel,
-      KDragSortWidget,
+      DragSortWidget,
     },
-    mixins: [themeMixin],
+    mixins: [coachStringsMixin],
     props: {
       draggable: {
         type: Boolean,
@@ -62,7 +73,7 @@
       },
       questionNumberOfExercise: {
         type: Number,
-        required: false,
+        default: null,
       },
       isSelected: {
         type: Boolean,
@@ -84,13 +95,17 @@
         type: Boolean,
         default: false,
       },
+      available: {
+        type: Boolean,
+        required: true,
+      },
     },
     computed: {
       text() {
-        if (this.questionNumberOfExercise === undefined) {
+        if (this.questionNumberOfExercise === undefined || this.questionNumberOfExercise === null) {
           return this.exerciseName;
         }
-        return this.$tr('nthExerciseName', {
+        return this.coachString('nthExerciseName', {
           name: this.exerciseName,
           number: this.questionNumberOfExercise,
         });
@@ -98,10 +113,26 @@
       focusRing() {
         return this.$computedClass({ ':focus': this.$coreOutline });
       },
+      bgStyle() {
+        const color = this.isSelected ? this.$themePalette.grey.v_300 : this.$themeTokens.surface;
+        return { backgroundColor: color };
+      },
     },
     methods: {
       handleSelect() {
         this.$emit('select');
+      },
+    },
+    $trs: {
+      moveExerciseUp: {
+        message: 'Move this exercise up by one position',
+        context:
+          'This is a screen reader option which refers to the option to reorder the way exercises are displayed to a learner.',
+      },
+      moveExerciseDown: {
+        message: 'Move this exercise down by one position',
+        context:
+          'This is a screen reader option which refers to the option to reorder the way exercises are displayed to a learner.',
       },
     },
   };
@@ -121,7 +152,6 @@
     text-align: left;
     white-space: nowrap;
     user-select: none;
-    background-color: white;
     border-radius: 4px;
   }
 
@@ -129,10 +159,6 @@
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .selected {
-    background-color: #e8e8e8;
   }
 
   .draggable {
@@ -164,6 +190,7 @@
   .fade-leave-active {
     transition: opacity 1s;
   }
+
   .fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
     opacity: 0;
   }

@@ -1,29 +1,21 @@
 import logging
+import ntpath
 import os
-import sys
 
-from rest_framework import serializers
+from django.conf import settings
+from django.core.management.base import CommandError
+from django.utils import translation
 
-from kolibri.core.logger.csv import ContentSessionLogCSVExportViewSet
-from kolibri.core.logger.csv import ContentSummaryLogCSVExportViewSet
+from kolibri.core.auth.constants.commands_errors import FILE_WRITE_ERROR
+from kolibri.core.auth.constants.commands_errors import MESSAGES
+from kolibri.core.auth.constants.commands_errors import NO_FACILITY
+from kolibri.core.auth.models import Facility
+from kolibri.core.logger.csv_export import classes_info
+from kolibri.core.logger.csv_export import csv_file_generator
 from kolibri.core.tasks.management.commands.base import AsyncCommand
+from kolibri.core.tasks.utils import get_current_job
 
 logger = logging.getLogger(__name__)
-
-
-class AsyncListSerializer(serializers.ListSerializer):
-    def to_representation(self, data):
-        """
-        List of object instances -> List of dicts of primitive datatypes.
-        """
-        for item in data:
-            yield self.child.to_representation(item)
-
-    @property
-    def data(self):
-        # We deliberately return the super of ListSerializer to avoid
-        # instantiating a ReturnList, which would force evaluating the generator
-        return super(serializers.ListSerializer, self).data
 
 
 class Command(AsyncCommand):
@@ -43,81 +35,87 @@ class Command(AsyncCommand):
             action="store",
             dest="log_type",
             default="session",
-            choices=["summary", "session"],
+            choices=classes_info.keys(),
             help='Log type to be exported. Valid values are "session" and "summary".',
         )
         parser.add_argument(
             "-w",
             "--overwrite",
-            action="store",
+            action="store_true",
             dest="overwrite",
             default=False,
-            type=bool,
             help="Allows overwritten of the exported file in case it exists",
         )
+        parser.add_argument(
+            "--facility",
+            action="store",
+            type=str,
+            help="Facility id to import the users into",
+        )
+        parser.add_argument(
+            "--locale",
+            action="store",
+            type=str,
+            default=None,
+            help="Code of the language for the messages to be translated",
+        )
 
-    def _data(self, csv_set):
-        queryset = csv_set.get_queryset()
-        self.total_rows = queryset.count()
-        serializer_class = csv_set.get_serializer_class()
-        serializer_class.Meta.list_serializer_class = AsyncListSerializer
-        serializer = serializer_class(queryset, many=True)
+    def get_facility(self, options):
+        if options["facility"]:
+            default_facility = Facility.objects.get(pk=options["facility"])
+        else:
+            default_facility = Facility.get_default_facility()
 
-        finished = False
-        while not finished:
-            finished = self._get_serialized_data(serializer)
-            if self.is_cancelled():
-                self.cancel()
-                break
-        renderer = csv_set.renderer_classes[0]()
-        return renderer.render(self.data)
-
-    def _get_serialized_data(self, serializer):
-        self.data = []
-        with self.start_progress(total=self.total_rows) as progress_update:
-            for item in serializer.data:
-                progress_update(1)
-                self.data.append(item)
-
-        return True
-
-    def _create_file(self, buffer):
-        try:
-            with open(self.filepath, "wb") as f:
-                f.write(buffer)
-                logger.info(
-                    "Creating csv file {filename}".format(filename=self.filepath)
-                )
-        except IOError as e:
-            logger.error("Error trying to write csv file: {}".format(e.strerror))
-            sys.exit(1)
+        return default_facility
 
     def handle_async(self, *args, **options):
-        classes_info = {
-            "summary": (ContentSessionLogCSVExportViewSet, "content_summary_logs.csv"),
-            "session": (ContentSummaryLogCSVExportViewSet, "content_session_logs.csv"),
-        }
-        log_type = options["log_type"]
-        if log_type not in ("summary", "session"):
-            logger.error(
-                "Impossible to create a csv export file for {}".format(log_type)
-            )
-            sys.exit(1)
 
-        if options["output_file"] is None:
-            filename = classes_info[log_type][1]
+        # set language for the translation of the messages
+        locale = settings.LANGUAGE_CODE if not options["locale"] else options["locale"]
+        translation.activate(locale)
+
+        self.overall_error = ""
+        job = get_current_job()
+
+        facility = self.get_facility(options)
+        if not facility:
+            self.overall_error = str(MESSAGES[NO_FACILITY])
+
         else:
-            filename = options["output_file"]
+            log_type = options["log_type"]
 
-        self.filepath = os.path.join(os.getcwd(), filename)
+            log_info = classes_info[log_type]
 
-        if not options["overwrite"]:
-            if os.path.exists(self.filepath):
-                logger.error("{} already exists in your directory".format(filename))
-                sys.exit(1)
-        csv_set = classes_info[log_type][0]()
-        # Here is where 99% of the time is spent:
-        buffer = self._data(csv_set)
-        # Considering insignificant (in relation to the time needed to serialize the table)
-        # the time spent in saving the file:
-        self._create_file(buffer)
+            if options["output_file"] is None:
+                filename = log_info["filename"].format(facility.name, facility.id[:4])
+            else:
+                filename = options["output_file"]
+
+            filepath = os.path.join(os.getcwd(), filename)
+
+            queryset = log_info["queryset"]
+
+            total_rows = queryset.count()
+
+            with self.start_progress(total=total_rows) as progress_update:
+                try:
+                    for row in csv_file_generator(
+                        facility, log_type, filepath, overwrite=options["overwrite"]
+                    ):
+                        progress_update(1)
+                except (ValueError, IOError) as e:
+                    self.overall_error = str(MESSAGES[FILE_WRITE_ERROR].format(e))
+
+        if job:
+            job.extra_metadata["overall_error"] = self.overall_error
+            self.job.extra_metadata["filename"] = ntpath.basename(filepath)
+            job.save_meta()
+        else:
+            if self.overall_error:
+                raise CommandError(self.overall_error)
+            else:
+                logger.info(
+                    "Created csv file {} with {} lines".format(filepath, total_rows)
+                )
+
+        translation.deactivate()

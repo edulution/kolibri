@@ -2,7 +2,9 @@
 
   <div>
     <KLabeledIcon nowrap>
-      <CoachStatusIcon slot="icon" ref="status" :icon="icon" />
+      <template #icon>
+        <CoachStatusIcon ref="status" :icon="icon" />
+      </template>
       {{ text }}
     </KLabeledIcon>
     <KTooltip
@@ -20,9 +22,7 @@
 
 <script>
 
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
-  import KLabeledIcon from 'kolibri.coreVue.components.KLabeledIcon';
-  import { coachStrings } from '../commonCoachStrings';
+  import { coachStringsMixin } from '../commonCoachStrings';
   import CoachStatusIcon from './CoachStatusIcon';
   import { statusStringsMixin, isValidVerb } from './statusStrings';
 
@@ -30,10 +30,8 @@
     name: 'LearnerProgressRatio',
     components: {
       CoachStatusIcon,
-      KLabeledIcon,
-      KTooltip,
     },
-    mixins: [statusStringsMixin],
+    mixins: [statusStringsMixin, coachStringsMixin],
     props: {
       verb: {
         type: String,
@@ -47,11 +45,11 @@
     },
     computed: {
       strings() {
-        return this.translations.learnerProgress[this.verb];
+        return this.learnerProgressTranslators[this.verb];
       },
       text() {
         if (!this.verbosityNumber) {
-          return coachStrings.$tr('ratioShort', { value: this.count, total: this.total });
+          return this.coachString('ratioShort', { value: this.count, total: this.total });
         }
         if (this.count === this.total && this.total > 2 && this.verb != 'notStarted') {
           return this.strings.$tr(this.shorten('allOfMoreThanTwo', this.verbosityNumber), {

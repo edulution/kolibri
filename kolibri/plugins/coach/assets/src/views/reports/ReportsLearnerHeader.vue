@@ -8,58 +8,57 @@
       />
     </p>
     <h1>
-      <KLabeledIcon>
-        <KIcon slot="icon" person />
-        {{ learner.name }}
-      </KLabeledIcon>
+      <KLabeledIcon icon="person" :label="learner.name" />
     </h1>
     <HeaderTable>
       <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('usernameLabel') }}
+        <template #key>
+          {{ coreString('usernameLabel') }}
         </template>
-        <template slot="value">
+        <template #value>
           {{ learner.username }}
         </template>
       </HeaderTableRow>
       <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('groupsLabel') }}
+        <template #key>
+          {{ coachString('groupsLabel') }}
         </template>
-        <TruncatedItemList slot="value" :items="getGroupNamesForLearner(learner.id)" />
-      </HeaderTableRow>
-      <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('avgQuizScoreLabel') }}
-        </template>
-        <template slot="value">
-          {{ coachStrings.$tr('percentage', {value: avgScore}) }}
+        <template #value>
+          <TruncatedItemList :items="getGroupNamesForLearner(learner.id)" />
         </template>
       </HeaderTableRow>
       <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('exercisesCompletedLabel') }}
+        <template #key>
+          {{ coachString('avgScoreLabel') }}
         </template>
-        <template slot="value">
-          {{ coachStrings.$tr('integer', {value: exercisesCompleted}) }}
+        <template #value>
+          {{ $formatNumber(avgScore, { style: 'percent', maximumFractionDigits: 0 }) }}
         </template>
       </HeaderTableRow>
       <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('resourcesViewedLabel') }}
+        <template #key>
+          {{ coachString('exercisesCompletedLabel') }}
         </template>
-        <template slot="value">
-          {{ coachStrings.$tr('integer', {value: resourcesViewed}) }}
+        <template #value>
+          {{ $formatNumber(exercisesCompleted) }}
+        </template>
+      </HeaderTableRow>
+      <HeaderTableRow>
+        <template #key>
+          {{ coachString('resourcesViewedLabel') }}
+        </template>
+        <template #value>
+          {{ $formatNumber(resourcesViewed) }}
         </template>
       </HeaderTableRow>
     </HeaderTable>
-    <HeaderTabs>
+    <HeaderTabs :enablePrint="enablePrint">
       <HeaderTab
-        :text="coachStrings.$tr('reportsLabel')"
+        :text="coachString('reportsLabel')"
         :to="classRoute('ReportsLearnerReportPage', {})"
       />
       <HeaderTab
-        :text="coachStrings.$tr('activityLabel')"
+        :text="coachString('activityLabel')"
         :to="classRoute('ReportsLearnerActivityPage', {})"
       />
     </HeaderTabs>
@@ -70,12 +69,19 @@
 
 <script>
 
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
 
   export default {
     name: 'ReportsLearnerHeader',
-    components: {},
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
+    props: {
+      enablePrint: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+    },
     computed: {
       learner() {
         return this.learnerMap[this.$route.params.learnerId];
@@ -96,7 +102,7 @@
       exercisesCompleted() {
         const statuses = this.learnerContentStatuses.filter(
           status =>
-            this.contentMap[status.content_id].kind === 'exercise' &&
+            this.contentIdIsForExercise(status.content_id) &&
             status.status === this.STATUSES.completed
         );
         return statuses.length;
@@ -104,14 +110,18 @@
       resourcesViewed() {
         const statuses = this.learnerContentStatuses.filter(
           status =>
-            this.contentMap[status.content_id].kind !== 'exercise' &&
+            !this.contentIdIsForExercise(status.content_id) &&
             status.status !== this.STATUSES.notStarted
         );
         return statuses.length;
       },
     },
     $trs: {
-      back: 'All learners',
+      back: {
+        message: 'All learners',
+        context:
+          "Link that takes user back to the list of learners on the 'Reports' tab, from the individual learner's information page.",
+      },
     },
   };
 

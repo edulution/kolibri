@@ -1,8 +1,8 @@
 <template>
 
-  <div :style="{ backgroundColor: $coreBgLight }">
+  <div :style="{ backgroundColor: $themeTokens.surface }">
     <h3 class="header">
-      {{ coachStrings.$tr('learnersLabel') }}
+      {{ coreString('learnersLabel') }}
     </h3>
 
     <ul ref="learnerList" class="history-list">
@@ -11,32 +11,29 @@
           :key="index"
           class="clickable learner-item"
           :style="{
-            borderBottom: `2px solid ${$coreTextDisabled}`,
-            backgroundColor: isSelected(index) ? $coreTextDisabled : '',
+            borderBottom: `2px solid ${$themeTokens.textDisabled}`,
+            backgroundColor: isSelected(index) ? $themeTokens.textDisabled : '',
           }"
           @click="setSelectedLearner(index)"
         >
           <div class="title">
-            <mat-svg
+            <KIcon
               v-if="learner.noattempt"
               class="item svg-item"
-              :style=" { fill: $coreTextAnnotation }"
-              category="navigation"
-              name="cancel"
+              :style=" { fill: $themeTokens.annotation }"
+              icon="cancel"
             />
-            <mat-svg
+            <KIcon
               v-else-if="!learner.correct"
               class="item svg-item"
-              :style="{ fill: $coreStatusWrong }"
-              category="navigation"
-              name="cancel"
+              :style="{ fill: $themeTokens.incorrect }"
+              icon="cancel"
             />
-            <mat-svg
+            <KIcon
               v-else-if="learner.hinted"
               class="item svg-item"
-              :style=" { fill: $coreTextAnnotation }"
-              category="action"
-              name="lightbulb_outline"
+              :style=" { fill: $themeTokens.annotation }"
+              icon="hint"
             />
             <h3 class="item">
               {{ learner.name }}
@@ -52,13 +49,11 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import { coachStringsMixin } from './commonCoachStrings';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'QuestionDetailLearnerList',
-    $trs: {},
-    mixins: [coachStringsMixin, themeMixin],
+    mixins: [commonCoreStrings],
     props: {
       learners: {
         type: Array,

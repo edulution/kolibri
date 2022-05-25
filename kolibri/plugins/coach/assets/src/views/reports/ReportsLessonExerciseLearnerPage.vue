@@ -3,6 +3,8 @@
   <CoreBase
     :immersivePage="true"
     :immersivePageRoute="toolbarRoute"
+    :immersivePagePrimary="true"
+    immersivePageIcon="back"
     :appBarTitle="exercise.title"
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"

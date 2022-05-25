@@ -2,7 +2,8 @@
 
   <div
     class="block-item"
-    :class="{ small : windowIsSmall }"
+    :class="{ small: windowIsSmall }"
+    :style="{ borderBottomColor: $themeTokens.fineLine }"
   >
     <slot></slot>
   </div>
@@ -12,11 +13,11 @@
 
 <script>
 
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
 
   export default {
     name: 'BlockItem',
-    mixins: [responsiveWindow],
+    mixins: [responsiveWindowMixin],
   };
 
 </script>
@@ -27,13 +28,20 @@
   .block-item {
     padding-top: 8px;
     padding-right: 24px;
-    padding-bottom: 8px;
     padding-left: 24px;
     margin-right: -24px;
     margin-left: -24px;
+    border-bottom-style: none;
+    border-bottom-width: 0;
 
     &:not(:last-child) {
-      border-bottom: 1px solid #dedede;
+      padding-bottom: 16px;
+      border-bottom-style: solid;
+      border-bottom-width: 1px;
+    }
+
+    &:last-child {
+      padding-top: 16px;
     }
   }
 

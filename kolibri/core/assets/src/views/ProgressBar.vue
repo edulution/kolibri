@@ -2,11 +2,11 @@
 
   <div class="wrapper">
     <div id="progress-bar-label" class="visuallyhidden">
-      {{ $tr('label') }}
+      {{ coreString('progressLabel') }}
     </div>
     <div
       class="progress-bar-wrapper"
-      :style="{ backgroundColor: $coreGrey }"
+      :style="{ backgroundColor: $themePalette.grey.v_200 }"
       role="progressbar"
       aria-labelledby="progress-bar-label"
       :aria-valuenow="percent"
@@ -17,7 +17,7 @@
         class="progress-bar-complete"
         :style="{
           width: percent + '%',
-          backgroundColor: color || $coreActionNormal
+          backgroundColor: color || $themeTokens.primary
         }"
       >
       </div>
@@ -32,15 +32,11 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'ProgressBar',
-    $trs: {
-      label: 'Progress',
-      pct: '{0, number, percent}',
-    },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings],
     props: {
       progress: {
         type: Number,
@@ -48,7 +44,7 @@
       },
       color: {
         type: String,
-        required: false,
+        default: null,
       },
       showPercentage: {
         type: Boolean,
@@ -61,6 +57,12 @@
         return Math.max(Math.min(this.progress * 100, 100), 0);
       },
     },
+    $trs: {
+      pct: {
+        message: '{0, number, percent}',
+        context: 'DO NOT TRANSLATE\nCopy the source string.',
+      },
+    },
   };
 
 </script>
@@ -68,7 +70,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   .wrapper {
     position: relative;

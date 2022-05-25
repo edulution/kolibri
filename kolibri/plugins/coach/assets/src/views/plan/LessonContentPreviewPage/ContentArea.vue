@@ -1,11 +1,11 @@
 <template>
 
-  <section :style="{backgroundColor: isExercise ? $coreBgLight : ''}">
+  <section :style="{ backgroundColor: isExercise ? $themeTokens.surface : '' }">
     <h2 v-if="isExercise" class="header">
       {{ header }}
     </h2>
-    <ContentRenderer
-      :class="{ hof: isExercise}"
+    <KContentRenderer
+      :class="{ hof: isExercise }"
       :showCorrectAnswer="true"
       :itemId="selectedQuestion"
       :allowHints="false"
@@ -22,15 +22,8 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import ContentRenderer from 'kolibri.coreVue.components.ContentRenderer';
-
   export default {
     name: 'ContentArea',
-    components: {
-      ContentRenderer,
-    },
-    mixins: [themeMixin],
     props: {
       content: {
         type: Object,
@@ -39,7 +32,7 @@
       // Exercise-specific
       selectedQuestion: {
         type: String,
-        required: false,
+        default: null,
       },
       isExercise: {
         type: Boolean,
@@ -70,6 +63,11 @@
   .header {
     margin: 0;
     font-size: 16px; // same as question-list
+  }
+
+  // Centers the video inside the main slot
+  /deep/ .wrapper {
+    margin: auto;
   }
 
 </style>

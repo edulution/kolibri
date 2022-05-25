@@ -3,17 +3,17 @@
   <KModal
     :title="$tr('renameLearnerGroup')"
     size="small"
-    :submitText="$tr('save')"
-    :cancelText="$tr('cancel')"
+    :submitText="coreString('saveAction')"
+    :cancelText="coreString('cancelAction')"
     :submitDisabled="submitting"
     @submit="callRenameGroup"
-    @cancel="close"
+    @cancel="$emit('cancel')"
   >
     <KTextbox
       ref="name"
       v-model.trim="name"
       type="text"
-      :label="$tr('learnerGroupName')"
+      :label="coachString('groupNameLabel')"
       :autofocus="true"
       :invalid="nameIsInvalid"
       :invalidText="nameIsInvalidText"
@@ -28,23 +28,12 @@
 <script>
 
   import { mapActions } from 'vuex';
-  import KTextbox from 'kolibri.coreVue.components.KTextbox';
-  import KModal from 'kolibri.coreVue.components.KModal';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { coachStringsMixin } from '../../common/commonCoachStrings';
 
   export default {
     name: 'RenameGroupModal',
-    $trs: {
-      renameLearnerGroup: 'Rename group',
-      learnerGroupName: 'Group name',
-      cancel: 'Cancel',
-      save: 'Save',
-      duplicateName: 'A group with that name already exists',
-      required: 'This field is required',
-    },
-    components: {
-      KModal,
-      KTextbox,
-    },
+    mixins: [coachStringsMixin, commonCoreStrings],
     props: {
       groupName: {
         type: String,
@@ -84,7 +73,7 @@
       nameIsInvalidText() {
         if (this.nameBlurred || this.formSubmitted) {
           if (this.name === '') {
-            return this.$tr('required');
+            return this.coreString('requiredFieldError');
           }
           if (this.duplicateName) {
             return this.$tr('duplicateName');
@@ -100,7 +89,7 @@
       },
     },
     methods: {
-      ...mapActions('groups', ['renameGroup', 'displayModal']),
+      ...mapActions('groups', ['renameGroup']),
       callRenameGroup() {
         this.formSubmitted = true;
         if (this.formIsValid) {
@@ -108,13 +97,24 @@
           this.renameGroup({
             groupId: this.groupId,
             newGroupName: this.name,
+          }).then(() => {
+            this.showSnackbarNotification('changesSaved');
           });
         } else {
           this.$refs.name.focus();
         }
       },
-      close() {
-        this.displayModal(false);
+    },
+    $trs: {
+      renameLearnerGroup: {
+        message: 'Rename group',
+        context:
+          "Title of window that displays when user uses the 'Rename' option to rename a group.",
+      },
+      duplicateName: {
+        message: 'A group with that name already exists',
+        context:
+          'Message that displays if a user creates a group with the same name as one that already exists.',
       },
     },
   };

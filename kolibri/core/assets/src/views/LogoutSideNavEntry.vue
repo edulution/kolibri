@@ -3,14 +3,8 @@
   <CoreMenuOption
     :label="$tr('signOut')"
     :link="url"
-  >
-    <mat-svg
-      slot="icon"
-      name="exit_to_app"
-      category="action"
-      :class="{ 'rtl-icon': isRtl }"
-    />
-  </CoreMenuOption>
+    icon="logout"
+  />
 
 </template>
 
@@ -26,12 +20,16 @@
     components: {
       CoreMenuOption,
     },
-    $trs: {
-      signOut: 'Sign out',
-    },
     computed: {
       url() {
         return urls['kolibri:core:logout']();
+      },
+    },
+    $trs: {
+      signOut: {
+        message: 'Sign out',
+        context:
+          "Users can exit Kolibri by selecting 'Sign out' from the user menu in the upper right corner.",
       },
     },
     role: UserKinds.LEARNER,

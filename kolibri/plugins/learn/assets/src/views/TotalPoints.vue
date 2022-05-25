@@ -1,13 +1,11 @@
 <template>
 
-  <div v-if="isUserLoggedIn">
-    <div ref="icon" class="points" :style="{ color: $coreTextAnnotation }">
-      <PointsIcon class="icon" :active="true" />
-      <div class="description">
-        <div class="description-value">
-          {{ $formatNumber(totalPoints) }}
-        </div>
-      </div>
+  <div v-if="isUserLoggedIn" ref="icon" class="points-wrapper">
+    <div class="icon-wrapper" :style="{ backgroundColor: $themeTokens.surface }">
+      <PointsIcon class="icon" />
+    </div>
+    <div v-show="!windowIsSmall" class="description">
+      {{ $formatNumber(totalPoints) }}
     </div>
     <KTooltip
       reference="icon"
@@ -22,25 +20,35 @@
 
 <script>
 
-  import { mapGetters } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
+  import { mapGetters, mapActions } from 'vuex';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import PointsIcon from 'kolibri.coreVue.components.PointsIcon';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
 
   export default {
     name: 'TotalPoints',
-    $trs: { pointsTooltip: 'You earned { points, number } points' },
     components: {
       PointsIcon,
-      KTooltip,
     },
-    mixins: [themeMixin],
+    mixins: [responsiveWindowMixin],
     computed: {
       ...mapGetters(['totalPoints', 'currentUserId', 'isUserLoggedIn']),
     },
-    watch: { currentUserId: 'fetchPoints' },
+    watch: {
+      currentUserId() {
+        this.fetchPoints();
+      },
+    },
     created() {
-      this.$store.dispatch('fetchPoints');
+      this.fetchPoints();
+    },
+    methods: {
+      ...mapActions(['fetchPoints']),
+    },
+    $trs: {
+      pointsTooltip: {
+        message: 'You earned { points, number } points',
+        context: 'Notification indicating how many points a leaner has earned.',
+      },
     },
   };
 
@@ -49,21 +57,24 @@
 
 <style lang="scss" scoped>
 
-  .points {
-    padding: 8px 0;
+  .icon-wrapper {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    text-align: center;
+    // Aligns the round background with its siblings
+    vertical-align: middle;
+    border-radius: 100%;
   }
 
   .icon {
-    position: relative;
-    top: 2px;
-    display: inline-block;
-    width: 16px;
-    height: 16px;
+    margin-top: 4px;
   }
 
   .description {
     display: inline-block;
-    margin-left: 16px;
+    margin-left: 8px;
+    font-size: 14px;
   }
 
 </style>

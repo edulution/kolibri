@@ -2,8 +2,10 @@
 
   <CoreBase
     :immersivePage="true"
+    :immersivePagePrimary="true"
+    immersivePageIcon="back"
     :immersivePageRoute="toolbarRoute"
-    :appBarTitle="title"
+    :appBarTitle="exercise.title"
     :pageTitle="title"
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
@@ -30,8 +32,10 @@
     mixins: [commonCoach],
     computed: {
       ...mapState('questionDetail', ['title']),
+      ...mapState('exerciseDetail', ['exercise']),
       toolbarRoute() {
-        return this.classRoute('ReportsGroupReportLessonExerciseQuestionListPage', {});
+        const backRoute = this.backRouteForQuery(this.$route.query);
+        return backRoute || this.classRoute('ReportsGroupReportLessonExerciseQuestionListPage', {});
       },
     },
     methods: {
@@ -46,11 +50,6 @@
           },
         });
       },
-    },
-    $trs: {
-      allQuestionsLabel: 'All questions',
-      summary:
-        '{count, number, integer} {count, plural, one {learner} other {learners}} got this question incorrect',
     },
   };
 

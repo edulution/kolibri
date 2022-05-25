@@ -2,6 +2,8 @@
 
   <CoreBase
     :immersivePage="true"
+    :immersivePagePrimary="true"
+    immersivePageIcon="back"
     :immersivePageRoute="toolbarRoute"
     :appBarTitle="title"
     :pageTitle="title"
@@ -31,7 +33,8 @@
     computed: {
       ...mapState('questionDetail', ['title']),
       toolbarRoute() {
-        return this.classRoute('ReportsLessonExerciseQuestionListPage', {});
+        const backRoute = this.backRouteForQuery(this.$route.query);
+        return backRoute || this.classRoute('ReportsLessonExerciseQuestionListPage', {});
       },
     },
     methods: {
@@ -45,11 +48,6 @@
           },
         });
       },
-    },
-    $trs: {
-      allQuestionsLabel: 'All questions',
-      summary:
-        '{count, number, integer} {count, plural, one {learner} other {learners}} got this question incorrect',
     },
   };
 

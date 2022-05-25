@@ -4,12 +4,12 @@
 
     <div class="card-group-details">
 
-      <h2 v-if="header" class="card-group-details-header" :style="{ color: $coreTextDefault }">
+      <h2 v-if="header" class="card-group-details-header" :style="{ color: $themeTokens.text }">
         {{ header }}
       </h2>
 
       <span v-if="showViewMore" class="card-group-details-view-more">
-        <KRouterLink :text="$tr('viewMoreFromSectionButton')" :to="viewMorePageLink" />
+        <KRouterLink :text="coreString('viewMoreAction')" :to="viewMorePageLink" />
       </span>
 
     </div>
@@ -21,19 +21,20 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'ContentCardGroupHeader',
-    components: { KRouterLink },
-    $trs: {
-      viewMoreFromSectionButton: 'View more',
-    },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings],
     props: {
-      header: { type: String },
-      viewMorePageLink: { type: Object },
+      header: {
+        type: String,
+        default: null,
+      },
+      viewMorePageLink: {
+        type: Object,
+        required: true,
+      },
       showViewMore: { type: Boolean },
     },
   };

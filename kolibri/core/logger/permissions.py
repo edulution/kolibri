@@ -1,8 +1,6 @@
-from django.core.exceptions import ObjectDoesNotExist
-from rest_framework import permissions
-
 from kolibri.core.auth.permissions.base import BasePermissions
 from kolibri.core.auth.permissions.base import lookup_field_with_fks
+from kolibri.core.auth.permissions.base import q_none
 
 
 class AnyoneCanWriteAnonymousLogs(BasePermissions):
@@ -28,44 +26,5 @@ class AnyoneCanWriteAnonymousLogs(BasePermissions):
     def user_can_delete_object(self, user, obj):
         return False
 
-    def readable_by_user_filter(self, user, queryset):
-        return queryset.none()
-
-
-def _ensure_raw_dict(d):
-    if hasattr(d, "dict"):
-        d = d.dict()
-    return dict(d)
-
-
-class ExamActivePermissions(permissions.BasePermission):
-    """
-    A Django REST Framework permissions class that does not allow writes to examattemptlogs
-    when the exam has been submitted, or the exam closed.
-    """
-
-    def has_permission(self, request, view):
-        from kolibri.core.logger.models import ExamAttemptLog
-
-        # as `has_object_permission` isn't called for POST/create, we need to check here
-        examlog = None
-        if request.data:
-            if request.method == "POST":
-                validated_data = view.serializer_class().to_internal_value(
-                    _ensure_raw_dict(request.data)
-                )
-                examlog = validated_data["examlog"]
-            elif request.method == "PATCH":
-                try:
-                    lookup_url_kwarg = view.lookup_url_kwarg or view.lookup_field
-                    examattemptlog = ExamAttemptLog.objects.get(
-                        id=view.kwargs[lookup_url_kwarg]
-                    )
-                    examlog = examattemptlog.examlog
-                except (ValueError, ObjectDoesNotExist):
-                    pass
-        if examlog:
-            # Make sure the examlog is not closed and the exam is active
-            return not examlog.closed and examlog.exam.active
-
-        return True
+    def readable_by_user_filter(self, user):
+        return q_none

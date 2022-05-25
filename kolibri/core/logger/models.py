@@ -17,11 +17,12 @@ from datetime import timedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator
+from django.core.validators import MinLengthValidator
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
-from jsonfield import JSONField
-from morango.query import SyncableModelQuerySet
+from morango.models import SyncableModelQuerySet
+from morango.models import UUIDField
 
 from .permissions import AnyoneCanWriteAnonymousLogs
 from kolibri.core.auth.constants import role_kinds
@@ -30,9 +31,9 @@ from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.permissions.base import RoleBasedPermissions
 from kolibri.core.auth.permissions.general import IsOwn
-from kolibri.core.content.models import UUIDField
 from kolibri.core.exams.models import Exam
 from kolibri.core.fields import DateTimeTzField
+from kolibri.core.fields import JSONField
 from kolibri.utils.time_utils import local_now
 
 
@@ -64,6 +65,7 @@ def log_permissions(user_field):
             can_be_read_by=(role_kinds.ADMIN, role_kinds.COACH),
             can_be_updated_by=(role_kinds.ADMIN,),
             can_be_deleted_by=(role_kinds.ADMIN,),
+            collection_field="{}__memberships__collection_id".format(user_field),
         )
     )
 
@@ -86,7 +88,8 @@ class BaseLogModel(AbstractFacilityDataModel):
                 pass
         # if no user or matching facility, infer dataset from the default facility
         facility = Facility.get_default_facility()
-        assert facility, "Before you can save logs, you must have a facility"
+        if not facility:
+            raise AssertionError("Before you can save logs, you must have a facility")
         return facility.dataset_id
 
     objects = BaseLogQuerySet.as_manager()
@@ -96,8 +99,7 @@ class BaseLogModel(AbstractFacilityDataModel):
             return "{dataset_id}:user-rw:{user_id}".format(
                 dataset_id=self.dataset_id, user_id=self.user_id
             )
-        else:
-            return "{dataset_id}:anonymous".format(dataset_id=self.dataset_id)
+        return "{dataset_id}:anonymous".format(dataset_id=self.dataset_id)
 
 
 class ContentSessionLog(BaseLogModel):
@@ -110,14 +112,15 @@ class ContentSessionLog(BaseLogModel):
 
     user = models.ForeignKey(FacilityUser, blank=True, null=True)
     content_id = UUIDField(db_index=True)
-    channel_id = UUIDField()
+    visitor_id = models.UUIDField(blank=True, null=True)
+    channel_id = UUIDField(blank=True, null=True)
     start_timestamp = DateTimeTzField()
     end_timestamp = DateTimeTzField(blank=True, null=True)
     time_spent = models.FloatField(
         help_text="(in seconds)", default=0.0, validators=[MinValueValidator(0)]
     )
     progress = models.FloatField(default=0, validators=[MinValueValidator(0)])
-    kind = models.CharField(max_length=200)
+    kind = models.CharField(max_length=200, validators=[MinLengthValidator(1)])
     extra_fields = JSONField(default={}, blank=True)
 
     def save(self, *args, **kwargs):
@@ -138,7 +141,7 @@ class ContentSummaryLog(BaseLogModel):
 
     user = models.ForeignKey(FacilityUser)
     content_id = UUIDField(db_index=True)
-    channel_id = UUIDField()
+    channel_id = UUIDField(blank=True, null=True)
     start_timestamp = DateTimeTzField()
     end_timestamp = DateTimeTzField(blank=True, null=True)
     completion_timestamp = DateTimeTzField(blank=True, null=True)
@@ -148,7 +151,7 @@ class ContentSummaryLog(BaseLogModel):
     progress = models.FloatField(
         default=0, validators=[MinValueValidator(0), MaxValueValidator(1.01)]
     )
-    kind = models.CharField(max_length=200)
+    kind = models.CharField(max_length=200, validators=[MinLengthValidator(1)])
     extra_fields = JSONField(default={}, blank=True)
 
     def calculate_source_id(self):
@@ -174,12 +177,21 @@ class UserSessionLog(BaseLogModel):
     start_timestamp = DateTimeTzField(default=local_now)
     last_interaction_timestamp = DateTimeTzField(null=True, blank=True)
     pages = models.TextField(blank=True)
+    device_info = models.CharField(null=True, blank=True, max_length=100)
 
     @classmethod
-    def update_log(cls, user):
+    def update_log(cls, user, os_info=None, browser_info=None):
         """
         Update the current UserSessionLog for a particular user.
+
+        ua_parser never defaults the setting of os.family and user_agent.family
+        It uses the value 'other' whenever the values are not recognized or the parsing
+        fails. The code depends on this behaviour.
         """
+        if os_info is None:
+            os_info = {}
+        if browser_info is None:
+            browser_info = {}
         if user and isinstance(user, FacilityUser):
             try:
                 user_session_log = cls.objects.filter(user=user).latest(
@@ -188,10 +200,20 @@ class UserSessionLog(BaseLogModel):
             except ObjectDoesNotExist:
                 user_session_log = None
 
-            if not user_session_log or timezone.now() - user_session_log.last_interaction_timestamp > timedelta(
-                minutes=5
+            if (
+                not user_session_log
+                or timezone.now() - user_session_log.last_interaction_timestamp
+                > timedelta(minutes=5)
             ):
-                user_session_log = cls(user=user)
+                device_info = (
+                    "{os_name},{os_major}/{browser_name},{browser_major}".format(
+                        os_name=os_info.get("name", ""),
+                        os_major=os_info.get("major", ""),
+                        browser_name=browser_info.get("name", ""),
+                        browser_major=browser_info.get("major", ""),
+                    )
+                )
+                user_session_log = cls(user=user, device_info=device_info)
             user_session_log.last_interaction_timestamp = local_now()
             user_session_log.save()
 
@@ -215,11 +237,21 @@ class MasteryLog(BaseLogModel):
     end_timestamp = DateTimeTzField(blank=True, null=True)
     completion_timestamp = DateTimeTzField(blank=True, null=True)
     # The integer mastery level that this log is tracking.
-    mastery_level = models.IntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(10)]
-    )
+    # A random negative integer is used to disambiguate unique quiz attempts
+    # exercise attempts use incrementing integers starting at 1.
+    mastery_level = models.IntegerField()
     # Has this mastery level been completed?
     complete = models.BooleanField(default=False)
+    # How long did the learner spend on this specific try of the exercise or quiz?
+    # Field is added as nullable so that we can distinguish values from older instances
+    # of Kolibri prior to this being added and zero values.
+    time_spent = models.FloatField(
+        help_text="(in seconds)",
+        null=True,
+        blank=True,
+        default=0.0,
+        validators=[MinValueValidator(0)],
+    )
 
     def infer_dataset(self, *args, **kwargs):
         return self.cached_related_dataset_lookup("user")
@@ -238,7 +270,7 @@ class BaseAttemptLog(BaseLogModel):
 
     # Unique identifier within the relevant assessment for the particular question/item
     # that this attemptlog is a record of an interaction with.
-    item = models.CharField(max_length=200)
+    item = models.CharField(max_length=200, validators=[MinLengthValidator(1)])
     start_timestamp = DateTimeTzField()
     end_timestamp = DateTimeTzField()
     completion_timestamp = DateTimeTzField(blank=True, null=True)
@@ -278,7 +310,7 @@ class AttemptLog(BaseAttemptLog):
     sessionlog = models.ForeignKey(ContentSessionLog, related_name="attemptlogs")
 
     def infer_dataset(self, *args, **kwargs):
-        return self.sessionlog.dataset_id
+        return self.cached_related_dataset_lookup("sessionlog")
 
 
 class ExamLog(BaseLogModel):
@@ -321,7 +353,7 @@ class ExamAttemptLog(BaseAttemptLog):
     content_id = UUIDField()
 
     def infer_dataset(self, *args, **kwargs):
-        return self.examlog.dataset_id
+        return self.cached_related_dataset_lookup("examlog")
 
     def calculate_partition(self):
         return self.dataset_id

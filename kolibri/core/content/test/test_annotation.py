@@ -1,30 +1,34 @@
 import tempfile
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.db import DataError
 from django.test import TestCase
 from django.test import TransactionTestCase
 from le_utils.constants import content_kinds
-from mock import call
 from mock import patch
 
 from .sqlalchemytesting import django_connection_engine
 from kolibri.core.content.models import ChannelMetadata
-from kolibri.core.content.models import CONTENT_SCHEMA_VERSION
 from kolibri.core.content.models import ContentNode
 from kolibri.core.content.models import File
 from kolibri.core.content.models import Language
 from kolibri.core.content.models import LocalFile
+from kolibri.core.content.test.test_channel_upgrade import ChannelBuilder
 from kolibri.core.content.utils.annotation import calculate_included_languages
-from kolibri.core.content.utils.annotation import fix_multiple_trees_with_id_one
+from kolibri.core.content.utils.annotation import calculate_published_size
+from kolibri.core.content.utils.annotation import calculate_total_resource_count
 from kolibri.core.content.utils.annotation import mark_local_files_as_available
 from kolibri.core.content.utils.annotation import mark_local_files_as_unavailable
-from kolibri.core.content.utils.annotation import recurse_availability_up_tree
+from kolibri.core.content.utils.annotation import recurse_annotation_up_tree
+from kolibri.core.content.utils.annotation import set_channel_ancestors
+from kolibri.core.content.utils.annotation import set_channel_metadata_fields
 from kolibri.core.content.utils.annotation import (
     set_leaf_node_availability_from_local_file_availability,
 )
+from kolibri.core.content.utils.annotation import set_leaf_nodes_invisible
 from kolibri.core.content.utils.annotation import set_local_file_availability_from_disk
-from kolibri.core.content.utils.annotation import topic_coach_content_annotation
 
 
 def get_engine(connection_string):
@@ -35,6 +39,167 @@ test_channel_id = "6199dde695db4ee4ab392222d5af1e5c"
 
 
 @patch("kolibri.core.content.utils.sqlalchemybridge.get_engine", new=get_engine)
+class SetContentNodesInvisibleTestCase(TransactionTestCase):
+
+    fixtures = ["content_test.json"]
+
+    def test_all_leaves(self):
+        ContentNode.objects.all().update(available=True)
+        set_leaf_nodes_invisible(test_channel_id)
+        self.assertFalse(
+            any(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                    "available", flat=True
+                )
+            )
+        )
+
+    def test_other_channel_node_still_available(self):
+        test = ContentNode.objects.filter(kind=content_kinds.VIDEO).first()
+        test.id = uuid.uuid4().hex
+        test.channel_id = uuid.uuid4().hex
+        test.available = True
+        test.parent = None
+        test.save()
+        set_leaf_nodes_invisible(test_channel_id)
+        test.refresh_from_db()
+        self.assertTrue(test.available)
+
+    def test_all_nodes_available_include_all(self):
+        ContentNode.objects.all().update(available=True)
+        include_ids = list(
+            ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                "id", flat=True
+            )
+        )
+        set_leaf_nodes_invisible(test_channel_id, node_ids=include_ids)
+        self.assertFalse(
+            any(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                    "available", flat=True
+                )
+            )
+        )
+
+    def test_all_nodes_available_include_one(self):
+        # These nodes in the fixture have erroneous mptt metadata so break tests that depend on it.
+        ContentNode.objects.filter(title="copy").delete()
+        ContentNode.objects.all().update(available=True)
+        include_ids = [ContentNode.objects.exclude(kind=content_kinds.TOPIC).first().id]
+        set_leaf_nodes_invisible(test_channel_id, node_ids=include_ids)
+        self.assertEqual(ContentNode.objects.filter(available=False).count(), 1)
+
+    def test_all_nodes_available_include_duplicate_topic_only(self):
+        ContentNode.objects.all().update(available=True)
+        parent = ContentNode.objects.get(title="c3")
+        copy = ContentNode.objects.get(title="c2c1")
+        copy.id = uuid.uuid4().hex
+        copy.parent = None
+        copy.lft = None
+        copy.rght = None
+        copy.tree_id = None
+        copy.save()
+        copy.move_to(parent)
+        copy.save()
+        include_ids = [parent.id]
+
+        set_leaf_nodes_invisible(test_channel_id, node_ids=include_ids)
+        self.assertEqual(ContentNode.objects.filter(title="c2c1").count(), 2)
+        self.assertEqual(
+            ContentNode.objects.filter(title="c2c1", available=False).count(), 1
+        )
+
+    def test_all_nodes_available_exclude_all(self):
+        ContentNode.objects.all().update(available=True)
+        exclude_ids = list(
+            ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                "id", flat=True
+            )
+        )
+        set_leaf_nodes_invisible(test_channel_id, exclude_node_ids=exclude_ids)
+        self.assertTrue(
+            all(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                    "available", flat=True
+                )
+            )
+        )
+
+    def test_all_nodes_available_exclude_root(self):
+        ContentNode.objects.all().update(available=True)
+        exclude_ids = list(
+            ContentNode.objects.filter(parent__isnull=True).values_list("id", flat=True)
+        )
+        set_leaf_nodes_invisible(test_channel_id, exclude_node_ids=exclude_ids)
+        self.assertTrue(
+            all(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                    "available", flat=True
+                )
+            )
+        )
+
+    def test_all_nodes_available_exclude_duplicate_topic(self):
+        ContentNode.objects.all().update(available=True)
+        parent = ContentNode.objects.get(title="c3")
+        copy = ContentNode.objects.get(title="c2c1")
+        copy.id = uuid.uuid4().hex
+        copy.parent = None
+        copy.lft = None
+        copy.rght = None
+        copy.tree_id = None
+        copy.save()
+        copy.move_to(parent)
+        copy.save()
+        exclude_ids = [parent.id]
+
+        set_leaf_nodes_invisible(test_channel_id, exclude_node_ids=exclude_ids)
+        self.assertEqual(ContentNode.objects.filter(title="c2c1").count(), 2)
+        self.assertEqual(
+            ContentNode.objects.filter(title="c2c1", available=False).count(), 1
+        )
+
+    def test_all_nodes_available_include_original_exclude_duplicate_topic(self):
+        ContentNode.objects.all().update(available=True)
+        parent = ContentNode.objects.get(title="c3")
+        copy = ContentNode.objects.get(title="c2c1")
+        original_id = copy.id
+        copy.id = uuid.uuid4().hex
+        copy.parent = None
+        copy.lft = None
+        copy.rght = None
+        copy.tree_id = None
+        copy.save()
+        copy.move_to(parent)
+        copy.save()
+        original = ContentNode.objects.get(id=original_id)
+        exclude_ids = [parent.id]
+
+        set_leaf_nodes_invisible(
+            test_channel_id, node_ids=[original.parent.id], exclude_node_ids=exclude_ids
+        )
+        self.assertEqual(ContentNode.objects.filter(title="c2c1").count(), 2)
+        self.assertEqual(
+            ContentNode.objects.filter(title="c2c1", available=False).count(), 1
+        )
+
+    def test_all_nodes_available_non_include_exclude_unaffected(self):
+        ContentNode.objects.all().update(available=True)
+        exclude = ContentNode.objects.get(title="c3")
+        include = ContentNode.objects.get(title="c2")
+        node = ContentNode.objects.get(title="copy", kind=content_kinds.VIDEO)
+        set_leaf_nodes_invisible(
+            test_channel_id, node_ids=[include.id], exclude_node_ids=[exclude.id]
+        )
+        node.refresh_from_db()
+        self.assertTrue(node.available)
+
+    def tearDown(self):
+        call_command("flush", interactive=False)
+        super(SetContentNodesInvisibleTestCase, self).tearDown()
+
+
+@patch("kolibri.core.content.utils.sqlalchemybridge.get_engine", new=get_engine)
 class AnnotationFromLocalFileAvailability(TransactionTestCase):
 
     fixtures = ["content_test.json"]
@@ -42,7 +207,6 @@ class AnnotationFromLocalFileAvailability(TransactionTestCase):
     def test_all_local_files_available(self):
         LocalFile.objects.all().update(available=True)
         set_leaf_node_availability_from_local_file_availability(test_channel_id)
-        self.assertTrue(all(File.objects.all().values_list("available", flat=True)))
         self.assertTrue(
             all(
                 ContentNode.objects.exclude(kind=content_kinds.TOPIC)
@@ -54,7 +218,6 @@ class AnnotationFromLocalFileAvailability(TransactionTestCase):
     def test_no_local_files_available(self):
         LocalFile.objects.all().update(available=False)
         set_leaf_node_availability_from_local_file_availability(test_channel_id)
-        self.assertEqual(File.objects.filter(available=True).count(), 0)
         self.assertEqual(
             ContentNode.objects.exclude(kind=content_kinds.TOPIC)
             .filter(available=True)
@@ -90,6 +253,172 @@ class AnnotationFromLocalFileAvailability(TransactionTestCase):
         test.refresh_from_db()
         self.assertTrue(test.available)
 
+    def test_all_local_files_available_include_all(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        include_ids = list(
+            ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                "id", flat=True
+            )
+        )
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, node_ids=include_ids
+        )
+        self.assertTrue(
+            all(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC)
+                .exclude(files=None)
+                .values_list("available", flat=True)
+            )
+        )
+
+    def test_all_local_files_available_include_one(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        include_ids = [ContentNode.objects.exclude(kind=content_kinds.TOPIC).first().id]
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, node_ids=include_ids
+        )
+        self.assertEqual(ContentNode.objects.filter(available=True).count(), 1)
+
+    def test_all_local_files_available_include_duplicate_topic_only(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        parent = ContentNode.objects.get(title="c3")
+        copy = ContentNode.objects.get(title="c2c1")
+        original_id = copy.id
+        copy.id = uuid.uuid4().hex
+        copy.parent = None
+        copy.lft = None
+        copy.rght = None
+        copy.tree_id = None
+        copy.save()
+        copy.move_to(parent)
+        copy.save()
+        original = ContentNode.objects.get(id=original_id)
+        for file in original.files.all():
+            file.id = uuid.uuid4().hex
+            file.contentnode = copy
+            file.save()
+        include_ids = [parent.id]
+
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, node_ids=include_ids
+        )
+        self.assertEqual(ContentNode.objects.filter(title="c2c1").count(), 2)
+        self.assertEqual(
+            ContentNode.objects.filter(title="c2c1", available=True).count(), 1
+        )
+
+    def test_all_local_files_available_exclude_all(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        exclude_ids = list(
+            ContentNode.objects.exclude(kind=content_kinds.TOPIC).values_list(
+                "id", flat=True
+            )
+        )
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, exclude_node_ids=exclude_ids
+        )
+        self.assertFalse(
+            any(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC)
+                .exclude(files=None)
+                .values_list("available", flat=True)
+            )
+        )
+
+    def test_all_local_files_available_exclude_root(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        exclude_ids = list(
+            ContentNode.objects.filter(parent__isnull=True).values_list("id", flat=True)
+        )
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, exclude_node_ids=exclude_ids
+        )
+        self.assertFalse(
+            any(
+                ContentNode.objects.exclude(kind=content_kinds.TOPIC)
+                .exclude(files=None)
+                .values_list("available", flat=True)
+            )
+        )
+
+    def test_all_local_files_available_exclude_duplicate_topic(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        parent = ContentNode.objects.get(title="c3")
+        copy = ContentNode.objects.get(title="c2c1")
+        original_id = copy.id
+        copy.id = uuid.uuid4().hex
+        copy.parent = None
+        copy.lft = None
+        copy.rght = None
+        copy.tree_id = None
+        copy.save()
+        copy.move_to(parent)
+        copy.save()
+        original = ContentNode.objects.get(id=original_id)
+        for file in original.files.all():
+            file.id = uuid.uuid4().hex
+            file.contentnode = copy
+            file.save()
+        exclude_ids = [parent.id]
+
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, exclude_node_ids=exclude_ids
+        )
+        self.assertEqual(ContentNode.objects.filter(title="c2c1").count(), 2)
+        self.assertEqual(
+            ContentNode.objects.filter(title="c2c1", available=True).count(), 1
+        )
+
+    def test_all_local_files_available_include_orignial_exclude_duplicate_topic(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        parent = ContentNode.objects.get(title="c3")
+        copy = ContentNode.objects.get(title="c2c1")
+        original_id = copy.id
+        copy.id = uuid.uuid4().hex
+        copy.parent = None
+        copy.lft = None
+        copy.rght = None
+        copy.tree_id = None
+        copy.save()
+        copy.move_to(parent)
+        copy.save()
+        original = ContentNode.objects.get(id=original_id)
+        for file in original.files.all():
+            file.id = uuid.uuid4().hex
+            file.contentnode = copy
+            file.save()
+        exclude_ids = [parent.id]
+
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, node_ids=[original.parent.id], exclude_node_ids=exclude_ids
+        )
+        self.assertEqual(ContentNode.objects.filter(title="c2c1").count(), 2)
+        self.assertEqual(
+            ContentNode.objects.filter(title="c2c1", available=True).count(), 1
+        )
+
+    def test_all_local_files_available_non_include_exclude_unaffected(self):
+        ContentNode.objects.all().update(available=False)
+        LocalFile.objects.all().update(available=True)
+        exclude = ContentNode.objects.get(title="c3")
+        include = ContentNode.objects.get(title="c2")
+        node = ContentNode.objects.get(title="copy", kind=content_kinds.VIDEO)
+        self.assertFalse(node.available)
+        node.available = True
+        node.save()
+        set_leaf_node_availability_from_local_file_availability(
+            test_channel_id, node_ids=[include.id], exclude_node_ids=[exclude.id]
+        )
+        node.refresh_from_db()
+        self.assertTrue(node.available)
+
     def tearDown(self):
         call_command("flush", interactive=False)
         super(AnnotationFromLocalFileAvailability, self).tearDown()
@@ -106,7 +435,7 @@ class AnnotationTreeRecursion(TransactionTestCase):
 
     def test_all_content_nodes_available(self):
         ContentNode.objects.exclude(kind=content_kinds.TOPIC).update(available=True)
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         self.assertTrue(
             ContentNode.objects.get(id="da7ecc42e62553eebc8121242746e88a").available
         )
@@ -116,20 +445,21 @@ class AnnotationTreeRecursion(TransactionTestCase):
 
     def test_no_content_nodes_available(self):
         ContentNode.objects.filter(kind=content_kinds.TOPIC).update(available=True)
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
-        # 3, as there are three childless topics in the fixture, these cannot exist in real databases
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        # 0, as although there are three childless topics in the fixture, these cannot exist in real databases
+        # all availability for a channel gets set to False for topics before propagating availability up the tree.
         self.assertEqual(
             ContentNode.objects.filter(kind=content_kinds.TOPIC)
             .filter(available=True)
             .count(),
-            3,
+            0,
         )
 
     def test_one_content_node_available(self):
         ContentNode.objects.filter(id="32a941fb77c2576e8f6b294cde4c3b0c").update(
             available=True
         )
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         # Check parent is available
         self.assertTrue(
             ContentNode.objects.get(id="da7ecc42e62553eebc8121242746e88a").available
@@ -139,7 +469,7 @@ class AnnotationTreeRecursion(TransactionTestCase):
         ContentNode.objects.exclude(kind=content_kinds.TOPIC).update(
             available=True, coach_content=True
         )
-        topic_coach_content_annotation(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         self.assertTrue(
             ContentNode.objects.get(id="da7ecc42e62553eebc8121242746e88a").coach_content
         )
@@ -150,8 +480,10 @@ class AnnotationTreeRecursion(TransactionTestCase):
     def test_no_content_nodes_coach_content(self):
         ContentNode.objects.all().update(available=True)
         ContentNode.objects.all().update(coach_content=False)
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         self.assertEqual(ContentNode.objects.filter(coach_content=True).count(), 0)
+        root = ChannelMetadata.objects.get(id=test_channel_id).root
+        self.assertEqual(root.num_coach_contents, 0)
 
     def test_all_root_content_nodes_coach_content(self):
         ContentNode.objects.all().update(available=True, coach_content=False)
@@ -159,9 +491,10 @@ class AnnotationTreeRecursion(TransactionTestCase):
         ContentNode.objects.filter(parent=root_node).exclude(
             kind=content_kinds.TOPIC
         ).update(coach_content=True)
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         root_node.refresh_from_db()
         self.assertFalse(root_node.coach_content)
+        self.assertEqual(root_node.num_coach_contents, 2)
 
     def test_one_root_content_node_coach_content(self):
         ContentNode.objects.all().update(available=True, coach_content=False)
@@ -173,9 +506,10 @@ class AnnotationTreeRecursion(TransactionTestCase):
         )
         node.coach_content = True
         node.save()
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         root_node.refresh_from_db()
         self.assertFalse(root_node.coach_content)
+        self.assertEqual(root_node.num_coach_contents, 1)
 
     def test_one_root_topic_node_coach_content(self):
         ContentNode.objects.all().update(available=True, coach_content=False)
@@ -185,9 +519,10 @@ class AnnotationTreeRecursion(TransactionTestCase):
         ).first()
         node.coach_content = True
         node.save()
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         root_node.refresh_from_db()
         self.assertFalse(root_node.coach_content)
+        self.assertEqual(root_node.num_coach_contents, 0)
 
     def test_one_child_node_coach_content(self):
         ContentNode.objects.all().update(available=True, coach_content=False)
@@ -205,11 +540,13 @@ class AnnotationTreeRecursion(TransactionTestCase):
             available=True,
             coach_content=True,
         )
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         root_node.refresh_from_db()
         node.refresh_from_db()
         self.assertFalse(root_node.coach_content)
+        self.assertEqual(root_node.num_coach_contents, 1)
         self.assertFalse(node.coach_content)
+        self.assertEqual(node.num_coach_contents, 1)
 
     def test_one_child_coach_content_parent_no_siblings(self):
         ContentNode.objects.all().update(available=True, coach_content=False)
@@ -247,16 +584,17 @@ class AnnotationTreeRecursion(TransactionTestCase):
             available=True,
             coach_content=False,
         )
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         parent_node.refresh_from_db()
         self.assertFalse(parent_node.coach_content)
+        self.assertEqual(parent_node.num_coach_contents, 1)
 
     def test_one_content_node_many_siblings_coach_content(self):
         ContentNode.objects.filter(kind=content_kinds.TOPIC).update(available=True)
         ContentNode.objects.filter(id="32a941fb77c2576e8f6b294cde4c3b0c").update(
             coach_content=True
         )
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         # Check parent is not marked as coach_content True because there are non-coach_content siblings
         self.assertFalse(
             ContentNode.objects.get(id="da7ecc42e62553eebc8121242746e88a").coach_content
@@ -282,7 +620,7 @@ class AnnotationTreeRecursion(TransactionTestCase):
             available=False,
             coach_content=False,
         )
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         root_node.refresh_from_db()
         self.assertTrue(root_node.available)
         self.assertTrue(root_node.coach_content)
@@ -307,7 +645,7 @@ class AnnotationTreeRecursion(TransactionTestCase):
             available=True,
             coach_content=True,
         )
-        recurse_availability_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
+        recurse_annotation_up_tree(channel_id="6199dde695db4ee4ab392222d5af1e5c")
         root_node.refresh_from_db()
         self.assertFalse(root_node.available)
         self.assertFalse(root_node.coach_content)
@@ -506,156 +844,7 @@ class LocalFileByDisk(TransactionTestCase):
         super(LocalFileByDisk, self).tearDown()
 
 
-mock_content_db_file = tempfile.mkstemp()
-
-
-@patch("kolibri.core.content.utils.channel_import.import_channel_from_local_db")
-class FixMultipleTreesWithIdOneTestCase(TransactionTestCase):
-
-    fixtures = ["content_test.json"]
-
-    @patch(
-        "kolibri.core.content.utils.annotation.get_content_database_file_path",
-        return_value=mock_content_file[1],
-    )
-    def test_extra_channel_contentdb_exists(self, path_mock, import_mock):
-        root_node = ContentNode.objects.create(
-            title="test",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=uuid.uuid4().hex,
-        )
-        ChannelMetadata.objects.create(
-            id=root_node.channel_id,
-            root=root_node,
-            name="test",
-            min_schema_version=CONTENT_SCHEMA_VERSION,
-        )
-        # Do this to side step django mptts auto tree_id code
-        ContentNode.objects.filter(parent=None).update(tree_id=1)
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 2)
-        fix_multiple_trees_with_id_one()
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 1)
-        import_mock.assert_called_with(root_node.channel_id)
-
-    @patch(
-        "kolibri.core.content.utils.annotation.get_content_database_file_path",
-        return_value=mock_content_file[1],
-    )
-    def test_two_extra_channels_contentdb_exists(self, path_mock, import_mock):
-        root_node_1 = ContentNode.objects.create(
-            title="test",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=uuid.uuid4().hex,
-        )
-        ChannelMetadata.objects.create(
-            id=root_node_1.channel_id,
-            root=root_node_1,
-            name="test",
-            min_schema_version=CONTENT_SCHEMA_VERSION,
-        )
-        root_node_2 = ContentNode.objects.create(
-            title="test",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=uuid.uuid4().hex,
-        )
-        # Add an additional node so that root_node_1 channel is processed first.
-        ContentNode.objects.create(
-            title="test1",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=root_node_2.channel_id,
-            parent=root_node_2,
-        )
-        ChannelMetadata.objects.create(
-            id=root_node_2.channel_id,
-            root=root_node_2,
-            name="test",
-            min_schema_version=CONTENT_SCHEMA_VERSION,
-        )
-        # Do this to side step django mptts auto tree_id code
-        ContentNode.objects.filter(parent=None).update(tree_id=1)
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 3)
-        fix_multiple_trees_with_id_one()
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 1)
-        import_mock.assert_has_calls(
-            [call(root_node_1.channel_id), call(root_node_2.channel_id)]
-        )
-
-    @patch(
-        "kolibri.core.content.utils.annotation.get_content_database_file_path",
-        return_value="",
-    )
-    def test_extra_channel_no_contentdb_exists(self, path_mock, import_mock):
-        root_node = ContentNode.objects.create(
-            title="test",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=uuid.uuid4().hex,
-        )
-        ChannelMetadata.objects.create(
-            id=root_node.channel_id,
-            root=root_node,
-            name="test",
-            min_schema_version=CONTENT_SCHEMA_VERSION,
-        )
-        # Do this to side step django mptts auto tree_id code
-        ContentNode.objects.filter(parent=None).update(tree_id=1)
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 2)
-        fix_multiple_trees_with_id_one()
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 2)
-        import_mock.assert_not_called()
-
-    @patch(
-        "kolibri.core.content.utils.annotation.get_content_database_file_path",
-        side_effect=["", mock_content_file[1]],
-    )
-    def test_two_extra_channels_one_contentdb_exists(self, path_mock, import_mock):
-        root_node_1 = ContentNode.objects.create(
-            title="test",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=uuid.uuid4().hex,
-        )
-        ChannelMetadata.objects.create(
-            id=root_node_1.channel_id,
-            root=root_node_1,
-            name="test",
-            min_schema_version=CONTENT_SCHEMA_VERSION,
-        )
-        root_node_2 = ContentNode.objects.create(
-            title="test",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=uuid.uuid4().hex,
-        )
-        # Add an additional node so that root_node_1 channel is processed first.
-        ContentNode.objects.create(
-            title="test1",
-            id=uuid.uuid4().hex,
-            content_id=uuid.uuid4().hex,
-            channel_id=root_node_2.channel_id,
-            parent=root_node_2,
-        )
-        ChannelMetadata.objects.create(
-            id=root_node_2.channel_id,
-            root=root_node_2,
-            name="test",
-            min_schema_version=CONTENT_SCHEMA_VERSION,
-        )
-        # Do this to side step django mptts auto tree_id code
-        ContentNode.objects.filter(parent=None).update(tree_id=1)
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 3)
-        fix_multiple_trees_with_id_one()
-        self.assertEqual(ContentNode.objects.filter(parent=None, tree_id=1).count(), 2)
-        with self.assertRaises(AssertionError):
-            import_mock.assert_called_with(root_node_1.channel_id)
-        import_mock.assert_called_with(root_node_2.channel_id)
-
-
-class CalculateChannelFieldsTestCase(TestCase):
+class SetChannelMetadataFieldsTestCase(TestCase):
     def setUp(self):
         self.node = ContentNode.objects.create(
             title="test",
@@ -679,3 +868,69 @@ class CalculateChannelFieldsTestCase(TestCase):
         self.assertEqual(
             list(self.channel.included_languages.values_list("id", flat=True)), ["en"]
         )
+
+    def test_calculate_total_resources(self):
+        local_file = LocalFile.objects.create(
+            id=uuid.uuid4().hex, extension="mp4", available=True, file_size=10
+        )
+        File.objects.create(
+            id=uuid.uuid4().hex, local_file=local_file, contentnode=self.node
+        )
+        calculate_total_resource_count(self.channel)
+        self.assertEqual(self.channel.total_resource_count, 1)
+
+    def test_calculate_published_size(self):
+        local_file = LocalFile.objects.create(
+            id=uuid.uuid4().hex, extension="mp4", available=True, file_size=10
+        )
+        File.objects.create(
+            id=uuid.uuid4().hex, local_file=local_file, contentnode=self.node
+        )
+        calculate_published_size(self.channel)
+        self.assertEqual(self.channel.published_size, 10)
+
+    def test_published_size_big_integer_field(self):
+        self.channel.published_size = (
+            2150000000  # out of range for integer field on postgres
+        )
+        try:
+            self.channel.save()
+        except DataError:
+            self.fail("DataError: integer out of range")
+
+    def test_public(self):
+        self.assertIsNone(self.channel.public)
+        set_channel_metadata_fields(self.channel.id)
+
+        self.channel.refresh_from_db()
+        self.assertIsNone(self.channel.public)
+
+        set_channel_metadata_fields(self.channel.id, public=True)
+
+        self.channel.refresh_from_db()
+        self.assertTrue(self.channel.public)
+
+
+@patch("kolibri.core.content.utils.sqlalchemybridge.get_engine", new=get_engine)
+class AncestorAnnotationTestCase(TransactionTestCase):
+    def test_ancestors(self):
+        builder = ChannelBuilder()
+        builder.insert_into_default_db()
+        channel_id = builder.channel["id"]
+        set_channel_ancestors(channel_id)
+        for n in ContentNode.objects.filter(channel_id=channel_id):
+            self.assertEqual(n.ancestors, list(n.get_ancestors().values("id", "title")))
+
+    def test_ancestors_quotation_marks_in_title(self):
+        builder = ChannelBuilder()
+        builder._django_nodes[0].title = 'Title with "A title!" in it!'
+        builder.insert_into_default_db()
+        channel_id = builder.channel["id"]
+        set_channel_ancestors(channel_id)
+        try:
+            for n in ContentNode.objects.filter(channel_id=channel_id):
+                self.assertEqual(
+                    n.ancestors, list(n.get_ancestors().values("id", "title"))
+                )
+        except ValidationError:
+            self.fail("Did not coerce to proper JSON")

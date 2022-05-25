@@ -6,50 +6,65 @@
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
-      <ReportsHeader />
-      <KSelect
-        v-model="filter"
-        :label="$tr('show')"
-        :options="filterOptions"
-        :inline="true"
-      />
+      <ReportsHeader :title="$isPrint ? $tr('printLabel', { className }) : null" />
+      <ReportsControls @export="exportCSV">
+        <!-- Hidden temporarily per https://github.com/learningequality/kolibri/issues/6174
+        <KSelect
+          v-model="filter"
+          :label="coreString('showAction')"
+          :options="filterOptions"
+          :inline="true"
+        />
+        -->
+      </ReportsControls>
       <CoreTable :emptyMessage="emptyMessage">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('titleLabel') }}</th>
-            <th>{{ coachStrings.$tr('progressLabel') }}</th>
-            <th>{{ coachStrings.$tr('recipientsLabel') }}</th>
-            <th>{{ coachStrings.$tr('statusLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" lesson />
+        <template #headers>
+          <th>{{ coachString('titleLabel') }}</th>
+          <th>{{ coreString('progressLabel') }}</th>
+          <th>{{ coachString('recipientsLabel') }}</th>
+          <th v-show="!$isPrint">
+            {{ coachString('lessonVisibleLabel') }}
+          </th>
+        </template>
+        <template #tbody>
+          <transition-group tag="tbody" name="list">
+            <tr v-for="tableRow in table" :key="tableRow.id">
+              <td>
                 <KRouterLink
                   :text="tableRow.title"
                   :to="classRoute('ReportsLessonReportPage', { lessonId: tableRow.id })"
+                  icon="lesson"
                 />
-              </KLabeledIcon>
-            </td>
-            <td>
-              <StatusSummary
-                :tally="tableRow.tally"
-                :verbose="true"
-              />
-            </td>
-            <td>
-              <Recipients
-                :groupNames="tableRow.groupNames"
-              />
-            </td>
-            <td><LessonActive :active="tableRow.active" /></td>
-          </tr>
-        </transition-group>
+              </td>
+              <td>
+                <StatusSummary
+                  :tally="tableRow.tally"
+                  :verbose="true"
+                />
+              </td>
+              <td>
+                <Recipients
+                  :groupNames="getRecipientNamesForExam(tableRow)"
+                  :hasAssignments="tableRow.assignments.length > 0"
+                />
+              </td>
+              <td v-show="!$isPrint">
+                <KSwitch
+                  name="toggle-lesson-visibility"
+                  label=""
+                  :checked="tableRow.active"
+                  :value="tableRow.active"
+                  @change="handleToggleVisibility(tableRow)"
+                />
+              </td>
+            </tr>
+          </transition-group>
+        </template>
       </CoreTable>
     </KPageContainer>
   </CoreBase>
@@ -59,19 +74,21 @@
 
 <script>
 
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import { LessonResource } from 'kolibri.resources';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
-  import LessonsRootPage from '../plan/LessonsRootPage';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsControls from './ReportsControls';
   import ReportsHeader from './ReportsHeader';
-
-  const LessonsRootPageStrings = crossComponentTranslator(LessonsRootPage);
 
   export default {
     name: 'ReportsLessonListPage',
     components: {
+      ReportsControls,
       ReportsHeader,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
     data() {
       return {
         filter: 'allLessons',
@@ -80,31 +97,31 @@
     computed: {
       emptyMessage() {
         if (this.filter.value === 'allLessons') {
-          return this.coachStrings.$tr('lessonListEmptyState');
+          return this.coachString('lessonListEmptyState');
         }
-        if (this.filter.value === 'activeLessons') {
-          return LessonsRootPageStrings.$tr('noActiveLessons');
-        }
-        if (this.filter.value === 'inactiveLessons') {
-          return LessonsRootPageStrings.$tr('noInactiveLessons');
-        }
+        // if (this.filter.value === 'activeLessons') {
+        //   return this.$tr('noActiveLessons');
+        // }
+        // if (this.filter.value === 'inactiveLessons') {
+        //   return this.$tr('noInactiveLessons');
+        // }
 
         return '';
       },
       filterOptions() {
         return [
           {
-            label: this.$tr('allLessons'),
+            label: this.coreString('allLessonsLabel'),
             value: 'allLessons',
           },
-          {
-            label: this.$tr('activeLessons'),
-            value: 'activeLessons',
-          },
-          {
-            label: this.$tr('inactiveLessons'),
-            value: 'inactiveLessons',
-          },
+          // {
+          //   label: this.$tr('activeLessons'),
+          //   value: 'activeLessons',
+          // },
+          // {
+          //   label: this.$tr('inactiveLessons'),
+          //   value: 'inactiveLessons',
+          // },
         ];
       },
       table() {
@@ -117,28 +134,65 @@
             return !lesson.active;
           }
         });
-        const sorted = this._.sortBy(filtered, ['title', 'active']);
-        const mapped = sorted.map(lesson => {
-          const learners = this.getLearnersForGroups(lesson.groups);
+        const sorted = this._.orderBy(filtered, ['date_created'], ['desc']);
+        return sorted.map(lesson => {
+          const learners = this.getLearnersForLesson(lesson);
           const tableRow = {
             totalLearners: learners.length,
             tally: this.getLessonStatusTally(lesson.id, learners),
             groupNames: this.getGroupNames(lesson.groups),
+            recipientNames: this.getRecipientNamesForExam(lesson),
+            hasAssignments: learners.length > 0,
           };
           Object.assign(tableRow, lesson);
           return tableRow;
         });
-        return mapped;
       },
     },
     beforeMount() {
       this.filter = this.filterOptions[0];
     },
+    methods: {
+      handleToggleVisibility(lesson) {
+        const newActiveState = !lesson.active;
+        const snackbarMessage = newActiveState
+          ? this.coachString('lessonVisibleToLearnersLabel')
+          : this.coachString('lessonNotVisibleToLearnersLabel');
+
+        let promise = LessonResource.saveModel({
+          id: lesson.id,
+          data: {
+            is_active: newActiveState,
+          },
+          exists: true,
+        });
+
+        return promise.then(() => {
+          this.$store.dispatch('classSummary/refreshClassSummary');
+          this.$store.dispatch('createSnackbar', snackbarMessage);
+        });
+      },
+      exportCSV() {
+        const columns = [
+          ...csvFields.title(),
+          ...csvFields.recipients(this.className),
+          ...csvFields.tally(),
+        ];
+
+        const fileName = this.$tr('printLabel', { className: this.className });
+        new CSVExporter(columns, fileName).export(this.table);
+      },
+    },
     $trs: {
-      show: 'Show',
-      allLessons: 'All lessons',
-      activeLessons: 'Active lessons',
-      inactiveLessons: 'Inactive lessons',
+      // activeLessons: 'Active lessons',
+      // inactiveLessons: 'Inactive lessons',
+      // noActiveLessons: 'No active lessons',
+      // noInactiveLessons: 'No inactive lessons',
+      printLabel: {
+        message: '{className} Lessons',
+        context:
+          "Title that displays on a printed copy of the 'Reports' > 'Lessons' page. This shows if the user uses the 'Print' option by clicking on the printer icon.",
+      },
     },
   };
 
@@ -148,5 +202,6 @@
 <style lang="scss" scoped>
 
   @import '../common/list-transition';
+  @import '../common/print-table';
 
 </style>

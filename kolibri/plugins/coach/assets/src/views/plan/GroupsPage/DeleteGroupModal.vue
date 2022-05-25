@@ -2,12 +2,13 @@
 
   <KModal
     :title="$tr('deleteLearnerGroup')"
-    :submitText="$tr('deleteGroup')"
-    :cancelText="$tr('cancel')"
+    :submitText="coreString('deleteAction')"
+    :cancelText="coreString('cancelAction')"
     @submit="handleSubmit"
-    @cancel="close"
+    @cancel="$emit('cancel')"
   >
     <p>{{ $tr('areYouSure', { groupName: groupName }) }}</p>
+    <p>{{ coreString('cannotUndoActionWarning') }}</p>
   </KModal>
 
 </template>
@@ -16,19 +17,11 @@
 <script>
 
   import { mapActions } from 'vuex';
-  import KModal from 'kolibri.coreVue.components.KModal';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'DeleteGroupModal',
-    $trs: {
-      deleteLearnerGroup: 'Delete group',
-      areYouSure: "Are you sure you want to delete '{ groupName }'?",
-      cancel: 'Cancel',
-      deleteGroup: 'Delete',
-    },
-    components: {
-      KModal,
-    },
+    mixins: [commonCoreStrings],
     props: {
       groupName: {
         type: String,
@@ -40,14 +33,22 @@
       },
     },
     methods: {
-      ...mapActions('groups', ['displayModal', 'deleteGroup']),
+      ...mapActions('groups', ['deleteGroup']),
       handleSubmit() {
         this.deleteGroup(this.groupId).then(() => {
-          this.$emit('success');
+          this.$emit('submit');
         });
       },
-      close() {
-        this.displayModal(false);
+    },
+    $trs: {
+      deleteLearnerGroup: {
+        message: 'Delete group',
+        context:
+          "Title of the confirmation window which appears when user uses the 'Delete' option in the group section.",
+      },
+      areYouSure: {
+        message: "Are you sure you want to delete '{ groupName }'?",
+        context: 'Confirmation message when the coach attempts to delete a group of learners.',
       },
     },
   };

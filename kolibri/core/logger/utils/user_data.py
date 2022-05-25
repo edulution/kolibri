@@ -9,11 +9,12 @@ import random
 from django.db.models import Max
 from django.db.models import Min
 from django.db.models import Sum
-from django.db.models.query import F
+from django.db.models.query import Q
+from django.db.utils import IntegrityError
 from django.utils import timezone
 from le_utils.constants import content_kinds
 
-from kolibri.core.auth.filters import HierarchyRelationsFilter
+from kolibri.core.auth.constants import demographics
 from kolibri.core.auth.models import Classroom
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
@@ -25,21 +26,60 @@ from kolibri.core.lessons.models import LessonAssignment
 from kolibri.core.logger.models import AttemptLog
 from kolibri.core.logger.models import ContentSessionLog
 from kolibri.core.logger.models import ContentSummaryLog
-from kolibri.core.logger.models import ExamAttemptLog
-from kolibri.core.logger.models import ExamLog
 from kolibri.core.logger.models import MasteryLog
 
 logger = logging.getLogger(__name__)
 
 
+QUIZ_ITEM_DELIMETER = ":"
+
+#####################
+# When modifying here, run these tests for sanity:
+#   pytest kolibri/core/analytics/test/test_utils.py
+#   pytest kolibri/core/logger/utils/user_data.py
+#####################
+
+
+def logger_info(message, verbosity=1):
+    # Encapsulate logging in an exception handler to capture encoding errors:
+    # Sadly, simply wrapping the printing code in an exception handler
+    # doesn't work on Windows, see: https://github.com/learningequality/kolibri/issues/7077
+    try:
+        # MUST: Follow the verbosity mechanism of Django's management commands
+        # https://docs.djangoproject.com/en/1.11/ref/django-admin/#cmdoption-verbosity
+        # and only show when it's > 0.
+        # print("====> verbosity %s" % verbosity)
+        if verbosity > 0:
+            # REF: [Python, Unicode, and the Windows console](https://stackoverflow.com/a/32176732/845481)
+            print(message)
+    except Exception:
+        # TODO(cpauya): Don't just pass on everything, capture only specific ones.
+        pass
+
+
 def get_or_create_facilities(**options):
     n_facilities = options["n_facilities"]
+    device_name = options.get("device_name", "")
+    verbosity = options.get("verbosity", 1)
+
     n_on_device = Facility.objects.all().count()
     n_to_create = n_facilities - n_on_device
     if n_to_create > 0:
-        print("Generating {n} facility object(s)".format(n=n_to_create))
+        logger_info(
+            "Generating {n} facility object(s)".format(n=n_to_create),
+            verbosity=verbosity,
+        )
         for i in range(0, n_to_create):
-            Facility.objects.create(name="Test Facility {i}".format(i=i + 1))
+            facility_name = "Facility{i}".format(i=i + 1)
+            if device_name:
+                # If specified, prepend the device name to the facility.
+                facility_name = "{0} {1}".format(device_name, facility_name)
+            facility, created = Facility.objects.get_or_create(name=facility_name)
+            facility.dataset.location = device_name
+            facility.dataset.save()
+            if created:
+                logger_info("==> CREATED FACILITY {f}".format(f=facility), verbosity)
+
     return Facility.objects.all()[0:n_facilities]
 
 
@@ -48,17 +88,27 @@ def get_or_create_classrooms(**options):
     facility = options["facility"]
     n_on_device = Classroom.objects.filter(parent=facility).count()
     n_to_create = n_classes - n_on_device
+    device_name = options.get("device_name", "")
+    verbosity = options.get("verbosity", 1)
+
     if n_to_create > 0:
-        logger.info(
+        logger_info(
             "Generating {n} classroom object(s) for facility: {name}".format(
                 n=n_to_create, name=facility.name
-            )
+            ),
+            verbosity,
         )
         for i in range(0, n_to_create):
-            Classroom.objects.create(
-                parent=facility,
-                name="Classroom {i}{a}".format(i=i + 1, a=random.choice("ABCD")),
+            class_name = "Class{i}{a}".format(i=i + 1, a=random.choice("ABCD"))
+            if device_name:
+                # Prepend the facility name to the class to easily identify the class during
+                # P2P sync tests. The facility name already has the device_name prepended.
+                class_name = "{0} {1}".format(facility, class_name)
+            classroom, created = Classroom.objects.get_or_create(
+                parent=facility, name=class_name
             )
+            if created:
+                logger_info("==> CREATED Class {c}".format(c=classroom), verbosity)
     return Classroom.objects.filter(parent=facility)[0:n_classes]
 
 
@@ -67,6 +117,8 @@ def get_or_create_classroom_users(**options):
     n_users = options["n_users"]
     user_data = options["user_data"]
     facility = options["facility"]
+    device_name = options.get("device_name", "")
+    verbosity = options.get("verbosity", 1)
 
     # The headers in the user_data.csv file that we use to generate user Full Names
     # Note, we randomly pick from these to give deliberately varied (and sometimes idiosyncratic)
@@ -74,18 +126,20 @@ def get_or_create_classroom_users(**options):
     user_data_name_fields = ["GivenName", "MiddleInitial", "Surname"]
 
     n_in_classroom = (
-        HierarchyRelationsFilter(FacilityUser.objects.all())
-        .filter_by_hierarchy(ancestor_collection=classroom, target_user=F("id"))
+        FacilityUser.objects.filter(memberships__collection=classroom)
+        .distinct()
         .count()
     )
 
     # Only generate new users if there are fewer users than requested.
+    current_year = datetime.datetime.now().year
     n_to_create = n_users - n_in_classroom
     if n_to_create > 0:
-        logger.info(
+        logger_info(
             "Generating {n} user object(s) for class: {classroom} in facility: {facility}".format(
                 n=n_to_create, classroom=classroom, facility=facility
-            )
+            ),
+            verbosity=verbosity,
         )
         for i in range(0, n_to_create):
             # Get the first base data that does not have a matching user already
@@ -100,19 +154,35 @@ def get_or_create_classroom_users(**options):
                     if base_data[key]
                 ]
             )
-            user = FacilityUser.objects.create(
-                facility=facility, full_name=name, username=base_data["Username"]
-            )
-            # Set a dummy password so that if we want to login as this learner later, we can.
-            user.set_password("password")
-            user.save()
+            if device_name:
+                # If specified, prepend the device name to the user.
+                name = "{0} {1}".format(device_name, name)
+            # calculate birth year
+            birth_year = str(current_year - int(base_data["Age"]))
+            # randomly assign gender
+            gender = random.choice(demographics.choices)[0]
+            try:
+                user = FacilityUser.objects.create(
+                    facility=facility,
+                    full_name=name,
+                    username=base_data["Username"],
+                    gender=gender,
+                    birth_year=birth_year,
+                )
+                # Set a dummy password so that if we want to login as this learner later, we can.
+                user.set_password("password")
+                user.save()
+            except IntegrityError:
+                user = FacilityUser.objects.get(
+                    facility=facility, username=base_data["Username"]
+                )
 
             # Add the user to the current classroom
             classroom.add_member(user)
 
-    return HierarchyRelationsFilter(FacilityUser.objects.all()).filter_by_hierarchy(
-        target_user=F("id"), ancestor_collection=classroom
-    )[0:n_users]
+    return FacilityUser.objects.filter(memberships__collection=classroom).distinct()[
+        0:n_users
+    ]
 
 
 def add_channel_activity_for_user(**options):  # noqa: max-complexity=16
@@ -120,16 +190,18 @@ def add_channel_activity_for_user(**options):  # noqa: max-complexity=16
     channel = options["channel"]
     user = options["user"]
     now = options["now"]
+    verbosity = options.get("verbosity", 1)
 
     channel_id = channel.id
     default_channel_content = ContentNode.objects.exclude(
         kind=content_kinds.TOPIC
     ).filter(channel_id=channel_id)
 
-    logger.debug(
+    logger_info(
         "Generating {i} user interaction(s) for user: {user} for channel: {channel}".format(
             i=n_content_items, user=user, channel=channel.name
-        )
+        ),
+        verbosity=verbosity,
     )
     # Generate a content interaction history for this many content items
     for i in range(0, n_content_items):
@@ -404,6 +476,7 @@ def create_exams_for_classrooms(**options):
     num_exams = options["exams"]
     facility = options["facility"]
     now = options["now"]
+    device_name = options.get("device_name", "")
 
     if not channels:
         return
@@ -416,6 +489,9 @@ def create_exams_for_classrooms(**options):
         if not members:
             coach = FacilityUser.objects.create(username="coach", facility=facility)
             coach.set_password("password")
+            if device_name:
+                # If specified, prepend the device_name to the new coach.
+                coach.name = "{0} {1}".format(device_name, coach.name)
             coach.save()
         else:
             coach = random.choice(members)
@@ -424,9 +500,11 @@ def create_exams_for_classrooms(**options):
     for count in range(num_exams):
 
         # exam questions can come from different channels
-        exercise_content = ContentNode.objects.filter(kind=content_kinds.EXERCISE)
+        exercise_content = ContentNode.objects.filter(
+            kind=content_kinds.EXERCISE
+        ).filter(~Q(assessmentmetadata__assessment_item_ids=[]))
         # don't add more than 3 resources per:
-        n_content_items = min(random.randint(0, exercise_content.count() - 1), 3)
+        n_content_items = min(exercise_content.count(), 3)
         exam_content = []
         content_ids = []
         assessment_ids = []
@@ -462,17 +540,44 @@ def create_exams_for_classrooms(**options):
         )
         # everyone in the class has to take the exam
         for user in classroom.get_members():
-            # create exam log per user
-            examlog = ExamLog.objects.create(
-                exam=exam, user=user, completion_timestamp=now
+            random_seconds = random.randint(1, 500)
+            seconds = timezone.timedelta(seconds=random_seconds)
+            then = now - seconds
+            # create mastery log per user
+            sessionlog = ContentSessionLog.objects.create(
+                user=user,
+                start_timestamp=then,
+                end_timestamp=now,
+                content_id=exam.id,
+                channel_id=None,
+                time_spent=60,  # 1 minute
+                kind=content_kinds.QUIZ,
+            )
+            summarylog = ContentSummaryLog.objects.create(
+                user=user,
+                start_timestamp=then,
+                end_timestamp=now,
+                completion_timestamp=now,
+                content_id=exam.id,
+                channel_id=None,
+                kind=content_kinds.QUIZ,
+            )
+            masterylog = MasteryLog.objects.create(
+                mastery_criterion={"type": "quiz", "coach_assigned": True},
+                summarylog=summarylog,
+                start_timestamp=summarylog.start_timestamp,
+                user=user,
+                mastery_level=-1,
             )
             # create 1 exam attempt log per question in exam
             for i in range(len(exam_content)):
                 correct = random.choice([0, 1])
                 random_seconds = random.randint(1, 100)
                 seconds = timezone.timedelta(seconds=random_seconds)
-                ExamAttemptLog.objects.create(
-                    item=assessment_ids[i],
+                AttemptLog.objects.create(
+                    item="{}{}{}".format(
+                        content_ids[i], QUIZ_ITEM_DELIMETER, assessment_ids[i]
+                    ),
                     start_timestamp=now - seconds,
                     end_timestamp=now,
                     completion_timestamp=now,
@@ -486,6 +591,46 @@ def create_exams_for_classrooms(**options):
                     answer={},
                     interaction_history={},
                     user=user,
-                    examlog=examlog,
-                    content_id=content_ids[i],
+                    masterylog=masterylog,
+                    sessionlog=sessionlog,
                 )
+
+
+# TODO(cpauya): WIP
+# def create_groups_for_classrooms(**options):
+#     # Creates specified number of groups per class.
+#
+#     classroom = options["classroom"]
+#     facility = options["facility"]
+#     channels = options["channels"]
+#     num_groups = options["num_groups"]
+#     now = options["now"]
+#     device_name = options.get("device_name", "")
+
+#     coaches = facility.get_coaches()
+#     if coaches:
+#         coach = random.choice(coaches)
+#     else:
+#         members = facility.get_members()
+#         if not members:
+#             coach = FacilityUser.objects.create(username="coach", facility=facility)
+#             coach.set_password("password")
+#             if device_name:
+#                 # If specified, prepend the device_name to the new coach.
+#                 coach.name = "{0} {1}".format(device_name, coach.name)
+#             coach.save()
+#         else:
+#             coach = random.choice(members)
+#             facility.add_coach(coach)
+
+#     # Create group and enroll learners.
+#     from kolibri.core.auth.models import LearnerGroup
+
+#     # Only create specified number of groups per classroom.
+#     if num_groups:
+#         groups = LearnerGroup.objects.all()
+#         if num_groups < len(groups):
+#             return
+
+#         for group in groups:
+#             logger_info("==> group {group}".format(group=group))

@@ -16,6 +16,8 @@ class NetworkLocationSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "available",
+            "dynamic",
+            "nickname",
             "base_url",
             "device_name",
             "instance_id",
@@ -24,23 +26,32 @@ class NetworkLocationSerializer(serializers.ModelSerializer):
             "operating_system",
             "application",
             "kolibri_version",
+            "subset_of_users_device",
         )
         read_only_fields = (
             "available",
+            "dynamic",
+            "device_name",
             "instance_id",
             "added",
             "last_accessed",
             "operating_system",
             "application",
             "kolibri_version",
+            "subset_of_users_device",
         )
 
-    def validate_base_url(self, value):
+    def validate(self, data):
         try:
-            client = NetworkClient(address=value)
+            client = NetworkClient(address=data["base_url"])
         except errors.NetworkError as e:
             raise ValidationError(
-                "Error with address {} ({})".format(value, e.__class__.__name__),
+                "Error with address {} ({})".format(
+                    data["base_url"], e.__class__.__name__
+                ),
                 code=e.code,
             )
-        return client.base_url
+        data["base_url"] = client.base_url
+        info = {k: v for (k, v) in client.info.items() if v is not None}
+        data.update(info)
+        return super(NetworkLocationSerializer, self).validate(data)

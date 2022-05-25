@@ -12,26 +12,31 @@
     "test-jest": "kolibri-tools test --config ./jest.conf.js",
     "test-jest-cov": "yarn run test-jest --coverage",
     "coverage": "yarn run test-jest-cov",
-    "build": "kolibri-tools build prod --file ./build_tools/build_plugins.txt && yarn run hashi-build",
-    "makemessages": "kolibri-tools build i18n --file ./build_tools/build_plugins.txt",
-    "watch": "kolibri-tools build dev --file ./build_tools/build_plugins.txt",
-    "watch-hot": "kolibri-tools build dev --file ./build_tools/build_plugins.txt --hot",
-    "django-devserver": "kolibri --debug manage runserver --settings=kolibri.deployment.default.settings.dev \"0.0.0.0:8000\" ",
-    "devserver": "npm-run-all --parallel django-devserver watch lint:watch hashi-dev",
-    "devserver-hot": "npm-run-all --parallel django-devserver watch-hot lint:watch",
+    "build": "yarn run hashi-build && kolibri-tools build prod --file ./build_tools/build_plugins.txt",
+    "makemessages": "kolibri-tools i18n-extract-messages --pluginFile ./build_tools/build_plugins.txt",
+    "createprofiles": "kolibri-tools i18n-profile --pluginFile ./build_tools/build_plugins.txt --output-file ./kolibri/locale/en/LC_MESSAGES/profiles/strings.csv",
+    "transfercontext": "kolibri-tools i18n-transfer-context --pluginFile ./build_tools/build_plugins.txt",
+    "watch": "kolibri-tools build dev --file ./build_tools/build_plugins.txt --cache",
+    "watch-hot": "yarn run watch --hot",
+    "python-devserver": "kolibri start --debug --foreground --port=8000 --settings=kolibri.deployment.default.settings.dev",
+    "python-devserver-no-update": "kolibri start --debug --skip-update --foreground --port=8000 --settings=kolibri.deployment.default.settings.dev",
+    "frontend-devserver": "run-p lint-frontend:watch:format hashi-dev watch",
+    "devserver": "run-p python-devserver lint-frontend:watch:format hashi-dev watch ",
+    "devserver-warn": "run-p python-devserver lint-frontend:watch hashi-dev watch",
+    "devserver-hot": "run-p python-devserver lint-frontend:watch:format hashi-dev watch-hot",
+    "devserver-hot-warn": "run-p python-devserver lint-frontend:watch hashi-dev watch-hot",
     "bundle-stats": "kolibri-tools build stats --file ./build_tools/build_plugins.txt",
     "clean": "kolibri-tools build clean --file ./build_tools/build_plugins.txt",
     "preinstall": "node ./packages/kolibri-tools/lib/npm_deprecation_warning.js",
-    "lint": "kolibri-tools lint",
-    "lint-all": "yarn run lint '{kolibri*/**/assets,packages}/**/*.{js,vue,scss,less,css}' -i '**/node_modules/**','**/static/**','**/packages/kolibri-core-for-export/**'",
-    "lint-all:fix": "yarn run lint-all -w",
-    "lint:fix": "yarn run lint -w",
-    "lint:watch": "yarn lint-all -w -m",
-    "generate-locale-data": "node ./build_tools/i18n/intl_code_gen.js",
-    "build-kolibri-tools": "yarn workspace kolibri-tools run build",
+    "lint-frontend": "kolibri-tools lint --pattern '{kolibri*/**/assets,packages,build_tools}/**/*.{js,vue,scss,less,css}' --ignore '**/dist/**,**/node_modules/**,**/static/**,**/kolibri-core-for-export/**'",
+    "lint-frontend:format": "yarn run lint-frontend --write",
+    "lint-frontend:watch": "yarn run lint-frontend --monitor",
+    "lint-frontend:watch:format": "yarn run lint-frontend --monitor --write",
+    "build-kolibri-tools": "yarn workspace kolibri-tools run build-kolibri-tools",
     "publish-packages": "node ./packages/publish.js",
     "hashi-dev": "yarn workspace hashi run dev",
-    "hashi-build": "yarn workspace hashi run build"
+    "hashi-build": "yarn workspace hashi run build",
+    "compress": "kolibri-tools compress 'kolibri/*/**/static/**/*.{html,js,css,ico,svg,map,eot,woff,ttf,woff2}'"
   },
   "repository": {
     "type": "git",
@@ -43,16 +48,21 @@
     "url": "https://github.com/learningequality/kolibri/issues"
   },
   "private": true,
-  "dependencies": {},
   "devDependencies": {
-    "kolibri-tools": "0.12.0-beta.3.2",
+    "@types/jest": "^24.0.12",
+    "xhr-mock": "^2.5.1",
     "yarn-run-all": "^3.1.1"
   },
   "optionalDependencies": {
     "fsevents": "*"
   },
+  "engineStrict": true,
   "engines": {
-    "node": "10.x",
-    "npm": ">= 3"
-  }
+    "node": "16.x",
+    "yarn": ">= 1.12.3"
+  },
+  "browserslist": [
+    "extends browserslist-config-kolibri"
+  ],
+  "dependencies": {}
 }

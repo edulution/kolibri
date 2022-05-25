@@ -1,9 +1,9 @@
 <template>
 
-  <section class="question-list">
+  <section :style="{ backgroundColor: $themeTokens.surface }">
 
     <h2 class="header">
-      {{ $tr('questionListHeader', {numOfQuestions:questions.length}) }}
+      {{ $tr('questionListHeader', { numOfQuestions: questions.length }) }}
     </h2>
 
     <ul class="list">
@@ -14,8 +14,8 @@
         class="item"
       >
         <KButton
-          :class="{selected: index === selectedIndex}"
-          :style="{ backgroundColor: index === selectedIndex ? $coreGrey300 : '' }"
+          :class="{ selected: index === selectedIndex }"
+          :style="buttonStyle(index)"
           class="button"
           :text="questionLabel(index)"
           appearance="flat-button"
@@ -31,19 +31,8 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KButton from 'kolibri.coreVue.components.KButton';
-
   export default {
     name: 'QuestionList',
-    components: {
-      KButton,
-    },
-    mixins: [themeMixin],
-    $trs: {
-      questionListHeader: '{numOfQuestions, number} Questions',
-      questionLabel: 'Question { questionNumber, number }',
-    },
     props: {
       questions: {
         type: Array,
@@ -60,16 +49,25 @@
         validator: value => typeof value(0) === 'string',
       },
     },
+    methods: {
+      buttonStyle(index) {
+        return {
+          backgroundColor: index === this.selectedIndex ? this.$themePalette.grey.v_300 : '',
+        };
+      },
+    },
+    $trs: {
+      questionListHeader: {
+        message: '{numOfQuestions, number} Questions',
+        context: 'Header for the list of questions in a quiz or a lesson. Translate as a plural.',
+      },
+    },
   };
 
 </script>
 
 
 <style lang="scss" scoped>
-
-  .question-list {
-    background-color: white;
-  }
 
   .header,
   .list,
@@ -99,6 +97,7 @@
     text-align: left;
     text-transform: none;
     border-radius: 0;
+
     &.selected {
       font-weight: bold;
     }

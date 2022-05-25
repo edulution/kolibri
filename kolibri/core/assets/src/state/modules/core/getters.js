@@ -29,3 +29,7 @@ export function totalPoints(state) {
 export function pageSessionId(state) {
   return state.pageSessionId;
 }
+
+export function allowAccess(state, getters, rootState, rootGetters) {
+  return state.allowRemoteAccess || rootGetters.isAppContext;
+}

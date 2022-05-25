@@ -3,33 +3,33 @@
   <div role="alert" class="app-error">
 
     <img src="./app-error-bird.png">
-    <!-- Header message -->
+
     <h1>
-      {{ $tr('defaultErrorHeader') }}
+      {{ headerText }}
     </h1>
 
-    <p>
-      {{ $tr('defaultErrorMessage') }}
+    <p v-for="(paragraph, idx) in paragraphTexts" :key="idx">
+      {{ paragraph }}
     </p>
 
     <p>
-      {{ $tr('defaultErrorResolution') }}
+      <KButtonGroup>
+        <KButton
+          v-if="!isPageNotFound"
+          :text="$tr('pageReloadPrompt')"
+          :primary="true"
+          @click="reloadPage"
+        />
+        <KButton
+          :primary="isPageNotFound"
+          appearance="raised-button"
+          :text="exitButtonLabel"
+          @click="handleClickBackToHome"
+        />
+      </KButtonGroup>
     </p>
 
-    <p>
-      <KButton
-        :text="$tr('pageReloadPrompt')"
-        :primary="true"
-        @click="reloadPage"
-      />
-      <KRouterLink
-        appearance="raised-button"
-        :to="{path: '/'}"
-        :text="$tr('defaultErrorExitPrompt')"
-        @click.native="clearErrorState"
-      />
-    </p>
-    <p>
+    <p v-if="!isPageNotFound">
       <!-- link button to open reporting modal -->
       <KButton
         appearance="basic-link"
@@ -51,31 +51,55 @@
 
 <script>
 
+  import get from 'lodash/get';
   import { mapActions } from 'vuex';
-  import KButton from 'kolibri.coreVue.components.KButton';
-  import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
   import ReportErrorModal from './ReportErrorModal';
 
   export default {
     name: 'AppError',
-    $trs: {
-      defaultErrorHeader: 'Sorry! Something went wrong!',
-      defaultErrorExitPrompt: 'Back to home',
-      pageReloadPrompt: 'Refresh',
-      defaultErrorMessage:
-        'We care about your experience on Kolibri and are working hard to fix this issue.',
-      defaultErrorResolution: 'Try refreshing this page or going back to the home page.',
-      defaultErrorReportPrompt: 'Help us by reporting this error',
-    },
     components: {
-      KButton,
-      KRouterLink,
       ReportErrorModal,
     },
     data() {
       return {
         showDetailsModal: false,
       };
+    },
+    computed: {
+      headerText() {
+        if (this.isPageNotFound) {
+          return this.$tr('resourceNotFoundHeader');
+        }
+        return this.$tr('defaultErrorHeader');
+      },
+      paragraphTexts() {
+        if (this.isPageNotFound) {
+          return [this.$tr('resourceNotFoundMessage')];
+        }
+        return [this.$tr('defaultErrorMessage'), this.$tr('defaultErrorResolution')];
+      },
+      // HACK since the error is stored as a string, we have to re-parse it to get the error code
+      errorObject() {
+        if (this.$store.state.core.error) {
+          try {
+            return JSON.parse(this.$store.state.core.error);
+          } catch (err) {
+            return null;
+          }
+        }
+        return null;
+      },
+      isPageNotFound() {
+        // Returns 'true' only if method is 'GET' and code is '404'.
+        // Doesn't handle case where 'DELETE' or 'PATCH' request returns '404'.
+        return (
+          get(this.errorObject, 'status') === 404 &&
+          get(this.errorObject, 'config.method') === 'get'
+        );
+      },
+      exitButtonLabel() {
+        return this.$tr('defaultErrorExitPrompt');
+      },
     },
     methods: {
       ...mapActions(['handleError']),
@@ -89,8 +113,52 @@
         // reloads without cache
         global.location.reload();
       },
-      clearErrorState() {
+      handleClickBackToHome() {
         this.handleError('');
+        this.$router.push({ path: '/' });
+      },
+    },
+    $trs: {
+      defaultErrorHeader: {
+        message: 'Sorry! Something went wrong!',
+        context:
+          'This is a generic error message that the user will see when an error has occurred.',
+      },
+      // eslint-disable-next-line
+      defaultErrorExitPrompt: {
+        message: 'Back to home',
+        context:
+          'If Kolibri produces an unexpected error, this link appears which take the user back to the homepage.',
+      },
+      pageReloadPrompt: {
+        message: 'Refresh',
+        context:
+          'Button which allows the user to refresh the application if an error has occurred.',
+      },
+      defaultErrorMessage: {
+        message: 'We care about your experience on Kolibri and are working hard to fix this issue',
+        context:
+          'Error message that a user will see if an error that is the result of a known bug has occurred.',
+      },
+      defaultErrorResolution: {
+        message: 'Try refreshing this page or going back to the home page',
+        context:
+          'Helper text which advises the user to refresh their browser if an error has occurred, or go back to the home page.',
+      },
+      defaultErrorReportPrompt: {
+        message: 'Help us by reporting this error',
+        context:
+          'Text that informs the user about how to report an error if they see one in Kolibri.',
+      },
+      resourceNotFoundHeader: {
+        message: 'Resource not found',
+        context:
+          'Error message that may appear if Kolibri cannot find a learning resource such as a video or a quiz.',
+      },
+      resourceNotFoundMessage: {
+        message: 'Sorry, that resource does not exist',
+        context:
+          'Message that appears when a user tries to access a learning resource that is not available in Kolibri.',
       },
     },
   };

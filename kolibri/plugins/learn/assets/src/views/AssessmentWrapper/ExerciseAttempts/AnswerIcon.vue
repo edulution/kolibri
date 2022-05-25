@@ -2,31 +2,30 @@
 
   <div>
     <div ref="icon">
-      <mat-svg
+      <KIcon
         v-if="answer === 'right'"
-        category="action"
-        name="check_circle"
+        icon="correct"
         class="correct"
-        :style="{ fill: $coreStatusCorrect }"
+        :color="$themeTokens.correct"
+        style="top: 0; width: 24px; height: 24px;"
       />
-      <mat-svg
+      <KIcon
         v-else-if="answer === 'wrong'"
-        category="navigation"
-        name="close"
-        :style="svgFill"
+        icon="incorrect"
+        style="top: 0; width: 24px; height: 24px;"
+        :color="$themeTokens.annotation"
       />
-      <mat-svg
+      <KIcon
         v-else-if="answer === 'hint'"
-        category="action"
-        name="lightbulb_outline"
-        :style="svgFill"
+        icon="hint"
+        style="top: 0; width: 24px; height: 24px;"
+        :color="$themeTokens.annotation"
       />
-      <mat-svg
+      <KIcon
         v-else-if="answer === 'rectified'"
-        category="image"
-        name="lens"
+        icon="rectified"
         class="rectified"
-        :style="svgFill"
+        :color="$themeTokens.annotation"
       />
     </div>
     <KTooltip
@@ -43,15 +42,8 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
-
   export default {
     name: 'AnswerIcon',
-    components: {
-      KTooltip,
-    },
-    mixins: [themeMixin],
     props: {
       answer: {
         type: String,
@@ -76,17 +68,26 @@
             return '';
         }
       },
-      svgFill() {
-        return {
-          fill: this.$coreTextAnnotation,
-        };
-      },
     },
     $trs: {
-      correct: 'Correct',
-      incorrect: 'Incorrect',
-      hintUsed: 'Hint used',
-      incorrectFirstTry: 'Incorrect first try',
+      correct: {
+        message: 'Correct',
+        context: 'Indicates if the learner answered the question correctly.',
+      },
+      incorrect: {
+        message: 'Incorrect',
+        context: 'Indicates if the learner answered the question incorrectly.',
+      },
+      hintUsed: {
+        message: 'Hint used',
+        context:
+          "Some exercises can offer hints. These can be suggestions to help learners solve a problem.\n\nIf the learner uses a hint, the text 'Hint used' appears in the exercise.",
+      },
+      incorrectFirstTry: {
+        message: 'Incorrect first try',
+        context:
+          'Indicates if the learner answered a question incorrectly on the first attempt at answering it.\n',
+      },
     },
   };
 
@@ -95,7 +96,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   svg {
     height: 30px;

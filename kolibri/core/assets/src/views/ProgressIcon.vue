@@ -5,25 +5,31 @@
       <UiIcon
         v-if="isInProgress"
         :ariaLabel="$tr('inProgress')"
-        class="inprogress"
-        :style="{ backgroundColor: $coreStatusProgress }"
       >
-        <mat-svg name="schedule" category="action" />
+        <KIcon
+          icon="schedule"
+          :style="iconStyle($themeTokens.progress)"
+          class="icon"
+          :color="$themeTokens.textInverted"
+        />
       </UiIcon>
       <UiIcon
         v-else-if="isCompleted"
-        :ariaLabel="$tr('completed')"
-        class="completed"
-        :style="{ backgroundColor: $coreStatusMastered }"
+        :ariaLabel="coreString('completedLabel')"
       >
-        <mat-svg name="star" category="toggle" />
+        <KIcon
+          icon="star"
+          :style="iconStyle($themeTokens.mastered)"
+          class="icon"
+          :color="$themeTokens.textInverted"
+        />
       </UiIcon>
     </span>
     <KTooltip
       reference="icon"
       :refs="$refs"
     >
-      {{ isInProgress ? $tr('inProgress') : $tr('completed') }}
+      {{ isInProgress ? $tr('inProgress') : coreString('completedLabel') }}
     </KTooltip>
   </span>
 
@@ -32,25 +38,19 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import UiIcon from 'keen-ui/src/UiIcon';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import UiIcon from 'kolibri-design-system/lib/keen/UiIcon';
 
   export default {
     name: 'ProgressIcon',
-    $trs: {
-      inProgress: 'In progress',
-      completed: 'Completed',
-    },
     components: {
       UiIcon,
-      KTooltip,
     },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings],
     props: {
       progress: {
         type: Number,
-        required: false,
+        default: null,
         validator(value) {
           return value >= 0 && value <= 1;
         },
@@ -58,10 +58,26 @@
     },
     computed: {
       isInProgress() {
-        return this.progress !== null && this.progress >= 0 && this.progress < 1;
+        // this logic is updated to be consistent with the logic in CardThumbnail
+        return this.progress !== null && this.progress > 0 && this.progress < 1;
       },
       isCompleted() {
         return this.progress >= 1;
+      },
+    },
+    methods: {
+      iconStyle(bgColor) {
+        return {
+          backgroundColor: bgColor,
+          color: this.$themeTokens.textInverted,
+        };
+      },
+    },
+    $trs: {
+      inProgress: {
+        message: 'In progress',
+        context:
+          "When a learner starts an exercise, viewing a video, or reading a document, this will be marked with the 'In progress' icon.\n\nThe text 'In progress' appears if the user moves their mouse over the icon.",
       },
     },
   };
@@ -71,9 +87,9 @@
 
 <style lang="scss" scoped>
 
-  .inprogress,
-  .completed {
-    color: white;
+  .icon {
+    width: 24px;
+    height: 24px;
     cursor: default;
     border-radius: 50%;
   }

@@ -2,11 +2,10 @@
 
   <YesNoForm
     :noOptionLabel="$tr('noOptionLabel')"
-    :noOptionTooltip="$tr('noOptionTooltip')"
+    :noOptionDescription="$tr('noOptionTooltip')"
     :settingIsEnabled="settingIsEnabled"
-    :submitText="submitText"
     :headerText="$tr('header')"
-    @submit="setSetting"
+    @submit="handleSubmit"
   />
 
 </template>
@@ -21,35 +20,37 @@
     components: {
       YesNoForm,
     },
-    props: {
-      submitText: {
-        type: String,
-        required: true,
-      },
-    },
     data() {
-      const { settings, preset } = this.$store.state.onboardingData;
-      if (settings.learner_can_login_with_no_password !== null) {
-        return {
-          settingIsEnabled: settings.learner_can_login_with_no_password,
-        };
-      }
-      // Default is False only for "formal" preset
       return {
-        settingIsEnabled: preset !== 'formal',
+        // NOTE: The 'Yes' option should set this to false
+        settingIsEnabled: !this.$store.state.onboardingData.settings
+          .learner_can_login_with_no_password,
       };
     },
     methods: {
-      setSetting(setting) {
-        this.$store.commit('SET_LEARNER_CAN_LOGIN_WITH_NO_PASSWORD', setting);
-        this.$emit('submit');
+      handleSubmit(setting) {
+        // NOTE: Notice that setting is negated
+        this.$store.commit('SET_LEARNER_CAN_LOGIN_WITH_NO_PASSWORD', !setting);
+        this.$emit('click_next');
       },
     },
     $trs: {
-      header: 'Enable passwords on learner accounts?',
-      noOptionLabel: 'No. Learner accounts can sign in with just a username',
-      noOptionTooltip:
-        'Helpful for younger learners or when you are not concerned about account security',
+      header: {
+        message: 'Enable passwords on learner accounts?',
+        context:
+          'Admins can either enable passwords for learners or offer a simplified sign-in, without the password requirement. This allows easier access for younger learners.',
+      },
+      noOptionLabel: {
+        message: 'No. Learner accounts can sign in with just a username',
+        context:
+          "Option on the 'Enable passwords for learners' screen. The admin selects this option if they don't want to enable passwords for learner accounts.",
+      },
+      noOptionTooltip: {
+        message:
+          'Helpful for younger learners or when you are not concerned about account security',
+        context:
+          "Additional information in the form of a tooltip about the 'No' option in the 'Enable passwords for younger learners' screen.",
+      },
     },
   };
 

@@ -5,10 +5,10 @@
     :to="to"
     class="header-tab"
     :activeClass="activeClasses"
-    :style="{ color: $coreTextAnnotation }"
+    :style="{ color: $themeTokens.annotation }"
     :class="defaultStyles"
   >
-    <div class="inner" :style="{ borderColor: this.$coreActionNormal }">
+    <div class="inner" :style="{ borderColor: this.$themeTokens.primary }">
       {{ text }}
     </div>
   </router-link>
@@ -18,11 +18,8 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-
   export default {
     name: 'HeaderTab',
-    mixins: [themeMixin],
     props: {
       text: {
         type: String,
@@ -36,13 +33,13 @@
     computed: {
       activeClasses() {
         // return both fixed and dynamic classes
-        return `router-link-active ${this.$computedClass({ color: this.$coreActionNormal })}`;
+        return `router-link-active ${this.$computedClass({ color: this.$themeTokens.primary })}`;
       },
       defaultStyles() {
         return this.$computedClass({
           ':focus': this.$coreOutline,
           ':hover': {
-            backgroundColor: this.$coreGrey300,
+            backgroundColor: this.$themePalette.grey.v_300,
           },
         });
       },
@@ -54,7 +51,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   // a lot copied from KButton
   .header-tab {
@@ -83,6 +80,20 @@
     border-top-right-radius: $radius;
     outline: none;
     transition: background-color $core-time ease;
+
+    @media print {
+      min-width: 0;
+      min-height: 0;
+      margin: 0;
+      font-size: inherit;
+      line-height: inherit;
+      text-align: left;
+      text-transform: none;
+
+      &:not(.router-link-active) {
+        display: none;
+      }
+    }
   }
 
   .inner {
@@ -95,6 +106,11 @@
   .router-link-active .inner {
     margin-bottom: 0;
     border-bottom-width: 2px;
+
+    @media print {
+      padding: 0;
+      border-bottom-width: 0;
+    }
   }
 
 </style>

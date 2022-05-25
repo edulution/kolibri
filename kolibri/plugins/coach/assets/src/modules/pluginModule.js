@@ -14,17 +14,19 @@ import classSummary from './classSummary';
 import coachNotifications from './coachNotifications';
 import questionDetail from './questionDetail';
 import questionList from './questionList';
+import resourceDetail from './resourceDetail';
 
 const logging = logger.getLogger(__filename);
 
 export default {
-  state: {
-    busy: false,
-    classList: [],
-    pageName: '',
-    toolbarRoute: {},
-    toolbarTitle: '',
-    reportRefreshInterval: 30000,
+  state() {
+    return {
+      busy: false,
+      classList: [],
+      pageName: '',
+      toolbarRoute: {},
+      toolbarTitle: '',
+    };
   },
   mutations: {
     SET_PAGE_NAME(state, pageName) {
@@ -46,10 +48,21 @@ export default {
       // otherwise show the whole class list
       return state.classList.length !== 1;
     },
+    userIsAuthorizedForCoach(state, getters, rootState) {
+      if (getters.isSuperuser) {
+        return true;
+      } else if (getters.isCoach || getters.isAdmin) {
+        return state.classSummary.facility_id === rootState.core.session.facility_id;
+      } else {
+        return false;
+      }
+    },
   },
   actions: {
-    setClassList(store) {
-      return ClassroomResource.fetchCollection({ getParams: { role: 'coach' } })
+    setClassList(store, facilityId) {
+      return ClassroomResource.fetchCollection({
+        getParams: { parent: facilityId || store.getters.currentFacilityId, role: 'coach' },
+      })
         .then(classrooms => {
           store.commit('SET_CLASS_LIST', classrooms);
         })
@@ -63,14 +76,10 @@ export default {
     handleCoachPageError(store, errorObject) {
       const authErrorCodes = [401, 403, 404, 407];
       logging.error(errorObject);
-      if (
-        errorObject.status &&
-        errorObject.status.code &&
-        authErrorCodes.includes(errorObject.status.code)
-      ) {
-        store.dispatch('handleError', '');
+      if (errorObject.response.status && authErrorCodes.includes(errorObject.response.status)) {
+        store.dispatch('handleApiError', '');
       } else {
-        store.dispatch('handleError', errorObject);
+        store.dispatch('handleApiError', errorObject);
       }
     },
     resetModuleState(store, { toRoute, fromRoute }) {
@@ -124,5 +133,6 @@ export default {
     lessonsRoot,
     questionDetail,
     questionList,
+    resourceDetail,
   },
 };

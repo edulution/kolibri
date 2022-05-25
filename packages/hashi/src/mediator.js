@@ -1,3 +1,10 @@
+import { v4 as uuidv4 } from 'uuid';
+import { events, MessageStatuses } from './hashiBase';
+
+function isUndefined(x) {
+  return typeof x === 'undefined';
+}
+
 /*
  * This class manages all message listening and sending from the postMessage
  * layer. All interfaces that need to message via the postMessage layer should
@@ -12,10 +19,10 @@ class Mediator {
     this.__messageHandlers = {};
   }
 
-  handleMessage(ev) {
-    const { nameSpace, event, data } = ev.data;
+  handleMessage(message) {
+    const { nameSpace, event, data } = message.data;
     // nameSpace and event should be defined, otherwise, it's not our message!
-    if (typeof nameSpace === 'undefined' || typeof event === 'undefined') {
+    if (isUndefined(nameSpace) || isUndefined(event)) {
       return;
     }
     if (this.__messageHandlers[nameSpace] && this.__messageHandlers[nameSpace][event]) {
@@ -33,29 +40,53 @@ class Mediator {
   }
 
   sendLocalMessage({ event, data, nameSpace } = {}) {
-    const message = {
-      event,
-      data,
-      nameSpace,
-    };
-    this.local.postMessage(message, '*');
+    this.local.postMessage({ event, data, nameSpace }, '*');
   }
 
   sendMessage({ event, data, nameSpace }) {
-    const message = {
-      event,
-      data,
-      nameSpace,
-    };
-    this.remote.postMessage(message, '*');
+    this.remote.postMessage({ event, data, nameSpace }, '*');
+  }
+
+  // a function to manage messages for kolibri.js,
+  // when most messages require a response, to minimize redundancy
+  sendMessageAwaitReply({ event, data, nameSpace }) {
+    return new Promise((resolve, reject) => {
+      const msgId = uuidv4();
+      let self = this;
+      function handler(message) {
+        if (message.message_id === msgId && message.type === 'response') {
+          if (message.status == MessageStatuses.SUCCESS) {
+            resolve(message.data);
+          } else if (message.status === MessageStatuses.FAILURE && message.err) {
+            reject(message.err);
+          } else {
+            // Otherwise something unspecified happened
+            reject();
+          }
+          try {
+            self.removeMessageHandler({
+              nameSpace,
+              event: events.DATARETURNED,
+              callback: handler,
+            });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.log(e);
+          }
+        }
+      }
+      this.registerMessageHandler({
+        nameSpace,
+        event: events.DATARETURNED,
+        callback: handler,
+      });
+      data.message_id = msgId;
+      this.sendMessage({ event, data, nameSpace });
+    });
   }
 
   registerMessageHandler({ event, nameSpace, callback } = {}) {
-    if (
-      typeof callback !== 'function' ||
-      typeof event === 'undefined' ||
-      typeof nameSpace === 'undefined'
-    ) {
+    if (typeof callback !== 'function' || isUndefined(event) || isUndefined(nameSpace)) {
       return;
     }
     if (!this.__messageHandlers[nameSpace]) {

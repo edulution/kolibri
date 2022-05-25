@@ -5,6 +5,9 @@
     <p>
       <KExternalLink v-if="deviceContentUrl" :text="$tr('adminLink')" :href="deviceContentUrl" />
     </p>
+    <p v-if="showLearnerText">
+      {{ $tr('learnerText') }}
+    </p>
   </div>
 
 </template>
@@ -13,7 +16,6 @@
 <script>
 
   import { mapGetters } from 'vuex';
-  import KExternalLink from 'kolibri.coreVue.components.KExternalLink';
   import urls from 'kolibri.urls';
 
   export default {
@@ -23,24 +25,41 @@
         title: this.$tr('documentTitle'),
       };
     },
-    components: {
-      KExternalLink,
-    },
+
     computed: {
-      ...mapGetters(['canManageContent']),
+      ...mapGetters(['canManageContent', 'isLearner']),
       deviceContentUrl() {
-        const deviceContentUrl = urls['kolibri:devicemanagementplugin:device_management'];
+        const deviceContentUrl = urls['kolibri:kolibri.plugins.device:device_management'];
         if (deviceContentUrl && this.canManageContent) {
           return `${deviceContentUrl()}#/content`;
         }
 
         return '';
       },
+      showLearnerText() {
+        return this.isLearner && !this.canManageContent;
+      },
     },
     $trs: {
-      header: 'No content channels available',
-      adminLink: 'You can import content from the Content page if you have the proper permissions',
-      documentTitle: 'Content Unavailable',
+      header: {
+        message: 'No resources available',
+        context:
+          'Message displayed when there are no learning resources available for the learner to view.',
+      },
+      adminLink: {
+        message: 'Import channels to your device',
+        context: 'Message for admin indicating the possibility of importing channels into Kolibri.',
+      },
+      learnerText: {
+        message: 'Ask your coach or administrator for assistance',
+        context:
+          "Description on the 'No resources available' page. A learner will see this if no resource have been assigned to them.",
+      },
+      documentTitle: {
+        message: 'Resource unavailable',
+        context:
+          'Message displays if a resource has been removed or is not available for some other reason.',
+      },
     },
   };
 

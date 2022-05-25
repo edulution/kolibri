@@ -2,12 +2,15 @@
 The permissions classes in this module define the specific permissions that govern access to the models in the auth app.
 """
 from django.contrib.auth.models import AnonymousUser
+from django.db.models import Q
 
+from ..constants.collection_kinds import ADHOCLEARNERSGROUP
 from ..constants.collection_kinds import FACILITY
 from ..constants.collection_kinds import LEARNERGROUP
 from ..constants.role_kinds import ADMIN
 from ..constants.role_kinds import COACH
 from .base import BasePermissions
+from .base import q_none
 from .base import RoleBasedPermissions
 from .general import DenyAll
 
@@ -35,11 +38,10 @@ class CollectionSpecificRoleBasedPermissions(RoleBasedPermissions):
         if obj.kind == FACILITY:
             # permissions for creating Facilities are defined elsewhere; they can't be created by FacilityUser
             return False
-        else:
-            # we allow a Collection to be created if the user has permissions to update the parent Collection
-            return super(
-                CollectionSpecificRoleBasedPermissions, self
-            ).user_can_update_object(user, obj.parent)
+        # we allow a Collection to be created if the user has permissions to update the parent Collection
+        return super(
+            CollectionSpecificRoleBasedPermissions, self
+        ).user_can_update_object(user, obj.parent)
 
     def user_can_delete_object(self, user, obj):
         """
@@ -48,11 +50,17 @@ class CollectionSpecificRoleBasedPermissions(RoleBasedPermissions):
         if obj.kind == FACILITY:
             # disallow a FacilityUser from deleting a Facility
             return False
-        else:
-            # for non-Facility Collections, defer to the roles to determine delete permissions
-            return super(
-                CollectionSpecificRoleBasedPermissions, self
-            ).user_can_update_object(user, obj.parent)
+        # for non-Facility Collections, defer to the roles to determine delete permissions
+        return super(
+            CollectionSpecificRoleBasedPermissions, self
+        ).user_can_update_object(user, obj.parent)
+
+    def readable_by_user_filter(self, user):
+        if user.is_anonymous():
+            return q_none
+
+        # By default can read all collections in facility
+        return Q(dataset_id=user.dataset_id)
 
 
 class AnonUserCanReadFacilities(DenyAll):
@@ -63,13 +71,12 @@ class AnonUserCanReadFacilities(DenyAll):
     def user_can_read_object(self, user, obj):
         if obj.kind == FACILITY:
             return isinstance(user, AnonymousUser)
-        else:
-            return False
+        return False
 
-    def readable_by_user_filter(self, user, queryset):
+    def readable_by_user_filter(self, user):
         if isinstance(user, AnonymousUser):
-            return queryset.filter(kind=FACILITY)
-        return queryset.none()
+            return Q(kind=FACILITY)
+        return q_none
 
 
 class FacilityAdminCanEditForOwnFacilityDataset(BasePermissions):
@@ -110,8 +117,8 @@ class FacilityAdminCanEditForOwnFacilityDataset(BasePermissions):
     def user_can_delete_object(self, user, obj):
         return False
 
-    def readable_by_user_filter(self, user, queryset):
-        return queryset.none()
+    def readable_by_user_filter(self, user):
+        return q_none
 
 
 class AllCanReadFacilityDataset(BasePermissions):
@@ -122,8 +129,8 @@ class AllCanReadFacilityDataset(BasePermissions):
     def user_can_read_object(self, user, obj):
         return True
 
-    def readable_by_user_filter(self, user, queryset):
-        return queryset
+    def readable_by_user_filter(self, user):
+        return ~q_none
 
     def user_can_create_object(self, user, obj):
         return False
@@ -138,9 +145,9 @@ class AllCanReadFacilityDataset(BasePermissions):
 class CoachesCanManageGroupsForTheirClasses(BasePermissions):
     def _user_is_coach_for_classroom(self, user, obj):
         # make sure the target object is a group and user is a coach for the group's classroom
-        return obj.kind == LEARNERGROUP and user.has_role_for_collection(
-            COACH, obj.parent
-        )
+        return (
+            obj.kind == LEARNERGROUP or obj.kind == ADHOCLEARNERSGROUP
+        ) and user.has_role_for_collection(COACH, obj.parent)
 
     def user_can_create_object(self, user, obj):
         return self._user_is_coach_for_classroom(user, obj)
@@ -154,14 +161,16 @@ class CoachesCanManageGroupsForTheirClasses(BasePermissions):
     def user_can_delete_object(self, user, obj):
         return self._user_is_coach_for_classroom(user, obj)
 
-    def readable_by_user_filter(self, user, queryset):
-        return queryset.none()
+    def readable_by_user_filter(self, user):
+        return q_none
 
 
 class CoachesCanManageMembershipsForTheirGroups(BasePermissions):
     def _user_is_coach_for_group(self, user, group):
         # make sure the target object is a group and user is a coach for the group
-        return group.kind == LEARNERGROUP and user.has_role_for_collection(COACH, group)
+        return (
+            group.kind == LEARNERGROUP or group.kind == ADHOCLEARNERSGROUP
+        ) and user.has_role_for_collection(COACH, group)
 
     def _user_should_be_able_to_manage(self, user, obj):
         # Requesting user must be a coach for the group
@@ -179,10 +188,32 @@ class CoachesCanManageMembershipsForTheirGroups(BasePermissions):
         return False
 
     def user_can_update_object(self, user, obj):
-        return self._user_should_be_able_to_manage(user, obj)
+        # Memberships should be either created or destroyed, not updated.
+        return False
 
     def user_can_delete_object(self, user, obj):
         return self._user_should_be_able_to_manage(user, obj)
 
-    def readable_by_user_filter(self, user, queryset):
-        return queryset.none()
+    def readable_by_user_filter(self, user):
+        return q_none
+
+
+class MembersCanReadMembershipsOfTheirCollections(BasePermissions):
+    def user_can_create_object(self, user, obj):
+        return False
+
+    def user_can_read_object(self, user, obj):
+        return user.is_member_of(obj.collection)
+
+    def user_can_update_object(self, user, obj):
+        return False
+
+    def user_can_delete_object(self, user, obj):
+        return False
+
+    def readable_by_user_filter(self, user):
+        if user.is_anonymous():
+            return q_none
+        # Add a special case where users with memberships in the same collection
+        # can also read memberships for other members
+        return Q(collection_id__in=user.memberships.all().values("collection_id"))

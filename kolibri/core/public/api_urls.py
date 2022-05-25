@@ -19,15 +19,22 @@ from django.conf.urls import include
 from django.conf.urls import url
 from rest_framework import routers
 
+from ..auth.api import PublicFacilityUserViewSet
 from ..auth.api import PublicFacilityViewSet
+from ..auth.api import PublicSignUpViewSet
 from .api import get_public_channel_list
 from .api import get_public_channel_lookup
+from .api import get_public_file_checksums
 from .api import InfoViewSet
+from .api import SyncQueueViewSet
 
 router = routers.SimpleRouter()
 
 router.register(r"v1/facility", PublicFacilityViewSet, base_name="publicfacility")
+router.register(r"facilityuser", PublicFacilityUserViewSet, base_name="publicuser")
+router.register(r"signup", PublicSignUpViewSet, base_name="publicsignup")
 router.register(r"info", InfoViewSet, base_name="info")
+router.register(r"syncqueue", SyncQueueViewSet, base_name="syncqueue")
 
 # Add public api endpoints
 urlpatterns = [
@@ -41,5 +48,10 @@ urlpatterns = [
         r"(?P<version>[^/]+)/channels",
         get_public_channel_list,
         name="get_public_channel_list",
+    ),
+    url(
+        r"(?P<version>[^/]+)/file_checksums/",
+        get_public_file_checksums,
+        name="get_public_file_checksums",
     ),
 ]

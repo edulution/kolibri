@@ -2,12 +2,28 @@ import fnmatch
 import logging
 import os
 
+from django.core.cache import cache
+from sqlalchemy.exc import DatabaseError
+from sqlalchemy.sql import select
+
 from .paths import get_content_database_dir_path
 from .sqlalchemybridge import Bridge
 from kolibri.core.discovery.utils.filesystem import enumerate_mounted_disk_partitions
 from kolibri.utils.uuids import is_valid_uuid
 
 logger = logging.getLogger(__name__)
+
+CHANNEL_UPDATE_STATS_CACHE_KEY = "CHANNEL_UPDATE_STATS_{}"
+
+
+def get_channel_ids_for_content_dirs(content_dirs):
+    database_dir_paths = [
+        get_content_database_dir_path(contentfolder=path) for path in content_dirs
+    ]
+    channel_ids = set()
+    for path in database_dir_paths:
+        channel_ids.update(get_channel_ids_for_content_database_dir(path))
+    return list(channel_ids)
 
 
 def get_channel_ids_for_content_database_dir(content_database_dir):
@@ -33,21 +49,25 @@ def get_channel_ids_for_content_database_dir(content_database_dir):
             )
         )
 
+    # nonexistent database files are created if we delete the files that have broken symbolic links;
     # empty database files are created if we delete a database file while the server is running and connected to it;
     # here, we delete and exclude such databases to avoid errors when we try to connect to them
-    empty_db_files = set({})
+    db_files_to_remove = set({})
     for db_name in valid_db_names:
         filename = os.path.join(content_database_dir, "{}.sqlite3".format(db_name))
-        if os.path.getsize(filename) == 0:
-            empty_db_files.add(db_name)
+        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
+            db_files_to_remove.add(db_name)
             os.remove(filename)
-    if empty_db_files:
-        logger.warning(
-            "Removing empty databases in content database directory '{directory}' with IDs: {names}".format(
-                directory=content_database_dir, names=empty_db_files
-            )
+
+    if db_files_to_remove:
+        err_msg = (
+            "Removing nonexistent or empty databases in content database directory "
+            "'{directory}' with IDs: {names}.\nPlease import the channels again."
         )
-    valid_dbs = list(set(valid_db_names) - set(empty_db_files))
+        logger.warning(
+            err_msg.format(directory=content_database_dir, names=db_files_to_remove)
+        )
+    valid_dbs = list(set(valid_db_names) - set(db_files_to_remove))
 
     return valid_dbs
 
@@ -64,25 +84,23 @@ def read_channel_metadata_from_db_file(channeldbpath):
 
     source = Bridge(sqlite_file_path=channeldbpath)
 
-    ChannelMetadataClass = source.get_class(ChannelMetadata)
+    ChannelMetadataTable = source.get_table(ChannelMetadata)
 
-    source_channel_metadata = source.session.query(ChannelMetadataClass).all()[0]
+    source_channel_metadata = dict(
+        source.execute(select([ChannelMetadataTable])).fetchone()
+    )
 
     # Use the inferred version from the SQLAlchemy Bridge object, and set it as additional
     # metadata on the channel data
 
-    source_channel_metadata.inferred_schema_version = source.schema_version
+    source_channel_metadata["inferred_schema_version"] = source.schema_version
 
     source.end()
 
     # Adds an attribute `root_id` when `root_id` does not exist to match with
     # the latest schema.
-    if not hasattr(source_channel_metadata, "root_id"):
-        setattr(
-            source_channel_metadata,
-            "root_id",
-            getattr(source_channel_metadata, "root_pk"),
-        )
+    if "root_id" not in source_channel_metadata:
+        source_channel_metadata["root_id"] = source_channel_metadata["root_pk"]
 
     return source_channel_metadata
 
@@ -92,28 +110,54 @@ def get_channels_for_data_folder(datafolder):
     for path in enumerate_content_database_file_paths(
         get_content_database_dir_path(datafolder)
     ):
-        channel = read_channel_metadata_from_db_file(path)
+        try:
+            channel = read_channel_metadata_from_db_file(path)
+        except DatabaseError:
+            logger.warning(
+                "Tried to import channel from database file {}, but the file was corrupted.".format(
+                    path
+                )
+            )
+            continue
         channel_data = {
             "path": path,
-            "id": channel.id,
-            "name": channel.name,
-            "description": channel.description,
-            "thumbnail": channel.thumbnail,
-            "version": channel.version,
-            "root": channel.root_id,
-            "author": channel.author,
-            "last_updated": getattr(channel, "last_updated", None),
-            "lang_code": getattr(channel, "lang_code", None),
-            "lang_name": getattr(channel, "lang_name", None),
+            "id": channel["id"],
+            "name": channel["name"],
+            "description": channel["description"],
+            "tagline": channel.get("tagline", ""),
+            "thumbnail": channel["thumbnail"],
+            "version": channel["version"],
+            "root": channel["root_id"],
+            "author": channel["author"],
+            "last_updated": channel.get("last_updated"),
+            "lang_code": channel.get("lang_code"),
+            "lang_name": channel.get("lang_name"),
         }
         channels.append(channel_data)
     return channels
 
 
-def get_mounted_drives_with_channel_info():
+# Use this to cache mounted drive information when
+# it has already been fetched for querying by drive id
+MOUNTED_DRIVES_CACHE_KEY = "mounted_drives_cache_key"
+
+
+def _read_mounted_drives_with_channel_info():
     drives = enumerate_mounted_disk_partitions()
     for drive in drives.values():
         drive.metadata["channels"] = (
             get_channels_for_data_folder(drive.datafolder) if drive.datafolder else []
         )
+    cache.set(MOUNTED_DRIVES_CACHE_KEY, drives, 3600)
     return drives
+
+
+def get_mounted_drives_with_channel_info():
+    return _read_mounted_drives_with_channel_info().values()
+
+
+def get_mounted_drive_by_id(drive_id):
+    drives = cache.get(MOUNTED_DRIVES_CACHE_KEY)
+    if drives is None or drives.get(drive_id, None) is None:
+        drives = _read_mounted_drives_with_channel_info()
+    return drives[drive_id]

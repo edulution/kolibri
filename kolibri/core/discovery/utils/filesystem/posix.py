@@ -43,6 +43,7 @@ FILESYSTEM_BLACKLIST = set(
         "ecryptfs",
         "fuse",
         "fuse.gvfsd-fuse",
+        "fuse.portal",
         "fusectl",
         "hugetlbfs",
         "mqueue",
@@ -76,14 +77,16 @@ def get_drive_list():
 
     if sys.platform == "darwin":
         MOUNT_PARSER = OSX_MOUNT_PARSER
-    elif on_android():
-        MOUNT_PARSER = RAW_MOUNT_PARSER
     else:
         MOUNT_PARSER = LINUX_MOUNT_PARSER
 
     try:
         drivelist = subprocess.Popen("mount", shell=True, stdout=subprocess.PIPE)
         drivelisto, err = drivelist.communicate()
+        # Some Android devices at least now use the LINUX_MOUNT_PARSER format.
+        # Try it and revert to RAW_MOUNT_PARSER if we can't find any matches with it.
+        if on_android() and not MOUNT_PARSER.match(drivelisto.decode()):
+            MOUNT_PARSER = RAW_MOUNT_PARSER
     except OSError:  # couldn't run `mount`, let's try reading the /etc/mounts listing directly
         with open("/proc/mounts") as f:
             drivelisto = f.read()
@@ -114,7 +117,12 @@ def get_drive_list():
             continue
 
         # attempt to get some additional metadata about the drive
-        usage = _get_drive_usage(path)
+        try:
+            usage = _get_drive_usage(path)
+        except OSError:
+            # skip if we don't have access to get drive usage
+            continue
+
         dbus_drive_info = _try_to_get_drive_info_from_dbus(drive["device"])
         diskutil_info = _try_to_get_drive_info_from_diskutil(drive["device"])
 
@@ -148,22 +156,21 @@ def _get_drive_usage(path):
     if sys.version_info >= (3, 3):
         usage = shutil.disk_usage(path)
         return {"total": usage.total, "used": usage.used, "free": usage.free}
-    elif on_android():
+    if on_android():
         from jnius import autoclass
 
         StatFs = autoclass("android.os.StatFs")
-        stats = StatFs(path)
+        AndroidString = autoclass("java.lang.String")
+        stats = StatFs(AndroidString(path))
         return {
             "total": stats.getBlockCountLong() * stats.getBlockSizeLong(),
             "free": stats.getAvailableBlocksLong() * stats.getBlockSizeLong(),
         }
-
-    else:
-        # with os.statvfs, we need to multiple block sizes by block counts to get bytes
-        stats = os.statvfs(path)
-        total = stats.f_frsize * stats.f_blocks
-        free = stats.f_frsize * stats.f_bavail
-        return {"total": total, "free": free, "used": total - free}
+    # with os.statvfs, we need to multiple block sizes by block counts to get bytes
+    stats = os.statvfs(path)
+    total = stats.f_frsize * stats.f_blocks
+    free = stats.f_frsize * stats.f_bavail
+    return {"total": total, "free": free, "used": total - free}
 
 
 def _try_to_get_drive_info_from_dbus(device):
@@ -227,16 +234,13 @@ def _get_drivetype_from_dbus_drive_properties(drive_props):
         or drive_props.get("Media") == "flash_sd"
     ):
         return drivetypes.SD_CARD
-    elif (
-        drive_props.get("ConnectionBus") == "usb" or drive_props.get("Media") == "thumb"
-    ):
+    if drive_props.get("ConnectionBus") == "usb" or drive_props.get("Media") == "thumb":
         return drivetypes.USB_DEVICE
-    elif drive_props.get("Optical"):
+    if drive_props.get("Optical"):
         return drivetypes.OPTICAL_DRIVE
-    elif drive_props.get("Removable") or drive_props.get("MediaRemovable"):
+    if drive_props.get("Removable") or drive_props.get("MediaRemovable"):
         return drivetypes.USB_DEVICE
-    else:
-        return drivetypes.UNKNOWN
+    return drivetypes.UNKNOWN
 
 
 def _try_to_get_drive_info_from_diskutil(device):

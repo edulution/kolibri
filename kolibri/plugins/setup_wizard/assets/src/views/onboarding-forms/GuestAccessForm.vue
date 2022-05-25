@@ -3,10 +3,9 @@
   <YesNoForm
     :noOptionLabel="$tr('noOptionLabel')"
     :settingIsEnabled="settingIsEnabled"
-    :submitText="submitText"
     :description="$tr('description')"
     :headerText="$tr('header')"
-    @submit="setSetting"
+    @submit="handleSubmit"
   />
 
 </template>
@@ -21,35 +20,33 @@
     components: {
       YesNoForm,
     },
-    props: {
-      submitText: {
-        type: String,
-        required: true,
-      },
-    },
     data() {
-      const { settings, preset } = this.$store.state.onboardingData;
-      if (settings.allow_guest_access !== null) {
-        return {
-          settingIsEnabled: settings.allow_guest_access,
-        };
-      }
-      // Default is False only for "formal" preset
       return {
-        settingIsEnabled: preset !== 'formal',
+        settingIsEnabled: this.$store.state.onboardingData.allow_guest_access,
       };
     },
     methods: {
-      setSetting(setting) {
+      handleSubmit(setting) {
         this.$store.commit('SET_ALLOW_GUEST_ACCESS', setting);
-        this.$emit('submit');
+        this.$emit('click_next');
       },
     },
     $trs: {
-      description:
-        'This allows anyone to view content on Kolibri without needing to make an account',
-      header: 'Enable guest access?',
-      noOptionLabel: 'No. Users must have an account to view content on Kolibri',
+      description: {
+        message:
+          'This allows anyone to view resources on Kolibri without needing to make an account',
+        context:
+          "Description of the 'Enable guest access?' option that an admin can configure in the set up process. It means that anyone can access Kolibri without having to create an account.",
+      },
+      header: {
+        message: 'Enable guest access?',
+        context:
+          'Option that an admin can configure in the set up process. If selected, guests can access Kolibri without the need to create an account.',
+      },
+      noOptionLabel: {
+        message: 'No. Users must have an account to view resources on Kolibri',
+        context: "Possible answer to the 'Enable guest access?' question.",
+      },
     },
   };
 

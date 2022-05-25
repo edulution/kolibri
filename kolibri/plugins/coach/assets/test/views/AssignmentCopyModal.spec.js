@@ -7,15 +7,18 @@ const defaultProps = {
   copyExplanation: '',
   assignmentQuestion: '',
   classId: 'class_2',
-  classList: [{ id: 'class_1', name: 'Class One' }, { id: 'class_2', name: 'Class Two' }],
+  classList: [
+    { id: 'class_1', name: 'Class One' },
+    { id: 'class_2', name: 'Class Two' },
+  ],
 };
 
 // prettier-ignore
 function makeWrapper(options) {
   const wrapper = mount(AssignmentCopyModal, options)
   const els = {
-    selectClassroomForm: () => wrapper.find('#select-classroom form'),
-    selectLearnerGroupForm: () => wrapper.find('#select-learnergroup form'),
+    selectClassroomForm: () => wrapper.find('#select-classroom'),
+    selectLearnerGroupForm: () => wrapper.find('#select-learnergroup'),
     submitButton: () => wrapper.find('button[type="submit"]')
   };
   return { wrapper, els }
@@ -41,7 +44,7 @@ describe('AssignmentCopyModal', () => {
       propsData: { ...defaultProps },
       store,
     });
-    const classroomRadios = els.selectClassroomForm().findAll({ name: 'KRadioButton' });
+    const classroomRadios = els.selectClassroomForm().findAll('[data-test="radio-button"]');
     expect(classroomRadios.length).toEqual(2);
   });
 
@@ -52,7 +55,7 @@ describe('AssignmentCopyModal', () => {
     });
     const currentClassroomRadio = els
       .selectClassroomForm()
-      .findAll({ name: 'KRadioButton' })
+      .findAll('[data-test="radio-button"]')
       .at(0);
     expect(currentClassroomRadio.props().label).toEqual('Class Two (current class)');
   });
@@ -71,7 +74,9 @@ describe('AssignmentCopyModal', () => {
       const explanation = wrapper.find('p').text();
       expect(explanation).toEqual(`Will be copied to 'Class Two'`);
       // Recipient selector gets all of the groups
-      const RecipientSelector = els.selectLearnerGroupForm().find({ name: 'RecipientSelector' });
+      const RecipientSelector = els
+        .selectLearnerGroupForm()
+        .find('[data-test="recipient-selector"]');
       expect(RecipientSelector.props().groups).toEqual(groups);
     });
   });
@@ -85,7 +90,7 @@ describe('AssignmentCopyModal', () => {
     return wrapper.vm.goToAvailableGroups().then(() => {
       els.selectLearnerGroupForm().trigger('submit');
       // By default, this will copy the Assignment to the same class, and the entire class
-      expect(wrapper.emitted().copy[0]).toEqual(['class_2', ['class_2']]);
+      expect(wrapper.emitted().submit[0]).toEqual(['class_2', ['class_2'], []]);
     });
   });
 

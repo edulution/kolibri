@@ -7,73 +7,92 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
-      <p>
-        <BackLink
-          :to="classRoute('ReportsLessonReportPage', {})"
-          :text="$tr('back', { lesson: lesson.title })"
-        />
-      </p>
-      <h1>
-        <KLabeledIcon>
-          <KBasicContentIcon slot="icon" :kind="resource.kind" />
-          {{ resource.title }}
-        </KLabeledIcon>
-      </h1>
-      <!-- TODO COACH
-      <KButton :text="coachStrings.$tr('previewAction')" />
-      <KCheckbox :label="coachStrings.$tr('viewByGroupsLabel')" />
-      <h2>{{ coachStrings.$tr('overallLabel') }}</h2>
-       -->
-      <HeaderTable v-if="avgTime">
-        <HeaderTableRow>
-          <template slot="key">
-            {{ coachStrings.$tr('avgTimeSpentLabel') }}
-          </template>
-          <template slot="value">
-            <TimeDuration :seconds="avgTime" />
-          </template>
-        </HeaderTableRow>
-      </HeaderTable>
+      <ReportsResourceHeader :resource="resource" @previewClick="onPreviewClick" />
 
-      <p>
-        <StatusSummary :tally="tally" />
-      </p>
-      <CoreTable :emptyMessage="coachStrings.$tr('activityListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('nameLabel') }}</th>
-            <th>{{ coachStrings.$tr('statusLabel') }}</th>
-            <th>{{ coachStrings.$tr('timeSpentLabel') }}</th>
-            <th>{{ coachStrings.$tr('groupsLabel') }}</th>
-            <th>{{ coachStrings.$tr('lastActivityLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" person />
-                {{ tableRow.name }}
-              </KLabeledIcon>
-            </td>
-            <td>
-              <StatusSimple :status="tableRow.statusObj.status" />
-            </td>
-            <td>
-              <TimeDuration :seconds="tableRow.statusObj.time_spent" />
-            </td>
-            <td>
-              <TruncatedItemList :items="tableRow.groups" />
-            </td>
-            <td>
-              <ElapsedTime :date="tableRow.statusObj.last_activity" />
-            </td>
-          </tr>
-        </transition-group>
-      </CoreTable>
+      <ReportsControls @export="exportCSV">
+        <KCheckbox
+          :label="coachString('viewByGroupsLabel')"
+          :checked="viewByGroups"
+          @change="toggleGroupsView"
+        />
+      </ReportsControls>
+
+      <div v-if="viewByGroups">
+        <div
+          v-for="group in lessonGroups"
+          :key="group.id"
+          :data-test="`group-${group.id}`"
+          class="group"
+        >
+          <h2
+            class="group-title"
+            data-test="group-title"
+          >
+            <KLabeledIcon icon="group" :label="group.name" />
+          </h2>
+
+          <ReportsResourcesStats
+            :avgTime="getGroupRecipientsAvgTime(group.id)"
+            :className="className"
+            :lessonName="lesson.title"
+            data-test="group-resources-stats"
+          />
+
+          <p>
+            <StatusSummary
+              :tally="getGroupTally(group.id)"
+              :showNeedsHelp="false"
+              :verbose="false"
+              data-test="group-tally"
+            />
+          </p>
+
+          <ReportsLearnersTable
+            :entries="getGroupEntries(group.id)"
+            :showGroupsColumn="false"
+          />
+        </div>
+
+        <div
+          v-if="ungroupedEntries.length"
+          class="group"
+        >
+          <h2
+            class="group-title"
+            data-test="group-title"
+          >
+            {{ coachString('ungroupedLearnersLabel') }}
+          </h2>
+
+          <ReportsLearnersTable
+            :entries="ungroupedEntries"
+            :showGroupsColumn="false"
+          />
+        </div>
+      </div>
+
+      <template v-else>
+        <ReportsResourcesStats
+          :avgTime="allRecipientsAvgTime"
+          :className="className"
+          :lessonName="lesson.title"
+          data-test="summary-resources-stats"
+        />
+
+        <p>
+          <StatusSummary
+            :tally="summaryTally"
+            data-test="summary-tally"
+          />
+        </p>
+
+        <ReportsLearnersTable :entries="allEntries" />
+      </template>
     </KPageContainer>
   </CoreBase>
 
@@ -82,32 +101,57 @@
 
 <script>
 
+  import sortBy from 'lodash/sortBy';
+  import fromPairs from 'lodash/fromPairs';
+  import { mapState } from 'vuex';
+  import { LastPages } from '../../constants/lastPagesConstants';
   import commonCoach from '../common';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsLearnersTable from './ReportsLearnersTable';
+  import ReportsResourcesStats from './ReportsResourcesStats';
+  import ReportsControls from './ReportsControls';
+  import ReportsResourceHeader from './ReportsResourceHeader';
 
   export default {
     name: 'ReportsLessonResourceLearnerListPage',
-    components: {},
+    components: {
+      ReportsLearnersTable,
+      ReportsResourcesStats,
+      ReportsControls,
+      ReportsResourceHeader,
+    },
     mixins: [commonCoach],
+    data() {
+      return {
+        viewByGroups: Boolean(this.$route.query.groups),
+      };
+    },
     computed: {
+      ...mapState('resourceDetail', ['resource']),
       lesson() {
         return this.lessonMap[this.$route.params.lessonId];
       },
-      resource() {
-        return this.contentMap[this.$route.params.resourceId];
-      },
       recipients() {
-        return this.getLearnersForGroups(this.lesson.groups);
+        return this.getLearnersForLesson(this.lesson);
       },
-      avgTime() {
+      allRecipientsAvgTime() {
         return this.getContentAvgTimeSpent(this.$route.params.resourceId, this.recipients);
       },
-      tally() {
+      summaryTally() {
         return this.getContentStatusTally(this.$route.params.resourceId, this.recipients);
       },
-      table() {
+      lessonGroups() {
+        if (!this.lesson.groups.length) {
+          return this.groups;
+        }
+
+        return this.groups.filter(group => this.lesson.groups.includes(group.id));
+      },
+      allEntries() {
         const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
-        const sorted = this._.sortBy(learners, ['name']);
-        const mapped = sorted.map(learner => {
+        const sorted = sortBy(learners, ['name']);
+        return sorted.map(learner => {
           const tableRow = {
             groups: this.getGroupNamesForLearner(learner.id),
             statusObj: this.getContentStatusObjForLearner(
@@ -118,16 +162,133 @@
           Object.assign(tableRow, learner);
           return tableRow;
         });
-        return mapped;
+      },
+      ungroupedEntries() {
+        return this.allEntries.filter(entry => !entry.groups || !entry.groups.length);
       },
     },
-    $trs: {
-      back: "Back to '{lesson}'",
-      avgNumViews: 'Average number of views',
+    watch: {
+      $route() {
+        this.viewByGroups = Boolean(this.$route.query.groups);
+      },
+    },
+    methods: {
+      toggleGroupsView() {
+        this.viewByGroups = !this.viewByGroups;
+
+        let query;
+        if (this.viewByGroups) {
+          query = { ...this.$route.query, groups: 'true' };
+        } else {
+          query = { ...this.$route.query, groups: undefined };
+        }
+
+        this.$router.replace({ query });
+      },
+      getGroupEntries(groupId) {
+        const learnerIdMap = fromPairs(
+          this.getLearnersForGroups([groupId]).map(learnerId => [learnerId, true])
+        );
+        return this.allEntries.filter(entry => {
+          return learnerIdMap[entry.id];
+        });
+      },
+      getGroupTally(groupId) {
+        const recipients = this.getLearnersForGroups([groupId]);
+        return this.getContentStatusTally(this.$route.params.resourceId, recipients);
+      },
+      getGroupRecipientsAvgTime(groupId) {
+        const recipients = this.getLearnersForGroups([groupId]);
+        return this.getContentAvgTimeSpent(this.$route.params.resourceId, recipients);
+      },
+      onPreviewClick() {
+        let lastPage = LastPages.RESOURCE_LEARNER_LIST;
+        if (this.viewByGroups) {
+          lastPage = LastPages.RESOURCE_LEARNER_LIST_BY_GROUPS;
+        }
+
+        this.$router.push(
+          this.$router.getRoute(
+            'RESOURCE_CONTENT_PREVIEW',
+            {
+              contentId: this.resource.node_id,
+            },
+            {
+              last: lastPage,
+              resourceId: this.resource.content_id,
+            }
+          )
+        );
+      },
+      exportCSV() {
+        const columns = [];
+
+        if (this.viewByGroups) {
+          columns.push({
+            name: this.coachString('groupNameLabel'),
+            key: 'groupName',
+          });
+        }
+
+        columns.push(
+          ...csvFields.name(),
+          ...csvFields.learnerProgress('statusObj.status'),
+          ...csvFields.timeSpent('statusObj.time_spent')
+        );
+
+        if (!this.viewByGroups) {
+          columns.push(...csvFields.list('groupNames', 'groupsLabel'));
+        }
+
+        columns.push(...csvFields.lastActivity());
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          lesson: this.lesson.title,
+          resource: this.resource.title,
+        });
+
+        if (!this.viewByGroups) {
+          exporter.export(this.allEntries);
+          return;
+        }
+
+        const data = this.lessonGroups
+          .map(group => {
+            return this.getGroupEntries(group.id).map(entry => {
+              entry.groupName = group.name;
+              return entry;
+            });
+          })
+          .reduce((entries, groupEntries) => entries.concat(groupEntries), []);
+
+        if (this.ungroupedEntries.length) {
+          data.concat(
+            this.ungroupedEntries.map(entry => {
+              entry.groupName = '';
+              return entry;
+            })
+          );
+        }
+
+        exporter.export(data);
+      },
     },
   };
 
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+  .group:not(:first-child) {
+    margin-top: 42px;
+  }
+
+  .group-title {
+    margin-bottom: 24px;
+  }
+
+</style>

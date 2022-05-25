@@ -4,10 +4,11 @@ const prettier = require('prettier');
 const compiler = require('vue-template-compiler');
 const ESLintCLIEngine = require('eslint').CLIEngine;
 const HTMLHint = require('htmlhint').HTMLHint;
-const esLintFormatter = require('eslint/lib/formatters/stylish');
+const esLintFormatter = require('eslint/lib/cli-engine/formatters/stylish');
 const stylelint = require('stylelint');
-const colors = require('colors');
+const chalk = require('chalk');
 const stylelintFormatter = require('stylelint').formatters.string;
+const { insertContent } = require('./vueTools');
 
 require('./htmlhint_custom');
 
@@ -37,14 +38,14 @@ try {
 
 let prettierConfig;
 try {
-  prettierConfig = require(`${hostProjectDir}/.prettier.js`);
+  prettierConfig = require(`${hostProjectDir}/.prettierrc.js`);
 } catch (e) {
-  prettierConfig = require('../.prettier.js');
+  prettierConfig = require('../.prettierrc.js');
 }
 
 const logger = require('./logging');
 
-const logging = logger.getLogger('Kolibri linter');
+const logging = logger.getLogger('Kolibri Linter');
 
 const esLinter = new ESLintCLIEngine({
   baseConfig: esLintConfig,
@@ -58,7 +59,6 @@ const styleLinters = {};
 styleLangs.forEach(lang => {
   styleLinters[lang] = stylelint.createLinter({
     config: stylelintConfig,
-    syntax: lang,
     fix: true,
     configBasedir: path.resolve(__dirname, '..'),
   });
@@ -66,27 +66,6 @@ styleLangs.forEach(lang => {
 
 const errorOrChange = 1;
 const noChange = 0;
-/*
-  Modifications to match our component linting conventions.
-  Surround style and script blocks by 2 new lines and ident.
-*/
-function indentAndAddNewLines(str) {
-  if (str) {
-    str = str.replace(/^(\n)*/, '\n\n');
-    str = str.replace(/(\n)*$/, '\n\n');
-    str = str.replace(/(.*\S.*)/g, '  $1');
-    return str;
-  }
-}
-
-function insertContent(source, block, formatted) {
-  if (source) {
-    const start = block.start;
-    const end = block.end;
-    const indented = indentAndAddNewLines(formatted);
-    return source.replace(source.slice(start, end), indented);
-  }
-}
 
 function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -134,9 +113,9 @@ function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
           linted = prettier.format(code, options);
         } catch (e) {
           messages.push(
-            `${colors.underline(file)}\n${colors.red(
-              'Parsing error during prettier formatting:'
-            )}\n${e.message}`
+            `${chalk.underline(file)}\n${chalk.red('Parsing error during prettier formatting:')}\n${
+              e.message
+            }`
           );
         }
         return linted;
@@ -150,9 +129,6 @@ function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
               code,
               codeFilename,
               config: stylelintConfig,
-              // For reasons beyond my ken, stylint borks on css files
-              // Fortunately, scss is a superset of css, so this works.
-              syntax: style === 'css' ? 'scss' : style,
               fix: true,
               configBasedir: path.resolve(__dirname, '..'),
             })
@@ -191,9 +167,8 @@ function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
               if (linted.trim() !== (stylinted || code).trim()) {
                 notSoPretty = true;
               }
-              if (linted.trim() !== code.trim()) {
-                styleCodeUpdates.push(() => callback(linted));
-              }
+
+              styleCodeUpdates.push(() => callback(linted));
             })
             .catch(err => {
               messages.push(err.toString());
@@ -207,7 +182,7 @@ function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
         }
         // Raw JS
         if (extension === 'js') {
-          formatted = prettierFormat(source, 'babylon');
+          formatted = prettierFormat(source, 'babel');
           if (formatted !== source) {
             notSoPretty = true;
           }
@@ -221,20 +196,31 @@ function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
           let block;
           // First lint the whole vue component with eslint
           formatted = eslint(source);
+
+          let vueComponent = compiler.parseComponent(formatted);
+
+          // Format template block
+          if (vueComponent.template && vueComponent.template.content) {
+            formatted = insertContent(
+              formatted,
+              vueComponent.template,
+              vueComponent.template.content
+            );
+            vueComponent = compiler.parseComponent(formatted);
+          }
+
           // Now run htmlhint on the whole vue component
           let htmlMessages = HTMLHint.verify(formatted, htmlHintConfig);
           if (htmlMessages.length) {
             messages.push(...HTMLHint.format(htmlMessages, { colors: true }));
           }
 
-          let vueComponent = compiler.parseComponent(formatted);
-
           // Format script block
           if (vueComponent.script) {
             block = vueComponent.script;
 
             const js = block.content;
-            let formattedJs = prettierFormat(js, 'babylon', true);
+            let formattedJs = prettierFormat(js, 'babel', true);
             formatted = insertContent(formatted, block, formattedJs);
             if (formattedJs.trim() !== js.trim()) {
               notSoPretty = true;
@@ -263,7 +249,7 @@ function lint({ file, write, encoding = 'utf-8', silent = false } = {}) {
           }
         }
         if (notSoPretty) {
-          messages.push(colors.yellow(`${file} did not conform to prettier standards`));
+          messages.push(chalk.yellow(`${file} did not conform to prettier standards`));
         }
       } catch (e) {
         // Something went wrong, return the source to be safe.

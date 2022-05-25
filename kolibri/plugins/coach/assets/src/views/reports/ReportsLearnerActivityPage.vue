@@ -7,16 +7,17 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
 
-      <ReportsLearnerHeader />
+      <ReportsLearnerHeader :enablePrint="true" />
 
       <ActivityList
-        :notificationParams="notificationParams"
         embeddedPageName="ReportsLearnerActivityPage"
-        :noActivityString="coachStrings.$tr('activityListEmptyState')"
+        :noActivityString="coachString('activityListEmptyState')"
       />
 
     </KPageContainer>
@@ -38,14 +39,6 @@
       ReportsLearnerHeader,
     },
     mixins: [commonCoach],
-    computed: {
-      notificationParams() {
-        return {
-          collection_id: this.$route.params.classId,
-          learner_id: this.$route.params.learnerId,
-        };
-      },
-    },
   };
 
 </script>

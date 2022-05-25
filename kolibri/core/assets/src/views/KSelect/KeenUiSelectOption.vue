@@ -45,15 +45,13 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import UiIcon from 'keen-ui/src/UiIcon';
+  import UiIcon from 'kolibri-design-system/lib/keen/UiIcon';
 
   export default {
     name: 'KeenUiSelectOption',
     components: {
       UiIcon,
     },
-    mixins: [themeMixin],
 
     props: {
       option: {
@@ -103,7 +101,7 @@
       selectedStyle() {
         if (this.selected) {
           return {
-            color: this.$coreActionNormal,
+            color: this.$themeTokens.primary,
           };
         }
 
@@ -117,8 +115,8 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
-  @import '~keen-ui/src/styles/imports';
+  @import '~kolibri-design-system/lib/styles/definitions';
+  @import '~kolibri-design-system/lib/keen/styles/imports';
 
   /* stylelint-disable csstree/validator */
 

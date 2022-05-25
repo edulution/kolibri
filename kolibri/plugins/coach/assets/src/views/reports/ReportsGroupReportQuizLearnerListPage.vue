@@ -1,87 +1,33 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="true"
-  >
-
-    <TopNavbar slot="sub-nav" />
-
-    <KPageContainer>
-
-      <ReportsGroupReportQuizHeader />
-
-      <CoreTable :emptyMessage="coachStrings.$tr('activityListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('nameLabel') }}</th>
-            <th>{{ coachStrings.$tr('progressLabel') }}</th>
-            <th>{{ coachStrings.$tr('scoreLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" person />
-                <KRouterLink
-                  v-if="tableRow.statusObj.status !== STATUSES.notStarted"
-                  :text="tableRow.name"
-                  :to="detailLink(tableRow.id)"
-                />
-                <template v-else>
-                  {{ tableRow.name }}
-                </template>
-              </KLabeledIcon>
-            </td>
-            <td>
-              <StatusSimple :status="tableRow.statusObj.status" />
-            </td>
-            <td><Score :value="tableRow.statusObj.score" /></td>
-          </tr>
-        </transition-group>
-      </CoreTable>
-    </KPageContainer>
-  </CoreBase>
+  <ReportsQuizBaseListPage @export="exportCSV">
+    <ReportsLearnersTable :entries="table" :questionCount="exam.question_count" />
+  </ReportsQuizBaseListPage>
 
 </template>
 
 
 <script>
 
+  import sortBy from 'lodash/sortBy';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import { PageNames } from '../../constants';
-  import ReportsGroupReportQuizHeader from './ReportsGroupReportQuizHeader';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsQuizBaseListPage from './ReportsQuizBaseListPage';
+  import ReportsLearnersTable from './ReportsLearnersTable';
 
   export default {
     name: 'ReportsGroupReportQuizLearnerListPage',
     components: {
-      ReportsGroupReportQuizHeader,
+      ReportsQuizBaseListPage,
+      ReportsLearnersTable,
     },
-    mixins: [commonCoach],
-    data() {
-      return {
-        filter: 'allQuizzes',
-      };
-    },
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
-      filterOptions() {
-        return [
-          {
-            label: this.$tr('allQuizzes'),
-            value: 'allQuizzes',
-          },
-          {
-            label: this.$tr('activeQuizzes'),
-            value: 'activeQuizzes',
-          },
-          {
-            label: this.$tr('inactiveQuizzes'),
-            value: 'inactiveQuizzes',
-          },
-        ];
+      group() {
+        return this.groupMap[this.$route.params.groupId];
       },
       exam() {
         return this.examMap[this.$route.params.quizId];
@@ -91,20 +37,17 @@
       },
       table() {
         const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
-        const sorted = this._.sortBy(learners, ['name']);
-        const mapped = sorted.map(learner => {
+        const sorted = sortBy(learners, ['name']);
+        return sorted.map(learner => {
           const tableRow = {
             groups: this.getGroupNamesForLearner(learner.id),
             statusObj: this.getExamStatusObjForLearner(this.exam.id, learner.id),
+            link: this.detailLink(learner.id),
           };
           Object.assign(tableRow, learner);
           return tableRow;
         });
-        return mapped;
       },
-    },
-    beforeMount() {
-      this.filter = this.filterOptions[0];
     },
     methods: {
       detailLink(learnerId) {
@@ -112,16 +55,29 @@
           learnerId,
         });
       },
-    },
-    $trs: {
-      averageScore: 'Average score: {score, number, percent}',
-      allQuizzes: 'All quizzes',
-      activeQuizzes: 'Active quizzes',
-      inactiveQuizzes: 'Inactive quizzes',
+      exportCSV() {
+        const columns = [
+          ...csvFields.name(),
+          ...csvFields.learnerProgress('statusObj.status'),
+          ...csvFields.score(),
+        ];
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          group: this.group.name,
+          resource: this.exam.title,
+        });
+
+        exporter.export(this.table);
+      },
     },
   };
 
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+</style>

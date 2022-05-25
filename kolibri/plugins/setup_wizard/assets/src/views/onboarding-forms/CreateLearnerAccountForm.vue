@@ -3,9 +3,8 @@
   <YesNoForm
     :noOptionLabel="$tr('noOptionLabel')"
     :settingIsEnabled="settingIsEnabled"
-    :submitText="submitText"
     :headerText="$tr('header')"
-    @submit="setSetting"
+    @submit="handleSubmit"
   />
 
 </template>
@@ -20,33 +19,28 @@
     components: {
       YesNoForm,
     },
-    props: {
-      submitText: {
-        type: String,
-        required: true,
-      },
-    },
     data() {
-      const { settings, preset } = this.$store.state.onboardingData;
-      if (settings.learner_can_sign_up !== null) {
-        return {
-          settingIsEnabled: settings.learner_can_sign_up,
-        };
-      }
-      // Default is False only for "formal" preset
       return {
-        settingIsEnabled: preset !== 'formal',
+        settingIsEnabled: this.$store.state.onboardingData.settings.learner_can_sign_up,
       };
     },
     methods: {
-      setSetting(setting) {
+      handleSubmit(setting) {
         this.$store.commit('SET_LEARNER_CAN_SIGN_UP', setting);
-        this.$emit('submit');
+        this.$emit('click_next');
       },
     },
     $trs: {
-      header: 'Allow anyone to create their own learner account?',
-      noOptionLabel: 'No. Admins must create all accounts',
+      header: {
+        message: 'Allow anyone to create their own learner account?',
+        context:
+          'Admins have the option to allow either anyone to create a user account for themselves, or for accounts to be created only by Kolibri admins.\n\n',
+      },
+      noOptionLabel: {
+        message: 'No. Admins must create all accounts',
+        context:
+          "Possible answer to the 'Allow anyone to create their own learner account?' question.",
+      },
     },
   };
 

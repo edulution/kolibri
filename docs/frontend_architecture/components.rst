@@ -9,21 +9,23 @@ Components allow us to define new custom tags that encapsulate a piece of self-c
 
 Read through the :doc:`./conventions` for further guidelines on writing components.
 
-Style guide
------------
 
-Our `style guide <http://kolibridemo.learningequality.org/style_guide>`__ contains reusable components that should be used whenever possible to maintain UI consistency. Adding components to the style guide depends on whether the component is currently used in multiple locations and will likely be used in more locations in the future, matches style guide style, is prop-driven, is properly named.
+Design system
+-------------
+
+Our `design system <http://kolibribeta.learningequality.org/design>`__ contains reusable patterns and components that should be used whenever possible to maintain UI consistency and avoid duplication of effort.
+
 
 SVG Icons
 ---------
 
-`Material Design Icon <https://material.io/tools/icons/>`__ SVGs or local SVGs can be inlined using the `svg-icon-inline-loader <https://github.com/learningequality/svg-icon-inline-loader>`__
+Icons in Kolibri should be accessed through the ``<KIcon>`` component. The icons available can be found and searched at `Kolibri Design System <https://kolibri-design-system.netlify.app/icons/>`__.
+
+Each icon is associated with a token, which is passed to ``<KIcon>`` and other Kolibri Design System components which accept an ``icon`` or ``iconAfter`` prop such as ``KIconButton``.
 
 .. code-block:: html
 
-  <mat-svg category="navigation" name="fullscreen_exit"/>
-  <file-svg src="./icon.svg"/>
-
-Inlining an SVG allows it to be inserted directly into the outputted HTML. This allows aspects of the icon (e.g. fill) to be styled using CSS.
-
-Attributes (such as vue directives like ``v-if`` and SVG attributes like ``viewbox``) can also be added to the svg tag.
+  <!--
+    embed https://material.io/resources/icons/?search=add_circl&icon=add_circle_outline&style=baseline
+  -->
+  <KIcon :icon="add" />

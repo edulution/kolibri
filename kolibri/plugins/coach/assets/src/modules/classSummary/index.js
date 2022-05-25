@@ -1,7 +1,7 @@
 import get from 'lodash/get';
 import set from 'lodash/set';
 import flatten from 'lodash/flatten';
-
+import find from 'lodash/find';
 import Vue from 'kolibri.lib.vue';
 import ClassSummaryResource from '../../apiResources/classSummary';
 import dataHelpers from './dataHelpers';
@@ -41,6 +41,15 @@ function defaultState() {
      *     data_model_version,
      *     question_count,
      *   }
+     * }
+     */
+    adHocGroupsMap: {},
+    /*
+     * adHocLearners := {
+     *  [collection_id]: {
+     *    id,
+     *    member_ids: [user_id, ...]
+     *  },
      * }
      */
     examMap: {},
@@ -175,6 +184,15 @@ export default {
       return Object.values(state.learnerMap);
     },
     /*
+     * adHocGroups := [
+     *   { id, member_ids: [id, ...] }, ...
+     * ]
+     ]
+     */
+    adHocGroups(state) {
+      return Object.values(state.adHocGroupsMap);
+    },
+    /*
      * groups := [
      *   { id, name, member_ids: [id, ...] }, ...
      * ]
@@ -279,10 +297,29 @@ export default {
       });
       return map;
     },
+    quizTitleUnavailable(state, getters) {
+      const normalize = title => title.trim().toUpperCase();
+      return function finder({ title, excludeId }) {
+        return find(
+          getters.exams,
+          exam => exam.id !== excludeId && normalize(exam.title) === normalize(title)
+        );
+      };
+    },
+    lessonTitleUnavailable(state, getters) {
+      const normalize = title => title.trim().toUpperCase();
+      return function finder({ title, excludeId }) {
+        return find(
+          getters.lessons,
+          lesson => lesson.id !== excludeId && normalize(lesson.title) === normalize(title)
+        );
+      };
+    },
     // Adapter used in 'coachNotifications' module. Make sure this getter is updated
     // whenever this module's state changes.
     notificationModuleData(state) {
       return {
+        adHocGroupsMap: state.adHocGroupsMap,
         learners: state.learnerMap,
         learnerGroups: state.groupMap,
         lessons: state.lessonMap,
@@ -296,27 +333,43 @@ export default {
   mutations: {
     SET_STATE(state, summary) {
       const examMap = _itemMap(summary.exams, 'id');
+      const lessonMap = _itemMap(summary.lessons, 'id');
+      Object.values(examMap).forEach(exam => {
+        // convert dates
+        exam.date_created = new Date(exam.date_created);
+      });
+      Object.values(lessonMap).forEach(lesson => {
+        // convert dates
+        lesson.date_created = new Date(lesson.date_created);
+      });
       summary.exam_learner_status.forEach(status => {
         // convert dates
-        status.last_activity = new Date(status.last_activity);
+        status.last_activity = status.last_activity ? new Date(status.last_activity) : null;
         status.score = _score(status.num_correct, examMap[status.exam_id].question_count);
       });
       summary.content_learner_status.forEach(status => {
         // convert dates
-        status.last_activity = new Date(status.last_activity);
+        status.last_activity = status.last_activity ? new Date(status.last_activity) : null;
+      });
+      const patchedSummaryContent = summary.content.map(item => {
+        const obj = Object.assign({}, item);
+        obj['kind'] = obj['kind'] == 'h5p' ? 'html5' : obj['kind'];
+        return obj;
       });
       Object.assign(state, {
         id: summary.id,
+        facility_id: summary.facility_id,
         name: summary.name,
         coachMap: _itemMap(summary.coaches, 'id'),
         learnerMap: _itemMap(summary.learners, 'id'),
         groupMap: _itemMap(summary.groups, 'id'),
+        adHocGroupsMap: _itemMap(summary.adhoclearners, 'id'),
         examMap,
         examLearnerStatusMap: _statusMap(summary.exam_learner_status, 'exam_id'),
-        contentMap: _itemMap(summary.content, 'content_id'),
-        contentNodeMap: _itemMap(summary.content, 'node_id'),
+        contentMap: _itemMap(patchedSummaryContent, 'content_id'),
+        contentNodeMap: _itemMap(patchedSummaryContent, 'node_id'),
         contentLearnerStatusMap: _statusMap(summary.content_learner_status, 'content_id'),
-        lessonMap: _itemMap(summary.lessons, 'id'),
+        lessonMap,
       });
     },
     CREATE_ITEM(state, { map, id, object }) {

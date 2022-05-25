@@ -8,57 +8,20 @@
       />
     </p>
     <h1>
-      <KLabeledIcon>
-        <KIcon slot="icon" group />
-        {{ group.name }}
-      </KLabeledIcon>
+      <KLabeledIcon icon="group" :label="group.name" />
     </h1>
 
-    <!-- TODO COACH
-    <HeaderTable>
-      <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('avgQuizScoreLabel') }}
-        </template>
-        <template slot="value">
-          {{ coachStrings.$tr('percentage', {value: avgScore}) }}
-        </template>
-      </HeaderTableRow>
-    </HeaderTable>
-    <HeaderTable>
-      <HeaderTableRow>
-        <template slot="key">{{ coachStrings.$tr('learnersLabel') }}</template>
-        <template slot="value">
-          <TruncatedItemList
-            :items="[
-              'John',
-              'Alice',
-              'Julie',
-              'Lucy',
-              'Steve',
-              'Mary',
-              'Judy',
-              'George',
-              'Carol',
-              'Ken'
-            ]"
-          />
-        </template>
-      </HeaderTableRow>
-    </HeaderTable>
-     -->
-
-    <HeaderTabs>
+    <HeaderTabs :enablePrint="enablePrint">
       <HeaderTab
-        :text="coachStrings.$tr('reportsLabel')"
+        :text="coachString('reportsLabel')"
         :to="classRoute('ReportsGroupReportPage', {})"
       />
       <HeaderTab
-        :text="coachStrings.$tr('membersLabel')"
+        :text="coachString('membersLabel')"
         :to="classRoute('ReportsGroupLearnerListPage', {})"
       />
       <HeaderTab
-        :text="coachStrings.$tr('activityLabel')"
+        :text="coachString('activityLabel')"
         :to="classRoute('ReportsGroupActivityPage', {})"
       />
     </HeaderTabs>
@@ -69,34 +32,30 @@
 
 <script>
 
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
 
   export default {
     name: 'ReportsGroupHeader',
-    components: {},
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
+    props: {
+      enablePrint: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+    },
     computed: {
       group() {
         return this.groupMap[this.$route.params.groupId];
       },
-      /** TODO COACH
-      recipients() {
-        return this.group.member_ids;
-      },
-      avgScore() {
-        const examStatuses = this.examStatuses.filter(status =>
-          this.recipients.includes(status.learner_id)
-        );
-        const statuses = examStatuses.filter(status => status.status === this.STATUSES.completed);
-        if (!statuses.length) {
-          return null;
-        }
-        return this._.meanBy(statuses, 'score');
-      },
-      */
     },
     $trs: {
-      back: 'All groups',
+      back: {
+        message: 'All groups',
+        context:
+          "Refers to a link that takes the user back to the 'Groups' tab in the 'Reports' section where they can see a list of all the groups in a class.",
+      },
     },
   };
 

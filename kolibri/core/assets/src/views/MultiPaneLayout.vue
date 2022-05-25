@@ -5,33 +5,49 @@
       v-if="$slots.header"
       ref="header"
       class="header"
+      :style="styles.header"
     >
       <slot name="header"></slot>
     </header>
 
-    <div>
-      <aside
+    <section
+      v-if="$slots.subheader"
+      ref="subheader"
+      class="subheader"
+    >
+      <slot name="subheader"></slot>
+    </section>
+
+    <KFixedGrid
+      numCols="3"
+    >
+      <KFixedGridItem
         v-if="$slots.aside"
-        class="aside"
-        :style="{ maxHeight: `${maxHeight}px` }"
+        ref="aside"
+        :style="styles.aside"
+        span="1"
       >
-        <slot name="aside"></slot>
-      </aside>
+        <div class="aside">
+          <slot name="aside"></slot>
+        </div>
+      </KFixedGridItem>
 
-      <main
+      <KFixedGridItem
         ref="main"
-        class="main"
-        :class="{'main-with-aside': $slots.aside }"
-        :style="{ maxHeight: $slots.aside ? `${maxHeight}px` : '' }"
+        :span="$slots.aside ? 2 : 3"
+        :class="{ 'main-with-aside': $slots.aside }"
       >
-        <slot name="main"></slot>
-      </main>
+        <div class="main">
+          <slot name="main"></slot>
+        </div>
+      </KFixedGridItem>
 
-    </div>
+    </KFixedGrid>
     <footer
       v-if="$slots.footer"
       ref="footer"
       class="footer"
+      :style="styles.footer"
     >
       <slot name="footer"></slot>
     </footer>
@@ -42,28 +58,32 @@
 
 <script>
 
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import responsiveElement from 'kolibri.coreVue.mixins.responsiveElement';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
 
   export default {
     name: 'MultiPaneLayout',
-    mixins: [responsiveWindow, responsiveElement],
+    mixins: [responsiveWindowMixin, responsiveElementMixin],
     computed: {
-      maxHeight() {
-        const APP_BAR_HEIGHT = this.windowIsSmall ? 56 : 64;
-        const PADDING = this.windowIsSmall ? 16 : 32;
-        const MARGIN = 16;
-        let maxHeight = this.windowHeight - APP_BAR_HEIGHT - PADDING * 2 - MARGIN;
-        if (this.$refs.header) {
-          maxHeight = maxHeight - this.$refs.header.clientHeight;
-        }
-        if (this.$refs.footer) {
-          maxHeight = maxHeight - this.$refs.footer.clientHeight;
-        }
-        return maxHeight;
+      styles() {
+        return {
+          header: {
+            borderBottomColor: this.$themeTokens.textDisabled,
+          },
+          aside: {
+            maxHeight: `${this.windowHeight}px`,
+            overflowY: 'auto',
+          },
+          footer: {
+            borderTopColor: this.$themeTokens.textDisabled,
+          },
+        };
       },
     },
     methods: {
+      /**
+       * @public
+       */
       scrollMainToTop() {
         this.$refs.main.scrollTop = 0;
       },
@@ -76,28 +96,28 @@
 <style lang="scss" scoped>
 
   .header {
-    margin-bottom: 8px;
+    padding: 16px;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
   }
 
-  .aside,
-  .main {
-    overflow-y: auto;
+  .subheader {
+    padding: 16px;
   }
 
   .aside {
-    display: inline-block;
-    width: 25%;
-    margin-right: 8px;
+    padding: 16px;
   }
 
   .main-with-aside {
-    display: inline-block;
-    width: calc(75% - 8px);
+    padding: 16px;
     vertical-align: top;
   }
 
   .footer {
-    margin-top: 8px;
+    padding: 16px;
+    border-top-style: solid;
+    border-top-width: 1px;
   }
 
 </style>

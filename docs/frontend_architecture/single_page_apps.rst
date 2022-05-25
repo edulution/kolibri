@@ -7,7 +7,7 @@ Each app is implemented as a Kolibri plugin (see :doc:`/backend_architecture/plu
 
 On the Server-side, the ``kolibri_plugin.py`` file describes most of the configuration for the single-page app. In particular, this includes the base Django HTML template to return (with an empty ``<body>``), the URL at which the app is exposed, and the javascript entry file which is run on load.
 
-On the client-side, the app creates a single ``KolibriModule`` object in the entry file (conventionally *app.js*) and registers this with the core app, a global variable called ``kolibriGlobal``. The Kolibri Module then mounts single root component to the HTML returned by the server, which recursively contains all additional components, html and logic.
+On the client-side, the app creates a single ``KolibriModule`` object in the entry file (conventionally *app.js*) and registers this with the core app, a global variable called ``kolibriCoreAppGlobal``. The Kolibri Module then mounts single root component to the HTML returned by the server, which recursively contains all additional components, html and logic.
 
 Defining a new Kolibri module
 -----------------------------
@@ -16,30 +16,82 @@ Defining a new Kolibri module
 
   This section is mostly relevant if you are creating a new app or plugin. If you are just creating new components, you don't need to do this.
 
-A Kolibri Module is initially defined in Python by sub-classing the ``WebpackBundleHook`` class (in ``kolibri.core.webpack.hooks``). The hook defines the JS entry point (conventionally called *app.js*) where the ``KolibriModule`` subclass is instantiated, and where events and callbacks on the module are registered. These are defined in the ``events`` and ``once`` properties. Each defines key-value pairs of the name of an event, and the name of the method on the ``KolibriModule`` object. When these events are triggered on the Kolibri core JavaScript app, these callbacks will be called. (If the ``KolibriModule`` is registered for asynchronous loading, the Kolibri Module will first be loaded, and then the callbacks called when it is ready. See :doc:`/pipeline/frontend_build_pipeline` for more information.)
+A Kolibri Module is initially defined in Python by sub-classing the ``WebpackBundleHook`` class (in ``kolibri.core.webpack.hooks``). The hook defines the JS entry point (conventionally called *app.js*) where the ``KolibriModule`` subclass is instantiated, and where events and callbacks on the module are registered. These are defined in the ``events`` and ``once`` properties. Each defines key-value pairs of the name of an event, and the name of the method on the ``KolibriModule`` object. When these events are triggered on the Kolibri core JavaScript app, these callbacks will be called. (If the ``KolibriModule`` is registered for asynchronous loading, the Kolibri Module will first be loaded, and then the callbacks called when it is ready. See :doc:`/frontend_architecture/frontend_build_pipeline` for more information.)
 
 All apps should extend the ``KolibriModule`` class found in `kolibri/core/assets/src/kolibri_module.js`.
 
 The ``ready`` method will be automatically executed once the Module is loaded and registered with the Kolibri Core App. By convention, JavaScript is injected into the served HTML *after* the ``<rootvue>`` tag, meaning that this tag should be available when the ``ready`` method is called, and the root component (conventionally in *vue/index.vue*) can be mounted here.
 
+Creating a side nav entry
+-------------------------
+
+If you want to expose your new single page app as a top level navigation item in the sidebar nav, then it is necessary to create a nav item in your plugin. This is implemented as a hook, which is a combination of the WebpackBundleHook and a navigation hook. So it allows the creation of a navigation item frontend bundle, and signalling that this should be included as a navigation item. Here is an example of it in use.
+
+.. code-block:: python
+
+  from kolibri.core.hooks import NavigationHook
+  from kolibri.plugins.hooks import register_hook
+
+  @register_hook
+  class ExampleNavItem(NavigationHook):
+      bundle_id = "side_nav"
+
+For more information on using `bundle_id` and connecting it to the relevant Javascript entry point read the documentation on the :ref:`Frontend build pipeline`. The entry point for the nav item should minimally do the following:
+
+.. code-block:: html
+
+  <template>
+
+    <CoreMenuOption
+      :label="$tr('label')"
+      :link="url"
+      icon="learn"
+    />
+
+  </template>
+
+
+  <script>
+
+    import CoreMenuOption from 'kolibri.coreVue.components.CoreMenuOption';
+    import navComponents from 'kolibri.utils.navComponents';
+    import urls from 'kolibri.urls';
+
+    const component = {
+      name: 'ExampleSideNavEntry',
+      components: {
+        CoreMenuOption,
+      },
+      computed: {
+        url() {
+          return urls['kolibri:kolibri.plugins.example:example']();
+        },
+      },
+      priority: 5,
+      $tr: {
+        label: 'Example',
+      },
+    };
+
+    navComponents.register(component);
+
+    export default component;
+
+  </script>
+
+This will create a navigation component which will be registered to appear in the navigation side bar.
+
+
 Content renderers
 -----------------
 
-A special kind of Kolibri Module is dedicated to rendering particular content types. All content renderers should extend the ``ContentRendererModule`` class found in `kolibri/core/assets/src/content_renderer_module.js`. In addition, rather than subclassing the ``WebpackBundleHook`` class, content renderers should be defined in the Python code using the ``ContentRendererHook`` class defined in ``kolibri.content.hooks``. In addition to the standard options for the ``WebpackBundleHook``, the ``ContentRendererHook`` also accepts a json file defining the content types that it renders.
+A special kind of Kolibri Module is dedicated to rendering particular content types. All content renderers should extend the ``ContentRendererModule`` class found in `kolibri/core/assets/src/content_renderer_module.js`. In addition, rather than subclassing the ``WebpackBundleHook`` class, content renderers should be defined in the Python code using the ``ContentRendererHook`` class defined in ``kolibri.content.hooks``. In addition to the standard options for the ``WebpackBundleHook``, the ``ContentRendererHook`` also requires a ``presets`` tuple listing the format presets that it will render.
 
 .. automodule:: kolibri.core.content.hooks
     :members:
     :noindex:
 
-The ``ContentRendererModule`` class has one required property ``getRendererComponent`` which should return a Vue component that wraps the content rendering code. This component will be passed ``defaultFile``, ``files``, ``supplementaryFiles``, and ``thumbnailFiles`` props, defining the files associated with the piece of content. These can be automatically mixed into a content renderer component definition using the content renderer mixin.
-
-.. code-block:: javascript
-
-  import contentRendererMixin from 'kolibri.coreVue.mixins.contentRendererMixin';
-
-  {
-    mixins: [contentRendererMixin],
-  };
+The ``ContentRendererModule`` class has one required property ``getRendererComponent`` which should return a Vue component that wraps the content rendering code. This component will be passed ``files``, ``file``, ``itemData``, ``preset``, ``itemId``, ``answerState``, ``allowHints``, ``extraFields``, ``interactive``, ``lang``, ``showCorrectAnswer``, ``defaultItemPreset``, ``availableFiles``, ``defaultFile``, ``supplementaryFiles``, ``thumbnailFiles``, ``contentDirection``, and ``contentIsRtl`` props, defining the files associated with the piece of content, and other required data for rendering. These will be automatically mixed into any content renderer component definition when loaded. For more details of these props see the `Content Renderer documentation <https://design-system.learningequality.org/kcontentrenderer/>`__.
 
 In order to log data about users viewing content, the component should emit ``startTracking``, ``updateProgress``, and ``stopTracking`` events, using the Vue ``$emit`` method. ``startTracking`` and ``stopTracking`` are emitted without any arguments, whereas ``updateProgress`` should be emitted with a single value between 0 and 1 representing the current proportion of progress on the content.
 
@@ -55,10 +107,7 @@ The answer renderer should also define a ``checkAnswer`` method in its component
 
 .. code-block:: javascript
 
-  import contentRendererMixin from 'kolibri.coreVue.mixins.contentRendererMixin';
-
   {
-    mixins: [contentRendererMixin],
     methods: {
       checkAnswer() {
         return {

@@ -2,51 +2,85 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.urls.exceptions import NoReverseMatch
 from mock import patch
 from rest_framework.test import APITestCase
+from rest_framework.test import APITransactionTestCase
 
 from kolibri.core.auth.constants import role_kinds
+from kolibri.core.auth.test.helpers import clear_process_cache
 from kolibri.core.auth.test.helpers import create_superuser
 from kolibri.core.auth.test.helpers import provision_device
 from kolibri.core.auth.test.test_api import DUMMY_PASSWORD
 from kolibri.core.auth.test.test_api import FacilityFactory
 from kolibri.core.auth.test.test_api import FacilityUserFactory
-from kolibri.deployment.default.urls import urlpatterns
+from kolibri.core.device.translation import get_settings_language
+
+
+class BeforeDeviceProvisionTests(APITestCase):
+    def setUp(self):
+        clear_process_cache()
+
+    def test_redirect_to_setup_wizard(self):
+        response = self.client.get(reverse("kolibri:core:root_redirect"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.get("location"),
+            reverse("kolibri:kolibri.plugins.setup_wizard:setupwizard"),
+        )
 
 
 class KolibriTagNavigationTestCase(APITestCase):
-    def test_redirect_to_setup_wizard(self):
-        with patch("kolibri.core.views.is_provisioned", return_value=False):
-            response = self.client.get("/")
-            self.assertEqual(response.status_code, 302)
-            self.assertEqual(
-                response.get("location"),
-                reverse("kolibri:setupwizardplugin:setupwizard"),
-            )
-
-    def test_redirect_root_to_user_if_not_logged_in(self):
+    @classmethod
+    def setUpTestData(cls):
         provision_device()
-        response = self.client.get("/")
+        facility = cls.facility = FacilityFactory.create()
+        cls.learner = FacilityUserFactory.create(facility=facility)
+        cls.facility_coach = FacilityUserFactory.create(facility=facility)
+        facility.add_role(cls.facility_coach, "coach")
+        cls.class_coach = FacilityUserFactory.create(facility=facility)
+        facility.add_role(cls.class_coach, "classroom assignable coach")
+        cls.superuser = create_superuser(cls.facility)
+
+    def tearDown(self):
+        self.client.logout()
+
+    def _assert_location_reverse_url(self, url_name):
+        response = self.client.get(reverse("kolibri:core:root_redirect"))
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.get("location"), reverse("kolibri:user:user"))
+        self.assertEqual(response.get("location"), reverse(url_name))
 
-    def test_redirect_root_to_learn_if_logged_in(self):
-        facility = FacilityFactory.create()
-        do = create_superuser(facility)
-        provision_device()
-        self.client.login(username=do.username, password=DUMMY_PASSWORD)
-        response = self.client.get("/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.get("location"), reverse("kolibri:learnplugin:learn"))
+    def test_anonymous_user_is_redirected_to_user_plugin(self):
+        self._assert_location_reverse_url("kolibri:kolibri.plugins.user_auth:user_auth")
+
+    def test_superuser_is_redirected_to_device_plugin(self):
+        self.client.login(username=self.superuser.username, password=DUMMY_PASSWORD)
+        self._assert_location_reverse_url(
+            "kolibri:kolibri.plugins.device:device_management"
+        )
+
+    def test_learner_is_redirected_to_learn_plugin(self):
+        self.client.login(username=self.learner.username, password=DUMMY_PASSWORD)
+        self._assert_location_reverse_url("kolibri:kolibri.plugins.learn:learn")
+
+    def test_facility_coach_is_redirected_to_coach_plugin(self):
+        self.client.login(
+            username=self.facility_coach.username, password=DUMMY_PASSWORD
+        )
+        self._assert_location_reverse_url("kolibri:kolibri.plugins.coach:coach")
+
+    def test_class_coach_is_redirected_to_coach_plugin(self):
+        self.client.login(username=self.class_coach.username, password=DUMMY_PASSWORD)
+        self._assert_location_reverse_url("kolibri:kolibri.plugins.coach:coach")
 
 
-class AllUrlsTest(APITestCase):
+class AllUrlsTest(APITransactionTestCase):
 
     # Allow codes that may indicate a poorly formed response
     # 412 is returned from endpoints that have required GET params when these are not supplied
-    allowed_http_codes = [200, 302, 400, 401, 403, 404, 405, 412]
+    allowed_http_codes = [200, 301, 302, 400, 401, 403, 404, 405, 412]
 
     def setUp(self):
         provision_device()
@@ -118,12 +152,26 @@ class AllUrlsTest(APITestCase):
                         pass
             self.assertFalse(failures, "\n".join(failures))
 
-        # Some API endpoints start iceqube tasks which can cause the task runner to hang
-        # Patch this so that no tasks get started.
         with patch(
             "kolibri.core.webpack.hooks.WebpackBundleHook.bundle", return_value=[]
-        ), patch("kolibri.core.tasks.api.get_client"):
-            check_urls(urlpatterns)
+        ), patch("kolibri.core.webpack.hooks.WebpackBundleHook.get_by_unique_id"):
+            # A slight hack to accommodate the SoUD tests ensuring that Coach and Facility plugins are not
+            # available to the frontend. If for any reason you decide to use get_device_setting in the
+            # kolibri_plugin of either Coach or Facility.
+            # This ensures that the subsequent import of urlpatterns doesn't try to touch the database and
+            # we touch the database in these two places.
+            with patch(
+                "kolibri.plugins.coach.kolibri_plugin.get_device_setting",
+                return_value=False,
+            ), patch(
+                "kolibri.plugins.facility.kolibri_plugin.get_device_setting",
+                return_value=False,
+            ), patch(
+                "kolibri.core.tasks.api.job_storage"
+            ):
+                from kolibri.deployment.default.urls import urlpatterns
+
+                check_urls(urlpatterns)
 
     def test_anonymous_responses(self):
         self.check_responses()
@@ -154,3 +202,36 @@ class AllUrlsTest(APITestCase):
         self.check_responses(
             credentials={"username": user.username, "password": DUMMY_PASSWORD}
         )
+
+
+class LogoutLanguagePersistenceTest(APITestCase):
+    def setUp(self):
+        provision_device()
+        facility = FacilityFactory.create()
+        user = create_superuser(facility)
+        self.credentials = {"username": user.username, "password": DUMMY_PASSWORD}
+
+    def test_persistent_language_on_namespaced_logout(self):
+        # Test that namespaced /{lang_code}/logout persists that namespace.
+        for lang_code in [lang[0] for lang in settings.LANGUAGES]:
+            self.client.login(**self.credentials)
+            response = self.client.post("/{}/logout".format(lang_code))
+            self.assertTrue(lang_code in response.url)
+
+    def test_default_language_without_namespaced_logout(self):
+        # Test /logout without any in-path language code. Expect default language setting.
+        self.client.login(**self.credentials)
+        response = self.client.get("/logout")
+        self.assertTrue(get_settings_language() in response.url)
+
+    def test_persistent_session_language_setting_on_logout(self):
+        # Test when set on a session.
+        from django.utils.translation import LANGUAGE_SESSION_KEY
+
+        self.client.login(**self.credentials)
+        session = self.client.session
+        test_lang = settings.LANGUAGES[-1][0]
+        session[LANGUAGE_SESSION_KEY] = test_lang
+        session.save()
+        response = self.client.post("/logout")
+        self.assertTrue(test_lang in response.url)

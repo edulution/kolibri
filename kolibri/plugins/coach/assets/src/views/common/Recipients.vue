@@ -1,11 +1,14 @@
 <template>
 
   <span>
-    <template v-if="!groupNames.length">
-      {{ $tr('assignmentClass') }}
+    <template v-if="groupNames.length">
+      <TruncatedItemList :items="groupNames" />
+    </template>
+    <template v-else-if="hasAssignments">
+      {{ coachString('entireClassLabel') }}
     </template>
     <template v-else>
-      <TruncatedItemList :items="groupNames" />
+      {{ $tr('noOne') }}
     </template>
   </span>
 
@@ -15,7 +18,7 @@
 <script>
 
   import TruncatedItemList from './TruncatedItemList';
-  import { coachStringsMixin } from './commonCoachStrings.js';
+  import { coachStringsMixin } from './commonCoachStrings';
 
   export default {
     name: 'Recipients',
@@ -28,9 +31,17 @@
         type: Array,
         required: true,
       },
+      hasAssignments: {
+        type: Boolean,
+        required: true,
+      },
     },
     $trs: {
-      assignmentClass: 'Entire class',
+      noOne: {
+        message: 'No one',
+        context:
+          'Displays next to an activity in the lesson if no learners have been assigned to it.',
+      },
     },
   };
 

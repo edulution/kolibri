@@ -2,21 +2,24 @@
 
   <CoreBase
     :immersivePage="true"
-    immersivePageIcon="arrow_back"
-    :immersivePageRoute="toolbarRoute"
+    immersivePageIcon="back"
+    :immersivePageRoute="returnBackRoute"
+    :immersivePagePrimary="true"
     :appBarTitle="appBarTitle"
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
   >
-    <LessonContentPreviewPage
-      :currentContentNode="currentContentNode"
-      :isSelected="isSelected"
-      :questions="preview.questions"
-      :displaySelectOptions="true"
-      :completionData="preview.completionData"
-      @addResource="handleAddResource"
-      @removeResource="handleRemoveResource"
-    />
+    <KPageContainer>
+      <LessonContentPreviewPage
+        :currentContentNode="currentContentNode"
+        :isSelected="isSelected"
+        :questions="preview.questions"
+        :displaySelectOptions="true"
+        :completionData="preview.completionData"
+        @addResource="handleAddResource"
+        @removeResource="handleRemoveResource"
+      />
+    </KPageContainer>
   </CoreBase>
 
 </template>
@@ -25,21 +28,16 @@
 <script>
 
   import { mapState, mapActions } from 'vuex';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import LessonContentPreviewPage from '../plan/LessonContentPreviewPage';
-  import Index from '../CoachIndex';
-  import CreateExamPage from './CreateExamPage';
-
-  const indexStrings = crossComponentTranslator(Index);
-  const CreateExamPageStrings = crossComponentTranslator(CreateExamPage);
 
   export default {
     name: 'PlanQuizPreviewPage',
     components: {
       LessonContentPreviewPage,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoreStrings, commonCoach],
     computed: {
       ...mapState(['toolbarRoute']),
       ...mapState('examCreation', ['preview', 'selectedExercises', 'currentContentNode']),
@@ -47,22 +45,29 @@
         return Boolean(this.selectedExercises[this.currentContentNode.id]);
       },
       appBarTitle() {
-        return CreateExamPageStrings.$tr('createNewExam');
+        return this.currentContentNode.title;
+      },
+      returnBackRoute() {
+        return this.toolbarRoute;
       },
     },
     beforeDestroy() {
       this.clearSnackbar();
     },
     methods: {
-      ...mapActions(['createSnackbar', 'clearSnackbar']),
+      ...mapActions(['clearSnackbar']),
       ...mapActions('examCreation', ['addToSelectedExercises', 'removeFromSelectedExercises']),
       handleAddResource(content) {
-        this.addToSelectedExercises([content]);
-        this.createSnackbar(indexStrings.$tr('added', { item: this.currentContentNode.title }));
+        this.$router.push(this.returnBackRoute).then(() => {
+          this.addToSelectedExercises([content]);
+          this.showSnackbarNotification('resourcesAddedWithCount', { count: 1 });
+        });
       },
       handleRemoveResource(content) {
-        this.removeFromSelectedExercises([content]);
-        this.createSnackbar(indexStrings.$tr('removed', { item: this.currentContentNode.title }));
+        this.$router.push(this.returnBackRoute).then(() => {
+          this.removeFromSelectedExercises([content]);
+          this.showSnackbarNotification('resourcesRemovedWithCount', { count: 1 });
+        });
       },
     },
   };

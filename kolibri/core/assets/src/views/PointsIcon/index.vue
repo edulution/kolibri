@@ -1,8 +1,8 @@
 <template>
 
-  <div>
-    <file-svg v-if="active" src="./icons/leaf.svg" />
-    <file-svg v-else src="./icons/grey-leaf.svg" />
+  <div class="wrapper">
+    <KIcon v-if="active" icon="pointsActive" />
+    <KIcon v-else icon="pointsInactive" />
   </div>
 
 </template>
@@ -15,9 +15,18 @@
     props: {
       active: {
         type: Boolean,
-        required: true,
+        default: true,
       },
     },
   };
 
 </script>
+
+
+<style lang="scss" scoped>
+
+  .wrapper {
+    vertical-align: inherit;
+  }
+
+</style>

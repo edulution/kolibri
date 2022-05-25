@@ -2,20 +2,18 @@
 
   <span class="pos-rel">
     <span ref="icon">
-      <mat-svg
+      <KIcon
         v-if="hasSuperAdminPermission"
-        class="super-admin icon"
-        :style="{ fill: $coreStatusMastered }"
-        name="vpn_key"
-        category="communication"
+        class="icon super-admin"
+        :style="iconStyle"
+        icon="permission"
       />
 
-      <mat-svg
+      <KIcon
         v-else-if="hasLimitedPermissions"
-        class="some-permissions icon"
-        :style="{ fill: $coreTextDefault }"
-        name="vpn_key"
-        category="communication"
+        class="icon some-permissions"
+        :style="iconStyle"
+        icon="permission"
       />
     </span>
     <KTooltip
@@ -37,18 +35,14 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import { PermissionTypes, UserKinds } from 'kolibri.coreVue.vuex.constants';
   import UserTypeDisplay from 'kolibri.coreVue.components.UserTypeDisplay';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
 
   export default {
     name: 'PermissionsIcon',
     components: {
       UserTypeDisplay,
-      KTooltip,
     },
-    mixins: [themeMixin],
     props: {
       permissionType: {
         type: String,
@@ -56,6 +50,10 @@
         validator(value) {
           return [PermissionTypes.SUPERUSER, PermissionTypes.LIMITED_PERMISSIONS].includes(value);
         },
+      },
+      lightIcon: {
+        type: Boolean,
+        default: false,
       },
     },
     computed: {
@@ -68,9 +66,24 @@
       hasLimitedPermissions() {
         return this.permissionType === PermissionTypes.LIMITED_PERMISSIONS;
       },
+      iconStyle() {
+        if (this.hasSuperAdminPermission) {
+          return {
+            fill: this.lightIcon ? this.$themePalette.amber.v_100 : this.$themeTokens.superAdmin,
+          };
+        } else {
+          return {
+            fill: this.lightIcon ? this.$themeTokens.disabled : this.$themeTokens.text,
+          };
+        }
+      },
     },
     $trs: {
-      limitedPermissionsTooltip: 'Limited permissions',
+      limitedPermissionsTooltip: {
+        message: 'Limited permissions',
+        context:
+          "It's a tooltip for the 'black key' icon that indicates that the user has permissions to manage content, but not other users or facility settings.",
+      },
     },
   };
 

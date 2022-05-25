@@ -12,9 +12,11 @@ from __future__ import unicode_literals
 from django.conf import settings
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
+from morango.models import UUIDField
 
-from kolibri.core.content.models import UUIDField
 from kolibri.core.fields import DateTimeTzField
+from kolibri.core.fields import JSONField
+from kolibri.deployment.default.sqlite_db_names import NOTIFICATIONS
 from kolibri.utils.time_utils import local_now
 
 # Remove NotificationsRouter if sqlite is not being used:
@@ -30,21 +32,18 @@ class NotificationsRouter(object):
     """
     Determine how to route database calls for the Notifications app.
     All other models will be routed to the default database.
-
-    If using sqlite, this command must be executed to run migrations under this router:
-        `kolibri manage migrate notifications --database=notifications_db`
     """
 
     def db_for_read(self, model, **hints):
-        """Send all read operations on Notifications app models to `notifications_db`."""
+        """Send all read operations on Notifications app models to NOTIFICATIONS."""
         if model._meta.app_label == "notifications":
-            return "notifications_db"
+            return NOTIFICATIONS
         return None
 
     def db_for_write(self, model, **hints):
-        """Send all write operations on Notifications app models to `notifications_db`."""
+        """Send all write operations on Notifications app models to NOTIFICATIONS."""
         if model._meta.app_label == "notifications":
-            return "notifications_db"
+            return NOTIFICATIONS
         return None
 
     def allow_relation(self, obj1, obj2, **hints):
@@ -66,10 +65,10 @@ class NotificationsRouter(object):
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         """Ensure that the Notifications app's models get created on the right database."""
         if app_label == "notifications":
-            # The Notifications app should be migrated only on the notifications_db database.
-            return db == "notifications_db"
-        elif db == "notifications_db":
-            # Ensure that all other apps don't get migrated on the notifications_db database.
+            # The Notifications app should be migrated only on the NOTIFICATIONS database.
+            return db == NOTIFICATIONS
+        elif db == NOTIFICATIONS:
+            # Ensure that all other apps don't get migrated on the NOTIFICATIONS database.
             return False
 
         # No opinion for all other scenarios
@@ -96,6 +95,7 @@ class NotificationEventType(myEnum):
     Started = "Started"
     Completed = "Completed"
     Help = "HelpNeeded"
+    Answered = "Answered"
 
 
 class HelpReason(myEnum):
@@ -116,11 +116,13 @@ class LearnerProgressNotification(models.Model):
         max_length=200, choices=NotificationEventType.choices(), blank=True
     )
     user_id = UUIDField()
-    classroom_id = UUIDField()  # This can be either a Classroom or a LearnerGroup id
+    classroom_id = UUIDField()  # This is a Classroom id
+    assignment_collections = JSONField(null=True, default=[])
     contentnode_id = UUIDField(null=True)
     lesson_id = UUIDField(null=True)
     quiz_id = UUIDField(null=True)
     quiz_num_correct = models.IntegerField(null=True)
+    quiz_num_answered = models.IntegerField(null=True)
     reason = models.CharField(max_length=200, choices=HelpReason.choices(), blank=True)
     timestamp = DateTimeTzField(default=local_now)
 

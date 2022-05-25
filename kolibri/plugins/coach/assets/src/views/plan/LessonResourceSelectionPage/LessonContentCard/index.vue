@@ -1,48 +1,53 @@
 <template>
 
-  <router-link :to="link" class="content-card" :style="{ backgroundColor: $coreBgLight }">
+  <router-link :to="link" class="content-card" :style="{ backgroundColor: $themeTokens.surface }">
 
     <CardThumbnail
       class="thumbnail"
       :thumbnail="thumbnail"
       :kind="kind"
-      :isMobile="true"
+      :isMobile="windowIsSmall"
     />
 
-    <div class="text" :style="{ color: $coreTextDefault }">
+    <div :class="windowIsSmall ? 'mobile-text' : 'text'" :style="{ color: $themeTokens.text }">
       <h3
+        v-if="!windowIsSmall"
         class="title"
-        :class="{'has-message': Boolean(message)}"
+        :class="{ 'has-message': Boolean(message) }"
         dir="auto"
       >
-        {{ title }}
+        <KLabeledIcon :label="title">
+          <template #icon>
+            <ContentIcon :kind="kind" />
+          </template>
+        </KLabeledIcon>
       </h3>
-      <div v-if="message" class="message" :style="{ color: $coreTextDefault }">
+      <h3
+        v-if="windowIsSmall"
+        dir="auto"
+      >
+        <KLabeledIcon :label="title">
+          <template #icon>
+            <ContentIcon :kind="kind" />
+          </template>
+        </KLabeledIcon>
+      </h3>
+      <div v-if="message" class="message" :style="{ color: $themeTokens.text }">
         {{ message }}
       </div>
-      <!--
-      <p class="ancestors">
-        {{ $tr('topic') }} <KRouterLink text="TODO" :to="{}" />
-        {{ $tr('channel') }} <KRouterLink text="TODO" :to="{}" />
-      </p>
-       -->
       <TextTruncator
+        v-if="!windowIsSmall"
         :text="description"
         :maxHeight="80"
         class="description"
       />
-      <CoachContentLabel
-        class="coach-content-label"
-        :value="numCoachContents"
-        :isTopic="isTopic"
-      />
-      <p class="ancestors">
-        <KRouterLink
-          v-if="!isTopic"
-          :text="$tr('previewButtonLabel')"
-          :to="link"
+      <div>
+        <CoachContentLabel
+          class="coach-content-label"
+          :value="numCoachContents"
+          :isTopic="isTopic"
         />
-      </p>
+      </div>
     </div>
 
   </router-link>
@@ -52,23 +57,22 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
-  import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+  import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import { validateLinkObject, validateContentNodeKind } from 'kolibri.utils.validators';
   import TextTruncator from 'kolibri.coreVue.components.TextTruncator';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import CardThumbnail from './CardThumbnail';
 
   export default {
     name: 'LessonContentCard',
     components: {
       CardThumbnail,
+      ContentIcon,
       TextTruncator,
       CoachContentLabel,
-      KRouterLink,
     },
-    mixins: [themeMixin],
+    mixins: [responsiveWindowMixin],
     props: {
       title: {
         type: String,
@@ -80,12 +84,16 @@
       },
       thumbnail: {
         type: String,
-        required: false,
+        default: null,
       },
       kind: {
         type: String,
         required: true,
         validator: validateContentNodeKind,
+      },
+      isLeaf: {
+        type: Boolean,
+        required: true,
       },
       link: {
         type: Object,
@@ -106,16 +114,8 @@
     },
     computed: {
       isTopic() {
-        return this.kind === ContentNodeKinds.CHANNEL || this.kind === ContentNodeKinds.TOPIC;
+        return !this.isLeaf;
       },
-    },
-    $trs: {
-      // These strings are not used yet
-      resourcesInTopic: '{count} {count, plural, one {resource} other {resources}}',
-      selectedResourcesInTopic: '{selected} of {total} selected',
-      previewButtonLabel: 'View',
-      topic: 'Topic:',
-      channel: 'Channel:',
     },
   };
 
@@ -124,44 +124,41 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
   @import './card';
 
-  .coach-content-label {
-    padding: 8px 0;
-  }
-
   .content-card {
+    @extend %dropshadow-2dp;
+
+    position: relative;
     display: block;
-    height: $thumb-height;
+    min-height: $thumb-height + 16;
+    padding: 16px;
     margin-bottom: 24px;
     text-align: left;
     text-decoration: none;
     border-radius: 2px;
-    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2),
-      0 1px 5px 0 rgba(0, 0, 0, 0.12);
     transition: box-shadow $core-time ease;
+
     &:hover,
     &:focus {
-      box-shadow: 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12),
-        0 5px 5px -3px rgba(0, 0, 0, 0.2);
+      @extend %dropshadow-8dp;
     }
   }
 
-  .text {
-    $left-offset: $thumb-width + $checkbox-offset;
-
+  .thumbnail {
     position: absolute;
     top: 0;
-    bottom: 0;
-    left: $left-offset;
-    width: calc(100% - #{$left-offset});
-    padding: 16px;
+    left: 0;
+    margin: 8px;
   }
 
-  .title,
-  .description {
-    margin: 0;
+  .text {
+    margin-left: $thumb-width + 8;
+  }
+
+  .mobile-text {
+    margin-left: $mobile-thumb-width + 8;
   }
 
   .title,
@@ -177,26 +174,17 @@
   }
 
   .title {
-    padding-bottom: 8px;
-    font-size: 16px;
-  }
-
-  .description {
-    // HACK to get long descriptions to fit in the card
-    height: $thumb-height * 0.5;
-    overflow-y: visible;
-    font-size: 14px;
-  }
-
-  .ancestors {
-    margin-top: 8px;
-    font-size: smaller;
+    margin-top: 0;
   }
 
   .message {
     position: absolute;
     top: 16px;
     right: 16px;
+  }
+
+  .coach-content-label {
+    margin: 8px 0;
   }
 
 </style>

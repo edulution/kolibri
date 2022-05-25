@@ -21,12 +21,23 @@
         <slot name="footer"></slot>
       </div>
 
-      <KButton
-        class="onboarding-form-submit"
-        :primary="true"
-        type="submit"
-        :text="submitText"
-      />
+      <slot name="buttons">
+        <KButtonGroup>
+          <KButton
+            class="onboarding-form-submit"
+            :primary="true"
+            type="submit"
+            :text="submitText || coreString('continueAction')"
+            :disabled="$attrs.disabled"
+          />
+
+          <KButton
+            v-if="finishButton"
+            :text="coreString('finishAction')"
+            @click="$emit('click_finish')"
+          />
+        </KButtonGroup>
+      </slot>
     </form>
   </div>
 
@@ -35,13 +46,11 @@
 
 <script>
 
-  import KButton from 'kolibri.coreVue.components.KButton';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'OnboardingForm',
-    components: {
-      KButton,
-    },
+    mixins: [commonCoreStrings],
     props: {
       header: {
         type: String,
@@ -49,11 +58,15 @@
       },
       description: {
         type: String,
-        required: false,
+        default: null,
       },
       submitText: {
         type: String,
-        required: true,
+        default: null,
+      },
+      finishButton: {
+        type: Boolean,
+        default: false,
       },
     },
     computed: {
@@ -69,6 +82,7 @@
 <style lang="scss" scoped>
 
   .onboarding-form-fields {
+    min-width: 0;
     padding: 0;
     margin: 0;
     margin-bottom: 24px;
@@ -91,13 +105,14 @@
     margin-bottom: 8px;
   }
 
-  .onboarding-form-submit {
-    margin: 0;
-  }
-
   .form-footer {
     margin: 24px 0;
     margin-top: 24px;
+  }
+
+  /deep/ .truncate-text {
+    // Ensure long text (like German) wrap and stay on screen
+    white-space: normal;
   }
 
 </style>

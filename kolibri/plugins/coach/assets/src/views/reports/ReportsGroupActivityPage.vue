@@ -7,16 +7,17 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
 
-      <ReportsGroupHeader />
+      <ReportsGroupHeader :enablePrint="true" />
 
       <ActivityList
-        :notificationParams="notificationParams"
         embeddedPageName="ReportsGroupActivityPage"
-        :noActivityString="coachStrings.$tr('activityListEmptyState')"
+        :noActivityString="coachString('activityListEmptyState')"
       />
 
     </KPageContainer>
@@ -38,13 +39,6 @@
       ReportsGroupHeader,
     },
     mixins: [commonCoach],
-    computed: {
-      notificationParams() {
-        return {
-          collection_id: this.$route.params.groupId,
-        };
-      },
-    },
   };
 
 </script>

@@ -1,27 +1,24 @@
 <template>
 
-  <ExamReport
-    v-if="examAttempts"
-    :examAttempts="examAttempts"
-    :exam="exam"
-    :userName="learner.name"
-    :currentAttempt="currentAttempt"
-    :currentInteractionHistory="currentInteractionHistory"
-    :currentInteraction="currentInteraction"
-    :selectedInteractionIndex="selectedInteractionIndex"
-    :questionNumber="questionNumber"
-    :exercise="exercise"
-    :itemId="itemId"
-    :completionTimestamp="completionTimestamp"
-    :closed="closed"
-    :navigateToQuestion="navigateToQuestion"
-    :navigateToQuestionAttempt="navigateToQuestionAttempt"
-    :questions="questions"
-    :exerciseContentNodes="exerciseContentNodes"
-  />
-  <div v-else class="no-exercise-x">
-    <mat-svg category="navigation" name="close" />
-  </div>
+  <KPageContainer :topMargin="0">
+    <ExamReport
+      v-if="exerciseContentNodes && exerciseContentNodes.length"
+      :contentId="exam.id"
+      :title="exam.title"
+      :userName="learner.name"
+      :userId="learner.id"
+      :selectedInteractionIndex="interactionIndex"
+      :questionNumber="questionNumber"
+      :tryIndex="tryIndex"
+      :exercise="exercise"
+      :exerciseContentNodes="exerciseContentNodes"
+      :navigateTo="navigateTo"
+      :questions="questions"
+    />
+    <div v-else>
+      {{ getMissingContentString('someResourcesMissingOrNotSupported') }}
+    </div>
+  </KPageContainer>
 
 </template>
 
@@ -38,48 +35,30 @@
       ExamReport,
     },
     mixins: [commonCoach],
-    $trs: {},
     computed: {
-      ...mapState(['classId']),
       ...mapState('classSummary', ['learnerMap']),
       ...mapState('examReportDetail', [
-        'currentAttempt',
-        'currentInteraction',
-        'currentInteractionHistory',
         'exam',
-        'examAttempts',
         'exercise',
         'exerciseContentNodes',
-        'itemId',
         'questionNumber',
+        'interactionIndex',
+        'tryIndex',
         'questions',
         'learnerId',
-        'pageTitle',
       ]),
-      ...mapState('examReportDetail', {
-        closed: state => state.examLog.closed,
-        completionTimestamp: state => state.examLog.completion_timestamp,
-        selectedInteractionIndex: state => state.interactionIndex,
-      }),
       learner() {
         return this.learnerMap[this.learnerId];
       },
     },
     methods: {
-      navigateToQuestion(questionNumber) {
-        this.$emit('navigate', {
-          examId: this.exam.id,
-          learnerId: this.learnerId,
-          interactionIndex: 0,
-          questionId: questionNumber,
-        });
-      },
-      navigateToQuestionAttempt(interactionIndex) {
+      navigateTo(tryIndex, questionId, interactionIndex) {
         this.$emit('navigate', {
           examId: this.exam.id,
           learnerId: this.learnerId,
           interactionIndex,
-          questionId: this.questionNumber,
+          questionId,
+          tryIndex,
         });
       },
     },
@@ -92,6 +71,7 @@
 
   .no-exercise-x {
     text-align: center;
+
     svg {
       width: 200px;
       height: 200px;

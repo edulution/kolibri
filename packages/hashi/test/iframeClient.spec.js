@@ -1,12 +1,11 @@
+import 'mutationobserver-shim';
 import Hashi from '../src/iframeClient';
 import { events, nameSpace } from '../src/hashiBase';
-import loadCurrentPage from '../src/loadCurrentPage';
-
-jest.mock('../src/loadCurrentPage');
 
 describe('Hashi iframeClient', () => {
   let hashi;
   beforeEach(() => {
+    window.name = nameSpace;
     hashi = new Hashi();
   });
   describe('constructor method', () => {
@@ -24,28 +23,29 @@ describe('Hashi iframeClient', () => {
       }).then(() => {
         expect(hashi.mediator.sendMessage).toHaveBeenCalledWith({
           nameSpace,
-          event: events.READY,
+          event: events.IFRAMEREADY,
           data: true,
         });
       });
     });
-    it('should bind a listener to a ready event to call the loadPage method', () => {
-      expect(hashi.mediator.__messageHandlers[nameSpace][events.READY]).toEqual([loadCurrentPage]);
+    it('should bind a listener to a ready event to call the createIframe callback', () => {
+      expect(hashi.mediator.__messageHandlers[nameSpace][events.MAINREADY].length).toBe(1);
     });
-    it('should call the loadPage method when the ready event is triggered', () => {
-      hashi.mediator.__messageHandlers[nameSpace][events.READY] = [loadCurrentPage];
+    it('should call the createIframe method when the main ready event is triggered', () => {
+      const createIframe = jest.fn();
+      hashi.mediator.__messageHandlers[nameSpace][events.MAINREADY] = [createIframe];
       hashi.mediator.sendMessage = jest.fn();
       return new Promise(resolve => {
         hashi.mediator.registerMessageHandler({
           nameSpace,
-          event: events.READY,
+          event: events.MAINREADY,
           callback: () => {
             resolve();
           },
         });
-        hashi.mediator.sendLocalMessage({ nameSpace, event: events.READY });
+        hashi.mediator.sendLocalMessage({ nameSpace, event: events.MAINREADY });
       }).then(() => {
-        expect(loadCurrentPage).toHaveBeenCalled();
+        expect(createIframe).toHaveBeenCalled();
       });
     });
   });

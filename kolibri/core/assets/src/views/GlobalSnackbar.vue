@@ -7,6 +7,8 @@
     :actionText="snackbarOptions.actionText"
     :backdrop="snackbarOptions.backdrop"
     :autoDismiss="snackbarOptions.autoDismiss"
+    :duration="snackbarOptions.duration"
+    :bottomPosition="snackbarOptions.bottomPosition"
     @actionClicked="snackbarOptions.actionCallback()"
     @hide="hideCallback"
   />
@@ -38,11 +40,18 @@
         return JSON.stringify(options) + new Date();
       },
     },
+    destroyed() {
+      this.clearSnackbarState();
+    },
     methods: {
+      clearSnackbarState() {
+        this.$store.commit('CORE_CLEAR_SNACKBAR');
+      },
       hideCallback() {
         if (this.snackbarOptions.hideCallback) {
           this.snackbarOptions.hideCallback();
         }
+        this.clearSnackbarState();
       },
     },
   };

@@ -1,12 +1,18 @@
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TransactionTestCase
 from mock import call
 from mock import patch
 
+from .sqlalchemytesting import django_connection_engine
 from kolibri.core.content import models as content
 
 
-class DeleteChannelTestCase(TestCase):
+def get_engine(connection_string):
+    return django_connection_engine()
+
+
+@patch("kolibri.core.content.utils.sqlalchemybridge.get_engine", new=get_engine)
+class DeleteChannelTestCase(TransactionTestCase):
     """
     Testcase for delete channel management command
     """
@@ -17,27 +23,15 @@ class DeleteChannelTestCase(TestCase):
     def delete_channel(self):
         call_command("deletechannel", self.the_channel_id)
 
-    @patch("kolibri.core.content.models.paths.get_content_storage_file_path")
-    @patch("kolibri.core.content.models.os.remove")
-    def test_channelmetadata_delete_remove_metadata_object(
-        self, os_remove_mock, content_file_path
-    ):
+    def test_channelmetadata_delete_remove_metadata_object(self):
         self.delete_channel()
-        self.assertEquals(0, content.ChannelMetadata.objects.count())
+        self.assertEqual(0, content.ChannelMetadata.objects.count())
 
-    @patch("kolibri.core.content.models.paths.get_content_storage_file_path")
-    @patch("kolibri.core.content.models.os.remove")
-    def test_channelmetadata_delete_remove_contentnodes(
-        self, os_remove_mock, content_file_path
-    ):
+    def test_channelmetadata_delete_remove_contentnodes(self):
         self.delete_channel()
-        self.assertEquals(0, content.ContentNode.objects.count())
+        self.assertEqual(0, content.ContentNode.objects.count())
 
-    @patch("kolibri.core.content.models.paths.get_content_storage_file_path")
-    @patch("kolibri.core.content.models.os.remove")
-    def test_channelmetadata_delete_leave_unrelated_contentnodes(
-        self, os_remove_mock, content_file_path
-    ):
+    def test_channelmetadata_delete_leave_unrelated_contentnodes(self):
         c2c1 = content.ContentNode.objects.get(title="c2c1")
         new_id = c2c1.id[:-1] + "1"
         content.ContentNode.objects.create(
@@ -49,15 +43,11 @@ class DeleteChannelTestCase(TestCase):
             title=c2c1.title,
         )
         self.delete_channel()
-        self.assertEquals(1, content.ContentNode.objects.count())
+        self.assertEqual(1, content.ContentNode.objects.count())
 
-    @patch("kolibri.core.content.models.paths.get_content_storage_file_path")
-    @patch("kolibri.core.content.models.os.remove")
-    def test_channelmetadata_delete_remove_file_objects(
-        self, os_remove_mock, content_file_path
-    ):
+    def test_channelmetadata_delete_remove_file_objects(self):
         self.delete_channel()
-        self.assertEquals(0, content.File.objects.count())
+        self.assertEqual(0, content.File.objects.count())
 
     @patch("kolibri.core.content.models.paths.get_content_storage_file_path")
     @patch("kolibri.core.content.models.os.remove")
@@ -67,3 +57,7 @@ class DeleteChannelTestCase(TestCase):
         num_files = content.LocalFile.objects.filter(available=True).count()
         self.delete_channel()
         os_remove_mock.assert_has_calls([call(path)] * num_files)
+
+    def tearDown(self):
+        call_command("flush", interactive=False)
+        super(DeleteChannelTestCase, self).tearDown()

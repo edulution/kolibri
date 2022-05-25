@@ -63,6 +63,105 @@ export default {
     };
   },
   /*
+   * Return array of learner IDs who were individually assigned to the exam
+   */
+  getAdHocLearners() {
+    return function(assignments) {
+      const ilg = this.adHocGroups.find(group => assignments.includes(group.id));
+      return ilg ? ilg.member_ids : [];
+    };
+  },
+  /*
+   * Return array of names of groups followed by names of assigned
+   * ad hoc learners
+   */
+  getRecipientNamesForExam(state) {
+    return function(exam) {
+      const adHocLearners = this.getAdHocLearners(exam.assignments).map(
+        learnerId => state.learnerMap[learnerId].name
+      );
+      const recipientsForGroups =
+        exam.groups.length || !adHocLearners.length ? this.getLearnersForGroups(exam.groups) : [];
+      const learnersInSelectedGroups = recipientsForGroups.map(
+        learnerId => state.learnerMap[learnerId].name
+      );
+      return this.getGroupNames(exam.groups).concat(
+        adHocLearners.filter(name => !learnersInSelectedGroups.includes(name))
+      );
+    };
+  },
+  /*
+   * Return array of learner IDs given an exam
+   */
+  getLearnersForExam() {
+    return function(exam) {
+      if (!exam) {
+        throw new Error('getLearnersForLesson: invalid parameter(s)');
+      }
+      const individuallyAssignedLearners = this.getAdHocLearners(exam.assignments);
+      if (individuallyAssignedLearners.length) {
+        // If exam.groups is empty, getLearnersForGroups returns the whole class
+        // so only concat it if we're getting learners from specified groups
+        return exam.groups.length
+          ? individuallyAssignedLearners.concat(this.getLearnersForGroups(exam.groups))
+          : individuallyAssignedLearners;
+      } else {
+        if (exam.assignments.length) {
+          return this.getLearnersForGroups(exam.groups);
+        } else {
+          return [];
+        }
+      }
+    };
+  },
+  /*
+   * Return array of learner IDs given a lesson
+   */
+  getLearnersForLesson() {
+    return function(lesson) {
+      if (!lesson) {
+        throw new Error('getLearnersForLesson: invalid parameter(s)');
+      }
+      const individuallyAssignedLearners = this.getAdHocLearners(lesson.assignments);
+      if (individuallyAssignedLearners.length) {
+        // If lesson.groups is empty, getLearnersForGroups returns the whole class
+        // so only concat it if we're getting learners from specified groups
+        return lesson.groups.length
+          ? individuallyAssignedLearners.concat(this.getLearnersForGroups(lesson.groups))
+          : individuallyAssignedLearners;
+      } else {
+        if (lesson.assignments.length) {
+          return this.getLearnersForGroups(lesson.groups);
+        } else {
+          return [];
+        }
+      }
+    };
+  },
+  /*
+   * Return array of names of groups followed by names of assigned
+   * ad hoc learners
+   */
+  getRecipientNamesForLesson(state) {
+    return function(lesson) {
+      const fullLesson = state.lessonMap[lesson.id];
+      if (!fullLesson) {
+        return [];
+      }
+      const recipientsForGroups = fullLesson.groups.length
+        ? this.getLearnersForGroups(fullLesson.groups)
+        : [];
+      const learnersInSelectedGroups = recipientsForGroups.map(
+        learnerId => state.learnerMap[learnerId].name
+      );
+      return this.getGroupNames(fullLesson.groups).concat(
+        lesson.learner_ids
+          .map(learnerId => state.learnerMap[learnerId].name)
+          .filter(learner => !learnersInSelectedGroups.includes(learner))
+      );
+    };
+  },
+  /*
    * Return a STATUSES constant given a content ID and a learner ID
    */
   getContentStatusObjForLearner(state) {

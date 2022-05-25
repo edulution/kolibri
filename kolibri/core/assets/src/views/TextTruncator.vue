@@ -1,26 +1,19 @@
 <template>
 
-  <div>
+  <div :style="{ maxHeight: `${maxHeight - 16}px` }" :class="{ truncated: !shaveDone }">
     <div v-if="viewAllText">
       {{ text }}
     </div>
-    <template v-else>
-      <div ref="shaveEl">
-        {{ text }}
-      </div>
-      <KTooltip
-        reference="shaveEl"
-        :refs="$refs"
-        :disabled="!tooltipText"
-      >
-        {{ tooltipText }}
-      </KTooltip>
-    </template>
-    <div class="show-more">
+    <div v-else ref="shaveEl" class="truncated">
+      {{ text }}
+    </div>
+    <div
+      v-if="showViewMore && (textIsTruncated || viewAllText)"
+      class="show-more"
+    >
       <KButton
-        v-if="showViewMore && (textIsTruncated || viewAllText)"
         appearance="basic-link"
-        :text="viewAllText ? $tr('viewLessButtonPrompt') : $tr('viewMoreButtonPrompt')"
+        :text="viewAllText ? $coreString('viewLessAction') : coreString('viewMoreAction')"
         @click.stop.prevent="viewAllText = !viewAllText"
       />
     </div>
@@ -33,17 +26,12 @@
 
   import shave from 'shave';
   import debounce from 'lodash/debounce';
-  import responsiveElement from 'kolibri.coreVue.mixins.responsiveElement';
-  import KButton from 'kolibri.coreVue.components.KButton';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
+  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'TextTruncator',
-    components: {
-      KButton,
-      KTooltip,
-    },
-    mixins: [responsiveElement],
+    mixins: [commonCoreStrings, responsiveElementMixin],
     props: {
       text: {
         type: String,
@@ -56,11 +44,6 @@
           return value > 0;
         },
       },
-      showTooltip: {
-        type: Boolean,
-        required: false,
-        default: true,
-      },
       showViewMore: {
         type: Boolean,
         required: false,
@@ -70,20 +53,13 @@
     data() {
       return {
         textIsTruncated: false,
+        shaveDone: false,
         viewAllText: false,
       };
     },
     computed: {
-      tooltipText() {
-        if (!this.showTooltip || this.showViewMore || !this.textIsTruncated) {
-          return null;
-        }
-        return this.text;
-      },
       currentDimensions() {
         return {
-          text: this.text,
-          maxHeight: this.maxHeight,
           elementWidth: this.elementWidth,
           elementHeight: this.elementHeight,
         };
@@ -97,19 +73,43 @@
         this.debouncedHandleUpdate();
       },
     },
+    beforeDestroy() {
+      this.debouncedHandleUpdate.cancel();
+    },
     methods: {
+      titleIsShaved() {
+        return Boolean(this.$el.querySelector('.js-shave'));
+      },
+      titleIsOverflowing() {
+        // This checks to see if shave.js did not work, but the text is still
+        // overflowing. This can happen if `text` prop is one long string.
+        const $shaveEl = this.$refs.shaveEl;
+        if (!$shaveEl) {
+          return false;
+        } else {
+          return $shaveEl.clientWidth < $shaveEl.scrollWidth;
+        }
+      },
+      updateTitle() {
+        // Set title attribute as full text if the visible text is truncated
+        if (this.textIsTruncated && !this.$refs.shaveEl.title) {
+          this.$refs.shaveEl.setAttribute('title', this.text);
+        } else if (!this.textIsTruncated && this.$refs.shaveEl.title) {
+          // Remove if text is fully visible after a resize
+          this.$refs.shaveEl.removeAttribute('title');
+        }
+      },
       handleUpdate() {
         // TODO make "View Less" disappear when user expands window
-        // and text isn't truncated any more.
-        shave(this.$refs.shaveEl, this.maxHeight);
-        this.$nextTick(() => {
-          this.textIsTruncated = Boolean(this.$el.querySelector('.js-shave'));
+        // and text isn't truncated anymore.
+        shave(this.$refs.shaveEl, this.maxHeight, { spaces: false });
+        this.$nextTick().then(() => {
+          this.textIsTruncated = this.titleIsShaved() || this.titleIsOverflowing();
+          this.updateTitle();
+          // Removes temporary truncated styling from main div
+          this.shaveDone = true;
         });
       },
-    },
-    $trs: {
-      viewMoreButtonPrompt: 'View more',
-      viewLessButtonPrompt: 'View less',
     },
   };
 
@@ -121,6 +121,18 @@
   .show-more {
     margin-top: 8px;
     text-align: right;
+  }
+
+  // If the text is a long single word (and not shortened by shave.js),
+  // then apply this CSS instead
+  .truncated {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    // this ensure that when the text truncator is used
+    // in a router-link card, the text is not underlined
+    a {
+      text-decoration: none !important;
+    }
   }
 
 </style>

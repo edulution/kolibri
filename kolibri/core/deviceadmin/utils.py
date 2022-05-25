@@ -9,6 +9,7 @@ from django import db
 from django.conf import settings
 
 import kolibri
+from kolibri.core.deviceadmin.exceptions import IncompatibleDatabase
 from kolibri.utils.conf import KOLIBRI_HOME
 
 # Import db instead of db.connections because we want to use an instance of
@@ -28,12 +29,22 @@ if sys.version_info < (3,):
     KWARGS_IO_WRITE = {"mode": "wb"}
 
 
-class IncompatibleDatabase(Exception):
-    pass
-
-
 def default_backup_folder():
     return os.path.join(KOLIBRI_HOME, "backups")
+
+
+def get_backup_files():
+    """
+    Returns all backups from current kolibri version.
+    """
+    default_path = default_backup_folder()
+    backups = os.listdir(default_path)
+    prefix = "db-v"
+    backups = filter(lambda f: f.endswith(".dump"), backups)
+    backups = filter(lambda f: f.startswith(prefix), backups)
+    backups = list(backups)
+    backups.sort(reverse=True)
+    return backups
 
 
 def get_dtm_from_backup_name(fname):
@@ -43,7 +54,10 @@ def get_dtm_from_backup_name(fname):
     p = re.compile(r"^db\-v[^_]+_(?P<dtm>[\d\-_]+).*\.dump$")
     m = p.search(fname)
     if m:
-        return m.groups("dtm")[0]
+        label = m.groups("dtm")[0]
+        date = label.split("_")[0]
+        time = label.split("_")[1]
+        return "{date} {time}".format(date=date, time=time.replace("-", ":"))
     raise ValueError(
         "Tried to get date component of unparsed filename: {}".format(fname)
     )
@@ -148,8 +162,8 @@ def dbrestore(from_file):
 def search_latest(search_root, fallback_version):
     logger.info("Searching latest backup in {}...".format(search_root))
 
-    newest = None  # Should be a path/filename.sqlite3
-    newest_dtm = None
+    newest = ""  # Should be a path/filename.sqlite3
+    newest_dtm = ""
 
     # All file names have to be according to the fall back version.
     prefix = "db-v{}".format(fallback_version)

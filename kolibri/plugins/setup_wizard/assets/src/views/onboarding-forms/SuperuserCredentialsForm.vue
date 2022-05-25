@@ -1,62 +1,59 @@
 <template>
 
   <OnboardingForm
-    :header="$tr('adminAccountCreationHeader')"
-    :description="$tr('adminAccountCreationDescription')"
+    :header="$attrs.header || $tr('adminAccountCreationHeader')"
+    :description="$attrs.description || $tr('adminAccountCreationDescription')"
     :submitText="submitText"
-    @submit="submitSuperuserCredentials"
+    @submit="handleSubmit"
   >
+    <slot name="aboveform"></slot>
 
-    <KTextbox
-      ref="name"
-      v-model="name"
-      :label="$tr('adminNameFieldLabel')"
-      :autofocus="true"
-      autocomplete="name"
-      :maxlength="120"
-      :invalid="nameIsInvalid"
-      :invalidText="nameErrorMessage"
-      @blur="visitedFields.name = true"
-    />
-    <KTextbox
-      ref="username"
-      v-model="username"
-      :label="$tr('adminUsernameFieldLabel')"
-      type="username"
-      autocomplete="username"
-      :maxlength="30"
-      :invalid="usernameIsInvalid"
-      :invalidText="usernameErrorMessage"
-      @blur="visitedFields.username = true"
-    />
-    <KTextbox
-      ref="password"
-      v-model="password"
-      :label="$tr('adminPasswordFieldLabel')"
-      type="password"
-      autocomplete="new-password"
-      :invalid="passwordIsInvalid"
-      :invalidText="passwordErrorMessage"
-      @blur="visitedFields.password = true"
-    />
-    <KTextbox
-      ref="passwordConfirm"
-      v-model="passwordConfirm"
-      :label="$tr('adminPasswordConfirmationFieldLabel')"
-      type="password"
-      autocomplete="new-password"
-      :invalid="passwordConfirmIsInvalid"
-      :invalidText="passwordConfirmErrorMessage"
-      @blur="visitedFields.passwordConfirm = true"
-    />
-    <div slot="footer" class="reminder">
-      <div class="icon">
-        <mat-svg category="alert" name="warning" />
+    <!-- HACK in Import mode, this slot will be replaced by Password-only form -->
+    <!-- VUE3-COMPAT: linter doesn't like that we are injecting "footer" slot from
+         inside a slot default
+    -->
+    <slot name="form">
+      <FullNameTextbox
+        ref="fullNameTextbox"
+        :value.sync="fullName"
+        :isValid.sync="fullNameValid"
+        :shouldValidate="formSubmitted"
+        :autofocus="true"
+        autocomplete="name"
+      />
+
+      <UsernameTextbox
+        ref="usernameTextbox"
+        :value.sync="username"
+        :isValid.sync="usernameValid"
+        :shouldValidate="formSubmitted"
+        :isUniqueValidator="uniqueUsernameValidator"
+      />
+
+      <PasswordTextbox
+        ref="passwordTextbox"
+        :value.sync="password"
+        :isValid.sync="passwordValid"
+        :shouldValidate="formSubmitted"
+        autocomplete="new-password"
+      />
+
+      <!-- NOTE: Demographic info forms were removed in PR #6053 -->
+
+      <PrivacyLinkAndModal v-if="!hidePrivacyLink" />
+
+    </slot>
+
+    <slot name="footer">
+      <div class="reminder">
+        <div class="icon">
+          <KIcon icon="warning" />
+        </div>
+        <p class="text">
+          {{ $tr('rememberThisAccountInformation') }}
+        </p>
       </div>
-      <p class="text">
-        {{ $tr('rememberThisAccountInformation') }}
-      </p>
-    </div>
+    </slot>
   </OnboardingForm>
 
 </template>
@@ -64,134 +61,111 @@
 
 <script>
 
-  import { mapMutations } from 'vuex';
-  import KTextbox from 'kolibri.coreVue.components.KTextbox';
-  import { validateUsername } from 'kolibri.utils.validators';
+  import every from 'lodash/every';
+  import FullNameTextbox from 'kolibri.coreVue.components.FullNameTextbox';
+  import UsernameTextbox from 'kolibri.coreVue.components.UsernameTextbox';
+  import PasswordTextbox from 'kolibri.coreVue.components.PasswordTextbox';
+  import PrivacyLinkAndModal from 'kolibri.coreVue.components.PrivacyLinkAndModal';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import OnboardingForm from './OnboardingForm';
 
   export default {
     name: 'SuperuserCredentialsForm',
     components: {
       OnboardingForm,
-      KTextbox,
+      FullNameTextbox,
+      UsernameTextbox,
+      PasswordTextbox,
+      PrivacyLinkAndModal,
     },
-    $trs: {
-      adminAccountCreationHeader: 'Create super admin account',
-      adminAccountCreationDescription:
-        'This account allows you to manage the facility, content, and user accounts on this device',
-      adminNameFieldLabel: 'Full name',
-      adminUsernameFieldLabel: 'Username',
-      adminPasswordFieldLabel: 'Password',
-      adminPasswordConfirmationFieldLabel: 'Enter password again',
-      rememberThisAccountInformation:
-        'Important: please remember this account information. Write it down if needed',
-      // error messages
-      nameFieldEmptyErrorMessage: 'Full name cannot be empty',
-      usernameFieldEmptyErrorMessage: 'Username cannot be empty',
-      usernameCharacterErrorMessage: 'Username can only contain letters, numbers, and underscores',
-      passwordFieldEmptyErrorMessage: 'Password cannot be empty',
-      passwordsMismatchErrorMessage: 'Passwords do not match',
-      facilityFieldEmptyErrorMessage: 'Facility cannot be empty',
-      setupProgressFeedback: 'Setting up your device...',
-    },
+    mixins: [commonCoreStrings],
     props: {
-      submitText: {
-        type: String,
-        required: true,
+      isFinalStep: {
+        type: Boolean,
+        default: false,
+      },
+      uniqueUsernameValidator: {
+        type: Function,
+        default: null,
+      },
+      hidePrivacyLink: {
+        type: Boolean,
+        default: false,
       },
     },
     data() {
+      const { superuser } = this.$store.state.onboardingData;
       return {
-        name: this.$store.state.onboardingData.superuser.full_name,
-        username: this.$store.state.onboardingData.superuser.username,
-        password: this.$store.state.onboardingData.superuser.password,
-        passwordConfirm: this.$store.state.onboardingData.superuser.password,
-        visitedFields: {
-          name: false,
-          username: false,
-          password: false,
-          passwordConfirm: false,
-        },
+        fullName: superuser.full_name,
+        fullNameValid: false,
+        username: superuser.username,
+        usernameValid: false,
+        password: superuser.password,
+        passwordValid: false,
+        formSubmitted: false,
       };
     },
     computed: {
-      nameErrorMessage() {
-        if (this.name === '') {
-          return this.$tr('nameFieldEmptyErrorMessage');
-        }
-        return '';
-      },
-      usernameErrorMessage() {
-        if (this.username === '') {
-          return this.$tr('usernameFieldEmptyErrorMessage');
-        }
-        if (!validateUsername(this.username)) {
-          return this.$tr('usernameCharacterErrorMessage');
-        }
-        return '';
-      },
-      passwordErrorMessage() {
-        if (this.password === '') {
-          return this.$tr('passwordFieldEmptyErrorMessage');
-        }
-        return '';
-      },
-      passwordConfirmErrorMessage() {
-        if (this.passwordConfirm === '') {
-          return this.$tr('passwordFieldEmptyErrorMessage');
-        }
-        if (this.passwordConfirm !== this.password) {
-          return this.$tr('passwordsMismatchErrorMessage');
-        }
-        return '';
-      },
-      nameIsInvalid() {
-        return this.visitedFields.name && Boolean(this.nameErrorMessage);
-      },
-      usernameIsInvalid() {
-        return this.visitedFields.username && Boolean(this.usernameErrorMessage);
-      },
-      passwordIsInvalid() {
-        return this.visitedFields.password && Boolean(this.passwordErrorMessage);
-      },
-      passwordConfirmIsInvalid() {
-        return this.visitedFields.passwordConfirm && Boolean(this.passwordConfirmErrorMessage);
-      },
       formIsValid() {
-        return !this.usernameIsInvalid && !this.passwordIsInvalid && !this.passwordConfirmIsInvalid;
+        return every([this.usernameValid, this.fullNameValid, this.passwordValid]);
       },
-    },
-    beforeDestroy() {
-      // saves data if going backwards in wizard
-      this.saveSuperuserCredentials();
+      submitText() {
+        return this.isFinalStep
+          ? this.coreString('finishAction')
+          : this.coreString('continueAction');
+      },
     },
     methods: {
-      ...mapMutations({
-        setSuperuser: 'SET_SU',
-      }),
-      saveSuperuserCredentials() {
-        this.setSuperuser({
-          name: this.name,
-          username: this.username,
-          password: this.password,
+      handleSubmit() {
+        if (!this.$refs.fullNameTextbox) {
+          return this.$emit('click_next');
+        }
+        this.formSubmitted = true;
+        // Have to wait a tick to let inputs react to this.formSubmitted
+        this.$nextTick().then(() => {
+          if (this.formIsValid) {
+            this.$store.commit('SET_SUPERUSER_CREDENTIALS', {
+              full_name: this.fullName,
+              username: this.username,
+              password: this.password,
+            });
+            this.$emit('click_next', {
+              full_name: this.fullName,
+              username: this.username,
+              password: this.password,
+            });
+          } else {
+            this.focusOnInvalidField();
+          }
         });
       },
-      submitSuperuserCredentials() {
-        for (const field in this.visitedFields) {
-          this.visitedFields[field] = true;
-        }
-        if (this.formIsValid) {
-          this.saveSuperuserCredentials();
-          this.$emit('submit');
-        } else if (this.nameIsInvalid) {
-          this.$refs.name.focus();
-        } else if (this.usernameIsInvalid) {
-          this.$refs.username.focus();
-        } else if (this.passwordIsInvalid) {
-          this.$refs.password.focus();
-        } else if (this.passwordConfirmIsInvalid) {
-          this.$refs.passwordConfirm.focus();
-        }
+      focusOnInvalidField() {
+        this.$nextTick().then(() => {
+          if (!this.fullNameValid) {
+            this.$refs.fullNameTextbox.focus();
+          } else if (!this.usernameValid) {
+            this.$refs.usernameTextbox.focus();
+          } else if (!this.passwordValid) {
+            this.$refs.passwordTextbox.focus();
+          }
+        });
+      },
+    },
+    $trs: {
+      adminAccountCreationHeader: {
+        message: 'Create super admin account',
+        context:
+          "The title of the 'Create a super admin account' section. A super admin can manage all the content and all other Kolibri users on the device.",
+      },
+      adminAccountCreationDescription: {
+        message:
+          'This account allows you to manage the facility, resources, and user accounts on this device',
+        context: "Description of the 'Create super admin account' page.",
+      },
+      rememberThisAccountInformation: {
+        message: 'Important: please remember this account information. Write it down if needed',
+        context:
+          'Helper/information text to remind admin to take note of their account information.',
       },
     },
   };
@@ -203,6 +177,8 @@
 
   .reminder {
     display: table;
+    max-width: 480px;
+    padding-top: 1em;
 
     .icon {
       display: table-cell;
@@ -215,6 +191,10 @@
       width: 90%;
       vertical-align: top;
     }
+  }
+
+  .select {
+    margin: 18px 0 36px;
   }
 
 </style>

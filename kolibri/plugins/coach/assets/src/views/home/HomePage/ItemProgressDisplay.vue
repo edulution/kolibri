@@ -1,32 +1,32 @@
 <template>
 
-  <router-link class="link" :style="{color: $coreTextDefault}" :to="to">
-    <KGrid class="wrapper">
-      <KGridItem size="75" percentage>
+  <router-link
+    class="link"
+    :style="{ color: $themeTokens.text }"
+    :class="themeClass"
+    :to="to"
+  >
+    <KFixedGrid numCols="4" class="wrapper">
+      <KFixedGridItem span="3">
         <h3 class="title">
           {{ name }}
         </h3>
-      </KGridItem>
-
-      <KGridItem size="25" percentage alignment="right">
+      </KFixedGridItem>
+      <KFixedGridItem span="1" alignment="right">
         <div class="context">
-          <Recipients :groupNames="groupNames" />
+          <Recipients
+            :groupNames="groupNames"
+            :hasAssignments="hasAssignments"
+          />
         </div>
-      </KGridItem>
-
-      <KGridItem size="100" percentage>
-        <ProgressSummaryBar
-          :tally="tally"
-          class="dashboard-bar"
-        />
-      </KGridItem>
-
-      <KGridItem size="100" percentage>
-        <StatusSummary
-          :tally="tally"
-        />
-      </KGridItem>
-    </KGrid>
+      </KFixedGridItem>
+      <KFixedGridItem>
+        <ProgressSummaryBar :tally="tally" class="dashboard-bar" />
+      </KFixedGridItem>
+      <KFixedGridItem>
+        <StatusSummary :tally="tally" />
+      </KFixedGridItem>
+    </KFixedGrid>
   </router-link>
 
 </template>
@@ -35,7 +35,6 @@
 <script>
 
   import { validateLinkObject } from 'kolibri.utils.validators';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import commonCoach from '../../common';
   import ProgressSummaryBar from '../../common/status/ProgressSummaryBar';
 
@@ -44,7 +43,7 @@
     components: {
       ProgressSummaryBar,
     },
-    mixins: [commonCoach, themeMixin],
+    mixins: [commonCoach],
     props: {
       name: {
         type: String,
@@ -54,14 +53,34 @@
         type: Array,
         required: true,
       },
+      hasAssignments: {
+        type: Boolean,
+        required: true,
+      },
       tally: {
         type: Object,
         required: true,
       },
       to: {
         type: Object,
-        required: false,
+        required: true,
         validators: validateLinkObject,
+      },
+    },
+    computed: {
+      themeClass() {
+        return this.$computedClass({
+          ':hover': {
+            // Background is light enough so that contents colored at grey.v_300
+            // are still visible.
+            backgroundColor: this.$themePalette.grey.v_100,
+            // Add equal and opposite margin and padding to give the highlighted
+            // region more space without increasing the size of the parent div.
+            margin: '-8px',
+            padding: '8px',
+            borderRadius: '4px',
+          },
+        });
       },
     },
   };
@@ -104,6 +123,7 @@
   }
 
   .link {
+    display: block;
     text-decoration: none;
   }
 

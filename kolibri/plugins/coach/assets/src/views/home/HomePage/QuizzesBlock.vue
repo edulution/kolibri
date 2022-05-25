@@ -1,16 +1,16 @@
 <template>
 
   <Block
-    :allLinkText="viewAllString"
+    :allLinkText="coachString('viewAllAction')"
     :allLinkRoute="classRoute('ReportsQuizListPage', {})"
+    :showAllLink="table.length > 0"
   >
-    <KLabeledIcon slot="title">
-      <KIcon slot="icon" quiz />
-      {{ coachStrings.$tr('quizzesLabel') }}
-    </KLabeledIcon>
+    <template #title>
+      <KLabeledIcon icon="quiz" :label="coreString('quizzesLabel')" />
+    </template>
 
     <p v-if="table.length === 0">
-      {{ coachStrings.$tr('quizListEmptyState') }}
+      {{ coachString('quizListEmptyState') }}
     </p>
 
     <BlockItem
@@ -20,7 +20,8 @@
       <ItemProgressDisplay
         :name="tableRow.name"
         :tally="tableRow.tally"
-        :groupNames="tableRow.groups"
+        :groupNames="groupAndAdHocLearnerNames(tableRow.groups, tableRow.assignments)"
+        :hasAssignments="tableRow.hasAssignments"
         :to="classRoute('ReportsQuizLearnerListPage', { quizId: tableRow.key })"
       />
     </BlockItem>
@@ -31,15 +32,13 @@
 
 <script>
 
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import orderBy from 'lodash/orderBy';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../../common';
   import Block from './Block';
   import BlockItem from './BlockItem';
   import ItemProgressDisplay from './ItemProgressDisplay';
-  import ActivityBlock from './ActivityBlock';
 
-  const translator = crossComponentTranslator(ActivityBlock);
   const MAX_QUIZZES = 3;
 
   export default {
@@ -49,25 +48,21 @@
       Block,
       BlockItem,
     },
-    mixins: [commonCoach],
-    $trs: {
-      viewAll: 'All quizzes',
-    },
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
       table() {
         const recent = orderBy(this.exams, this.lastActivity, ['desc']).slice(0, MAX_QUIZZES);
         return recent.map(exam => {
-          const assigned = this.getLearnersForGroups(exam.groups);
+          const assigned = this.getLearnersForExam(exam);
           return {
             key: exam.id,
             name: exam.title,
             tally: this.getExamStatusTally(exam.id, assigned),
             groups: exam.groups.map(groupId => this.groupMap[groupId].name),
+            assignments: exam.assignments,
+            hasAssignments: assigned.length > 0,
           };
         });
-      },
-      viewAllString() {
-        return translator.$tr('viewAll');
       },
     },
     methods: {
@@ -84,6 +79,14 @@
           }
         });
         return last;
+      },
+      groupAndAdHocLearnerNames(groups, assignments) {
+        const adHocGroup = this.adHocGroups.find(group => assignments.includes(group.id));
+        let adHocLearners = [];
+        if (adHocGroup) {
+          adHocLearners = adHocGroup.member_ids.map(learnerId => this.learnerMap[learnerId].name);
+        }
+        return groups.concat(adHocLearners);
       },
     },
   };

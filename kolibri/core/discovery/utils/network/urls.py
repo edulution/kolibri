@@ -5,7 +5,8 @@ from six.moves.urllib.parse import urlparse
 from . import errors
 
 
-HTTP_PORTS = (8080, 80, 8008)
+# android is served on port 5000
+HTTP_PORTS = (8080, 80, 8008, 8000, 5000)
 HTTPS_PORTS = (443,)
 
 
@@ -30,8 +31,7 @@ def is_valid_hostname(hostname):
 
 # from https://stackoverflow.com/a/319293
 def is_valid_ipv4_address(ip):
-    """Validates IPv4 addresses.
-    """
+    """Validates IPv4 addresses."""
     pattern = re.compile(
         r"""
         ^
@@ -74,8 +74,7 @@ def is_valid_ipv4_address(ip):
 
 # from https://stackoverflow.com/a/319293
 def is_valid_ipv6_address(ip):
-    """Validates IPv6 addresses.
-    """
+    """Validates IPv6 addresses."""
     pattern = re.compile(
         r"""
         ^
@@ -108,7 +107,7 @@ def is_valid_ipv6_address(ip):
     return pattern.match(ip) is not None
 
 
-def parse_address_into_components(address):
+def parse_address_into_components(address):  # noqa C901
 
     # if it looks to be an IPv6 address, make sure it is surrounded by square brackets
     if address.count(":") > 2 and re.match(r"^[a-f0-9\:]+$", address):
@@ -123,6 +122,11 @@ def parse_address_into_components(address):
     p_scheme = parsed.scheme
     p_hostname = parsed.hostname
     p_path = parsed.path.rstrip("/") + "/"
+
+    # defaults to None
+    if p_hostname is None:
+        raise errors.InvalidHostname(p_hostname)
+
     try:
         p_port = parsed.port
         if not p_port:

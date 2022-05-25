@@ -7,37 +7,38 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
-      <ReportsGroupHeader />
-      <CoreTable :emptyMessage="coachStrings.$tr('learnerListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('nameLabel') }}</th>
-            <th>{{ coachStrings.$tr('avgQuizScoreLabel') }}</th>
-            <th>{{ coachStrings.$tr('exercisesCompletedLabel') }}</th>
-            <th>{{ coachStrings.$tr('resourcesViewedLabel') }}</th>
-            <th>{{ coachStrings.$tr('lastActivityLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" person />
+      <ReportsGroupHeader :enablePrint="true" />
+      <ReportsControls @export="exportCSV" />
+      <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
+        <template #headers>
+          <th>{{ coachString('nameLabel') }}</th>
+          <th>{{ coachString('avgScoreLabel') }}</th>
+          <th>{{ coachString('exercisesCompletedLabel') }}</th>
+          <th>{{ coachString('resourcesViewedLabel') }}</th>
+          <th>{{ coachString('lastActivityLabel') }}</th>
+        </template>
+        <template #tbody>
+          <transition-group tag="tbody" name="list">
+            <tr v-for="tableRow in table" :key="tableRow.id">
+              <td>
                 <KRouterLink
                   :text="tableRow.name"
                   :to="classRoute('ReportsLearnerReportPage', { learnerId: tableRow.id })"
+                  icon="person"
                 />
-              </KLabeledIcon>
-            </td>
-            <td><Score :value="tableRow.avgScore" /></td>
-            <td>{{ coachStrings.$tr('integer', {value: tableRow.exercises}) }}</td>
-            <td>{{ coachStrings.$tr('integer', {value: tableRow.resources}) }}</td>
-            <td><ElapsedTime :date="tableRow.lastActivity" /></td>
-          </tr>
-        </transition-group>
+              </td>
+              <td><Score :value="tableRow.avgScore" /></td>
+              <td>{{ $formatNumber(tableRow.exercises) }}</td>
+              <td>{{ $formatNumber(tableRow.resources) }}</td>
+              <td><ElapsedTime :date="tableRow.lastActivity" /></td>
+            </tr>
+          </transition-group>
+        </template>
       </CoreTable>
     </KPageContainer>
   </CoreBase>
@@ -47,24 +48,32 @@
 
 <script>
 
+  import sortBy from 'lodash/sortBy';
   import commonCoach from '../common';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
   import ReportsGroupHeader from './ReportsGroupHeader';
+  import ReportsControls from './ReportsControls';
 
   export default {
     name: 'ReportsGroupLearnerListPage',
     components: {
       ReportsGroupHeader,
+      ReportsControls,
     },
     mixins: [commonCoach],
     computed: {
+      group() {
+        return this.groupMap[this.$route.params.groupId];
+      },
       groupMembers() {
         return this.groupMap[this.$route.params.groupId].member_ids.map(
           memberId => this.learnerMap[memberId]
         );
       },
       table() {
-        const sorted = this._.sortBy(this.groupMembers, ['name']);
-        const mapped = sorted.map(learner => {
+        const sorted = sortBy(this.groupMembers, ['name']);
+        return sorted.map(learner => {
           const examStatuses = this.examStatuses.filter(status => learner.id === status.learner_id);
           const contentStatuses = this.contentStatuses.filter(
             status => learner.id === status.learner_id
@@ -79,7 +88,6 @@
           Object.assign(augmentedObj, learner);
           return augmentedObj;
         });
-        return mapped;
       },
     },
     methods: {
@@ -95,15 +103,13 @@
           ...examStatuses,
           ...contentStatuses.filter(status => status.status !== this.STATUSES.notStarted),
         ];
-        if (!statuses.length) {
-          return null;
-        }
-        return this._.maxBy(statuses, 'last_activity').last_activity;
+
+        return statuses.length ? this.maxLastActivity(statuses) : null;
       },
       exercisesCompleted(contentStatuses) {
         const statuses = contentStatuses.filter(
           status =>
-            this.contentMap[status.content_id].kind === 'exercise' &&
+            this.contentIdIsForExercise(status.content_id) &&
             status.status === this.STATUSES.completed
         );
         return statuses.length;
@@ -111,10 +117,32 @@
       resourcesViewed(contentStatuses) {
         const statuses = contentStatuses.filter(
           status =>
-            this.contentMap[status.content_id].kind !== 'exercise' &&
+            !this.contentIdIsForExercise(status.content_id) &&
             status.status !== this.STATUSES.notStarted
         );
         return statuses.length;
+      },
+      exportCSV() {
+        const columns = [
+          ...csvFields.name(),
+          ...csvFields.avgScore(true),
+          {
+            name: this.coachString('exercisesCompletedLabel'),
+            key: 'exercises',
+          },
+          {
+            name: this.coachString('resourcesViewedLabel'),
+            key: 'resources',
+          },
+          ...csvFields.lastActivity(),
+        ];
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          group: this.group.name,
+        });
+
+        exporter.export(this.table);
       },
     },
   };
@@ -122,4 +150,8 @@
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+</style>

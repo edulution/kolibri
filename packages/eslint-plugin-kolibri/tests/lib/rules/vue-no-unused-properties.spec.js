@@ -588,6 +588,121 @@ tester.run('vue-no-unused-properties', rule, {
         </script>
       `,
     },
+
+    // a property accessed via instance parameter in `beforeRouteEnter`
+    {
+      filename: 'test.vue',
+      code: `
+        <script>
+          export default {
+            props: ['count'],
+            beforeRouteEnter (to, from, next) {
+              next(vm => {
+                alert(vm.count)
+              })
+            }
+          };
+        </script>
+      `,
+    },
+
+    // data accessed via instance parameter in `beforeRouteEnter`
+    {
+      filename: 'test.vue',
+      code: `
+        <script>
+          export default {
+            data() {
+              return {
+                count: 2
+              }
+            },
+            beforeRouteEnter (to, from, next) {
+              next(vm => {
+                alert(vm.count)
+              })
+            }
+          };
+        </script>
+      `,
+    },
+
+    // a computed property accessed via instance parameter in `beforeRouteEnter`
+    {
+      filename: 'test.vue',
+      code: `
+        <script>
+          export default {
+            computed: {
+              count() {
+                return 2
+              }
+            },
+            beforeRouteEnter (to, from, next) {
+              next(vm => {
+                alert(vm.count)
+              })
+            }
+          };
+        </script>
+      `,
+    },
+
+    // a property used as a dynamic directive argument
+    {
+      filename: 'test.vue',
+      code: `
+        <template>
+          <a :[attributeName]="url"> ... </a>
+        </template>
+
+        <script>
+          export default {
+            props: ['attributeName']
+          };
+        </script>
+      `,
+    },
+
+    // data used as a dynamic directive argument
+    {
+      filename: 'test.vue',
+      code: `
+        <template>
+          <a :[attributeName]="url"> ... </a>
+        </template>
+
+        <script>
+          export default {
+            data() {
+              return {
+                attributeName: 'href'
+              };
+            }
+          };
+        </script>
+      `,
+    },
+
+    // a computed property used as a dynamic directive argument
+    {
+      filename: 'test.vue',
+      code: `
+        <template>
+          <a :[attributeName]="url"> ... </a>
+        </template>
+
+        <script>
+          export default {
+            computed: {
+              attributeName() {
+                return 'href';
+              }
+            }
+          };
+        </script>
+      `,
+    },
   ],
 
   invalid: [
@@ -661,6 +776,28 @@ tester.run('vue-no-unused-properties', rule, {
         {
           message: 'Unused computed property found: "count"',
           line: 9,
+        },
+      ],
+    },
+
+    // unused property - dynamic directive argument
+    {
+      filename: 'test.vue',
+      code: `
+        <template>
+          <a :[attributeNam]="url"> ... </a>
+        </template>
+
+        <script>
+          export default {
+            props: ['attributeName']
+          };
+        </script>
+      `,
+      errors: [
+        {
+          message: 'Unused property found: "attributeName"',
+          line: 8,
         },
       ],
     },

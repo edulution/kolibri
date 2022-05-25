@@ -1,17 +1,30 @@
+import concurrent.futures
 import logging
 import os
-from time import sleep
 
 import requests
 from django.core.management.base import CommandError
+from le_utils.constants import content_kinds
 
 from ...utils import annotation
-from ...utils import import_export_content
 from ...utils import paths
 from ...utils import transfer
+from kolibri.core.content.errors import InsufficientStorageSpaceError
 from kolibri.core.content.errors import InvalidStorageFilenameError
+from kolibri.core.content.models import ChannelMetadata
+from kolibri.core.content.models import ContentNode
+from kolibri.core.content.utils.file_availability import LocationError
+from kolibri.core.content.utils.import_export_content import compare_checksums
+from kolibri.core.content.utils.import_export_content import get_import_export_data
+from kolibri.core.content.utils.paths import get_channel_lookup_url
+from kolibri.core.content.utils.paths import get_content_file_name
+from kolibri.core.content.utils.upgrade import get_import_data_for_update
 from kolibri.core.tasks.management.commands.base import AsyncCommand
+from kolibri.core.tasks.utils import get_current_job
 from kolibri.utils import conf
+from kolibri.utils.options import FD_PER_THREAD
+from kolibri.utils.system import get_fd_limit
+from kolibri.utils.system import get_free_space
 
 # constants to specify the transfer method to be used
 DOWNLOAD_METHOD = "download"
@@ -19,9 +32,22 @@ COPY_METHOD = "copy"
 
 logger = logging.getLogger(__name__)
 
-FILE_TRANSFERRED = 2
+FILE_TRANSFERRED = 0
 FILE_SKIPPED = 1
-FILE_NOT_TRANSFERRED = 0
+
+
+def lookup_channel_listing_status(channel_id, baseurl=None):
+    """
+    Look up the listing status of the channel from the remote, this is surfaced as a
+    `public` boolean field.
+    """
+    resp = requests.get(get_channel_lookup_url(identifier=channel_id, baseurl=baseurl))
+
+    if resp.status_code != 200:
+        return None
+
+    (channel_info,) = resp.json()
+    return channel_info.get("public", None)
 
 
 class Command(AsyncCommand):
@@ -47,7 +73,7 @@ class Command(AsyncCommand):
             "-n",
             # Split the comma separated string we get, into a list of strings
             type=lambda x: x.split(","),
-            default=[],
+            default=None,
             required=False,
             dest="node_ids",
             help=node_ids_help_text,
@@ -64,7 +90,7 @@ class Command(AsyncCommand):
             "--exclude_node_ids",
             # Split the comma separated string we get, into a list of string
             type=lambda x: x.split(","),
-            default=[],
+            default=None,
             required=False,
             dest="exclude_node_ids",
             help=exclude_node_ids_help_text,
@@ -76,6 +102,22 @@ class Command(AsyncCommand):
             default=True,
             dest="renderable_only",
             help="Import all content, not just that which this Kolibri instance can render",
+        )
+
+        parser.add_argument(
+            "--import_updates",
+            action="store_true",
+            default=False,
+            dest="import_updates",
+            help="Import all updated content after a channel version upgrade",
+        )
+
+        parser.add_argument(
+            "--fail-on-error",
+            action="store_true",
+            default=False,
+            dest="fail_on_error",
+            help="Raise an error when a file has failed to be imported",
         )
 
         # to implement these two groups of commands and their corresponding
@@ -106,11 +148,24 @@ class Command(AsyncCommand):
             "--baseurl", type=str, default=default_studio_url, dest="baseurl"
         )
 
+        network_subparser.add_argument(
+            "--peer_id", type=str, default="", dest="peer_id"
+        )
+
+        network_subparser.add_argument(
+            "--timeout",
+            type=int,
+            default=transfer.Transfer.DEFAULT_TIMEOUT,
+            dest="timeout",
+            help="Specify network timeout in seconds (default: %(default)d)",
+        )
+
         disk_subparser = subparsers.add_parser(
             name="disk", cmd=self, help="Copy the content from the given folder."
         )
         disk_subparser.add_argument("channel_id", type=str)
         disk_subparser.add_argument("directory", type=str)
+        disk_subparser.add_argument("--drive_id", type=str, dest="drive_id", default="")
 
     def download_content(
         self,
@@ -118,7 +173,11 @@ class Command(AsyncCommand):
         node_ids=None,
         exclude_node_ids=None,
         baseurl=None,
+        peer_id=None,
         renderable_only=True,
+        import_updates=False,
+        fail_on_error=False,
+        timeout=transfer.Transfer.DEFAULT_TIMEOUT,
     ):
         self._transfer(
             DOWNLOAD_METHOD,
@@ -126,193 +185,398 @@ class Command(AsyncCommand):
             node_ids=node_ids,
             exclude_node_ids=exclude_node_ids,
             baseurl=baseurl,
+            peer_id=peer_id,
             renderable_only=renderable_only,
+            import_updates=import_updates,
+            fail_on_error=fail_on_error,
+            timeout=timeout,
         )
 
     def copy_content(
         self,
         channel_id,
         path,
+        drive_id=None,
         node_ids=None,
         exclude_node_ids=None,
         renderable_only=True,
+        import_updates=False,
+        fail_on_error=False,
     ):
         self._transfer(
             COPY_METHOD,
             channel_id,
             path=path,
+            drive_id=drive_id,
             node_ids=node_ids,
             exclude_node_ids=exclude_node_ids,
             renderable_only=renderable_only,
+            import_updates=import_updates,
+            fail_on_error=fail_on_error,
         )
 
-    # fmt: off
-    # HACK - turning off auto-formatting because the method is too complex. Should be refactored!
-    def _transfer(self, method, channel_id, path=None, node_ids=None, exclude_node_ids=None, baseurl=None, renderable_only=True):  # noqa: max-complexity=16
+    def _transfer(  # noqa: max-complexity=16
+        self,
+        method,
+        channel_id,
+        path=None,
+        drive_id=None,
+        node_ids=None,
+        exclude_node_ids=None,
+        baseurl=None,
+        peer_id=None,
+        renderable_only=True,
+        import_updates=False,
+        fail_on_error=False,
+        timeout=transfer.Transfer.DEFAULT_TIMEOUT,
+    ):
+        try:
+            if not import_updates:
+                (
+                    total_resource_count,
+                    files_to_download,
+                    total_bytes_to_transfer,
+                ) = get_import_export_data(
+                    channel_id,
+                    node_ids,
+                    exclude_node_ids,
+                    False,
+                    renderable_only=renderable_only,
+                    drive_id=drive_id,
+                    peer_id=peer_id,
+                )
+            else:
+                (
+                    total_resource_count,
+                    files_to_download,
+                    total_bytes_to_transfer,
+                ) = get_import_data_for_update(
+                    channel_id,
+                    renderable_only=renderable_only,
+                    drive_id=drive_id,
+                    peer_id=peer_id,
+                )
+        except LocationError:
+            if drive_id:
+                raise CommandError(
+                    "The external drive with given drive id {} does not exist.".format(
+                        drive_id
+                    )
+                )
+            if peer_id:
+                raise CommandError(
+                    "The network location with the id {} does not exist".format(peer_id)
+                )
+        except ValueError:
+            if import_updates:
+                raise CommandError(
+                    "Tried to perform an channel update import when update data was not available"
+                )
+            raise
 
-        files_to_download, total_bytes_to_transfer = import_export_content.get_files_to_transfer(
-            channel_id, node_ids, exclude_node_ids, False, renderable_only=renderable_only)
+        if not paths.using_remote_storage():
+            free_space = get_free_space(conf.OPTIONS["Paths"]["CONTENT_DIR"])
+
+            if free_space <= total_bytes_to_transfer:
+                raise InsufficientStorageSpaceError(
+                    "Import would completely fill remaining disk space"
+                )
+
+        job = get_current_job()
+
+        if job:
+            job.extra_metadata["file_size"] = total_bytes_to_transfer
+            job.extra_metadata["total_resources"] = total_resource_count
+            job.save_meta()
 
         number_of_skipped_files = 0
+        transferred_file_size = 0
         file_checksums_to_annotate = []
+        public = None
 
-        with self.start_progress(total=total_bytes_to_transfer) as overall_progress_update:
-            exception = None  # Exception that is not caught by the retry logic
+        # If we're downloading, check listing status
+        if method == DOWNLOAD_METHOD:
+            public = lookup_channel_listing_status(
+                channel_id=channel_id, baseurl=baseurl
+            )
 
+        resources_before_transfer = (
+            ContentNode.objects.filter(channel_id=channel_id, available=True)
+            .exclude(kind=content_kinds.TOPIC)
+            .values("content_id")
+            .distinct()
+            .count()
+        )
+
+        dummy_bytes_for_annotation = annotation.calculate_dummy_progress_for_annotation(
+            node_ids, exclude_node_ids, total_bytes_to_transfer
+        )
+
+        if paths.using_remote_storage():
+            overall_progress_update = self.start_progress(
+                total=dummy_bytes_for_annotation
+            ).update_progress
+            file_checksums_to_annotate.extend(f["id"] for f in files_to_download)
+            transferred_file_size = total_bytes_to_transfer
+        else:
+            remaining_bytes_to_transfer = total_bytes_to_transfer
+            overall_progress_update = self.start_progress(
+                total=total_bytes_to_transfer + dummy_bytes_for_annotation
+            ).update_progress
             if method == DOWNLOAD_METHOD:
                 session = requests.Session()
 
-            for f in files_to_download:
+            executor = (
+                concurrent.futures.ProcessPoolExecutor
+                if conf.OPTIONS["Tasks"]["USE_WORKER_MULTIPROCESSING"]
+                else concurrent.futures.ThreadPoolExecutor
+            )
 
-                if self.is_cancelled():
-                    break
+            max_workers = 10
 
-                filename = f.get_filename()
-                try:
-                    dest = paths.get_content_storage_file_path(filename)
-                except InvalidStorageFilenameError:
-                    # If the destination file name is malformed, just stop now.
-                    overall_progress_update(f.file_size)
-                    continue
+            if not conf.OPTIONS["Tasks"]["USE_WORKER_MULTIPROCESSING"]:
+                # If we're not using multiprocessing for workers, we may need
+                # to limit the number of workers depending on the number of allowed
+                # file descriptors.
+                # This is a heuristic method, where we know there can be issues if
+                # the max number of file descriptors for a process is 256, and we use 10
+                # workers, with potentially 4 concurrent tasks downloading files.
+                # The number of concurrent tasks that might be downloading files is determined
+                # by the number of regular workers running in the task runner
+                # (although the high priority task queue could also be running a channel database download).
+                server_reserved_fd_count = (
+                    FD_PER_THREAD * conf.OPTIONS["Server"]["CHERRYPY_THREAD_POOL"]
+                )
+                max_descriptors_per_download_task = (
+                    get_fd_limit() - server_reserved_fd_count
+                ) / conf.OPTIONS["Tasks"]["REGULAR_PRIORITY_WORKERS"]
+                # Each download task only needs to have a maximum of two open file descriptors at once:
+                # The temporary download file that the file is streamed to initially, and then
+                # the actual destination file that it is moved to. To add tolerance, we divide
+                # the number of file descriptors that could be allocated to this task by four,
+                # which should give us leeway in case of unforeseen descriptor use during the process.
+                max_workers = min(
+                    max_workers, min(1, max_descriptors_per_download_task // 4)
+                )
 
-                # if the file already exists, add its size to our overall progress, and skip
-                if os.path.isfile(dest) and os.path.getsize(dest) == f.file_size:
-                    overall_progress_update(f.file_size)
-                    file_checksums_to_annotate.append(f.id)
-                    continue
-
-                # determine where we're downloading/copying from, and create appropriate transfer object
-                if method == DOWNLOAD_METHOD:
-                    url = paths.get_content_storage_remote_url(filename, baseurl=baseurl)
-                    filetransfer = transfer.FileDownload(url, dest, session=session)
-                elif method == COPY_METHOD:
-                    try:
-                        srcpath = paths.get_content_storage_file_path(filename, datafolder=path)
-                    except InvalidStorageFilenameError:
-                        # If the source file name is malformed, just stop now.
-                        overall_progress_update(f.file_size)
-                        continue
-                    filetransfer = transfer.FileCopy(srcpath, dest)
-
-                finished = False
-                try:
-                    while not finished:
-                        finished, status = self._start_file_transfer(
-                            f, filetransfer, overall_progress_update)
-
+            with executor(max_workers=max_workers) as executor:
+                batch_size = 100
+                # ThreadPoolExecutor allows us to download files concurrently,
+                # greatly reducing download time in most cases. However, loading
+                # all the downloads into the pool requires considerable memory,
+                # so we divide the downloads into batches to keep memory usage down.
+                # In batches of 100, total RAM usage doesn't exceed 250MB in testing.
+                while files_to_download:
+                    if self.is_cancelled():
+                        break
+                    future_file_transfers = {}
+                    for i in range(batch_size):
                         if self.is_cancelled():
                             break
+                        if files_to_download:
+                            f = files_to_download.pop()
+                            filename = get_content_file_name(f)
+                            try:
+                                dest = paths.get_content_storage_file_path(filename)
+                            except InvalidStorageFilenameError:
+                                # If the destination file name is malformed, just stop now.
+                                overall_progress_update(f["file_size"])
+                                continue
 
-                        if status == FILE_TRANSFERRED:
-                            file_checksums_to_annotate.append(f.id)
-                        elif status == FILE_SKIPPED:
-                            number_of_skipped_files += 1
-                except Exception as e:
-                    exception = e
-                    break
+                            # if the file already exists add its size to our overall progress, and skip
+                            if (
+                                os.path.isfile(dest)
+                                and os.path.getsize(dest) == f["file_size"]
+                            ):
+                                overall_progress_update(f["file_size"])
+                                file_checksums_to_annotate.append(f["id"])
+                                transferred_file_size += f["file_size"]
+                                continue
 
-            annotation.annotate_content(channel_id, file_checksums_to_annotate)
+                            # determine where we're downloading/copying from, and create appropriate transfer object
+                            if method == DOWNLOAD_METHOD:
+                                url = paths.get_content_storage_remote_url(
+                                    filename, baseurl=baseurl
+                                )
+                                filetransfer = transfer.FileDownload(
+                                    url,
+                                    dest,
+                                    session=session,
+                                    cancel_check=self.is_cancelled,
+                                    timeout=timeout,
+                                )
+                            elif method == COPY_METHOD:
+                                try:
+                                    srcpath = paths.get_content_storage_file_path(
+                                        filename, datafolder=path
+                                    )
+                                except InvalidStorageFilenameError:
+                                    # If the source file name is malformed, just stop now.
+                                    overall_progress_update(f["file_size"])
+                                    continue
+                                filetransfer = transfer.FileCopy(
+                                    srcpath, dest, cancel_check=self.is_cancelled
+                                )
+                            future = executor.submit(
+                                self._start_file_transfer, f, filetransfer
+                            )
+                            future_file_transfers[future] = (f, filetransfer)
 
-            if number_of_skipped_files > 0:
-                logger.warning(
-                    "{} files are skipped, because errors occurred during the import.".format(
-                        number_of_skipped_files))
+                    for future in concurrent.futures.as_completed(
+                        future_file_transfers
+                    ):
+                        f, filetransfer = future_file_transfers[future]
+                        try:
+                            status, data_transferred = future.result()
+                            overall_progress_update(data_transferred)
+                            if self.is_cancelled():
+                                break
 
-            if exception:
-                raise exception
+                            if status == FILE_SKIPPED:
+                                number_of_skipped_files += 1
+                            else:
+                                file_checksums_to_annotate.append(f["id"])
+                                transferred_file_size += f["file_size"]
+                            remaining_bytes_to_transfer -= f["file_size"]
+                            remaining_free_space = get_free_space(
+                                conf.OPTIONS["Paths"]["CONTENT_DIR"]
+                            )
+                            if remaining_free_space <= remaining_bytes_to_transfer:
+                                raise InsufficientStorageSpaceError(
+                                    "Kolibri ran out of storage space while importing content"
+                                )
+                        except transfer.TransferCanceled:
+                            break
+                        except Exception as e:
+                            logger.error(
+                                "An error occurred during content import: {}".format(e)
+                            )
 
-            if self.is_cancelled():
-                self.cancel()
-    # fmt: on
+                            if (
+                                not fail_on_error
+                                and isinstance(e, requests.exceptions.HTTPError)
+                                and e.response.status_code == 404
+                            ) or (isinstance(e, OSError) and e.errno == 2):
+                                # Continue file import when the current file is not found from the source and is skipped.
+                                overall_progress_update(f["file_size"])
+                                number_of_skipped_files += 1
+                                continue
+                            else:
+                                self.exception = e
+                                break
+                    if self.is_cancelled():
+                        for future in future_file_transfers:
+                            future.cancel()
 
-    def _start_file_transfer(self, f, filetransfer, overall_progress_update):
+        annotation.set_content_visibility(
+            channel_id,
+            file_checksums_to_annotate,
+            node_ids=node_ids,
+            exclude_node_ids=exclude_node_ids,
+            public=public,
+        )
+
+        resources_after_transfer = (
+            ContentNode.objects.filter(channel_id=channel_id, available=True)
+            .exclude(kind=content_kinds.TOPIC)
+            .values("content_id")
+            .count()
+        )
+
+        if job:
+            job.extra_metadata["transferred_file_size"] = transferred_file_size
+            job.extra_metadata["transferred_resources"] = (
+                resources_after_transfer - resources_before_transfer
+            )
+            job.save_meta()
+
+        if number_of_skipped_files > 0:
+            logger.warning(
+                "{} files are skipped, because errors occurred during the import.".format(
+                    number_of_skipped_files
+                )
+            )
+
+        overall_progress_update(dummy_bytes_for_annotation)
+
+        if self.exception:
+            raise self.exception
+
+        if self.is_cancelled():
+            self.cancel()
+
+    def _start_file_transfer(self, f, filetransfer):
         """
         Start to transfer the file from network/disk to the destination.
         Return value:
-            * True, FILE_TRANSFERRED - successfully transfer the file.
-            * True, FILE_SKIPPED - the file does not exist so it is skipped.
-            * True, FILE_NOT_TRANSFERRED - the transfer is cancelled.
-            * False, FILE_NOT_TRANSFERRED - the transfer fails and needs to retry.
+            * FILE_TRANSFERRED - successfully transfer the file.
+            * FILE_SKIPPED - the file does not exist so it is skipped.
         """
-        try:
-            # Save the current progress value
-            original_value = self.progresstrackers[0].progress
-            original_progress = self.progresstrackers[0].get_progress()
+        data_transferred = 0
 
-            with filetransfer, self.start_progress(
-                total=filetransfer.total_size
-            ) as file_dl_progress_update:
-                for chunk in filetransfer:
-                    if self.is_cancelled():
-                        filetransfer.cancel()
-                        return True, FILE_NOT_TRANSFERRED
-                    length = len(chunk)
-                    overall_progress_update(length)
-                    file_dl_progress_update(length)
+        with filetransfer:
+            for chunk in filetransfer:
+                data_transferred += len(chunk)
 
-                # Ensure that if for some reason the total file size for the transfer
-                # is less than what we have marked in the database that we make up
-                # the difference so that the overall progress is never incorrect.
-                # This could happen, for example for a local transfer if a file
-                # has been replaced or corrupted (which we catch below) or for
-                # a remote transfer if the peer to peer transfer is is compressing
-                # files using gzip.
-                overall_progress_update(f.file_size - filetransfer.total_size)
+            # Ensure that if for some reason the total file size for the transfer
+            # is less than what we have marked in the database that we make up
+            # the difference so that the overall progress is never incorrect.
+            # This could happen, for example for a local transfer if a file
+            # has been replaced or corrupted (which we catch below)
+            data_transferred += f["file_size"] - filetransfer.total_size
 
-                # If size of the destination file is smaller than the size
-                # indicated in the database, it's very likely that the source
-                # file is corrupted. Skip importing this file.
-                dest_file_size_on_disk = os.path.getsize(filetransfer.dest)
-                if dest_file_size_on_disk < f.file_size:
-                    e = "File {} is corrupted.".format(filetransfer.source)
-                    logger.error(
-                        "An error occurred during content import: {}".format(e)
-                    )
+            # If checksum of the destination file is different from the localfile
+            # id indicated in the database, it means that the destination file
+            # is corrupted, either from origin or during import. Skip importing
+            # this file.
+            try:
+                checksum_correctness = compare_checksums(filetransfer.dest, f["id"])
+            except (IOError, OSError):
+                checksum_correctness = False
+            if not checksum_correctness:
+                e = "File {} is corrupted.".format(filetransfer.source)
+                logger.error("An error occurred during content import: {}".format(e))
+                try:
                     os.remove(filetransfer.dest)
-                    return True, FILE_SKIPPED
+                except OSError:
+                    pass
+                return FILE_SKIPPED, data_transferred
 
-            return True, FILE_TRANSFERRED
-
-        except Exception as e:
-            logger.error("An error occurred during content import: {}".format(e))
-            retry = import_export_content.retry_import(e, skip_404=True)
-
-            if retry:
-                # Restore the previous progress so that the progress bar will
-                # not reach over 100% later
-                self.progresstrackers[0].progress = original_value
-
-                self.progresstrackers[0].update_callback(
-                    original_progress.progress_fraction, original_progress
-                )
-
-                logger.info(
-                    "Waiting for 30 seconds before retrying import: {}\n".format(
-                        filetransfer.source
-                    )
-                )
-                sleep(30)
-                return False, FILE_NOT_TRANSFERRED
-            else:
-                overall_progress_update(f.file_size)
-                return True, FILE_SKIPPED
+        return FILE_TRANSFERRED, data_transferred
 
     def handle_async(self, *args, **options):
+        try:
+            ChannelMetadata.objects.get(id=options["channel_id"])
+        except ValueError:
+            raise CommandError(
+                "{} is not a valid channel_id".format(options["channel_id"])
+            )
+        except ChannelMetadata.DoesNotExist:
+            raise CommandError(
+                "Must import a channel with importchannel before importing content."
+            )
         if options["command"] == "network":
             self.download_content(
                 options["channel_id"],
                 node_ids=options["node_ids"],
                 exclude_node_ids=options["exclude_node_ids"],
                 baseurl=options["baseurl"],
+                peer_id=options["peer_id"],
                 renderable_only=options["renderable_only"],
+                import_updates=options["import_updates"],
+                fail_on_error=options["fail_on_error"],
+                timeout=options["timeout"],
             )
         elif options["command"] == "disk":
             self.copy_content(
                 options["channel_id"],
                 options["directory"],
+                drive_id=options["drive_id"],
                 node_ids=options["node_ids"],
                 exclude_node_ids=options["exclude_node_ids"],
                 renderable_only=options["renderable_only"],
+                import_updates=options["import_updates"],
+                fail_on_error=options["fail_on_error"],
             )
         else:
             self._parser.print_help()

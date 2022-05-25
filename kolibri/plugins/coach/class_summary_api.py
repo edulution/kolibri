@@ -1,22 +1,32 @@
-from django.db.models import Count
+from django.db import connections
+from django.db.models import Exists
+from django.db.models import F
 from django.db.models import Max
-from django.db.models import Sum
+from django.db.models import OuterRef
+from django.db.models import Q
+from django.db.models import Subquery
+from django.db.utils import OperationalError
 from django.shortcuts import get_object_or_404
 from le_utils.constants import content_kinds
 from rest_framework import permissions
-from rest_framework import serializers
 from rest_framework import viewsets
 from rest_framework.response import Response
 
 from kolibri.core.auth import models as auth_models
 from kolibri.core.auth.constants import role_kinds
+from kolibri.core.auth.models import AdHocGroup
 from kolibri.core.auth.models import Collection
+from kolibri.core.auth.models import FacilityUser
 from kolibri.core.content.models import ContentNode
 from kolibri.core.exams.models import Exam
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.logger import models as logger_models
 from kolibri.core.notifications.models import LearnerProgressNotification
 from kolibri.core.notifications.models import NotificationEventType
+from kolibri.core.query import annotate_array_aggregate
+from kolibri.core.query import SQCount
+from kolibri.core.sqlite.utils import repair_sqlite_db
+from kolibri.deployment.default.sqlite_db_names import NOTIFICATIONS
 
 
 # Intended to match  NotificationEventType
@@ -26,7 +36,65 @@ HELP_NEEDED = "HelpNeeded"
 COMPLETED = "Completed"
 
 
-def content_status_serializer(lesson_data, learners_data, classroom):
+def _get_quiz_status(queryset):
+    queryset = queryset.filter(
+        mastery_level__lt=0,
+    ).order_by("-end_timestamp")
+    queryset = queryset.annotate(
+        previous_masterylog=Subquery(
+            queryset.filter(
+                summarylog=OuterRef("summarylog"),
+                end_timestamp__lt=OuterRef("end_timestamp"),
+            ).values_list("id")[:1]
+        ),
+    )
+    items = []
+    statuses = queryset.annotate(
+        last_activity=Max("attemptlogs__end_timestamp"),
+        num_correct=SQCount(
+            logger_models.AttemptLog.objects.filter(
+                masterylog=OuterRef("id"), correct=1
+            )
+            .order_by()
+            .values_list("item")
+            .distinct(),
+            field="item",
+        ),
+        num_answered=SQCount(
+            logger_models.AttemptLog.objects.filter(masterylog=OuterRef("id"))
+            .order_by()
+            .values_list("item")
+            .distinct(),
+            field="item",
+        ),
+        previous_num_correct=SQCount(
+            logger_models.AttemptLog.objects.filter(
+                masterylog=OuterRef("previous_masterylog"), correct=1
+            )
+            .order_by()
+            .values_list("item")
+            .distinct(),
+            field="item",
+        ),
+    ).values(
+        "summarylog__content_id",
+        "complete",
+        "last_activity",
+        "num_correct",
+        "num_answered",
+        "previous_num_correct",
+        learner_id=F("user_id"),
+    )
+    seen = set()
+    for item in statuses:
+        key = "{}-{}".format(item["learner_id"], item["summarylog__content_id"])
+        if key not in seen:
+            items.append(item)
+            seen.add(key)
+    return items
+
+
+def content_status_serializer(lesson_data, learners_data, classroom):  # noqa C901
 
     # First generate a unique set of content node ids from all the lessons
     lesson_node_ids = set()
@@ -34,22 +102,37 @@ def content_status_serializer(lesson_data, learners_data, classroom):
         lesson_node_ids |= set(lesson.get("node_ids"))
 
     # Now create a map of content_id to node_id so that we can map between lessons, and notifications
-    # which use the node id, and summary logs, which use content_id
+    # which use the node id, and summary logs, which use content_id. Note that many node_ids may map
+    # to the same content_id.
     content_map = {
         n[0]: n[1]
-        for n in ContentNode.objects.filter(id__in=lesson_node_ids).values_list(
-            "content_id", "id"
+        for n in ContentNode.objects.filter_by_uuids(lesson_node_ids).values_list(
+            "id", "content_id"
         )
     }
+
+    learner_ids = {learner["id"] for learner in learners_data}
+
+    content_ids = set(content_map.values())
 
     # Get all the values we need from the summary logs to be able to summarize current status on the
     # relevant content items.
     content_log_values = (
         logger_models.ContentSummaryLog.objects.filter(
-            content_id__in=set(content_map.keys()),
-            user__in=[learner["id"] for learner in learners_data],
+            content_id__in=content_ids,
+            user__in=learner_ids,
         )
-        .annotate(attempts=Count("masterylogs__attemptlogs"))
+        .annotate(
+            attempts_exist=Exists(
+                logger_models.AttemptLog.objects.filter(
+                    masterylog__summarylog=OuterRef("id")
+                )
+            ),
+            tries=SQCount(
+                logger_models.MasteryLog.objects.filter(summarylog=OuterRef("id")),
+                field="id",
+            ),
+        )
         .values(
             "user_id",
             "content_id",
@@ -57,33 +140,48 @@ def content_status_serializer(lesson_data, learners_data, classroom):
             "time_spent",
             "progress",
             "kind",
-            "attempts",
+            "attempts_exist",
+            "tries",
         )
     )
+
+    masterylog_queryset = logger_models.MasteryLog.objects.filter(
+        summarylog__content_id__in=content_ids, user__in=learner_ids
+    )
+
+    practice_quiz_data = {
+        "{}-{}".format(s.pop("learner_id"), s.pop("summarylog__content_id")): s
+        for s in _get_quiz_status(masterylog_queryset)
+    }
 
     # In order to make the lookup speedy, generate a unique key for each user/node that we find
     # listed in the needs help notifications that are relevant. We can then just check
     # existence of this key in the set in order to see whether this user has been flagged as needing
     # help.
     lookup_key = "{user_id}-{node_id}"
-    needs_help = {
-        lookup_key.format(user_id=n[0], node_id=n[1]): n[2]
-        for n in LearnerProgressNotification.objects.filter(
+    try:
+        notifications = LearnerProgressNotification.objects.filter(
+            Q(notification_event=NotificationEventType.Completed)
+            | Q(notification_event=NotificationEventType.Help),
             classroom_id=classroom.id,
-            notification_event=NotificationEventType.Help,
             lesson_id__in=[lesson["id"] for lesson in lesson_data],
-        ).values_list("user_id", "contentnode_id", "timestamp")
-    }
+        ).values_list("user_id", "contentnode_id", "timestamp", "notification_event")
+
+        needs_help = {
+            lookup_key.format(user_id=n[0], node_id=n[1]): n[2]
+            for n in notifications
+            if n[3] == NotificationEventType.Help
+        }
+    except OperationalError:
+        notifications = []
+        repair_sqlite_db(connections[NOTIFICATIONS])
 
     # In case a previously flagged learner has since completed an exercise, check all the completed
     # notifications also
     completed = {
         lookup_key.format(user_id=n[0], node_id=n[1]): n[2]
-        for n in LearnerProgressNotification.objects.filter(
-            classroom_id=classroom.id,
-            notification_event=NotificationEventType.Completed,
-            lesson_id__in=[lesson["id"] for lesson in lesson_data],
-        ).values_list("user_id", "contentnode_id", "timestamp")
+        for n in notifications
+        if n[3] == NotificationEventType.Completed
     }
 
     def get_status(log):
@@ -94,22 +192,24 @@ def content_status_serializer(lesson_data, learners_data, classroom):
         current progress.
         """
         content_id = log["content_id"]
-        if content_id in content_map:
+        if content_id in content_map.values():
             # Don't try to lookup anything if we don't know the content_id
             # node_id mapping - might happen if a channel has since been deleted
-            key = lookup_key.format(
-                user_id=log["user_id"], node_id=content_map[content_id]
-            )
-            if key in needs_help:
-                # Now check if we have not already registered completion of the content node
-                # or if we have and the timestamp is earlier than that on the needs_help event
-                if key not in completed or completed[key] < needs_help[key]:
-                    return HELP_NEEDED
+            content_ids = [
+                key for key, value in content_map.items() if value == content_id
+            ]
+            for c_id in content_ids:
+                key = lookup_key.format(user_id=log["user_id"], node_id=c_id)
+                if key in needs_help:
+                    # Now check if we have not already registered completion of the content node
+                    # or if we have and the timestamp is earlier than that on the needs_help event
+                    if key not in completed or completed[key] < needs_help[key]:
+                        return HELP_NEEDED
         if log["progress"] == 1:
             return COMPLETED
         if log["kind"] == content_kinds.EXERCISE:
             # if there are no attempt logs for this exercise, status is NOT_STARTED
-            if log["attempts"] == 0:
+            if not log["attempts_exist"]:
                 return NOT_STARTED
         return STARTED
 
@@ -117,125 +217,104 @@ def content_status_serializer(lesson_data, learners_data, classroom):
         """
         Parse the content logs to return objects in the expected format.
         """
-        return {
+        output = {
             "learner_id": log["user_id"],
             "content_id": log["content_id"],
             "status": get_status(log),
             "last_activity": log["end_timestamp"],
             "time_spent": log["time_spent"],
+            "tries": log["tries"],
         }
+        key = "{}-{}".format(log["user_id"], log["content_id"])
+        if key in practice_quiz_data:
+            output.update(practice_quiz_data[key])
+        return output
 
-    return map(map_content_logs, content_log_values)
+    return list(map(map_content_logs, content_log_values))
 
 
-class ExamStatusSerializer(serializers.ModelSerializer):
-    status = serializers.SerializerMethodField()
-    exam_id = serializers.PrimaryKeyRelatedField(source="exam", read_only=True)
-    learner_id = serializers.PrimaryKeyRelatedField(source="user", read_only=True)
-    last_activity = serializers.CharField()
-    num_correct = serializers.SerializerMethodField()
+def _map_exam_status(item):
+    complete = item.pop("complete")
+    item["status"] = COMPLETED if complete else STARTED
+    item["exam_id"] = item.pop("summarylog__content_id")
+    return item
 
-    def get_status(self, exam_log):
-        if exam_log.closed:
-            return COMPLETED
-        else:
-            return STARTED
 
-    def get_num_correct(self, exam_log):
-        return (
-            exam_log.attemptlogs.values_list("item")
-            .order_by("completion_timestamp")
-            .distinct()
-            .aggregate(Sum("correct"))
-            .get("correct__sum")
+def serialize_coach_assigned_quiz_status(queryset):
+    queryset = logger_models.MasteryLog.objects.filter(
+        summarylog__content_id__in=queryset.values("id"),
+    ).order_by()
+    return list(map(_map_exam_status, _get_quiz_status(queryset)))
+
+
+def serialize_groups(queryset):
+    queryset = annotate_array_aggregate(queryset, member_ids="membership__user__id")
+    return list(queryset.values("id", "name", "member_ids"))
+
+
+def serialize_users(queryset):
+    return list(queryset.values("id", "username", name=F("full_name")))
+
+
+def _map_lesson(item):
+    if item["resources"]:
+        item["node_ids"] = [
+            resource["contentnode_id"] for resource in item["resources"]
+        ]
+    else:
+        item["node_ids"] = []
+    return item
+
+
+def serialize_lessons(queryset):
+    queryset = annotate_array_aggregate(
+        queryset, assignments="lesson_assignments__collection"
+    )
+    return list(
+        map(
+            _map_lesson,
+            queryset.values(
+                "id",
+                "title",
+                "resources",
+                "assignments",
+                "description",
+                "date_created",
+                active=F("is_active"),
+            ),
         )
-
-    class Meta:
-        model = logger_models.ExamLog
-        fields = ("exam_id", "learner_id", "status", "last_activity", "num_correct")
-
-
-class GroupSerializer(serializers.ModelSerializer):
-    member_ids = serializers.SerializerMethodField()
-
-    def get_member_ids(self, group):
-        return group.get_members().values_list("id", flat=True)
-
-    class Meta:
-        model = auth_models.LearnerGroup
-        fields = ("id", "name", "member_ids")
-
-
-class UserSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source="full_name")
-
-    class Meta:
-        model = auth_models.FacilityUser
-        fields = ("id", "name", "username")
-
-
-class LessonAssignmentsField(serializers.RelatedField):
-    def to_representation(self, assignment):
-        return assignment.collection.id
-
-
-class LessonSerializer(serializers.ModelSerializer):
-    active = serializers.BooleanField(source="is_active")
-    node_ids = serializers.SerializerMethodField()
-
-    # classrooms are in here, and filtered out later
-    groups = LessonAssignmentsField(
-        many=True, read_only=True, source="lesson_assignments"
     )
 
-    class Meta:
-        model = Lesson
-        fields = ("id", "title", "active", "node_ids", "groups")
 
-    def get_node_ids(self, obj):
-        return [resource["contentnode_id"] for resource in obj.resources]
+def _map_exam(item):
+    item["assignments"] = item.pop("exam_assignments")
+    return item
 
 
-class ExamQuestionSourcesField(serializers.Field):
-    def to_representation(self, values):
-        return values
-
-
-class ExamAssignmentsField(serializers.RelatedField):
-    def to_representation(self, assignment):
-        return assignment.collection.id
-
-
-class ExamSerializer(serializers.ModelSerializer):
-
-    question_sources = ExamQuestionSourcesField(default=[])
-
-    # classes are in here, and filtered out later
-    groups = ExamAssignmentsField(many=True, read_only=True, source="assignments")
-
-    class Meta:
-        model = Exam
-        fields = (
-            "id",
-            "title",
-            "active",
-            "question_sources",
-            "groups",
-            "data_model_version",
-            "question_count",
+def serialize_exams(queryset):
+    queryset = annotate_array_aggregate(
+        queryset, exam_assignments="assignments__collection"
+    )
+    return list(
+        map(
+            _map_exam,
+            queryset.values(
+                "id",
+                "title",
+                "active",
+                "question_sources",
+                "data_model_version",
+                "question_count",
+                "learners_see_fixed_order",
+                "seed",
+                "date_created",
+                "date_archived",
+                "date_activated",
+                "archive",
+                "exam_assignments",
+            ),
         )
-
-
-class ContentSerializer(serializers.ModelSerializer):
-    node_id = serializers.CharField(source="id")
-
-    class Meta:
-        model = ContentNode
-        fields = ("node_id", "content_id", "title", "kind")
-
-
-def data(Serializer, queryset):
-    return Serializer(queryset, many=True).data
+    )
 
 
 class ClassSummaryPermissions(permissions.BasePermission):
@@ -260,23 +339,31 @@ class ClassSummaryViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk):
         classroom = get_object_or_404(auth_models.Classroom, id=pk)
-        query_learners = classroom.get_members()
+        query_learners = FacilityUser.objects.filter(memberships__collection=classroom)
         query_lesson = Lesson.objects.filter(collection=pk)
         query_exams = Exam.objects.filter(collection=pk)
-        query_exam_logs = logger_models.ExamLog.objects.filter(
-            exam__in=query_exams
-        ).annotate(last_activity=Max("attemptlogs__end_timestamp"))
+        lesson_data = serialize_lessons(query_lesson)
+        exam_data = serialize_exams(query_exams)
 
-        lesson_data = data(LessonSerializer, query_lesson)
-        exam_data = data(ExamSerializer, query_exams)
+        individual_learners_group_ids = AdHocGroup.objects.filter(
+            parent=classroom
+        ).values_list("id", flat=True)
 
         # filter classes out of exam assignments
         for exam in exam_data:
-            exam["groups"] = [g for g in exam["groups"] if g != pk]
+            exam["groups"] = [
+                g
+                for g in exam["assignments"]
+                if g != pk and g not in individual_learners_group_ids
+            ]
 
         # filter classes out of lesson assignments
         for lesson in lesson_data:
-            lesson["groups"] = [g for g in lesson["groups"] if g != pk]
+            lesson["groups"] = [
+                g
+                for g in lesson["assignments"]
+                if g != pk and g not in individual_learners_group_ids
+            ]
 
         all_node_ids = set()
         for lesson in lesson_data:
@@ -290,10 +377,10 @@ class ClassSummaryViewSet(viewsets.ViewSet):
         # map node ids => content_ids so we can replace missing nodes, if another matching content_id node exists
         content_id_map = {
             resource["contentnode_id"]: resource["content_id"]
-            for lesson in query_lesson
-            for resource in lesson.resources
+            for lesson in lesson_data
+            for resource in (lesson.pop("resources") or [])
         }
-        query_content = ContentNode.objects.filter(id__in=all_node_ids)
+        query_content = ContentNode.objects.filter_by_uuids(all_node_ids)
         # final list of available nodes
         list_of_ids = [node.id for node in query_content]
         # determine a new list of node_ids for each lesson, removing/replacing missing content items
@@ -313,17 +400,34 @@ class ClassSummaryViewSet(viewsets.ViewSet):
             # point to new list of node ids
             lesson["node_ids"] = node_ids
 
-        learners_data = data(UserSerializer, query_learners)
+        learners_data = serialize_users(query_learners)
 
         output = {
             "id": pk,
+            "facility_id": classroom.parent.id,
             "name": classroom.name,
-            "coaches": data(UserSerializer, classroom.get_coaches()),
+            "coaches": serialize_users(
+                FacilityUser.objects.filter(
+                    roles__collection=classroom, roles__kind=role_kinds.COACH
+                )
+            ),
             "learners": learners_data,
-            "groups": data(GroupSerializer, classroom.get_learner_groups()),
+            "groups": serialize_groups(classroom.get_learner_groups()),
+            "adhoclearners": serialize_groups(
+                classroom.get_individual_learners_group()
+            ),
             "exams": exam_data,
-            "exam_learner_status": data(ExamStatusSerializer, query_exam_logs),
-            "content": data(ContentSerializer, query_content),
+            "exam_learner_status": serialize_coach_assigned_quiz_status(query_exams),
+            "content": list(
+                query_content.values(
+                    "content_id",
+                    "title",
+                    "kind",
+                    "channel_id",
+                    "options",
+                    node_id=F("id"),
+                )
+            ),
             "content_learner_status": content_status_serializer(
                 lesson_data, learners_data, classroom
             ),

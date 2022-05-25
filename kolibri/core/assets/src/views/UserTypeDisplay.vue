@@ -13,20 +13,15 @@
 <script>
 
   import { UserKinds } from 'kolibri.coreVue.vuex.constants';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'UserTypeDisplay',
-    $trs: {
-      superUserLabel: 'Super admin',
-      adminLabel: 'Admin',
-      facilityCoachLabel: 'Facility coach',
-      coachLabel: 'Coach',
-      learnerLabel: 'Learner',
-    },
+    mixins: [commonCoreStrings],
     props: {
       userType: {
         type: String,
-        required: false,
+        default: null,
       },
       distinguishCoachTypes: {
         type: Boolean,
@@ -43,12 +38,12 @@
       typeDisplayMap() {
         return {
           [UserKinds.SUPERUSER]: this.$tr('superUserLabel'),
-          [UserKinds.ADMIN]: this.$tr('adminLabel'),
+          [UserKinds.ADMIN]: this.coreString('adminLabel'),
           [UserKinds.COACH]: this.distinguishCoachTypes
-            ? this.$tr('facilityCoachLabel')
-            : this.$tr('coachLabel'),
-          [UserKinds.ASSIGNABLE_COACH]: this.$tr('coachLabel'),
-          [UserKinds.LEARNER]: this.omitLearner ? '' : this.$tr('learnerLabel'),
+            ? this.coreString('facilityCoachLabel')
+            : this.coreString('coachLabel'),
+          [UserKinds.ASSIGNABLE_COACH]: this.coreString('coachLabel'),
+          [UserKinds.LEARNER]: this.omitLearner ? '' : this.coreString('learnerLabel'),
         };
       },
       typeDisplay() {
@@ -56,6 +51,13 @@
           return this.typeDisplayMap[this.userType];
         }
         return '';
+      },
+    },
+    $trs: {
+      superUserLabel: {
+        message: 'Super admin',
+        context:
+          'An account type that can manage the device. Super admin accounts also have permission to do everything that admins, coaches, and learners can do.',
       },
     },
   };

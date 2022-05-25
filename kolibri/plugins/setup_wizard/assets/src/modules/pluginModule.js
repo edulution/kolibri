@@ -1,48 +1,97 @@
 import client from 'kolibri.client';
 import urls from 'kolibri.urls';
-import { currentLanguage } from 'kolibri.utils.i18n';
+import { currentLanguage, createTranslator } from 'kolibri.utils.i18n';
+import { Presets, permissionPresets } from '../constants';
+import { FacilityImportResource } from '../api';
+
+const SetupStrings = createTranslator('SetupStrings', {
+  personalFacilityName: {
+    message: 'Home Facility for {name}',
+    context:
+      "Default facility name when Kolibri is installed with the 'Quick start' setup option for at home learning, outside any type of structure or institution like a school or a library. '{name}' will display the full name of the super admin user for their Kolibri server. Note that users can change this default name after the setup, and put whatever name they want to use for their home facility.",
+  },
+});
 
 export default {
-  state: {
-    onboardingData: {
-      // Set in DefaultLanguageForm
-      language_id: currentLanguage,
-      // Set in FacilityPermissionsForm
-      facility: {
-        name: '',
-      },
-      preset: 'nonformal',
-      // Keys match schema of FacilityDatasetModel
-      settings: {
+  state() {
+    return {
+      started: false,
+      // The shape of onboardingData needs to match the DevisionProvisionSerializer
+      onboardingData: {
+        // If device name is null, it will default to hostname. Blank names aren't allowed.
+        device_name: null,
+        // Set in DefaultLanguageForm
+        language_id: currentLanguage,
+        // Set in FacilityPermissionsForm
+        facility: {
+          name: '',
+        },
+        preset: null,
         // Set in GuessAccessForm
         allow_guest_access: null,
-        // Set in CreateLearnerAccountForm
-        learner_can_sign_up: null,
-        learner_can_edit_name: null,
-        learner_can_edit_username: null,
-        // Set in RequirePasswordForLearnersForm
-        learner_can_login_with_no_password: null,
+        // Keys match schema of FacilityDatasetModel
+        settings: {
+          // Set in CreateLearnerAccountForm
+          learner_can_sign_up: null,
+          learner_can_edit_name: null,
+          learner_can_edit_username: null,
+          // Set in RequirePasswordForLearnersForm
+          learner_can_login_with_no_password: null,
+          learner_can_edit_password: null,
+        },
+        // Set in SuperuserCredentialsForm
+        superuser: {
+          full_name: '',
+          username: '',
+          password: '',
+        },
       },
-      // Set in SuperuserCredentialsForm
-      superuser: {
-        full_name: '',
-        username: '',
-        password: '',
-      },
-    },
-    loading: false,
-    error: false,
-    onboardingStep: 1,
+      loading: false,
+      error: false,
+    };
   },
   actions: {
-    provisionDevice(store, onboardingData) {
+    logIntoSyncedFacility(store, credentials) {
+      return store.dispatch('kolibriLogin', {
+        username: credentials.username,
+        password: credentials.password,
+        facility: credentials.facility,
+        disableRedirect: true,
+      });
+    },
+    provisionDeviceAfterImport(store, credentials) {
+      const onboardingData = store.state.onboardingData;
+      return FacilityImportResource.provisiondevice({
+        device_name: onboardingData.device_name,
+        language_id: onboardingData.language_id,
+      }).then(() => {
+        store.dispatch('kolibriLogin', credentials);
+      });
+    },
+    provisionDevice(store) {
+      const onboardingData = store.state.onboardingData;
+
       // Make a copy so data is available when 'kolibriLogin' is called
       const superuser = { ...onboardingData.superuser };
+
+      // Strip out onboarding data so serializer can apply defaults
+      if (onboardingData.preset === Presets.PERSONAL) {
+        onboardingData.settings = {};
+        onboardingData.device_name = null;
+        onboardingData.facility.name = SetupStrings.$tr('personalFacilityName', {
+          name: store.state.onboardingData.superuser.full_name,
+        }).slice(0, 49);
+      }
+
       store.commit('SET_LOADING', true);
 
-      return client({ path: urls['kolibri:core:deviceprovision'](), entity: onboardingData }).then(
+      return client({
+        url: urls['kolibri:core:deviceprovision'](),
+        data: onboardingData,
+        method: 'post',
+      }).then(
         response => {
-          superuser.facility = response.entity.facility.id;
+          superuser.facility = response.data.facility.id;
           store.dispatch('kolibriLogin', superuser);
         },
         error => {
@@ -51,8 +100,41 @@ export default {
         }
       );
     },
+    setPersonalUsageDefaults(store) {
+      store.commit('SET_FACILITY_PRESET', Presets.PERSONAL);
+    },
+    setFormalUsageDefaults(store) {
+      const defaults = permissionPresets.formal.mappings;
+      store.commit('SET_FACILITY_PRESET', Presets.FORMAL);
+      store.commit('SET_ALLOW_GUEST_ACCESS', false);
+      store.commit('SET_LEARNER_CAN_SIGN_UP', defaults.learner_can_sign_up);
+      store.commit(
+        'SET_LEARNER_CAN_LOGIN_WITH_NO_PASSWORD',
+        defaults.learner_can_login_with_no_password
+      );
+    },
+    setNonformalUsageDefaults(store) {
+      const defaults = permissionPresets.nonformal.mappings;
+      store.commit('SET_FACILITY_PRESET', Presets.NONFORMAL);
+      store.commit('SET_ALLOW_GUEST_ACCESS', true);
+      store.commit('SET_LEARNER_CAN_SIGN_UP', defaults.learner_can_sign_up);
+      store.commit(
+        'SET_LEARNER_CAN_LOGIN_WITH_NO_PASSWORD',
+        defaults.learner_can_login_with_no_password
+      );
+    },
+    showError(store, errorMsg) {
+      store.commit('SET_ERROR', true);
+      store.dispatch('handleApiError', errorMsg);
+    },
   },
   mutations: {
+    START_SETUP(state) {
+      state.started = true;
+    },
+    SET_DEVICE_NAME(state, value) {
+      state.onboardingData.device_name = value;
+    },
     CLEAR_PASSWORD(state) {
       state.onboardingData.superuser.password = '';
     },
@@ -62,16 +144,17 @@ export default {
     SET_FACILITY_NAME(state, name) {
       state.onboardingData.facility.name = name;
     },
-    SET_SU(state, { name, username, password }) {
-      state.onboardingData.superuser.username = username;
-      state.onboardingData.superuser.full_name = name;
-      state.onboardingData.superuser.password = password;
+    SET_SUPERUSER_CREDENTIALS(state, payload) {
+      state.onboardingData.superuser = {
+        ...state.onboardingData.superuser,
+        ...payload,
+      };
     },
     SET_FACILITY_PRESET(state, preset) {
       state.onboardingData.preset = preset;
     },
     SET_ALLOW_GUEST_ACCESS(state, setting) {
-      state.onboardingData.settings.allow_guest_access = setting;
+      state.onboardingData.allow_guest_access = setting;
     },
     SET_LEARNER_CAN_SIGN_UP(state, setting) {
       // These three options are set together
@@ -81,21 +164,13 @@ export default {
     },
     SET_LEARNER_CAN_LOGIN_WITH_NO_PASSWORD(state, setting) {
       state.onboardingData.settings.learner_can_login_with_no_password = setting;
+      state.onboardingData.settings.learner_can_edit_password = !setting;
     },
     SET_LOADING(state, loadingFlag) {
       state.loading = loadingFlag;
     },
     SET_ERROR(state, errorFlag) {
       state.error = errorFlag;
-    },
-    INCREMENT_ONBOARDING_STEP(state) {
-      state.onboardingStep++;
-    },
-    DECREMENT_ONBOARDING_STEP(state) {
-      state.onboardingStep--;
-    },
-    SET_ONBOARDING_STEP(state, step) {
-      state.onboardingStep = step;
     },
   },
 };

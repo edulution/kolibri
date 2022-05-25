@@ -1,8 +1,8 @@
 Feature: Facility admin device management
-  Facility admins with device permissions need to see the *Device* dashboard to be able to manage content
+  Facility admins with device permissions need to see the *Device* dashboard to be able to manage resources
 
   Background:
-    Given I am signed into Kolibri as an admin user with device permissions
+    Given I am signed into Kolibri as a facility admin user with device permissions for content import
 
   Scenario: View all the options for managing content
     When I go to *Device > Channels* page
@@ -15,4 +15,3 @@ Feature: Facility admin device management
       And I can select one of the options
 
       # Continue testing content management by using the scenarios for super admins
-      

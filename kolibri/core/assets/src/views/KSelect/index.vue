@@ -14,15 +14,32 @@
     :invalid="invalid"
     :error="invalidText"
     :name="name"
+    :clearable="clearable"
+    :placeholder="placeholder"
     @change="handleChange"
     @blur="$emit('blur')"
-  />
+  >
+    <template #display>
+      <slot name="display"></slot>
+    </template>
+    <template #option="{ highlighted, index, option, selected }">
+      <slot
+        name="option"
+        :highlighted="highlighted"
+        :index="index"
+        :option="option"
+        :selected="selected"
+      >
+      </slot>
+    </template>
+  </UiSelect>
 
 </template>
 
 
 <script>
 
+  import has from 'lodash/has';
   import isObject from 'lodash/isObject';
   import UiSelect from './KeenUiSelect';
 
@@ -38,7 +55,7 @@
     } else if (Object.keys(object).length === 0) {
       return true;
     }
-    return object.hasOwnProperty('value') && object.hasOwnProperty('label');
+    return has(object, 'value') && has(object, 'label');
   }
 
   /**
@@ -79,7 +96,7 @@
        */
       label: {
         type: String,
-        required: true,
+        default: null,
       },
       /**
        * Whether disabled or not
@@ -100,7 +117,7 @@
        */
       invalidText: {
         type: String,
-        required: false,
+        default: null,
       },
       /**
        * Whether or not display as inline block
@@ -112,6 +129,18 @@
       floatingLabel: {
         type: Boolean,
         default: true,
+      },
+      placeholder: {
+        type: String,
+        default: null,
+      },
+      /**
+       * Whether to turn into a clearable state
+       * when an option has been selected.
+       */
+      clearable: {
+        type: Boolean,
+        default: false,
       },
     },
     data() {
@@ -131,7 +160,9 @@
       },
       selection(newSelection) {
         /* Emits new selection.*/
-        this.$emit('change', newSelection);
+        if (!this.disabled) {
+          this.$emit('change', newSelection);
+        }
       },
     },
     methods: {
@@ -146,6 +177,8 @@
 
 <style lang="scss" scoped>
 
+  @import '~kolibri-design-system/lib/keen/styles/imports';
+
   .k-select-inline {
     display: inline-block;
     width: 150px;
@@ -156,6 +189,16 @@
   .k-select-disabled /deep/ .ui-select__label-text.is-inline {
     cursor: default;
   }
+
+  /* stylelint-disable csstree/validator */
+
+  .k-select-disabled {
+    border-bottom-color: $ui-input-text-color--disabled;
+    border-bottom-style: $ui-input-border-style--disabled;
+    border-bottom-width: $ui-input-border-width--active;
+  }
+
+  /* stylelint-enable */
 
   /deep/ .ui-select__display-value {
     line-height: 1.3;

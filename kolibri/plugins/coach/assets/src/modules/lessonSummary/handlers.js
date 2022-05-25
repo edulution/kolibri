@@ -15,7 +15,6 @@ export function setLessonSummaryState(store, params) {
   const loadRequirements = [
     store.dispatch('lessonSummary/updateCurrentLesson', lessonId),
     LearnerGroupResource.fetchCollection({ getParams: { parent: classId } }),
-    store.dispatch('lessonSummary/setLessonReportTableData', { lessonId }),
     // Need state.classList to be set for copying to work
     store.dispatch('setClassList'),
   ];
@@ -26,7 +25,7 @@ export function setLessonSummaryState(store, params) {
       const resourceIds = currentLesson.resources.map(resourceObj => resourceObj.contentnode_id);
 
       return store.dispatch('lessonSummary/getResourceCache', resourceIds).then(() => {
-        store.commit('lessonSummary/SET_WORKING_RESOURCES', resourceIds);
+        store.commit('lessonSummary/SET_WORKING_RESOURCES', currentLesson.resources);
         store.commit('lessonSummary/SET_LEARNER_GROUPS', learnerGroups);
         store.commit('SET_PAGE_NAME', LessonsPageNames.SUMMARY);
       });

@@ -1,93 +1,139 @@
 <template>
 
-  <div ref="sideNav" class="side-nav-wrapper" @keydown.esc="toggleNav">
+  <div
+    ref="sideNav"
+    class="side-nav-wrapper"
+    tabindex="0"
+    @keyup.esc="toggleNav"
+  >
     <transition name="side-nav">
       <div
         v-show="navShown"
         class="side-nav"
         :style="{
           width: `${width}px`,
-          color: $coreTextDefault,
-          backgroundColor: $coreBgLight,
+          color: $themeTokens.text,
+          backgroundColor: $themeTokens.surface,
         }"
       >
-        <div
-          class="side-nav-header"
-          :style="{
-            height: headerHeight + 'px',
-            width: `${width}px`, paddingTop: windowIsSmall ? '4px' : '8px',
-            backgroundColor: $coreTextDefault,
-          }"
+        <FocusTrap
+          @shouldFocusFirstEl="$emit('shouldFocusFirstEl')"
+          @shouldFocusLastEl="focusLastEl"
         >
-          <UiIconButton
-            ref="toggleButton"
-            :aria-label="$tr('closeNav')"
-            type="secondary"
-            color="white"
-            size="large"
-            class="side-nav-header-icon"
-            @click="toggleNav"
-          >
-            <mat-svg
-              name="close"
-              category="navigation"
-              class="side-nav-header-close"
-            />
-          </UiIconButton>
-          <span
-            class="side-nav-header-name"
-            :style="{ color: $coreBgLight }"
-          >{{ $tr('kolibri') }}</span>
-        </div>
 
-        <div
-          class="side-nav-scrollable-area"
-          :style="{ top: `${headerHeight}px`, width: `${width}px` }"
-        >
-          <CoreMenu
-            role="navigation"
-            :style="{ backgroundColor: $coreBgLight }"
-            :hasIcons="true"
-            :aria-label="$tr('navigationLabel')"
-          >
-            <template slot="options">
-              <component :is="component" v-for="component in menuOptions" :key="component.name" />
-              <SideNavDivider />
-            </template>
-          </CoreMenu>
 
-          <div class="side-nav-scrollable-area-footer" :style="{ color: $coreTextAnnotation }">
-            <CoreLogo class="side-nav-scrollable-area-footer-logo" />
-            <div class="side-nav-scrollable-area-footer-info">
-              <p>{{ footerMsg }}</p>
-              <!-- Not translated -->
-              <p>© {{ copyrightYear }} Learning Equality</p>
-              <p>
-                <KButton
-                  ref="privacyLink"
-                  :text="$tr('privacyLink')"
-                  class="privacy-link"
-                  appearance="basic-link"
-                  @click="handleClickPrivacyLink"
-                />
-              </p>
+          <div
+            class="side-nav-scrollable-area"
+            :style="{ top: `${topBarHeight}px`, width: `${width}px` }"
+          >
+            <img
+              v-if="themeConfig.sideNav.topLogo"
+              class="logo"
+              :src="themeConfig.sideNav.topLogo.src"
+              :alt="themeConfig.sideNav.topLogo.alt"
+              :style="themeConfig.sideNav.topLogo.style"
+            >
+            <CoreMenu
+              ref="coreMenu"
+              role="navigation"
+              :style="{ backgroundColor: $themeTokens.surface }"
+              :aria-label="$tr('navigationLabel')"
+            >
+              <template #options>
+                <component :is="component" v-for="component in menuOptions" :key="component.name" />
+                <SideNavDivider />
+              </template>
+            </CoreMenu>
+
+            <div v-if="showSoudNotice" style="padding: 16px">
+              <LearnOnlyDeviceNotice />
+            </div>
+
+            <div
+              class="side-nav-scrollable-area-footer"
+              :style="{ color: $themeTokens.annotation }"
+            >
+              <!-- custom branded footer logo + text -->
+              <template v-if="themeConfig.sideNav.brandedFooter">
+                <img
+                  v-if="themeConfig.sideNav.brandedFooter.logo"
+                  class="side-nav-scrollable-area-footer-logo"
+                  :src="themeConfig.sideNav.brandedFooter.logo.src"
+                  :alt="themeConfig.sideNav.brandedFooter.logo.alt"
+                  :style="themeConfig.sideNav.brandedFooter.logo.style"
+                >
+                <div
+                  v-if="themeConfig.sideNav.brandedFooter.paragraphArray
+                    && themeConfig.sideNav.brandedFooter.paragraphArray.length"
+                  class="side-nav-scrollable-area-footer-info"
+                >
+                  <p
+                    v-for="(line, index) in themeConfig.sideNav.brandedFooter.paragraphArray"
+                    :key="index"
+                  >
+                    {{ line }}
+                  </p>
+                </div>
+              </template>
+              <!-- Kolibri footer logo -->
+              <CoreLogo
+                v-if="themeConfig.sideNav.showKolibriFooterLogo"
+                class="side-nav-scrollable-area-footer-logo"
+              />
+              <div class="side-nav-scrollable-area-footer-info">
+                <p>{{ footerMsg }}</p>
+                <!-- Not translated -->
+                <p>© {{ copyrightYear }} Learning Equality</p>
+                <p>
+                  <KButton
+                    ref="privacyLink"
+                    :text="coreString('usageAndPrivacyLabel')"
+                    class="privacy-link"
+                    appearance="basic-link"
+                    @click="handleClickPrivacyLink"
+                  />
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-
+          <div
+            class="side-nav-header"
+            :style="{
+              height: topBarHeight + 'px',
+              width: `${width}px`, paddingTop: windowIsSmall ? '4px' : '8px',
+              backgroundColor: $themeTokens.appBar,
+            }"
+          >
+            <KIconButton
+              ref="closeButton"
+              tabindex="0"
+              icon="close"
+              :color="$themeTokens.textInverted"
+              class="side-nav-header-icon"
+              :ariaLabel="$tr('closeNav')"
+              size="large"
+              @click="toggleNav"
+            />
+            <span
+              class="side-nav-header-name"
+              :style="{ color: $themeTokens.textInverted }"
+            >{{ sideNavTitleText }}</span>
+          </div>
+        </FocusTrap>
       </div>
     </transition>
 
-    <div
+    <Backdrop
       v-show="navShown"
+      :transitions="true"
       class="side-nav-backdrop"
       @click="toggleNav"
-    >
-    </div>
+    />
 
     <PrivacyInfoModal
       v-if="privacyModalVisible"
       @cancel="privacyModalVisible = false"
+      @submit="privacyModalVisible = false"
     />
 
   </div>
@@ -97,20 +143,23 @@
 
 <script>
 
-  import { mapState, mapGetters } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
+  import { mapGetters } from 'vuex';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { UserKinds, NavComponentSections } from 'kolibri.coreVue.vuex.constants';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import responsiveElement from 'kolibri.coreVue.mixins.responsiveElement';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
   import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
-  import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
   import CoreLogo from 'kolibri.coreVue.components.CoreLogo';
-  import KButton from 'kolibri.coreVue.components.KButton';
+  import LearnOnlyDeviceNotice from 'kolibri.coreVue.components.LearnOnlyDeviceNotice';
   import navComponents from 'kolibri.utils.navComponents';
   import PrivacyInfoModal from 'kolibri.coreVue.components.PrivacyInfoModal';
+  import themeConfig from 'kolibri.themeConfig';
+  import Backdrop from 'kolibri.coreVue.components.Backdrop';
   import navComponentsMixin from '../mixins/nav-components';
   import logout from './LogoutSideNavEntry';
   import SideNavDivider from './SideNavDivider';
+  import FocusTrap from './FocusTrap.vue';
+  import plugin_data from 'plugin_data';
 
   // Explicit ordered list of roles for nav item sorting
   const navComponentRoleOrder = [
@@ -125,48 +174,40 @@
   export default {
     name: 'SideNav',
     components: {
+      Backdrop,
       CoreMenu,
-      UiIconButton,
       CoreLogo,
+      LearnOnlyDeviceNotice,
       SideNavDivider,
-      KButton,
       PrivacyInfoModal,
+      FocusTrap,
     },
-    mixins: [responsiveWindow, responsiveElement, navComponentsMixin, themeMixin],
-    $trs: {
-      kolibri: 'Kolibri',
-      navigationLabel: 'Main user navigation',
-      closeNav: 'Close navigation',
-      poweredBy: 'Kolibri {version}',
-      privacyLink: 'Usage and privacy',
+    mixins: [commonCoreStrings, responsiveWindowMixin, responsiveElementMixin, navComponentsMixin],
+    setup() {
+      return { themeConfig };
     },
     props: {
       navShown: {
         type: Boolean,
         required: true,
       },
-      headerHeight: {
-        type: Number,
-        required: true,
-      },
-      width: {
-        type: Number,
-        required: true,
-      },
     },
     data() {
       return {
-        previouslyFocusedElement: null,
         // __copyrightYear is injected by Webpack DefinePlugin
         copyrightYear: __copyrightYear,
         privacyModalVisible: false,
+        isSubsetOfUsersDevice: plugin_data.isSubsetOfUsersDevice,
       };
     },
     computed: {
-      ...mapGetters(['isUserLoggedIn', 'isSuperuser', 'isAdmin', 'isCoach', 'canManageContent']),
-      ...mapState({
-        session: state => state.core.session,
-      }),
+      ...mapGetters(['isAdmin', 'isCoach']),
+      width() {
+        return this.topBarHeight * 4;
+      },
+      showSoudNotice() {
+        return this.isSubsetOfUsersDevice && (this.isAdmin || this.isCoach);
+      },
       footerMsg() {
         return this.$tr('poweredBy', { version: __version });
       },
@@ -181,20 +222,26 @@
           this.filterByRole
         );
       },
+      sideNavTitleText() {
+        if (this.themeConfig.sideNav.title) {
+          return this.themeConfig.sideNav.title;
+        }
+        return this.coreString('kolibriLabel');
+      },
     },
     watch: {
       navShown(isShown) {
         this.$nextTick(() => {
           if (isShown) {
-            window.addEventListener('focus', this.containFocus, true);
-            this.previouslyFocusedElement = document.activeElement;
-            this.$refs.sideNav.focus();
-          } else {
-            window.removeEventListener('focus', this.containFocus, true);
-            this.previouslyFocusedElement.focus();
+            this.focusFirstEl();
           }
         });
       },
+    },
+    mounted() {
+      this.$nextTick(() => {
+        this.$emit('shouldFocusFirstEl');
+      });
     },
     methods: {
       toggleNav() {
@@ -222,14 +269,34 @@
         // There is no difference!
         return 0;
       },
-      containFocus(event) {
-        if (event.target === window) {
-          return event;
-        }
-        if (!this.$refs.sideNav.contains(event.target)) {
-          this.$refs.toggleButton.$el.focus();
-        }
-        return event;
+      /**
+       * @public
+       * Focuses on correct first element for FocusTrap.
+       */
+      focusFirstEl() {
+        this.$nextTick(() => {
+          this.$refs.coreMenu.focusFirstEl();
+        });
+      },
+      focusLastEl() {
+        this.$refs.closeButton.$el.focus();
+      },
+    },
+    $trs: {
+      navigationLabel: {
+        message: 'Main user navigation',
+        context:
+          'Refers to the main side navigation bar. The message is providing additional context to the screen-reader users, but is not visible in the Kolibri UI.',
+      },
+      closeNav: {
+        message: 'Close navigation',
+        context:
+          "This message is providing additional context to the screen-reader users, but is not visible in the Kolibri UI.\n\nIn this case the screen-reader will announce the message when user navigates to the 'X' button with the keyboard, to indicate that it allows them to close the sidebar navigation menu. (Note that the sidebar needs to have been previously opened)",
+      },
+      poweredBy: {
+        message: 'Kolibri {version}',
+        context:
+          'Indicates the current version of Kolibri.\n\nFor languages with non-latin scripts, Kolibri should be transcribed phonetically into the target language, similar to a person\'s name. It should not be translated as "hummingbird".',
       },
     },
   };
@@ -239,7 +306,12 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
+
+  // Matches the Keen-UI/UiToolbar box-shadow property
+  %ui-toolbar-box-shadow {
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 2px rgba(0, 0, 0, 0.2);
+  }
 
   .side-nav-wrapper {
     overflow-x: hidden;
@@ -251,6 +323,7 @@
     position: fixed;
     top: 0;
     bottom: 0;
+    left: 0;
     z-index: 16;
   }
 
@@ -286,15 +359,10 @@
     left: 0;
     z-index: 17;
     font-size: 14px;
-    text-transform: uppercase;
   }
 
   .side-nav-header-icon {
     margin-left: 5px; /* align with a toolbar icon below */
-  }
-
-  .side-nav-header-close {
-    fill: white;
   }
 
   .side-nav-header-name {
@@ -308,6 +376,7 @@
     position: fixed;
     bottom: 0;
     left: 0;
+    padding-top: 4px;
     overflow: auto;
   }
 
@@ -324,21 +393,14 @@
     margin-top: 8px;
     font-size: 12px;
     line-height: 16px;
+
     p {
       margin: 0;
     }
   }
 
   .side-nav-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
     z-index: 15;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    background-attachment: fixed;
-    transition: opacity 0.3s ease;
   }
 
   /* keen menu */
@@ -348,37 +410,13 @@
     border: 0;
   }
 
-  /deep/ .ui-menu-option {
-    &:not(.is-divider) {
-      padding-top: 4px;
-      padding-bottom: 4px;
-
-      .ui-menu-option-text {
-        overflow: visible;
-        font-size: 14px;
-        white-space: normal;
-      }
-
-      .ui-menu-option-icon {
-        font-size: 1.2em;
-      }
-
-      &.is-active {
-        .ui-menu-option-text {
-          font-weight: bold;
-          opacity: 1;
-        }
-      }
-    }
-
-    &.is-divider {
-      margin-top: 0;
-      margin-bottom: 0;
-    }
-  }
-
   .privacy-link {
     text-align: left;
+  }
+
+  .logo {
+    max-width: 100%;
+    height: auto;
   }
 
 </style>

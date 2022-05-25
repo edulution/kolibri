@@ -3,14 +3,14 @@
   <div>
     <!-- visible text area, hidden to screenreaders -->
     <textarea
-      v-model="text"
+      :value="text"
       readonly
       class="error-log"
       wrap="soft"
       aria-hidden="true"
       :style="[dynamicHeightStyle, {
-        backgroundColor: $coreBgError,
-        border: $coreGrey300,
+        backgroundColor: $themePalette.grey.v_200,
+        border: $themePalette.grey.v_300,
       }]"
     >
     </textarea>
@@ -20,7 +20,7 @@
       <KButton
         v-if="clipboardCapable"
         ref="copyButton"
-        class="copy-to-clipboard-button"
+        :style="{ marginTop: '8px', marginBottom: '8px' }"
         :primary="false"
         :text="$tr('copyToClipboardButtonPrompt')"
       />
@@ -32,22 +32,11 @@
 
 <script>
 
-  import { mapState, mapActions } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KButton from 'kolibri.coreVue.components.KButton';
+  import { mapActions } from 'vuex';
   import ClipboardJS from 'clipboard';
 
   export default {
     name: 'TechnicalTextBlock',
-    $trs: {
-      copyToClipboardButtonPrompt: 'Copy to clipboard',
-      copiedToClipboardConfirmation: 'Copied to clipboard',
-      downloadAsTextPrompt: 'Or download as a text file',
-    },
-    components: {
-      KButton,
-    },
-    mixins: [themeMixin],
     props: {
       text: {
         type: String,
@@ -55,7 +44,7 @@
       },
       maxHeight: {
         type: Number,
-        required: false,
+        default: null,
       },
       minHeight: {
         type: Number,
@@ -63,9 +52,6 @@
       },
     },
     computed: {
-      ...mapState({
-        error: state => state.core.error,
-      }),
       clipboardCapable() {
         return ClipboardJS.isSupported();
       },
@@ -98,6 +84,18 @@
     methods: {
       ...mapActions(['createSnackbar']),
     },
+    $trs: {
+      copyToClipboardButtonPrompt: {
+        message: 'Copy to clipboard',
+        context:
+          'Button which allows the user to copy content to the clipboard.\n\nA clipboard is a temporary storage area where material cut or copied from a file is kept for pasting into another file.',
+      },
+      copiedToClipboardConfirmation: {
+        message: 'Copied to clipboard',
+        context:
+          'Message displayed when some content is copied to the clipboard.\n\nA clipboard is a temporary storage area where material cut or copied from a file is kept for pasting into another file.',
+      },
+    },
   };
 
 </script>
@@ -105,7 +103,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   .error-log {
     width: 100%;
@@ -115,10 +113,6 @@
     white-space: pre;
     resize: none;
     border-radius: $radius;
-  }
-
-  .copy-to-clipboard-button {
-    margin-left: 0;
   }
 
 </style>

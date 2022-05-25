@@ -1,62 +1,83 @@
-// Shim Array includes for ES7 spec compliance
-require('array-includes').shim();
-// polyfill for older browsers
-// TODO: rtibbles whittle down these polyfills to only what is needed for the application
-require('core-js');
-require('url-polyfill');
+/**
+ * Provides the public API for the Kolibri FrontEnd core app.
+ * @module Facade
+ */
+import 'core-js';
+import urls from 'kolibri.urls';
+import logging from 'kolibri.lib.logging';
+import store from 'kolibri.coreVue.vuex.store';
+import Vue from 'vue';
+import VueMeta from 'vue-meta';
+import VueRouter from 'vue-router';
+import Vuex from 'vuex';
+import VueCompositionApi from '@vue/composition-api';
+import KThemePlugin from 'kolibri-design-system/lib/KThemePlugin';
+import heartbeat from 'kolibri.heartbeat';
+import KContentPlugin from 'kolibri-design-system/lib/content/KContentPlugin';
+import initializeTheme from '../styles/initializeTheme';
+import KSelect from '../views/KSelect';
+import { i18nSetup, languageDirection } from '../utils/i18n';
+import ContentRendererErrorComponent from '../views/ContentRenderer/ContentRendererError';
+import apiSpec from './apiSpec';
 
 // Do this before any async imports to ensure that public paths
 // are set correctly
-require('kolibri.urls').default.setUp();
-// include global styles
-require('purecss/build/base-min.css');
-require('../styles/main.scss');
-require('../styles/globalDynamicStyles');
-require('./vuexModality');
-require('./monitorPageVisibility');
+urls.setUp();
 
-// Required to setup Keen UI, should be imported only once in your project
-require('keen-ui/src/bootstrap');
-
-// configure Keen
-const KeenUiConfig = require('keen-ui/src/config').default;
-KeenUiConfig.set(require('../keen-config/options.json'));
-require('../keen-config/font-stack.scss');
-
-// set up logging
-const logging = require('kolibri.lib.logging').default;
-
-logging.setDefaultLevel(process.env.NODE_ENV === 'production' ? 2 : 0);
-
-// optionally set up client-side Sentry error reporting
-if (global.sentryDSN) {
-  require.ensure(['@sentry/browser'], function(require) {
-    const Sentry = require('@sentry/browser');
-    const Vue = require('vue');
-
-    Sentry.init({
-      dsn: global.sentryDSN,
-      release: __version,
-      integrations: [new Sentry.Integrations.Vue({ Vue })],
-    });
-    logging.warn('Sentry error logging is enabled - this disables some local error reporting!');
-    logging.warn(
-      '(see https://github.com/vuejs/vue/issues/8433 and https://docs.sentry.io/platforms/javascript/vue/)'
-    );
-  });
+// Shim window.location.origin for IE.
+if (!window.location.origin) {
+  window.location.origin = `${window.location.protocol}//${window.location.hostname}${
+    window.location.port ? `:${window.location.port}` : ''
+  }`;
 }
 
-// Create an instance of the global app object.
-// This is exported by webpack as the kolibriGlobal object, due to the 'output.library' flag
+// set up logging
+logging.setDefaultLevel(process.env.NODE_ENV === 'production' ? 2 : 0);
+
+/**
+ * Object that forms the public API for the Kolibri
+ * core app.
+ */
+const coreApp = {
+  // Assign API spec
+  ...apiSpec,
+  version: __version,
+};
+
+// set up theme
+initializeTheme();
+
+// monitor page visibility
+document.addEventListener('visibilitychange', function() {
+  store.dispatch('setPageVisibility');
+});
+
+// Register Vue plugins and components
+Vue.use(Vuex);
+Vue.use(VueRouter);
+Vue.use(VueMeta);
+Vue.use(VueCompositionApi);
+
+// - Installs helpers on Vue instances: $themeBrand, $themeTokens, $themePalette
+// - Set up global state, listeners, and styles
+// - Register KDS components
+Vue.use(KThemePlugin);
+
+Vue.use(KContentPlugin, {
+  languageDirection,
+  ContentRendererErrorComponent,
+  coreApp,
+  registerContentActivity: heartbeat.setActive,
+});
+
+Vue.component('KSelect', KSelect);
+
+// Start the heartbeat polling here, as any URL needs should be set by now
+heartbeat.startPolling();
+
+i18nSetup().then(coreApp.ready);
+
+// This is exported by webpack as the kolibriCoreAppGlobal object, due to the 'output.library' flag
 // which exports the coreApp at the bottom of this file as a named global variable:
 // https://webpack.github.io/docs/configuration.html#output-library
-//
-// This is achieved by setting the `src_file` attribute in the core
-// kolibri_plugin.py which tells the webpack build scripts to set the export of this file
-// to a global variable.
-const CoreAppConstructor = require('./constructor').default;
-
-const coreApp = new CoreAppConstructor();
-
-// Use a module.exports here to be compatible with webpack library output
-module.exports = coreApp;
+export default coreApp;

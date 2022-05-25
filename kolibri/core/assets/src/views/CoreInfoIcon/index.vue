@@ -4,13 +4,14 @@
     <UiIcon
       ref="icon"
       class="info-icon"
-      :style="{ color: $coreAccentColor }"
+      :style="{ color: $themeTokens.primary }"
       :iconAriaLabel="iconAriaLabel"
     >
-      <mat-svg name="info" category="action" />
+      <KIcon icon="info" :style="{ fill: $themeTokens.primary }" />
     </UiIcon>
     <KTooltip
       reference="icon"
+      :class="{ 'ltr': !isRtl }"
       :refs="$refs"
       :placement="tooltipPlacement"
     >
@@ -23,17 +24,13 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import UiIcon from 'keen-ui/src/UiIcon';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
+  import UiIcon from 'kolibri-design-system/lib/keen/UiIcon';
 
   export default {
     name: 'CoreInfoIcon',
     components: {
       UiIcon,
-      KTooltip,
     },
-    mixins: [themeMixin],
     props: {
       iconAriaLabel: {
         type: String,
@@ -45,7 +42,7 @@
       },
       tooltipPlacement: {
         type: String,
-        required: false,
+        default: 'bottom',
       },
     },
   };
@@ -60,6 +57,13 @@
     font-size: 1.2em;
     vertical-align: top;
     cursor: pointer;
+  }
+
+  // Overwrite KIcon styles to make it compatible with UIIcon
+  /deep/ svg {
+    top: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .pos-rel {

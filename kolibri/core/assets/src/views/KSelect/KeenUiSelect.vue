@@ -29,7 +29,7 @@
       <div
         ref="label"
         class="ui-select-label"
-
+        :class="$computedClass({ ':focus': $coreOutline })"
         :tabindex="disabled ? null : '0'"
 
         @click="toggleDropdown"
@@ -55,13 +55,24 @@
             class="ui-select-display-value"
             :class="{ 'is-placeholder': !hasDisplayText }"
           >
-            {{ hasDisplayText ? displayText : (
-              hasFloatingLabel && isLabelInline) ? null : placeholder }}
+            <slot name="display">
+              {{ hasDisplayText ? displayText : (
+                hasFloatingLabel && isLabelInline) ? null : placeholder }}
+            </slot>
           </div>
 
-          <UiIcon class="ui-select-dropdown-button">
+          <UiIcon v-if="!clearableState" class="ui-select-dropdown-button">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M6.984 9.984h10.03L12 15z" /></svg>
           </UiIcon>
+          <KIconButton
+            v-else
+            class="overlay-close-button"
+            icon="close"
+            :ariaLabel="coreString('clearAction')"
+            :color="$themeTokens.text"
+            :tooltip="coreString('clearAction')"
+            @click.stop="setValue()"
+          />
         </div>
 
         <transition name="ui-select-transition-fade">
@@ -69,8 +80,7 @@
             v-show="showDropdown"
             ref="dropdown"
             class="ui-select-dropdown"
-            :style="{ color: $coreActionNormal }"
-
+            :style="{ color: $themeTokens.primary, backgroundColor: $themeTokens.surface }"
             tabindex="-1"
             @keydown.enter.prevent.stop="selectHighlighted"
             @keydown.space.prevent.stop="selectHighlighted"
@@ -119,7 +129,11 @@
               />
             </div>
 
-            <ul ref="optionsList" class="ui-select-options">
+            <ul
+              ref="optionsList"
+              class="ui-select-options"
+              :style="{ backgroundColor: $themeTokens.surface }"
+            >
               <KeenUiSelectOption
                 v-for="(option, index) in filteredOptions"
                 ref="options"
@@ -176,29 +190,32 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import fuzzysearch from 'fuzzysearch';
   import startswith from 'lodash/startsWith';
   import sortby from 'lodash/sortBy';
-  import UiIcon from 'keen-ui/src/UiIcon';
-  import KCircularLoader from 'kolibri.coreVue.components.KCircularLoader';
+  import UiIcon from 'kolibri-design-system/lib/keen/UiIcon';
 
-  import { looseIndexOf, looseEqual } from 'keen-ui/src/helpers/util';
-  import { scrollIntoView, resetScroll } from 'keen-ui/src/helpers/element-scroll';
-  import config from 'keen-ui/src/config';
+  import { looseIndexOf, looseEqual } from 'kolibri-design-system/lib/keen/helpers/util';
+  import {
+    scrollIntoView,
+    resetScroll,
+  } from 'kolibri-design-system/lib/keen/helpers/element-scroll';
+  import config from 'kolibri-design-system/lib/keen/config';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import KeenUiSelectOption from './KeenUiSelectOption.vue';
 
   export default {
     name: 'KeenUiSelect',
-
     components: {
       UiIcon,
-      KCircularLoader,
       KeenUiSelectOption,
     },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings],
     props: {
-      name: String,
+      name: {
+        type: String,
+        default: null,
+      },
       value: {
         type: [String, Number, Object, Array],
         required: true,
@@ -209,13 +226,22 @@
           return [];
         },
       },
-      placeholder: String,
-      icon: String,
+      placeholder: {
+        type: String,
+        default: '',
+      },
+      icon: {
+        type: String,
+        default: null,
+      },
       iconPosition: {
         type: String,
         default: 'left', // 'left' or 'right'
       },
-      label: String,
+      label: {
+        type: String,
+        default: null,
+      },
       floatingLabel: {
         type: Boolean,
         default: false,
@@ -240,7 +266,10 @@
         type: String,
         default: 'Search',
       },
-      filter: Function,
+      filter: {
+        type: Function,
+        default: null,
+      },
       disableFilter: {
         type: Boolean,
         default: false,
@@ -263,9 +292,19 @@
         type: Boolean,
         default: false,
       },
-      help: String,
-      error: String,
+      help: {
+        type: String,
+        default: null,
+      },
+      error: {
+        type: String,
+        default: null,
+      },
       disabled: {
+        type: Boolean,
+        default: false,
+      },
+      clearable: {
         type: Boolean,
         default: false,
       },
@@ -425,20 +464,27 @@
       activeColorStyle() {
         if (this.isActive) {
           return {
-            color: this.$coreActionNormal,
+            color: this.$themeTokens.primary,
           };
         }
 
         return {};
       },
       activeBorderStyle() {
-        if (this.isActive) {
+        if (this.isActive && !this.clearableState) {
           return {
-            borderBottomColor: this.$coreActionNormal,
+            borderBottomColor: this.$themeTokens.primary,
+          };
+        } else if (this.clearableState) {
+          return {
+            cursor: 'default',
           };
         }
 
         return {};
+      },
+      clearableState() {
+        return this.clearable && this.value && Object.keys(this.value).length && !this.disabled;
       },
     },
 
@@ -679,7 +725,7 @@
       },
 
       openDropdown() {
-        if (this.disabled) {
+        if (this.disabled || this.clearableState) {
           return;
         }
 
@@ -771,6 +817,9 @@
         });
       },
 
+      /**
+       * @public
+       */
       reset() {
         this.setValue(JSON.parse(this.initialValue));
         this.clearQuery();
@@ -789,8 +838,8 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
-  @import '~keen-ui/src/styles/imports';
+  @import '~kolibri-design-system/lib/styles/definitions';
+  @import '~kolibri-design-system/lib/keen/styles/imports';
 
   /* stylelint-disable csstree/validator */
 
@@ -818,6 +867,12 @@
     }
 
     &.is-active:not(.is-disabled) {
+      .ui-select-display {
+        border-bottom-width: $ui-input-border-width--active;
+      }
+    }
+
+    &.is-active {
       .ui-select-display {
         border-bottom-width: $ui-input-border-width--active;
       }
@@ -885,8 +940,6 @@
       .ui-select-display {
         color: $ui-input-text-color--disabled;
         cursor: default;
-        border-bottom-style: $ui-input-border-style--disabled;
-        border-bottom-width: $ui-input-border-width--active;
       }
 
       .ui-select-dropdown-button,
@@ -956,7 +1009,10 @@
   }
 
   .ui-select-display-value {
+    position: relative;
+    top: 2px;
     flex-grow: 1;
+    height: 22px; // height and top help prevent descender clipping
     overflow: hidden;
     text-overflow: ellipsis;
 
@@ -985,7 +1041,6 @@
     margin: 0;
     margin-bottom: rem-calc(8px);
     list-style-type: none;
-    background-color: white;
     outline: none;
     box-shadow: 1px 2px 8px $md-grey-600;
   }
@@ -1046,7 +1101,6 @@
     overflow-y: auto;
     color: $primary-text-color;
     list-style-type: none;
-    background-color: white;
   }
 
   .ui-select-no-results {
@@ -1092,5 +1146,10 @@
   }
 
   /* stylelint-enable */
+
+  .overlay-close-button {
+    position: absolute;
+    right: 0;
+  }
 
 </style>

@@ -5,10 +5,11 @@ import isEqual from 'lodash/isEqual';
 import urls from 'kolibri.urls';
 import cloneDeep from './cloneDeep';
 import ConditionalPromise from './conditionalPromise';
+import plugin_data from 'plugin_data';
 
 export const logging = logger.getLogger(__filename);
 
-const contentCacheKey = global.contentCacheKey;
+const contentCacheKey = plugin_data.contentCacheKey;
 
 /** Class representing a single API resource object */
 export class Model {
@@ -71,10 +72,10 @@ export class Model {
           } else {
             this.synced = false;
             // Do a fetch on the URL.
-            this.resource.client({ path: this.url, params: this.getParams }).then(
+            this.resource.client({ url: this.url, params: this.getParams }).then(
               response => {
                 // Set the retrieved Object onto the Model instance.
-                this.set(response.entity);
+                this.set(response.data);
                 // Flag that the Model has been fetched.
                 this.synced = true;
                 // Flag that the model exists on the server.
@@ -85,7 +86,7 @@ export class Model {
                 this.promises.splice(this.promises.indexOf(promise), 1);
               },
               response => {
-                logging.error('An error occurred', response);
+                this.resource.logError(response);
                 reject(response);
                 // Clean up the reference to this promise
                 this.promises.splice(this.promises.indexOf(promise), 1);
@@ -137,18 +138,18 @@ export class Model {
             if (!this.new || exists) {
               // If this Model is not new, then can do a PATCH against the Model
               url = this.url;
-              clientObj = { path: url, method: 'PATCH', entity: payload };
+              clientObj = { url: url, method: 'patch', data: payload, params: this.getParams };
             } else {
               // Otherwise, must POST to the Collection endpoint to create the Model
               url = this.resource.collectionUrl();
-              clientObj = { path: url, entity: payload };
+              clientObj = { url: url, method: 'post', data: payload, params: this.getParams };
             }
             // Do a save on the URL.
             this.resource.client(clientObj).then(
               response => {
                 const oldId = this.id;
                 // Set the retrieved Object onto the Model instance.
-                this.set(response.entity);
+                this.set(response.data);
                 // if the model did not used to have an id and now does, add it to the cache.
                 if (!oldId && this.id) {
                   this.resource.addModel(this, this.getParams);
@@ -163,7 +164,7 @@ export class Model {
                 this.promises.splice(this.promises.indexOf(promise), 1);
               },
               response => {
-                logging.error('An error occurred', response);
+                this.resource.logError(response);
                 reject(response);
                 // Clean up the reference to this promise
                 this.promises.splice(this.promises.indexOf(promise), 1);
@@ -195,7 +196,7 @@ export class Model {
             reject('Can not delete model that we do not have an id for');
           } else {
             // Otherwise, DELETE the Model
-            const clientObj = { path: this.url, method: 'DELETE' };
+            const clientObj = { url: this.url, method: 'delete', params: this.getParams };
             this.resource.client(clientObj).then(
               () => {
                 // delete this instance
@@ -213,7 +214,7 @@ export class Model {
                 this.promises.splice(this.promises.indexOf(promise), 1);
               },
               response => {
-                logging.error('An error occurred', response);
+                this.resource.logError(response);
                 reject(response);
                 // Clean up the reference to this promise
                 this.promises.splice(this.promises.indexOf(promise), 1);
@@ -301,28 +302,28 @@ export class Collection {
             resolve(this.data);
           } else {
             this.synced = false;
-            this.resource.client({ path: this.url, params: this.getParams }).then(
+            this.resource.client({ url: this.url, params: this.getParams }).then(
               response => {
                 // Set response object - an Array - on the Collection to record the data.
                 // First check that the response *is* an Array
-                if (Array.isArray(response.entity)) {
+                if (Array.isArray(response.data)) {
                   this.clearCache();
-                  this.set(response.entity);
+                  this.set(response.data);
                   // Mark that the fetch has completed.
                   this.synced = true;
                   // Flag that the collection exists on the server.
                   this.new = false;
-                } else if (typeof (response.entity || {}).results !== 'undefined') {
+                } else if (typeof (response.data || {}).results !== 'undefined') {
                   // If it's not, there are two possibilities - something is awry,
                   // or we have received data with additional metadata!
                   this.clearCache();
                   // Collections with additional metadata have 'results' as their results
                   // object so interpret this as such.
-                  this.set(response.entity.results);
+                  this.set(response.data.results);
                   this.metadata = {};
-                  Object.keys(response.entity).forEach(key => {
+                  Object.keys(response.data).forEach(key => {
                     if (key !== 'results') {
-                      this.metadata[key] = response.entity[key];
+                      this.metadata[key] = response.data[key];
                     }
                   });
                   // Mark that the fetch has completed.
@@ -331,7 +332,7 @@ export class Collection {
                   this.new = false;
                 } else {
                   // It's all gone a bit Pete Tong.
-                  logging.debug('Data appears to be malformed', response.entity);
+                  this.resource.logError(response);
                   reject(response);
                 }
                 resolve(this.data);
@@ -339,7 +340,7 @@ export class Collection {
                 this.promises.splice(this.promises.indexOf(promise), 1);
               },
               response => {
-                logging.error('An error occurred', response);
+                this.resource.logError(response);
                 reject(response);
                 // Clean up the reference to this promise
                 this.promises.splice(this.promises.indexOf(promise), 1);
@@ -376,20 +377,20 @@ export class Collection {
           this.synced = false;
           const url = this.resource.collectionUrl();
           const payload = data.length ? data : this.data;
-          const clientObj = { path: url, entity: payload };
+          const clientObj = { url: url, data: payload, method: 'post' };
           // Do a save on the URL.
           this.resource.client(clientObj).then(
             response => {
-              if (Array.isArray(response.entity)) {
+              if (Array.isArray(response.data)) {
                 this.clearCache();
-                this.set(response.entity);
+                this.set(response.data);
                 // Mark that the fetch has completed.
                 this.synced = true;
                 // Flag that the collection exists on the server.
                 this.new = false;
               } else {
                 // It's all gone a bit Pete Tong.
-                logging.debug('Data appears to be malformed', response.entity);
+                logging.debug('Data appears to be malformed', response.data);
                 reject(response);
               }
               // Resolve the promise with the Collection.
@@ -398,7 +399,7 @@ export class Collection {
               this.promises.splice(this.promises.indexOf(promise), 1);
             },
             response => {
-              logging.error('An error occurred', response);
+              this.resource.logError(response);
               reject(response);
               // Clean up the reference to this promise
               this.promises.splice(this.promises.indexOf(promise), 1);
@@ -430,8 +431,8 @@ export class Collection {
           } else {
             // Otherwise, DELETE the Collection
             const clientObj = {
-              path: this.resource.collectionUrl(),
-              method: 'DELETE',
+              url: this.resource.collectionUrl(),
+              method: 'delete',
               params: this.getParams,
             };
             this.resource.client(clientObj).then(
@@ -449,7 +450,7 @@ export class Collection {
                 this.promises.splice(this.promises.indexOf(promise), 1);
               },
               response => {
-                logging.error('An error occurred', response);
+                this.resource.logError(response);
                 reject(response);
                 // Clean up the reference to this promise
                 this.promises.splice(this.promises.indexOf(promise), 1);
@@ -592,15 +593,6 @@ export class Resource {
       throw ReferenceError('Resource must be instantiated with a name property');
     }
     this.name = `kolibri:${namespace}:${name}`;
-    if (process.env.NODE_ENV !== 'production') {
-      if (window.schema && window.schema.content) {
-        if (!window.schema.content[this.name]) {
-          logging.error(`${name} is not a recognized basename of an API endpoint on the server`);
-        } else {
-          this.__schema = window.schema.content[this.name];
-        }
-      }
-    }
     this.idKey = idKey;
     this.useContentCacheKey = useContentCacheKey;
     const optionsDefinitions = Object.getOwnPropertyDescriptors(options);
@@ -837,13 +829,6 @@ export class Resource {
     if (!detailName) {
       throw TypeError('A detailName must be specified');
     }
-    if (process.env.NODE_ENV !== 'production') {
-      if (!this.__schema[detailName]) {
-        logging.error(`${detailName} detail endpoint does not exist on ${this.name}.`);
-      } else if (this.__schema[detailName].method !== 'get') {
-        logging.error(`${detailName} detail endpoint does not accept get requests.`);
-      }
-    }
     return this.getModel(id, getParams, detailName).fetch();
   }
 
@@ -864,19 +849,12 @@ export class Resource {
     if (!detailName) {
       throw TypeError('A detailName must be specified');
     }
-    if (process.env.NODE_ENV !== 'production') {
-      if (!this.__schema[detailName]) {
-        logging.error(`${detailName} detail endpoint does not exist on ${this.name}.`);
-      } else if (this.__schema[detailName].method !== 'get') {
-        logging.error(`${detailName} detail endpoint does not accept get requests.`);
-      }
-    }
     return this.getCollection(getParams, detailName, id).fetch(force);
   }
 
   /**
    * Fetch from a custom list endpoint on a resource, that returns an array of JSON objects.
-   * Mostly used as a convenience method for defining additional endpoint fethc methods
+   * Mostly used as a convenience method for defining additional endpoint fetch methods
    * on a resource object.
    * @param  {string} listName   The name given to the list endpoint
    * @param  {Object} getParams  Any getParams needed while fetching
@@ -885,13 +863,6 @@ export class Resource {
   fetchListCollection(listName, getParams = {}) {
     if (!listName) {
       throw TypeError('A listName must be specified');
-    }
-    if (process.env.NODE_ENV !== 'production') {
-      if (!this.__schema[listName]) {
-        logging.error(`${listName} list endpoint does not exist on ${this.name}.`);
-      } else if (this.__schema[listName].method !== 'get') {
-        logging.error(`${listName} list endpoint does not accept get requests.`);
-      }
     }
     return this.getCollection(getParams, listName).fetch();
   }
@@ -902,34 +873,26 @@ export class Resource {
    * endpoints.
    * @param  {string} method   A valid HTTP method name, in all caps.
    * @param  {string} listName The name given to the list endpoint
-   * @param  {Object} args     The getParams or entity to be passed to the endpoint,
+   * @param  {Object} args     The getParams or data to be passed to the endpoint,
    * depending on method
    * @return {Promise}         Promise that resolves with the request
    */
-  accessEndpoint(method, listName, args = {}) {
+  accessEndpoint(method, listName, args = {}, multipart = false) {
     if (!listName) {
       throw TypeError('A listName must be specified');
     }
-    if (process.env.NODE_ENV !== 'production') {
-      if (!this.__schema[listName]) {
-        logging.error(`${listName} list endpoint does not exist on ${this.name}.`);
-      } else if (this.__schema[listName].method !== method.toLowerCase()) {
-        logging.error(
-          `${listName} list endpoint does not accept ${method.toLowerCase()} requests.`
-        );
-      }
-    }
-    let entity, params;
-    if (method === 'GET') {
+    let data, params;
+    if (method.toLowerCase() === 'get') {
       params = args;
     } else {
-      entity = args;
+      data = args;
     }
     return this.client({
-      path: this.getUrlFunction(listName)(),
+      url: this.getUrlFunction(listName)(),
       method,
-      entity,
+      data,
       params,
+      multipart,
     });
   }
 
@@ -940,7 +903,7 @@ export class Resource {
    * @return {Promise}         Promise that resolves with the request
    */
   getListEndpoint(listName, params = {}) {
-    return this.accessEndpoint('GET', listName, params);
+    return this.accessEndpoint('get', listName, params);
   }
 
   /**
@@ -950,7 +913,19 @@ export class Resource {
    * @return {Promise}         Promise that resolves with the request
    */
   postListEndpoint(listName, params = {}) {
-    return this.accessEndpoint('POST', listName, params);
+    return this.accessEndpoint('post', listName, params);
+  }
+
+  /**
+   * Call a POST on a custom list endpoint and use
+   * 'multipart/form-data' as Mimetype instead of 'application/json'.
+   *
+   * @param  {string} listName The name given to the list endpoint
+   * @param  {Object} args     The body of the request
+   * @return {Promise}         Promise that resolves with the request
+   */
+  postListEndpointMultipart(listName, params = {}) {
+    return this.accessEndpoint('post', listName, params, true);
   }
 
   /**
@@ -1006,11 +981,65 @@ export class Resource {
   client(options) {
     const client = require('./core-app/client').default;
     // Add in content cache parameter if relevant
-    if (this.useContentCacheKey && !options.entity) {
+    if (this.useContentCacheKey && !options.data) {
       options.params = options.params || {};
       options.params['contentCacheKey'] = contentCacheKey;
       options.cacheBust = false;
     }
     return client(options);
+  }
+
+  logError(err) {
+    const store = require('kolibri.coreVue.vuex.store').default;
+    /* eslint-disable no-console */
+    console.groupCollapsed(
+      `%cRequest error: ${err.response.statusText}, ${
+        err.response.status
+      } for ${err.config.method.toUpperCase()} to ${err.config.url} - open for more info`,
+      'color: red'
+    );
+    console.log(`Error occured for ${this.name} resource on page ${window.location.href}`);
+    if (store.state.route) {
+      console.group('Vue Router');
+      console.log(`fullPath: ${store.state.route.fullPath}`);
+      console.log(`Route name: ${store.state.route.name}`);
+      if (Object.keys(store.state.route.params).length) {
+        console.group('Vue router params');
+        for (let [k, v] of Object.entries(store.state.route.params)) {
+          console.log(`${k}: ${v}`);
+        }
+        console.groupEnd();
+      }
+      console.groupEnd();
+    }
+    if (Object.keys(err.config.params).length) {
+      console.group('Query parameters');
+      for (let [k, v] of Object.entries(err.config.params)) {
+        console.log(`${k}: ${v}`);
+      }
+      console.groupEnd();
+    }
+    if (err.config.data) {
+      try {
+        const data = JSON.parse(err.config.data);
+        if (Object.keys(data).length) {
+          console.group('Data');
+          for (let [k, v] of Object.entries(data)) {
+            console.log(`${k}: ${v}`);
+          }
+          console.groupEnd();
+        }
+      } catch (e) {} // eslint-disable-line no-empty
+    }
+    if (Object.keys(err.config.headers).length) {
+      console.group('Headers');
+      for (let [k, v] of Object.entries(err.config.headers)) {
+        console.log(`${k}: ${v}`);
+      }
+      console.groupEnd();
+    }
+    console.trace('Traceback for request');
+    console.groupEnd();
+    /* eslint-enable */
   }
 }

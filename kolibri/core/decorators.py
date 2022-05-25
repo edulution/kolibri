@@ -5,12 +5,18 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import hashlib
 import sys
-from functools import wraps
+from threading import local
 
+from django.core.cache import cache
+from django.utils.cache import patch_response_headers
+from django.views.decorators.http import etag
 from rest_framework.exceptions import APIException
 from rest_framework.views import APIView
 from six import string_types
+
+from kolibri import __version__ as kolibri_version
 
 TRUE_VALUES = ("1", "true")
 FALSE_VALUES = ("0", "false")
@@ -40,10 +46,8 @@ else:
 
 
 class ParamValidator(object):
-    # name
-    param_name = (
-        None
-    )  # the name of the param in the request, e.g. 'user_id' (even if we pass 'user' to the Fn)
+    # the name of the param in the request, e.g. 'user_id' (even if we pass 'user' to the Fn)
+    param_name = None
 
     # type
     param_type = None
@@ -85,7 +89,8 @@ class ParamValidator(object):
         elif self.param_type == float:
             param = float(param)
         elif self.param_type == str:
-            assert isinstance(param, string_types)
+            if not isinstance(param, string_types):
+                raise AssertionError
         elif self.param_type == bool:
             param = str(param).lower()  # bool isn't case sensitive
             if param in TRUE_VALUES:
@@ -188,17 +193,20 @@ class ParamValidator(object):
         if suffix == "method":
             self.set_method(value)
         elif suffix in BOOL_PARTS:
-            assert isinstance(value, bool)
+            if not isinstance(value, bool):
+                raise AssertionError
             setattr(self, suffix, value)
         elif suffix in NUM_PARTS:
-            assert isinstance(value, int) or isinstance(value, float)
+            if not (isinstance(value, int) or isinstance(value, float)):
+                raise AssertionError
             setattr(self, suffix, value)
         elif suffix == "default":
             self.optional = True
             self.default = value
 
         elif suffix == "field":
-            assert isinstance(suffix, str)
+            if not isinstance(suffix, str):
+                raise AssertionError
             self.field = value
         else:
             raise InvalidQueryParamsException(
@@ -251,10 +259,10 @@ class ParamValidator(object):
             return param
 
 
-def query_params_required(**kwargs):
+def query_params_required(**kwargs):  # noqa: C901
     """
-        Request fn decorator that builds up a list of params and automatically returns a 400 if they are invalid.
-        The validated params are passed to the wrapped function as kwargs.
+    Request fn decorator that builds up a list of params and automatically returns a 400 if they are invalid.
+    The validated params are passed to the wrapped function as kwargs.
     """
     validators = {}
 
@@ -276,47 +284,96 @@ def query_params_required(**kwargs):
 
     def _params(cls):
 
-        assert issubclass(
-            cls, APIView
-        ), "query_params_required decorator can only be used on subclasses of APIView"
+        if not issubclass(cls, APIView):
+            raise AssertionError(
+                "query_params_required decorator can only be used on subclasses of APIView"
+            )
 
-        class Wrapper(cls):
-            def initial(self, request, *args, **kwargs):
+        def initial(self, request, *args, **kwargs):
 
-                # Copy this from the default viewset initial behaviour, otherwise it is not set before a
-                # validation exception would be raised.
-                self.format_kwarg = self.get_format_suffix(**kwargs)
-                neg = self.perform_content_negotiation(request)
-                request.accepted_renderer, request.accepted_media_type = neg
+            # Copy this from the default viewset initial behaviour, otherwise it is not set before a
+            # validation exception would be raised.
+            self.format_kwarg = self.get_format_suffix(**kwargs)
+            neg = self.perform_content_negotiation(request)
+            request.accepted_renderer, request.accepted_media_type = neg
 
-                # Validate the params
-                missing_params = []
-                for arg_name, validator in validators.items():
-                    try:
-                        kwargs[arg_name] = validator.validate(request)
-                    except MissingRequiredParamsException:
-                        missing_params.append(validator.param_name)
+            # Validate the params
+            missing_params = []
+            for arg_name, validator in validators.items():
+                try:
+                    kwargs[arg_name] = validator.validate(request)
+                except MissingRequiredParamsException:
+                    missing_params.append(validator.param_name)
 
-                if missing_params:
-                    raise MissingRequiredParamsException(
-                        "The following parameters were missing and are required: {required}".format(
-                            required=", ".join(missing_params)
-                        )
+            if missing_params:
+                raise MissingRequiredParamsException(
+                    "The following parameters were missing and are required: {required}".format(
+                        required=", ".join(missing_params)
                     )
-                # Update the kwargs on the view itself
-                self.kwargs = kwargs
-                super(Wrapper, self).initial(request, *args, **kwargs)
+                )
+            # Update the kwargs on the view itself
+            self.kwargs = kwargs
+            super(cls, self).initial(request, *args, **kwargs)
 
-        return Wrapper
+        setattr(cls, "initial", initial)
+
+        return cls
 
     return _params
 
 
-def signin_redirect_exempt(view_func):
-    """Mark a view function as being exempt from the signin page redirect"""
+def cache_no_user_data(view_func):
+    """
+    Set appropriate Vary on headers on a view that specify there is
+    no user specific data being rendered in the view.
+    In order to ensure that the correct Vary headers are set,
+    the session is deleted from the request, as otherwise Vary cookies
+    will always be set by the Django session middleware.
+    This should not be used on any view that bootstraps user specific
+    data into it - this will remove the headers that will make this vary
+    on a per user basis.
+    """
 
-    def wrapped_view(*args, **kwargs):
-        return view_func(*args, **kwargs)
+    CACHE_TIMEOUT = 15
+    CACHE_KEY_TEMPLATE = "SPA_ETAG_CACHE_{}"
+    _response = local()
 
-    wrapped_view.signin_redirect_exempt = True
-    return wraps(view_func)(wrapped_view)
+    def render_and_cache(response, cache_key):
+        response.render()
+        etag = hashlib.md5(
+            kolibri_version.encode("utf-8") + str(response.content).encode("utf-8")
+        ).hexdigest()
+        cache.set(cache_key, etag, CACHE_TIMEOUT)
+        return etag
+
+    def calculate_spa_etag(*args, **kwargs):
+        # Clear the local thread 'response' property
+        setattr(_response, "response", None)
+
+        request = args[0]
+        etag = cache.get(CACHE_KEY_TEMPLATE.format(request.path))
+
+        # Doing this here - will also be the same in inner_func
+        # required to delete the session for this to work as expected
+        del request.session
+
+        if not etag:
+            response = view_func(*args, **kwargs)
+            setattr(_response, "response", response)
+            etag = render_and_cache(response, CACHE_KEY_TEMPLATE.format(request.path))
+        return etag
+
+    @etag(calculate_spa_etag)
+    def inner_func(*args, **kwargs):
+        request = args[0]
+
+        response = getattr(_response, "response", None)
+        if not response:
+            response = view_func(*args, **kwargs)
+
+        render_and_cache(response, CACHE_KEY_TEMPLATE.format(request.path))
+        patch_response_headers(response, cache_timeout=CACHE_TIMEOUT)
+        response["Vary"] = "accept-encoding, accept"
+        return response
+
+    return inner_func

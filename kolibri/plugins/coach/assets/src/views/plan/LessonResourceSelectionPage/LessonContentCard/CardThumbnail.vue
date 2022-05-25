@@ -1,17 +1,15 @@
 <template>
 
   <div
-    class="card-thumbnail-wrapper"
+    :class="isMobile ? 'mobile-thumbnail-wrapper' : 'card-thumbnail-wrapper'"
     :style="thumbnailBackground"
   >
-
-    <CornerIcon :kind="kind" />
-
+    <BookmarkIcon v-if="kind === 'bookmark'" />
     <ContentIcon
       v-if="!thumbnail"
       :kind="kind"
       class="thumbnail-icon"
-      :style="{ color: $coreTextAnnotation }"
+      :style="{ color: $themeTokens.annotation }"
     />
 
   </div>
@@ -21,33 +19,36 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import { validateContentNodeKind } from 'kolibri.utils.validators';
-  import CornerIcon from './CornerIcon';
+  import BookmarkIcon from './BookmarkIcon';
 
   export default {
     name: 'CardThumbnail',
     components: {
       ContentIcon,
-      CornerIcon,
+      BookmarkIcon,
     },
-    mixins: [themeMixin],
     props: {
       thumbnail: {
         type: String,
-        required: false,
+        default: null,
       },
       kind: {
         type: String,
         required: true,
         validator: validateContentNodeKind,
       },
+      isMobile: {
+        type: Boolean,
+        required: true,
+        default: false,
+      },
     },
     computed: {
       thumbnailBackground() {
         return {
-          backgroundColor: this.$coreBgLight,
+          backgroundColor: this.$themeTokens.surface,
           backgroundImage: this.thumbnail ? `url('${this.thumbnail}')` : '',
         };
       },
@@ -65,6 +66,16 @@
     position: absolute;
     width: $thumb-width;
     height: $thumb-height;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+  }
+
+  .mobile-thumbnail-wrapper {
+    position: absolute;
+    left: 60px;
+    width: $mobile-thumb-width;
+    height: $mobile-thumb-height;
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;

@@ -1,6 +1,5 @@
 import Vuex from 'vuex';
 import summaryModule from '../index';
-
 import sampleState from './sampleState2';
 
 describe('coach summary data helpers', () => {
@@ -28,6 +27,62 @@ describe('coach summary data helpers', () => {
     });
     it('returns the learner IDs of everyone in the groups with no duplicates', () => {
       const output = store.getters.getLearnersForGroups(['group_id_2', 'group_id_3']);
+      output.sort();
+      expect(output).toEqual([
+        'learner_id_1',
+        'learner_id_11',
+        'learner_id_2',
+        'learner_id_5',
+        'learner_id_6',
+        'learner_id_7',
+        'learner_id_8',
+        'learner_id_9',
+      ]);
+    });
+  });
+  describe('getLearnersForExam', () => {
+    it('returns empty when exam has no assignments', () => {
+      expect(
+        store.getters.getLearnersForExam({
+          assignments: [],
+        })
+      ).toEqual([]);
+    });
+
+    it('passes through to getLearnersForGroups when exam has assignments', () => {
+      const groups = ['group_id_2', 'group_id_3'];
+      const output = store.getters.getLearnersForExam({
+        assignments: groups,
+        groups,
+      });
+      output.sort();
+      expect(output).toEqual([
+        'learner_id_1',
+        'learner_id_11',
+        'learner_id_2',
+        'learner_id_5',
+        'learner_id_6',
+        'learner_id_7',
+        'learner_id_8',
+        'learner_id_9',
+      ]);
+    });
+  });
+  describe('getLearnersForLesson', () => {
+    it('returns empty when lesson has no assignments', () => {
+      expect(
+        store.getters.getLearnersForLesson({
+          assignments: [],
+        })
+      ).toEqual([]);
+    });
+
+    it('passes through to getLearnersForGroups when lesson has assignments', () => {
+      const groups = ['group_id_2', 'group_id_3'];
+      const output = store.getters.getLearnersForLesson({
+        assignments: groups,
+        groups,
+      });
       output.sort();
       expect(output).toEqual([
         'learner_id_1',
@@ -119,6 +174,19 @@ describe('coach summary data helpers', () => {
         completed: 1,
         started: 1,
         notStarted: 1,
+        helpNeeded: 0,
+      });
+    });
+    it('tallies all learners as "not started" if the lesson has no resources', () => {
+      const output = store.getters.getLessonStatusTally('lesson_id_5', [
+        'learner_id_1',
+        'learner_id_3',
+        'learner_id_6',
+      ]);
+      expect(output).toEqual({
+        completed: 0,
+        started: 0,
+        notStarted: 3,
         helpNeeded: 0,
       });
     });

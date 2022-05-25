@@ -1,50 +1,36 @@
 <template>
 
-  <div
+  <KLabeledIcon
     v-if="value > 0"
-    class="d-ib"
+    :style="{ color: $themeTokens.coachContent }"
   >
-    <div
-      ref="icon"
-      class="d-ib vab"
-    >
-      <UiIcon class="coach-mat-icon" :style="{ color: $coreStatusProgress }">
-        <mat-svg
-          name="local_library"
-          category="maps"
-        />
-      </UiIcon>
-      <span
-        v-if="isTopic"
-        class="counter"
-      >
-        {{ $formatNumber(value) }}
-      </span>
-    </div>
+    <template #icon>
+      <KIcon
+        ref="something"
+        icon="coach"
+        :color="$themeTokens.coachContent"
+      />
+    </template>
+    <span v-if="isTopic" class="counter">
+      {{ $formatNumber(value) }}
+    </span>
+
     <KTooltip
-      reference="icon"
+      reference="something"
+      placement="bottom"
       :refs="$refs"
     >
       {{ titleText }}
     </KTooltip>
-  </div>
+  </KLabeledIcon>
 
 </template>
 
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import UiIcon from 'keen-ui/src/UiIcon';
-  import KTooltip from 'kolibri.coreVue.components.KTooltip';
-
   export default {
     name: 'CoachContentLabel',
-    components: {
-      UiIcon,
-      KTooltip,
-    },
-    mixins: [themeMixin],
     props: {
       value: {
         type: Number,
@@ -65,9 +51,18 @@
       },
     },
     $trs: {
-      coachResourceLabel: 'Coach resource',
-      topicTitle:
-        'Contains {count, number, integer} {count, plural, one {coach resource} other {coach resources}}',
+      coachResourceLabel: {
+        message: 'Coach resource',
+        context:
+          'Coach resource materials can be lesson plans, professional development readings, training materials, etc. only viewable by coaches and not learners.',
+      },
+      topicTitle: {
+        message:
+          'Contains {count, number, integer} {count, plural, one {coach resource} other {coach resources}}',
+
+        context:
+          "For example, \"Contains 4 coach resources\".\n\nYou only need to translate the word 'Contains' and 'coach resource/coach resources' here.",
+      },
     },
   };
 
@@ -76,17 +71,10 @@
 
 <style lang="scss" scoped>
 
-  .vab {
-    vertical-align: bottom;
-  }
-
-  .d-ib {
-    display: inline-block;
-  }
-
   .counter {
+    position: relative;
+    left: -4px;
     font-size: 11px;
-    vertical-align: inherit;
   }
 
   .coach-mat-icon.ui-icon {

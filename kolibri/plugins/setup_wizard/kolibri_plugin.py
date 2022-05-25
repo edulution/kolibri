@@ -2,31 +2,34 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from . import hooks
 from kolibri.core.device.hooks import SetupHook
 from kolibri.core.webpack import hooks as webpack_hooks
-from kolibri.plugins.base import KolibriPluginBase
+from kolibri.plugins import KolibriPluginBase
+from kolibri.plugins.hooks import register_hook
+from kolibri.utils import translation
+from kolibri.utils.translation import ugettext as _
 
 
 class SetupWizardPlugin(KolibriPluginBase):
-    def url_module(self):
-        from . import urls
+    untranslated_view_urls = "api_urls"
+    translated_view_urls = "urls"
+    can_manage_while_running = True
 
-        return urls
-
+    @property
     def url_slug(self):
-        return "^setup_wizard/"
+        return "setup"
+
+    def name(self, lang):
+        with translation.override(lang):
+            return _("Setup Wizard")
 
 
+@register_hook
 class SetupWizardAsset(webpack_hooks.WebpackBundleHook):
-    unique_slug = "setup_wizard"
-    src_file = "assets/src/app.js"
+    bundle_id = "app"
 
 
-class SetupWizardInclusionHook(hooks.SetupWizardSyncHook):
-    bundle_class = SetupWizardAsset
-
-
+@register_hook
 class SetupWizardHook(SetupHook):
     @property
     def url(self):

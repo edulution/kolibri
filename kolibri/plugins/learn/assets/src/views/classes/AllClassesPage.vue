@@ -1,24 +1,11 @@
 <template>
 
   <div>
-    <div v-if="isUserLoggedIn ">
-      <h2>{{ $tr('allClassesHeader') }}</h2>
-      <p v-if="!classrooms.length">
-        {{ $tr('noClasses') }}
-      </p>
-      <div class="classrooms">
-        <ContentCard
-          v-for="c in classrooms"
-          :key="c.id"
-          class="content-card"
-          :link="classAssignmentsLink(c.id)"
-          :showContentIcon="false"
-          :title="c.name"
-          :kind="CLASSROOM"
-          :isMobile="windowIsSmall"
-        />
-      </div>
-    </div>
+    <KBreadcrumbs :items="breadcrumbs" />
+    <YourClasses
+      v-if="isUserLoggedIn"
+      :classes="classrooms"
+    />
     <AuthMessage v-else authorizedRole="learner" />
   </div>
 
@@ -28,49 +15,43 @@
 <script>
 
   import { mapState, mapGetters } from 'vuex';
+  import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
   import AuthMessage from 'kolibri.coreVue.components.AuthMessage';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
-  import ContentCard from '../ContentCard';
-  import { classAssignmentsLink } from './classPageLinks';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import YourClasses from '../YourClasses';
+  import { PageNames } from '../../constants';
 
   export default {
     name: 'AllClassesPage',
     metaInfo() {
       return {
-        title: this.$tr('documentTitle'),
+        title: this.coreString('classesLabel'),
       };
     },
     components: {
+      KBreadcrumbs,
       AuthMessage,
-      ContentCard,
+      YourClasses,
     },
-    mixins: [responsiveWindow],
+    mixins: [commonCoreStrings],
     computed: {
       ...mapGetters(['isUserLoggedIn']),
       ...mapState('classes', ['classrooms']),
-      CLASSROOM() {
-        return ContentNodeKinds.CLASSROOM;
+      breadcrumbs() {
+        return [
+          {
+            text: this.coreString('homeLabel'),
+            link: { name: PageNames.HOME },
+          },
+          {
+            text: this.coreString('classesLabel'),
+          },
+        ];
       },
-    },
-    methods: {
-      classAssignmentsLink,
-    },
-    $trs: {
-      allClassesHeader: 'Classes',
-      documentTitle: 'All classes',
-      noClasses: 'You are not enrolled in any classes',
     },
   };
 
 </script>
 
 
-<style lang="scss" scoped>
-
-  .content-card {
-    margin-right: 16px;
-    margin-bottom: 16px;
-  }
-
-</style>
+<style lang="scss" scoped></style>

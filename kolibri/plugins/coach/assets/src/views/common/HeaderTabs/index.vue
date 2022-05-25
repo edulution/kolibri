@@ -1,6 +1,11 @@
 <template>
 
-  <div class="tab-block" :class="{ small: windowIsSmall }">
+  <div
+    v-show="enablePrint || !$isPrint"
+    class="tab-block"
+    :class="{ small: windowIsSmall }"
+    :style="{ borderBottomColor: !$isPrint ? $themeTokens.fineLine : 'transparent' }"
+  >
     <slot></slot>
   </div>
 
@@ -9,11 +14,18 @@
 
 <script>
 
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
 
   export default {
     name: 'HeaderTabs',
-    mixins: [responsiveWindow],
+    mixins: [responsiveWindowMixin],
+    props: {
+      enablePrint: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+    },
   };
 
 </script>
@@ -27,7 +39,8 @@
     margin-right: -24px;
     margin-bottom: 24px;
     margin-left: -24px;
-    border-bottom: 1px solid #dedede;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
   }
 
   .small {

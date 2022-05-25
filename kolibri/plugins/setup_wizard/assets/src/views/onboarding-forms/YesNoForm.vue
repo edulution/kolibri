@@ -17,18 +17,14 @@
       v-model="setting"
       :label="noOptionLabel"
       :value="false"
-    >
-      <CoreInfoIcon
-        v-if="noOptionTooltip"
-        class="info-icon"
-        :iconAriaLabel="noOptionLabel"
-        :tooltipText="noOptionTooltip"
-      />
-    </KRadioButton>
+      :description="noOptionDescription"
+    />
 
-    <p slot="footer">
-      {{ $tr('details') }}
-    </p>
+    <template #footer>
+      <p>
+        {{ $tr('details') }}
+      </p>
+    </template>
   </OnboardingForm>
 
 </template>
@@ -36,15 +32,11 @@
 
 <script>
 
-  import KRadioButton from 'kolibri.coreVue.components.KRadioButton';
-  import CoreInfoIcon from 'kolibri.coreVue.components.CoreInfoIcon';
   import OnboardingForm from './OnboardingForm';
 
   export default {
     name: 'YesNoForm',
     components: {
-      CoreInfoIcon,
-      KRadioButton,
       OnboardingForm,
     },
     props: {
@@ -58,8 +50,9 @@
         type: String,
         required: true,
       },
-      noOptionTooltip: {
+      noOptionDescription: {
         type: String,
+        default: null,
       },
       headerText: {
         type: String,
@@ -67,10 +60,11 @@
       },
       description: {
         type: String,
+        default: null,
       },
       submitText: {
         type: String,
-        required: true,
+        default: null,
       },
       settingIsEnabled: {
         type: Boolean,
@@ -99,8 +93,15 @@
       },
     },
     $trs: {
-      details: 'You can change this in your facility settings later',
-      yesOptionLabel: 'Yes',
+      details: {
+        message: 'You can change this in your facility settings later',
+        context:
+          "Note to indicate that admins can change the settings later after they've done the initial set up.",
+      },
+      yesOptionLabel: {
+        message: 'Yes',
+        context: 'Option label.',
+      },
     },
   };
 

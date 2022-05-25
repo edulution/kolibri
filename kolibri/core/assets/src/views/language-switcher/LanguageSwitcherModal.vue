@@ -2,19 +2,19 @@
 
   <KModal
     :title="$tr('changeLanguageModalHeader')"
-    :submitText="$tr('confirmButtonText')"
-    :cancelText="$tr('cancelButtonText')"
+    :submitText="coreString('confirmAction')"
+    :cancelText="coreString('cancelAction')"
+    :size="600"
+    @cancel="cancel"
     @submit="setLang"
-    @cancel="closeModal"
   >
     <KGrid>
       <KGridItem
         v-for="(languageCol, index) in splitLanguageOptions"
         :key="index"
         :class="{ 'offset-col': windowIsSmall && index === 1 }"
-        sizes="100, 50, 50"
-        percentage
-        alignment="left"
+        :layout8="{ span: 4 }"
+        :layout12="{ span: 6 }"
       >
         <KRadioButton
           v-for="language in languageCol"
@@ -35,28 +35,14 @@
 
 <script>
 
-  import KModal from 'kolibri.coreVue.components.KModal';
-  import KRadioButton from 'kolibri.coreVue.components.KRadioButton';
   import { currentLanguage } from 'kolibri.utils.i18n';
-  import KGrid from 'kolibri.coreVue.components.KGrid';
-  import KGridItem from 'kolibri.coreVue.components.KGridItem';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import languageSwitcherMixin from './mixin';
 
   export default {
     name: 'LanguageSwitcherModal',
-    components: {
-      KModal,
-      KGrid,
-      KGridItem,
-      KRadioButton,
-    },
-    mixins: [languageSwitcherMixin, responsiveWindow],
-    $trs: {
-      changeLanguageModalHeader: 'Change language',
-      cancelButtonText: 'Cancel',
-      confirmButtonText: 'Confirm',
-    },
+    mixins: [commonCoreStrings, languageSwitcherMixin, responsiveWindowMixin],
     data() {
       return {
         selectedLanguage: currentLanguage,
@@ -71,11 +57,23 @@
       },
     },
     methods: {
-      closeModal() {
-        this.$emit('close');
-      },
       setLang() {
+        if (currentLanguage === this.selectedLanguage) {
+          this.cancel();
+          return;
+        }
+
         this.switchLanguage(this.selectedLanguage);
+      },
+      cancel() {
+        this.$emit('cancel');
+      },
+    },
+    $trs: {
+      changeLanguageModalHeader: {
+        message: 'Change language',
+        context:
+          "Option to change the Kolibri interface language on the  'Change language' screen.",
       },
     },
   };

@@ -1,4 +1,4 @@
-{% load i18n kolibri_tags webpack_tags content_tags cache %}
+{% load i18n core_tags webpack_tags content_tags cache %}
 {% load staticfiles %}
 {% get_current_language_bidi as LANGUAGE_BIDI %}
 {% get_current_language as LANGUAGE_CODE %}
@@ -18,25 +18,16 @@
     </script>
     <script type="text/javascript" src="//cdn.crowdin.com/jipt/jipt.js"></script>
   {% endif %}
-  {% if developer_mode %}
-    <script src="{% static 'rest_framework/js/coreapi-0.1.1.js' %}"></script>
-    <script src="{% url 'api-docs:schema-js' %}"></script>
-  {% endif %}
+  {% webpack_asset 'kolibri.core.frontend_head_assets' %}
 </head>
 <body>
-{% if supported_browser %}
 <rootvue>
   {% include "kolibri/loading_snippet.html" %}
 </rootvue>
 {% block frontend_assets %}
-{% kolibri_sentry_error_reporting %}
-{% kolibri_language_globals %}
-{% kolibri_content_cache_key %}
-{% kolibri_set_urls %}
-{% webpack_asset 'default_frontend' %}
-{% kolibri_navigation_actions %}
-{% webpack_base_assets %}
-{% webpack_base_async_assets %}
+{% webpack_asset 'kolibri.core.default_frontend' %}
+{% frontend_base_assets %}
+{% frontend_base_async_assets %}
 {% content_renderer_assets %}
 {% endblock %}
 
@@ -44,10 +35,5 @@
 
 {% endblock %}
 
-{% else %}
-
-{% include 'kolibri/unsupported_browser.html' %}
-
-{% endif %}
 </body>
 </html>

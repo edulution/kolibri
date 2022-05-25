@@ -1,18 +1,14 @@
 <template>
 
   <div>
-    <h1 dir="auto" class="classroom-name">
-      {{ classroomName }}
+    <KBreadcrumbs :items="breadcrumbs" />
+    <h1 class="classroom-name">
+      <KLabeledIcon icon="classes" :label="className" />
     </h1>
 
-    <AssignedExamsCards
-      :exams="exams"
-      :isMobile="windowIsSmall"
-    />
-    <AssignedLessonsCards
-      :lessons="lessons"
-      :isMobile="windowIsSmall"
-    />
+    <AssignedLessonsCards :lessons="activeLessons" />
+    <AssignedQuizzesCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
+
   </div>
 
 </template>
@@ -20,9 +16,15 @@
 
 <script>
 
-  import { mapState } from 'vuex';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import AssignedExamsCards from './AssignedExamsCards';
+  import { computed, onBeforeMount, onBeforeUnmount } from 'kolibri.lib.vueCompositionApi';
+  import { get } from '@vueuse/core';
+  import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+
+  import { PageNames, ClassesPageNames } from '../../constants';
+
+  import useLearnerResources from '../../composables/useLearnerResources';
+  import AssignedQuizzesCards from './AssignedQuizzesCards';
   import AssignedLessonsCards from './AssignedLessonsCards';
 
   export default {
@@ -33,19 +35,75 @@
       };
     },
     components: {
-      AssignedExamsCards,
+      AssignedQuizzesCards,
       AssignedLessonsCards,
+      KBreadcrumbs,
     },
-    mixins: [responsiveWindow],
+    mixins: [commonCoreStrings],
+    setup(_, { root }) {
+      const {
+        fetchClass,
+        getClass,
+        getClassActiveLessons,
+        getClassActiveQuizzes,
+      } = useLearnerResources();
+
+      const classId = root.$router.currentRoute.params.classId;
+      const classroom = computed(() => getClass(classId));
+      const className = computed(() => (get(classroom) ? get(classroom).name : ''));
+      const activeLessons = computed(() => getClassActiveLessons(get(classId)));
+      const activeQuizzes = computed(() => getClassActiveQuizzes(get(classId)));
+
+      function schedulePoll() {
+        const timeoutId = setTimeout(pollForUpdates, 30000);
+        return timeoutId;
+      }
+
+      function pollForUpdates() {
+        fetchClass({ classId, force: true }).then(() => {
+          schedulePoll();
+        });
+      }
+
+      let pollTimeoutId;
+
+      onBeforeMount(() => {
+        pollTimeoutId = schedulePoll();
+      });
+
+      onBeforeUnmount(() => {
+        clearTimeout(pollTimeoutId);
+      });
+
+      return {
+        className,
+        activeLessons,
+        activeQuizzes,
+      };
+    },
     computed: {
-      ...mapState('classAssignments', {
-        classroomName: state => state.currentClassroom.name,
-        exams: state => state.currentClassroom.assignments.exams,
-        lessons: state => state.currentClassroom.assignments.lessons,
-      }),
+      breadcrumbs() {
+        return [
+          {
+            text: this.coreString('homeLabel'),
+            link: { name: PageNames.HOME },
+          },
+          {
+            text: this.coreString('classesLabel'),
+            link: { name: ClassesPageNames.ALL_CLASSES },
+          },
+          {
+            text: this.className,
+          },
+        ];
+      },
     },
     $trs: {
-      documentTitle: 'Class assignments',
+      documentTitle: {
+        message: 'Class assignments',
+        context:
+          'Page/tab title displayed for the Learn page when the learner is enrolled in a class. This is where the learners can see the list of lessons and quizzes coaches have opened and made available for them.',
+      },
     },
   };
 

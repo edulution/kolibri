@@ -1,18 +1,13 @@
 <template>
 
   <KModal
+    v-if="displayedCopies.length"
     :title="$tr('copies')"
-    :submitText="$tr('close')"
-    @submit="closeModal"
-    @cancel="closeModal"
+    :submitText="coreString('closeAction')"
+    @submit="$emit('closeModal')"
   >
     <transition mode="out-in">
-
-      <KCircularLoader
-        v-if="loading"
-        :delay="false"
-      />
-      <ul v-else>
+      <ul>
         <li
           v-for="(copy, index) in copies"
           :key="index"
@@ -20,16 +15,16 @@
         >
           <div class="title">
             <KRouterLink
-              :text="copy[copy.length - 1].title"
-              :to="generateCopyLink(copy[copy.length - 1].id)"
+              :text="copy.title"
+              :to="contentLink(copy)"
             />
           </div>
           <ol>
             <li
-              v-for="(ancestor, index2) in copy.slice(0, -1)"
+              v-for="(ancestor, index2) in copy.ancestors"
               :key="index2"
               class="ancestor"
-              :class="{ 'arrow': index2 < copy.slice(0, -1).length - 1}"
+              :class="{ 'arrow': index2 < copy.ancestors.length - 1 }"
             >
               {{ ancestor.title }}
             </li>
@@ -44,65 +39,29 @@
 
 <script>
 
-  import toArray from 'lodash/toArray';
-  import { mapActions } from 'vuex';
-  import KModal from 'kolibri.coreVue.components.KModal';
-  import KCircularLoader from 'kolibri.coreVue.components.KCircularLoader';
-  import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
-  import sortBy from 'lodash/sortBy';
-  import { PageNames } from '../constants';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import genContentLink from '../utils/genContentLink';
 
   export default {
     name: 'CopiesModal',
-    components: {
-      KModal,
-      KCircularLoader,
-      KRouterLink,
-    },
+    mixins: [commonCoreStrings],
     props: {
-      uniqueId: {
-        type: String,
+      displayedCopies: {
+        type: Object,
         required: true,
       },
-      sharedContentId: {
-        type: String,
-        required: true,
-      },
-    },
-    data() {
-      return {
-        loading: true,
-        copies: [],
-      };
-    },
-    created() {
-      this.getCopies(this.sharedContentId).then(copies => {
-        // transform the copies objects from Array<Object> to Array<Array>
-        const arrayedCopies = copies.map(copy => {
-          return toArray(copy);
-        });
-        this.copies = sortBy(arrayedCopies, copy => copy[copy.length - 1].id !== this.uniqueId);
-        this.loading = false;
-      });
     },
     methods: {
-      ...mapActions(['getCopies']),
-      closeModal() {
-        return this.$emit('cancel');
-      },
-      generateCopyLink(id) {
-        return {
-          name: PageNames.TOPICS_CONTENT,
-          params: { id },
-          query: {
-            searchTerm: this.$route.query.searchTerm || '',
-          },
-        };
+      contentLink(copy) {
+        return genContentLink(copy);
       },
     },
     $trs: {
-      copies: 'Locations',
-      close: 'Close',
+      copies: {
+        message: 'Locations',
+        context:
+          'Some Kolibri resources may be duplicated in different topics or channels.\n\nSearch results will indicate when a resource is duplicated, and learners can click on the "...locations" link to discover the details for each location of the resource.',
+      },
     },
   };
 

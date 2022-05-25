@@ -1,75 +1,136 @@
 <template>
 
   <MultiPaneLayout>
-    <div
-      slot="header"
-      class="header"
-    >
+    <template #header>
       <div>
         <KGrid>
-          <KGridItem sizes="100, 50, 50" percentage>
+          <KGridItem
+            :layout8="{ span: 6 }"
+            :layout12="{ span: 9 }"
+          >
             <h1>
-              <KLabeledIcon>
-                <KBasicContentIcon slot="icon" :kind="content.kind" />
-                {{ content.title }}
+              <KLabeledIcon :icon="content.kind">
+                <template>
+                  {{ content.title }}
+                </template>
+                <template #iconAfter>
+                  <CoachContentLabel
+                    :value="content.num_coach_contents"
+                    :style="{ 'font-size': '0.65em' }"
+                    :isTopic="false"
+                  />
+                </template>
               </KLabeledIcon>
             </h1>
           </KGridItem>
-          <KGridItem sizes="100, 50, 50" percentage alignment="right">
-            <SelectOptions
-              v-if="displaySelectOptions"
-              class="select-options ib"
-              :isSelected="isSelected"
-              @addResource="$emit('addResource', content)"
-              @removeResource="$emit('removeResource', content)"
-            />
+          <KGridItem
+            :layout="{ alignment: 'right' }"
+            :layout8="{ span: 2 }"
+            :layout12="{ span: 3 }"
+          >
+            <template v-if="displaySelectOptions">
+              <template v-if="isSelected">
+                <KIcon icon="onDevice" />
+                {{ $tr('addedIndicator') }}
+              </template>
+
+              <KButton
+                v-if="isSelected"
+                :text="coreString('removeAction')"
+                :primary="true"
+                :disabled="disableSelectButton"
+                @click="removeResource"
+              />
+              <KButton
+                v-else
+                :text="$tr('addButtonLabel')"
+                :primary="true"
+                :disabled="disableSelectButton"
+                @click="addResource"
+              />
+            </template>
           </KGridItem>
         </KGrid>
-        <CoachContentLabel :value="content.num_coach_contents" :isTopic="false" />
-        <p v-if="completionRequirements">
-          {{ completionRequirements }}
-        </p>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <p v-if="description" dir="auto" v-html="description"></p>
-        <ul class="meta">
-          <li v-if="content.author">
-            {{ $tr('authorDataHeader') }}:
-            {{ content.author }}
-          </li>
-          <li v-if="content.license_name">
-            {{ $tr('licenseDataHeader') }}:
-            {{ content.license_name }}
-            <InfoIcon
-              v-if="content.license_description"
-              :tooltipText="licenseHelpText"
-              :iconAriaLabel="content.license_description"
-            />
-          </li>
-          <li v-if="content.license_owner">
-            {{ $tr('copyrightHolderDataHeader') }}:
-            {{ content.license_owner }}
-          </li>
-        </ul>
+        <SlotTruncator v-if="description" :maxHeight="96" :showViewMore="true">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <p dir="auto" v-html="description"></p>
+        </SlotTruncator>
+        <template>
+          <HeaderTable>
+            <HeaderTableRow
+              v-if="practiceQuiz"
+              :keyText="$tr('totalQuestionsHeader')"
+            >
+              <template #value>
+                {{ content.assessmentmetadata.number_of_assessments }}
+              </template>
+            </HeaderTableRow>
+
+            <HeaderTableRow
+              v-else-if="completionData"
+              :keyText="coreString('masteryModelLabel')"
+            >
+              <template #value>
+                <MasteryModel
+                  v-if="content"
+                  :masteryModel="completionData"
+                />
+              </template>
+            </HeaderTableRow>
+            <HeaderTableRow
+              :keyText="$tr('suggestedTimeToCompleteHeader')"
+            >
+              <template #value>
+                {{ currentContentNode.duration || 'Not available' }}
+              </template>
+            </HeaderTableRow>
+            <HeaderTableRow
+              v-if="licenseName"
+              :keyText="$tr('licenseDataHeader')"
+            >
+              <template #value>
+                {{ licenseName }}
+                <InfoIcon
+                  v-if="licenseDescription"
+                  :tooltipText="licenseDescription"
+                  :iconAriaLabel="licenseDescription"
+                />
+              </template>
+            </HeaderTableRow>
+            <HeaderTableRow
+              v-if="content.license_owner"
+              :keyText="$tr('copyrightHolderDataHeader')"
+            >
+              <template #value>
+                {{ content.license_owner }}
+              </template>
+            </HeaderTableRow>
+          </HeaderTable>
+        </template>
       </div>
+    </template>
 
-    </div>
+    <template #aside>
+      <QuestionList
+        v-if="isExercise"
+        :questions="questions"
+        :questionLabel="questionLabel"
+        :selectedIndex="selectedQuestionIndex"
+        @select="selectedQuestionIndex = $event"
+      />
+    </template>
 
-    <QuestionList
-      v-if="isExercise"
-      slot="aside"
-      :questions="questions"
-      :questionLabel="questionLabel"
-      :selectedIndex="selectedQuestionIndex"
-      @select="selectedQuestionIndex = $event"
-    />
+    <template #main>
 
-    <ContentArea
-      slot="main"
-      :header="questionLabel(selectedQuestionIndex)"
-      :selectedQuestion="selectedQuestion"
-      :content="content"
-      :isExercise="isExercise"
-    />
+      <ContentArea
+        class="content-area"
+        :header="questionLabel(selectedQuestionIndex)"
+        :selectedQuestion="selectedQuestion"
+        :content="content"
+        :isExercise="isExercise"
+      />
+
+    </template>
   </MultiPaneLayout>
 
 </template>
@@ -77,18 +138,22 @@
 
 <script>
 
+  import get from 'lodash/get';
   import MultiPaneLayout from 'kolibri.coreVue.components.MultiPaneLayout';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
-  import KLabeledIcon from 'kolibri.coreVue.components.KLabeledIcon';
-  import KBasicContentIcon from 'kolibri.coreVue.components.KBasicContentIcon';
   import InfoIcon from 'kolibri.coreVue.components.CoreInfoIcon';
-  import KGrid from 'kolibri.coreVue.components.KGrid';
-  import KGridItem from 'kolibri.coreVue.components.KGridItem';
-  import { currentLanguage, licenseTranslations } from 'kolibri.utils.i18n';
+  import SlotTruncator from 'kolibri.coreVue.components.SlotTruncator';
+  import MasteryModel from 'kolibri.coreVue.components.MasteryModel';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import {
+    licenseLongName,
+    licenseDescriptionForConsumer,
+  } from 'kolibri.utils.licenseTranslations';
   import markdownIt from 'markdown-it';
+  import Modalities from 'kolibri-constants/Modalities';
+  import commonCoach from '../../common';
   import QuestionList from './QuestionList';
   import ContentArea from './ContentArea';
-  import SelectOptions from './SelectOptions';
 
   export default {
     name: 'LessonContentPreviewPage',
@@ -98,25 +163,15 @@
       };
     },
     components: {
-      KBasicContentIcon,
-      KLabeledIcon,
       QuestionList,
       ContentArea,
-      SelectOptions,
       CoachContentLabel,
       InfoIcon,
-      KGrid,
-      KGridItem,
       MultiPaneLayout,
+      MasteryModel,
+      SlotTruncator,
     },
-    $trs: {
-      questionLabel: 'Question { questionNumber, number }',
-      completionRequirements: 'Completion: {correct, number} out of {total, number} correct',
-      descriptionDataHeader: 'Description',
-      authorDataHeader: 'Author',
-      licenseDataHeader: 'License',
-      copyrightHolderDataHeader: 'Copyright holder',
-    },
+    mixins: [commonCoreStrings, commonCoach],
     props: {
       currentContentNode: {
         type: Object,
@@ -134,7 +189,7 @@
       completionData: {
         type: Object,
         required: false,
-        default: () => {},
+        default: () => ({}),
       },
       displaySelectOptions: {
         type: Boolean,
@@ -145,24 +200,21 @@
     data() {
       return {
         selectedQuestionIndex: 0,
+        disableSelectButton: false,
       };
     },
     computed: {
       isExercise() {
         return this.content.kind === 'exercise';
       },
+      practiceQuiz() {
+        return get(this, ['content', 'options', 'modality']) === Modalities.QUIZ;
+      },
       selectedQuestion() {
         if (this.isExercise) {
           return this.questions[this.selectedQuestionIndex];
         }
         return '';
-      },
-      completionRequirements() {
-        if (this.completionData) {
-          const { m: correct, n: total } = this.completionData;
-          return this.$tr('completionRequirements', { correct, total });
-        }
-        return false;
       },
       description() {
         if (this.content) {
@@ -175,20 +227,19 @@
       content() {
         return this.currentContentNode;
       },
-      translatedLicense() {
-        if (
-          licenseTranslations[currentLanguage] &&
-          licenseTranslations[currentLanguage][this.content.license_name]
-        ) {
-          return licenseTranslations[currentLanguage][this.content.license_name];
-        }
-        return null;
+      licenseName() {
+        return licenseLongName(this.content.license_name);
       },
-      licenseHelpText() {
-        if (this.translatedLicense) {
-          return `${this.translatedLicense.name} – ${this.translatedLicense.description}`;
-        }
-        return this.content.license_description;
+      licenseDescription() {
+        return licenseDescriptionForConsumer(
+          this.content.license_name,
+          this.content.license_description
+        );
+      },
+    },
+    watch: {
+      isSelected() {
+        this.disableSelectButton = false;
       },
     },
     methods: {
@@ -197,7 +248,42 @@
           return '';
         }
         const questionNumber = questionIndex + 1;
-        return this.$tr('questionLabel', { questionNumber });
+        return this.coreString('questionNumberLabel', { questionNumber });
+      },
+      addResource() {
+        this.disableSelectButton = true;
+        this.$emit('addResource', this.content);
+      },
+      removeResource() {
+        this.disableSelectButton = true;
+        this.$emit('removeResource', this.content);
+      },
+    },
+    $trs: {
+      licenseDataHeader: {
+        message: 'License',
+        context:
+          "Refers to the type of license the learning resource has. For example, 'CC BY-NC' meaning 'Creative Commons: attribution, non-commercial'.",
+      },
+      copyrightHolderDataHeader: {
+        message: 'Copyright holder',
+        context:
+          'Refers to the person or organization who holds the copyright or legal ownership for that resource.',
+      },
+      addedIndicator: {
+        message: 'Added',
+        context:
+          'Notification that can refer to when resources are added to a lesson, for example.',
+      },
+      addButtonLabel: 'Add',
+      totalQuestionsHeader: {
+        message: 'Total questions',
+        context: 'Refers to the total number of questions in a quiz.',
+      },
+      suggestedTimeToCompleteHeader: {
+        message: 'Suggested time',
+        context:
+          'Refers to the recommended time it takes to complete a quiz.\n\nDuration is set by whoever made the quiz originally.',
       },
     },
   };
@@ -207,9 +293,24 @@
 
 <style lang="scss" scoped>
 
+  .selected-icon {
+    position: relative;
+    top: 4px;
+    width: 20px;
+    height: 20px;
+  }
+
   .meta {
     margin-bottom: 16px;
     font-size: smaller;
+  }
+
+  .content-area {
+    padding: 16px 0;
+  }
+
+  /deep/ .icon-after {
+    margin-top: -5px;
   }
 
 </style>

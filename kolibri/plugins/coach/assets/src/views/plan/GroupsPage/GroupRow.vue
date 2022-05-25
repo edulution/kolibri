@@ -2,21 +2,19 @@
 
   <tr>
     <td>
-      <KLabeledIcon>
-        <KIcon slot="icon" group />
-        <KRouterLink
-          :text="group.name"
-          :to="$router.getRoute('GroupMembersPage', { groupId: group.id })"
-        />
-      </KLabeledIcon>
+      <KRouterLink
+        :text="group.name"
+        :to="$router.getRoute('GroupMembersPage', { groupId: group.id })"
+        icon="group"
+      />
     </td>
     <td>
-      {{ group.users.length }}
+      {{ this.$formatNumber(group.users.length) }}
     </td>
     <td class="core-table-button-col">
       <KDropdownMenu
         appearance="flat-button"
-        :text="coachStrings.$tr('optionsLabel')"
+        :text="coreString('optionsLabel')"
         :options="menuOptions"
         @select="handleSelection"
       />
@@ -28,22 +26,13 @@
 
 <script>
 
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import KDropdownMenu from 'kolibri.coreVue.components.KDropdownMenu';
-  import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
-  import KLabeledIcon from 'kolibri.coreVue.components.KLabeledIcon';
-  import KIcon from 'kolibri.coreVue.components.KIcon';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../../common';
 
   export default {
     name: 'GroupRow',
-    components: {
-      KDropdownMenu,
-      KRouterLink,
-      KLabeledIcon,
-      KIcon,
-    },
-    mixins: [commonCoach, responsiveWindow],
+    mixins: [commonCoach, commonCoreStrings, responsiveWindowMixin],
     props: {
       group: {
         type: Object,
@@ -55,15 +44,15 @@
     },
     computed: {
       menuOptions() {
-        return [this.coachStrings.$tr('renameAction'), this.coachStrings.$tr('deleteAction')];
+        return [this.coachString('renameAction'), this.coreString('deleteAction')];
       },
     },
     methods: {
       handleSelection(selectedOption) {
         let emitted;
-        if (selectedOption === this.coachStrings.$tr('renameAction')) {
+        if (selectedOption === this.coachString('renameAction')) {
           emitted = 'rename';
-        } else if (selectedOption === this.coachStrings.$tr('deleteAction')) {
+        } else if (selectedOption === this.coreString('deleteAction')) {
           emitted = 'delete';
         }
         this.$emit(emitted, this.group.name, this.group.id);

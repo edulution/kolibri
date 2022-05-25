@@ -1,63 +1,59 @@
 steps:
   - label: Build Python packages
     command:
-     - make docker-clean
      - mkdir -p dist
      - .buildkite/build_whl.sh
 
   - wait
 
-    # Android build only requires whl file
-  - label: Build Android APK
-    env:
-      KOLIBRI_ANDROID_BUILD_MODE: dev
-    command: &android_build
-      - .buildkite/build_apk.sh
+  - label: ":android:"
+    trigger: "kolibri-android-installer"
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
 
-  - label: Build Windows installer
-    command: .buildkite/build_windows_installer.sh
+  - trigger: "kolibri-debian"
+    label: ":debian:"
+    key: deb-build
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        # Determines whether build will be autoblocked or not.
+        # Autoblock unless there's a tag associated with the commit. Usually a release.
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
+
+  - trigger: "kolibri-windows"
+    label: ":windows:"
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      branch: "v1.5.1"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        # Determines whether build will be autoblocked or not.
+        # Autoblock unless there's a tag associated with the commit. Usually a release.
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
+
+  - trigger: "kolibri-raspbian-image"
+    label: ":raspberry-pi:"
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        # Determines whether build will be autoblocked or not.
+        # Autoblock unless there's a tag associated with the commit. Usually a release.
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
+    depends_on:
+      - deb-build
 
   - wait
 
-  - label: Build Debian Packages
-    command: .buildkite/build_debian_pkgs.sh
-
-  - wait
-
-  - label: Upload artifacts
+  - label: Upload Release Artifacts
     command: .buildkite/setup_and_upload_artifact.sh
-
-  - wait
-
-  - label: Cleaning up
-    command: make docker-clean
-
-  - wait
-
-  - block: "Sign Windows installer?"
-  - label: Sign Windows installer
-    command: .buildkite/sign_windows_installer.bat
-    agents:
-      queue: "windows-sign"
-
-  - block: "Create integration testing worksheet?"
-  - label: Create integration testing
-    command: .buildkite/build_worksheet.sh
-
-  - wait
-
-  - label: Upload new artifacts
-    command: .buildkite/setup_and_upload_artifact.sh
-
-  - block: "Build release APK?"
-  - label: "Build Release APK"
-    env:
-      KOLIBRI_ANDROID_BUILD_MODE: release
-    command: *android_build
-
-  - block: "Test .debs?"
-  - label: Test on Trusty, Xenial, Bionic
-    command:
-     - mkdir -p dist
-     - buildkite-agent artifact download 'dist/*.deb' dist/
-     - make docker-deb-test
+    if: build.tag != null

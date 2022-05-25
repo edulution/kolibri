@@ -2,6 +2,7 @@ import some from 'lodash/some';
 import { UserKinds } from '../../constants';
 
 export const baseSessionState = {
+  app_context: false,
   can_manage_content: false,
   facility_id: undefined,
   full_name: '',
@@ -15,7 +16,7 @@ export default {
   state: { ...baseSessionState },
   getters: {
     isAdmin(state) {
-      return state.kind.includes(UserKinds.ADMIN);
+      return state.kind.includes(UserKinds.ADMIN) || state.kind.includes(UserKinds.SUPERUSER);
     },
     isCoach(state) {
       return (
@@ -39,6 +40,10 @@ export default {
     },
     isSuperuser(state) {
       return state.kind.includes(UserKinds.SUPERUSER);
+    },
+    // An "Multi-Facility Admin" is a superuser for a device with 2+ facilities
+    userIsMultiFacilityAdmin(state, getters, rootState) {
+      return getters.isSuperuser && rootState.core.facilities.length > 1;
     },
     getUserPermissions(state) {
       const permissions = {};
@@ -68,6 +73,9 @@ export default {
     },
     session(state) {
       return state;
+    },
+    isAppContext(state) {
+      return state.app_context;
     },
   },
   mutations: {

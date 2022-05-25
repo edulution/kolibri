@@ -1,23 +1,23 @@
 <template>
 
-  <KDragContainer
+  <DragContainer
     :items="workingResources"
     @sort="handleDrag"
   >
     <transition-group tag="div" name="list" class="wrapper">
-      <KDraggable
-        v-for="(resourceId, index) in workingResources"
-        :key="resourceId"
+      <Draggable
+        v-for="(resource, index) in workingResources"
+        :key="resource.contentnode_id"
       >
-        <KDragHandle>
-          <KGrid
+        <DragHandle>
+          <KFixedGrid
             class="row"
-            :style="{ backgroundColor: $coreBgLight }"
-            cols="8"
+            :style="{ backgroundColor: $themeTokens.surface }"
+            numCols="8"
           >
-            <KGridItem size="1" class="relative">
+            <KFixedGridItem span="1" class="relative">
               <div class="move-handle">
-                <KDragSortWidget
+                <DragSortWidget
                   :moveUpText="$tr('moveResourceUpButtonDescription')"
                   :moveDownText="$tr('moveResourceDownButtonDescription')"
                   :isFirst="index === 0"
@@ -26,34 +26,51 @@
                   @moveDown="moveDownOne(index)"
                 />
               </div>
-            </KGridItem>
-            <KGridItem size="4">
-              <div class="resource-title">
-                <ContentIcon :kind="resourceKind(resourceId)" />
-                {{ resourceTitle(resourceId) }}
-                <p dir="auto" class="channel-title" :style="{ color: $coreTextAnnotation }">
-                  <dfn class="visuallyhidden"> {{ $tr('parentChannelLabel') }} </dfn>
-                  {{ resourceChannelTitle(resourceId) }}
+            </KFixedGridItem>
+            <KFixedGridItem span="4">
+              <template v-if="getCachedResource(resource.contentnode_id)">
+                <div class="resource-title">
+                  <div class="content-icon">
+                    <ContentIcon :kind="resourceKind(resource.contentnode_id)" />
+                  </div>
+                  <div class="content-link">
+                    <KRouterLink
+                      :text="resourceTitle(resource.contentnode_id)"
+                      :to="$router.getRoute(
+                        'RESOURCE_CONTENT_PREVIEW', { contentId: resource.contentnode_id }
+                      )"
+                    />
+                  </div>
+                  <p dir="auto" class="channel-title" :style="{ color: $themeTokens.annotation }">
+                    <dfn class="visuallyhidden"> {{ $tr('parentChannelLabel') }} </dfn>
+                    {{ resourceChannelTitle(resource.contentnode_id) }}
+                  </p>
+                </div>
+                <CoachContentLabel
+                  class="coach-content-label"
+                  :value="getCachedResource(resource.contentnode_id).num_coach_contents"
+                  :isTopic="false"
+                />
+              </template>
+              <template v-else>
+                <p>
+                  <KIcon icon="warning" :style=" { fill: $themePalette.orange.v_400 }" />
+                  {{ resourceMissingText }}
                 </p>
-              </div>
-              <CoachContentLabel
-                class="coach-content-label"
-                :value="getCachedResource(resourceId).num_coach_contents"
-                :isTopic="false"
-              />
-            </KGridItem>
-            <KGridItem size="3" alignment="right">
+              </template>
+            </KFixedGridItem>
+            <KFixedGridItem :style="{ 'padding-top': '16px' }" span="3" alignment="right">
               <KButton
-                :text="$tr('resourceRemovalButtonLabel')"
+                :text="coreString('removeAction')"
                 appearance="flat-button"
-                @click="removeResource(resourceId)"
+                @click="removeResource(resource)"
               />
-            </KGridItem>
-          </KGrid>
-        </KDragHandle>
-      </KDraggable>
+            </KFixedGridItem>
+          </KFixedGrid>
+        </DragHandle>
+      </Draggable>
     </transition-group>
-  </KDragContainer>
+  </DragContainer>
 
 </template>
 
@@ -61,89 +78,54 @@
 <script>
 
   import { mapActions, mapState, mapMutations } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KDragSortWidget from 'kolibri.coreVue.components.KDragSortWidget';
-  import KDragContainer from 'kolibri.coreVue.components.KDragContainer';
-  import KDragHandle from 'kolibri.coreVue.components.KDragHandle';
-  import KDraggable from 'kolibri.coreVue.components.KDraggable';
-  import KButton from 'kolibri.coreVue.components.KButton';
-  import KGrid from 'kolibri.coreVue.components.KGrid';
-  import KGridItem from 'kolibri.coreVue.components.KGridItem';
+  import DragSortWidget from 'kolibri.coreVue.components.DragSortWidget';
+  import DragContainer from 'kolibri.coreVue.components.DragContainer';
+  import DragHandle from 'kolibri.coreVue.components.DragHandle';
+  import Draggable from 'kolibri.coreVue.components.Draggable';
   import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { coachStringsMixin } from '../../common/commonCoachStrings';
 
   const removalSnackbarTime = 5000;
 
   export default {
     name: 'ResourceListTable',
     components: {
-      KDraggable,
-      KDragContainer,
-      KDragHandle,
-      KDragSortWidget,
+      Draggable,
+      DragContainer,
+      DragHandle,
+      DragSortWidget,
       CoachContentLabel,
-      KButton,
-      KGrid,
-      KGridItem,
       ContentIcon,
     },
-    mixins: [themeMixin],
+    mixins: [commonCoreStrings, coachStringsMixin],
     data() {
-      const workingResourcesIds = this.$store.state.lessonSummary.workingResources;
-      const resourceContentNodes = this.$store.state.lessonSummary.resourceCache;
-      const filteredContents = workingResourcesIds.filter(
-        resourceId => resourceContentNodes[resourceId]
-      );
       return {
-        workingResourcesBackup: filteredContents,
-        firstRemovalTitle: '',
-        contentMightBeDeleted: filteredContents.length < workingResourcesIds.length,
+        workingResourcesBackup: [...this.$store.state.lessonSummary.workingResources],
       };
     },
     computed: {
       ...mapState('lessonSummary', {
         lessonId: state => state.currentLesson.id,
-        workingResourcesIds: state => state.workingResources,
+        workingResources: state => state.workingResources,
         // consider loading this async?
         resourceContentNodes: state => state.resourceCache,
         getCachedResource(state) {
           return function getter(resourceId) {
-            return state.resourceCache[resourceId] || {};
+            return state.resourceCache[resourceId];
           };
         },
       }),
-      // HACK for broken lessons: Prior to 0.12, lessons can hold resources that have
-      // been deleted. We need to filter them out here. As a remedy for users
-      // with 'broken' lessons, they can visit the lesson and the 'mounted' hook
-      // will save the fixed lesson.
-      workingResources() {
-        return this.workingResourcesIds.filter(resourceId => this.resourceContentNodes[resourceId]);
+      numberOfRemovals() {
+        return this.workingResourcesBackup.length - this.workingResources.length;
       },
-      removalMessage() {
-        const numberOfRemovals = this.workingResourcesBackup.length - this.workingResources.length;
-
-        if (!numberOfRemovals) {
-          return '';
-        } else if (numberOfRemovals === 1) {
-          return this.$tr('singleResourceRemovalConfirmationMessage', {
-            resourceTitle: this.firstRemovalTitle,
-          });
-        }
-
-        return this.$tr('multipleResourceRemovalsConfirmationMessage', {
-          numberOfRemovals,
-        });
+      resourceMissingText() {
+        return this.getMissingContentString('resourceNotFoundOnDevice');
       },
-    },
-    mounted() {
-      // HACK for broken lessons: Automatically save the lesson if we
-      // infer that is has missing items at first render.
-      if (this.contentMightBeDeleted) {
-        this.autoSave(this.lessonId, this.workingResources);
-      }
     },
     methods: {
-      ...mapActions(['createSnackbar', 'clearSnackbar']),
+      ...mapActions(['clearSnackbar']),
       ...mapActions('lessonSummary', ['saveLessonResources', 'updateCurrentLesson']),
       ...mapMutations('lessonSummary', {
         removeFromWorkingResources: 'REMOVE_FROM_WORKING_RESOURCES',
@@ -158,29 +140,33 @@
       resourceKind(resourceId) {
         return this.resourceContentNodes[resourceId].kind;
       },
-      removeResource(resourceId) {
-        this.firstRemovalTitle = this.resourceTitle(resourceId);
-        this.removeFromWorkingResources(resourceId);
+      removeResource(resource) {
+        this.removeFromWorkingResources([resource]);
 
         this.autoSave(this.lessonId, this.workingResources);
 
-        this.$store.commit('CORE_CREATE_SNACKBAR', {
-          text: this.removalMessage,
-          autoDismiss: true,
-          duration: removalSnackbarTime,
-          actionText: this.$tr('undoActionPrompt'),
-          actionCallback: () => {
-            this.setWorkingResources(this.workingResourcesBackup);
-            this.autoSave(this.lessonId, this.workingResources);
-            this.clearSnackbar();
-          },
-          hideCallback: () => {
-            if (this.workingResourcesBackup) {
-              // snackbar might carryover to another page (like select)
-              this.workingResourcesBackup = this.workingResources;
+        if (this.numberOfRemovals > 0) {
+          this.showSnackbarNotification(
+            'resourcesRemovedWithCount',
+            { count: this.numberOfRemovals },
+            {
+              autoDismiss: true,
+              duration: removalSnackbarTime,
+              actionText: this.$tr('undoActionPrompt'),
+              actionCallback: () => {
+                this.setWorkingResources(this.workingResourcesBackup);
+                this.autoSave(this.lessonId, this.workingResources);
+                this.clearSnackbar();
+              },
+              hideCallback: () => {
+                if (this.workingResourcesBackup) {
+                  // snackbar might carryover to another page (like select)
+                  this.workingResourcesBackup = [...this.workingResources];
+                }
+              },
             }
-          },
-        });
+          );
+        }
       },
       moveUpOne(oldIndex) {
         this.shiftOne(oldIndex, oldIndex - 1);
@@ -190,45 +176,50 @@
       },
       shiftOne(oldIndex, newIndex) {
         const resources = [...this.workingResources];
-        const oldResourceId = resources[newIndex];
+        const oldResource = resources[newIndex];
         resources[newIndex] = resources[oldIndex];
-        resources[oldIndex] = oldResourceId;
+        resources[oldIndex] = oldResource;
 
         this.setWorkingResources(resources);
         this.autoSave(this.lessonId, resources);
 
-        this.createSnackbar(this.$tr('resourceReorderConfirmationMessage'));
+        this.showSnackbarNotification('resourceOrderSaved');
       },
       handleDrag({ newArray }) {
         this.setWorkingResources(newArray);
         this.autoSave(this.lessonId, newArray);
-        this.createSnackbar(this.$tr('resourceReorderConfirmationMessage'));
+        this.showSnackbarNotification('resourceOrderSaved');
       },
       autoSave(id, resources) {
-        this.saveLessonResources({ lessonId: id, resourceIds: resources }).catch(() => {
-          this.updateCurrentLesson(id).then(currentLesson => {
-            this.setWorkingResources(
-              currentLesson.resources.map(resourceObj => resourceObj.contentnode_id)
-            );
+        this.saveLessonResources({ lessonId: id, resources: resources })
+          .then(() => {
+            this.updateCurrentLesson(id);
+          })
+          .catch(() => {
+            this.updateCurrentLesson(id).then(currentLesson => {
+              this.setWorkingResources(currentLesson.resources);
+            });
           });
-        });
       },
     },
     $trs: {
-      resourceReorderConfirmationMessage: 'New lesson order saved',
-      undoActionPrompt: 'Undo',
-      resourceReorderColumnHeaderForTable:
-        'Use buttons in this column to re-order resources in the lesson',
-      resourceTypeColumnHeaderForTable: 'Resource type',
-      lessonTitleColumnHeaderForTable: 'Title',
-      resourceRemovalColumnHeaderForTable:
-        'Use buttons in this column to remove resources from the lesson',
-      resourceRemovalButtonLabel: 'Remove',
-      singleResourceRemovalConfirmationMessage: 'Removed { resourceTitle }',
-      multipleResourceRemovalsConfirmationMessage: 'Removed { numberOfRemovals } resources',
-      moveResourceUpButtonDescription: 'Move this resource one position up in this lesson',
-      moveResourceDownButtonDescription: 'Move this resource one position down in this lesson',
-      parentChannelLabel: 'Parent channel:',
+      undoActionPrompt: {
+        message: 'Undo',
+        context: 'Allows user to undo an action.',
+      },
+      moveResourceUpButtonDescription: {
+        message: 'Move this resource one position up in this lesson',
+        context: 'Refers to ordering resources.',
+      },
+      moveResourceDownButtonDescription: {
+        message: 'Move this resource one position down in this lesson',
+        context: 'Refers to ordering resources.',
+      },
+      parentChannelLabel: {
+        message: 'Parent channel:',
+        context:
+          'Describes the name of the main channel which the specific learning resource belongs to.\n',
+      },
     },
   };
 
@@ -237,7 +228,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   .wrapper {
     margin-top: 16px;
@@ -310,6 +301,17 @@
 
   .list-move {
     transition: transform $core-time ease;
+  }
+
+  .content-icon {
+    display: inline-block;
+    width: 16px; // match the icon
+    vertical-align: top;
+  }
+
+  .content-link {
+    display: inline-block;
+    width: calc(100% - 16px);
   }
 
 </style>

@@ -2,6 +2,8 @@
 
   <CoreBase
     :immersivePage="true"
+    :immersivePagePrimary="true"
+    immersivePageIcon="back"
     :immersivePageRoute="toolbarRoute"
     :appBarTitle="exercise.title"
     :authorized="userIsAuthorized"
@@ -27,11 +29,11 @@
       LearnerExerciseReport,
     },
     mixins: [commonCoach],
-    $trs: {},
     computed: {
       ...mapState('exerciseDetail', ['exercise']),
       toolbarRoute() {
-        return this.classRoute('ReportsLessonLearnerPage', {});
+        const backRoute = this.backRouteForQuery(this.$route.query);
+        return backRoute || this.classRoute('ReportsLessonLearnerPage', {});
       },
     },
     methods: {

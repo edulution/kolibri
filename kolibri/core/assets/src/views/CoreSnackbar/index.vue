@@ -1,21 +1,27 @@
 <template>
 
   <div>
-    <div
-      v-if="backdrop"
-      class="snackbar-backdrop"
-    >
-    </div>
-    <transition name="snackbar">
+    <template v-if="backdrop">
+      <Backdrop class="snackbar-backdrop" />
+      <!-- Prevent focus from leaving the this container -->
+      <div tabindex="0" @focus="trapFocus"></div>
+    </template>
+    <transition name="snackbar" @leave-to="clearSnackbar" @enter="handleOnEnter">
       <UiSnackbar
         v-show="isVisible"
+        id="coresnackbar"
         ref="snackbar"
         class="snackbar"
         :message="text"
         :action="actionText"
         tabindex="0"
-        @action-click="$emit('actionClicked')"
-      />
+        :style="styles"
+        @action-click="handleActionClick"
+      >
+        <template #inner-focus-trap>
+          <div tabindex="0" @focus="trapFocus"></div>
+        </template>
+      </UiSnackbar>
     </transition>
   </div>
 
@@ -25,12 +31,14 @@
 <script>
 
   import { mapActions } from 'vuex';
-  import UiSnackbar from './KeenUiSnackbar';
+  import UiSnackbar from 'kolibri-design-system/lib/keen/UiSnackbar.vue';
+  import Backdrop from 'kolibri.coreVue.components.Backdrop';
 
   /* Snackbars are used to display notification. */
   export default {
     name: 'CoreSnackbar',
     components: {
+      Backdrop,
       UiSnackbar,
     },
     props: {
@@ -42,7 +50,7 @@
       /* To provide an action button, provide text */
       actionText: {
         type: String,
-        required: false,
+        default: null,
       },
       /* Automatically dismiss the snackbar */
       autoDismiss: {
@@ -59,46 +67,68 @@
         type: Boolean,
         default: false,
       },
+      /* Integer that over-rides the default 'bottom: 0' CSS */
+      bottomPosition: {
+        type: Number,
+        default: null,
+      },
     },
-    data: () => ({
-      timeout: null,
-      isVisible: false,
-      previouslyFocusedElement: null,
-    }),
+    data() {
+      return {
+        timeout: null,
+        isVisible: false,
+        previouslyFocusedElement: null,
+      };
+    },
+    computed: {
+      styles() {
+        if (this.bottomPosition) {
+          return {
+            bottom: `${this.bottomPosition}px`,
+          };
+        }
+        return {};
+      },
+    },
     mounted() {
       this.isVisible = true;
       if (this.autoDismiss) {
         this.timeout = window.setTimeout(this.hideSnackbar, this.duration);
       }
       if (this.backdrop) {
-        window.addEventListener('focus', this.containFocus, true);
         this.previouslyFocusedElement = document.activeElement;
         this.previouslyFocusedElement.blur();
       }
     },
     beforeDestroy() {
-      this.isVisible = false;
       if (this.timeout) {
         window.clearTimeout(this.timeout);
       }
       if (this.backdrop) {
-        window.removeEventListener('focus', this.containFocus, true);
         this.previouslyFocusedElement.focus();
       }
     },
     methods: {
       ...mapActions(['clearSnackbar']),
       hideSnackbar() {
+        this.isVisible = false;
         this.$emit('hide');
-        this.clearSnackbar();
       },
-      containFocus(event) {
-        if (event.target === window) {
-          return;
+      handleActionClick() {
+        this.isVisible = false;
+        this.$emit('actionClicked');
+      },
+      focusSnackbarElement() {
+        this.$refs.snackbar.$el.focus();
+      },
+      handleOnEnter() {
+        if (this.backdrop) {
+          this.focusSnackbarElement();
         }
-        if (!this.$refs.snackbar.$el.contains(event.target)) {
-          this.$refs.snackbar.$el.focus();
-        }
+      },
+      trapFocus(e) {
+        e.stopPropagation();
+        this.focusSnackbarElement();
       },
     },
   };
@@ -108,27 +138,34 @@
 
 <style lang="scss" scoped>
 
+  @import '~kolibri-design-system/lib/styles/definitions';
+
   .snackbar {
     position: fixed;
     bottom: 0;
     left: 0;
     z-index: 24;
     margin: 16px;
+
+    &:focus {
+      outline-style: none !important;
+    }
   }
 
   .snackbar-backdrop {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 16;
-    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 24; // material dialog - ensures we cover KModal
+  }
+
+  .snackbar-enter-active {
+    @extend %md-decelerate-func;
+  }
+
+  .snackbar-leave-active {
+    @extend %md-accelerate-func;
   }
 
   .snackbar-enter-active,
   .snackbar-leave-active {
-    transition-timing-function: ease;
     transition-duration: 0.4s;
     transition-property: transform, opacity;
   }

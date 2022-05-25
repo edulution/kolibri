@@ -1,125 +1,87 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="true"
-  >
-
-    <TopNavbar slot="sub-nav" />
-
-    <KPageContainer>
-
-      <ReportsQuizHeader />
-
-      <CoreTable :emptyMessage="coachStrings.$tr('learnerListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('nameLabel') }}</th>
-            <th>{{ coachStrings.$tr('progressLabel') }}</th>
-            <th>{{ coachStrings.$tr('scoreLabel') }}</th>
-            <th>{{ coachStrings.$tr('groupsLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" person />
-                <KRouterLink
-                  v-if="tableRow.statusObj.status !== STATUSES.notStarted"
-                  :text="tableRow.name"
-                  :to="classRoute('ReportsQuizLearnerPage', {
-                    learnerId: tableRow.id,
-                    questionId: 0,
-                    interactionIndex: 0
-                  })"
-                />
-                <template v-else>
-                  {{ tableRow.name }}
-                </template>
-              </KLabeledIcon>
-            </td>
-            <td>
-              <StatusSimple :status="tableRow.statusObj.status" />
-            </td>
-            <td><Score :value="tableRow.statusObj.score" /></td>
-            <td><TruncatedItemList :items="tableRow.groups" /></td>
-          </tr>
-        </transition-group>
-      </CoreTable>
-    </KPageContainer>
-  </CoreBase>
+  <ReportsQuizBaseListPage @export="exportCSV">
+    <ReportsLearnersTable :entries="table" :questionCount="exam.question_count" />
+  </ReportsQuizBaseListPage>
 
 </template>
 
 
 <script>
 
+  import sortBy from 'lodash/sortBy';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { PageNames } from '../../constants';
   import commonCoach from '../common';
-  import ReportsQuizHeader from './ReportsQuizHeader';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsQuizBaseListPage from './ReportsQuizBaseListPage';
+  import ReportsLearnersTable from './ReportsLearnersTable';
 
   export default {
     name: 'ReportsQuizLearnerListPage',
     components: {
-      ReportsQuizHeader,
+      ReportsQuizBaseListPage,
+      ReportsLearnersTable,
     },
-    mixins: [commonCoach],
-    data() {
-      return {
-        filter: 'allQuizzes',
-      };
-    },
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
-      filterOptions() {
-        return [
-          {
-            label: this.$tr('allQuizzes'),
-            value: 'allQuizzes',
-          },
-          {
-            label: this.$tr('activeQuizzes'),
-            value: 'activeQuizzes',
-          },
-          {
-            label: this.$tr('inactiveQuizzes'),
-            value: 'inactiveQuizzes',
-          },
-        ];
-      },
       exam() {
         return this.examMap[this.$route.params.quizId];
       },
       recipients() {
-        return this.getLearnersForGroups(this.exam.groups);
+        return this.getLearnersForExam(this.exam);
       },
       table() {
         const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
-        const sorted = this._.sortBy(learners, ['name']);
-        const mapped = sorted.map(learner => {
+        const sorted = sortBy(learners, ['name']);
+        return sorted.map(learner => {
           const tableRow = {
             groups: this.getGroupNamesForLearner(learner.id),
             statusObj: this.getExamStatusObjForLearner(this.exam.id, learner.id),
+            link: this.detailLink(learner.id),
           };
           Object.assign(tableRow, learner);
           return tableRow;
         });
-        return mapped;
       },
     },
-    beforeMount() {
-      this.filter = this.filterOptions[0];
-    },
-    $trs: {
-      averageScore: 'Average score: {score, number, percent}',
-      allQuizzes: 'All quizzes',
-      activeQuizzes: 'Active quizzes',
-      inactiveQuizzes: 'Inactive quizzes',
+    methods: {
+      detailLink(learnerId) {
+        return this.classRoute(PageNames.REPORTS_QUIZ_LEARNER_PAGE_ROOT, {
+          learnerId,
+        });
+      },
+      exportCSV() {
+        const columns = [
+          ...csvFields.name(),
+          ...csvFields.learnerProgress('statusObj.status'),
+          ...csvFields.score(),
+          ...csvFields.quizQuestionsAnswered(this.exam),
+          ...csvFields.list('groups', 'groupsLabel'),
+        ];
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          resource: this.exam.title,
+        });
+
+        exporter.export(this.table);
+      },
     },
   };
 
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+  .small-answered-count {
+    display: block;
+    margin-left: 1.75rem; /* matches KLabeledIcon */
+    font-size: small;
+  }
+
+</style>

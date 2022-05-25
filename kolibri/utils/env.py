@@ -3,18 +3,88 @@ import os
 import platform
 import sys
 
+try:
+    # Do this to allow this to be accessed
+    # during build, when dependencies are not
+    # installed.
+    # TODO: Move version tools to build tools, so we don't have to do this
+    from colorlog import ColoredFormatter
+    from colorlog import getLogger
+    from colorlog import StreamHandler
+except ImportError:
+    StreamHandler = None
+    getLogger = None
+    ColoredFormatter = None
+
+from .logger import LOG_COLORS
+from kolibri.utils.compat import monkey_patch_collections
+
+
+logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
+logging.StreamHandler(sys.stdout)
+
+if StreamHandler and getLogger and ColoredFormatter:
+    handler = StreamHandler(stream=sys.stdout)
+    handler.setFormatter(
+        ColoredFormatter(
+            fmt="%(log_color)s%(levelname)-8s %(message)s", log_colors=LOG_COLORS
+        )
+    )
+    handler.setLevel(logging.INFO)
+    logger = getLogger("env")
+    logger.addHandler(handler)
+    logger.propagate = False
+else:
+    logger = logging.getLogger("env")
+
+
+def settings_module():
+    from .build_config.default_settings import settings_path
+
+    return settings_path
+
+
+# Enumerate all the environment variables that are used in Kolibri, and describe
+# their usage. Optionally provide a default value as a callback function, to set as
+# a default if the environment variable is not set.
+ENVIRONMENT_VARIABLES = {
+    "DJANGO_SETTINGS_MODULE": {
+        "default": settings_module,
+        "description": "The Django settings module to use.",
+    },
+    "KOLIBRI_HOME": {
+        "default": lambda: os.path.join(os.path.expanduser("~"), ".kolibri"),
+        "description": "The base directory for the Kolibri installation.",
+    },
+    "KOLIBRI_NO_FILE_BASED_LOGGING": {
+        "description": "Disable file-based logging.",
+    },
+    "KOLIBRI_APK_VERSION_NAME": {
+        "description": "Version name for the Kolibri APK (Android Installer)",
+    },
+    "LISTEN_PID": {
+        "description": """
+            The PID of the process to listen for signals from -
+            used to detect whether running under socket activation under Debian.
+        """,
+    },
+}
+
 
 def prepend_cext_path(dist_path):
     """
     Calculate the directory of C extensions and add it to sys.path if exists.
+    Return True if C extensions are available for this platform.
+    Return False if no C extensions are available for this platform.
     """
+
     python_version = "cp" + str(sys.version_info.major) + str(sys.version_info.minor)
     system_name = platform.system()
     machine_name = platform.machine()
     dirname = os.path.join(dist_path, "cext", python_version, system_name)
 
     # For Linux system with cpython<3.3, there could be abi tags 'm' and 'mu'
-    if system_name == "Linux" and int(python_version[2:]) < 33:
+    if system_name == "Linux" and sys.version_info < (3, 3):
         # encode with ucs2
         if sys.maxunicode == 65535:
             dirname = os.path.join(dirname, python_version + "m")
@@ -29,7 +99,7 @@ def prepend_cext_path(dist_path):
         # add it + the matching noarch (OpenSSL) modules to sys.path
         sys.path = [str(dirname), str(noarch_dir)] + sys.path
     else:
-        logging.warning("No C Extensions available for this platform.\n")
+        logger.debug("No C extensions are available for this platform")
 
 
 def set_env():
@@ -42,6 +112,8 @@ def set_env():
     else.
     """
     from kolibri import dist as kolibri_dist  # noqa
+
+    monkey_patch_collections()
 
     sys.path = [os.path.realpath(os.path.dirname(kolibri_dist.__file__))] + sys.path
 
@@ -65,13 +137,7 @@ def set_env():
             )
         ]
 
-    try:
-        from .build_config.default_settings import settings_path
-    except ImportError:
-        settings_path = "kolibri.deployment.default.settings.base"
-
     # Set default env
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_path)
-    os.environ.setdefault(
-        "KOLIBRI_HOME", os.path.join(os.path.expanduser("~"), ".kolibri")
-    )
+    for key, value in ENVIRONMENT_VARIABLES.items():
+        if "default" in value:
+            os.environ.setdefault(key, value["default"]())

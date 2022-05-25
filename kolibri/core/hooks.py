@@ -14,51 +14,66 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import logging
+from abc import abstractproperty
 
+from kolibri.core.webpack.hooks import WebpackBundleHook
+from kolibri.core.webpack.hooks import WebpackInclusionASyncMixin
+from kolibri.core.webpack.hooks import WebpackInclusionSyncMixin
+from kolibri.plugins.hooks import define_hook
 from kolibri.plugins.hooks import KolibriHook
 from kolibri.plugins.utils import plugin_url
 
-logger = logging.getLogger(__name__)
+
+@define_hook
+class NavigationHook(WebpackBundleHook):
+    pass
 
 
-class NavigationHook(KolibriHook):
-
-    # : A string label for the menu item
-    label = "Untitled"
-
-    # : A string or lazy proxy for the url
-    url = "/"
-
-    # Set this to True so that any time this is mixed in with a
-    # frontend asset hook, the resulting frontend code will be rendered inline.
-    inline = True
-
-    def get_menu(self):
-        menu = {}
-        for hook in self.registered_hooks:
-            menu[hook.label] = self.url
-        return menu
-
-    class Meta:
-
-        abstract = True
-
-
+@define_hook
 class RoleBasedRedirectHook(KolibriHook):
     # User role to redirect for
-    role = None
+    @abstractproperty
+    def roles(self):
+        pass
 
     # URL to redirect to
-    url = None
-
-    # Special flag to only redirect on first login
-    # Default to False
-    first_login = False
+    @abstractproperty
+    def url(self):
+        pass
 
     def plugin_url(self, plugin_class, url_name):
         return plugin_url(plugin_class, url_name)
 
-    class Meta:
 
-        abstract = True
+@define_hook
+class FrontEndBaseSyncHook(WebpackInclusionSyncMixin):
+    """
+    Inherit a hook defining assets to be loaded in kolibri/base.html, that means
+    ALL pages. Use with care.
+    """
+
+
+@define_hook
+class FrontEndBaseASyncHook(WebpackInclusionASyncMixin):
+    """
+    Inherit a hook defining assets to be loaded in kolibri/base.html, that means
+    ALL pages. Use with care.
+    """
+
+
+@define_hook(only_one_registered=True)
+class LogoutRedirectHook(KolibriHook):
+    """
+    A hook to enable the OIDC client
+    """
+
+    @classmethod
+    def is_enabled(cls):
+        return len(list(cls.registered_hooks)) == 1
+
+    @abstractproperty
+    def url(self):
+        """
+        A property to be overriden by the class using this hook to provide the needed url to redirect
+        """
+        pass

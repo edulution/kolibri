@@ -5,37 +5,35 @@
       :icon="statusIcon"
       class="icon"
     />
-    <p class="context icon-spacer">
+    <p
+      class="context icon-spacer"
+      :style="{ color: $themeTokens.annotation }"
+    >
       {{ context }}
     </p>
-    <KGrid>
-      <KGridItem :sizes="mainColSizes">
+    <KFixedGrid numCols="4">
+      <KFixedGridItem :span="showTime ? 3 : 4">
         <div class="icon-spacer">
           <ContentIcon
-            slot="icon"
             class="content-icon"
             :kind="contentIcon"
             :showTooltip="false"
           />
           <KRouterLink
-            v-if="targetPage && targetPage.name"
+            v-if="route"
             :text="linkText"
-            :to="getRoute(targetPage)"
+            :to="route"
+            class="link"
           />
-          <span v-else>
+          <span v-else class="link">
             {{ linkText }}
           </span>
         </div>
-      </KGridItem>
-
-      <KGridItem
-        v-if="time"
-        :sizes="[1, 2, 3]"
-        alignment="right"
-      >
-        <ElapsedTime :date="parseDate(time)" />
-      </KGridItem>
-    </KGrid>
+      </KFixedGridItem>
+      <KFixedGridItem v-if="showTime" :span="1" alignment="right">
+        <ElapsedTime :date="date" />
+      </KFixedGridItem>
+    </KFixedGrid>
   </div>
 
 </template>
@@ -45,15 +43,14 @@
 
   import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import ElapsedTime from 'kolibri.coreVue.components.ElapsedTime';
-  import KGrid from 'kolibri.coreVue.components.KGrid';
-  import KGridItem from 'kolibri.coreVue.components.KGridItem';
-  import KRouterLink from 'kolibri.coreVue.components.KRouterLink';
-  import { validateLinkObject } from 'kolibri.utils.validators';
   import CoachStatusIcon from '../status/CoachStatusIcon';
   import {
     NotificationEvents,
     NotificationObjects,
   } from '../../../constants/notificationsConstants';
+  import { CollectionTypes } from '../../../constants/lessonsConstants';
+  import { cardTextForNotification } from './notificationStrings';
+  import { notificationLink } from './../../../modules/coachNotifications/gettersUtils';
 
   const EventToIconMap = {
     [NotificationEvents.COMPLETED]: 'star',
@@ -67,92 +64,74 @@
       ContentIcon,
       CoachStatusIcon,
       ElapsedTime,
-      KGrid,
-      KGridItem,
-      KRouterLink,
     },
     props: {
-      targetPage: {
+      notification: {
         type: Object,
-        required: false,
-        validator: validateLinkObject,
-      },
-      // Notification event: 'Started', 'Completed', 'HelpNeeded'
-      eventType: {
-        type: String,
         required: true,
-        validator(value) {
-          return Object.values(NotificationEvents).includes(value);
+        validator(notification) {
+          return (
+            Object.values(NotificationEvents).includes(notification.event) &&
+            Object.values(NotificationObjects).includes(notification.object)
+          );
         },
       },
-      // Notification object: 'Lesson', 'Quiz', 'Resource',
-      objectType: {
-        type: String,
-        required: true,
-        validator(value) {
-          return Object.values(NotificationObjects).includes(value);
-        },
+      lastQuery: {
+        type: Object,
+        default: () => ({}),
       },
-      // A ContentNodeKind
-      resourceType: {
-        type: String,
-        required: false,
-      },
-      // group name
-      learnerContext: {
-        type: String,
-        required: false,
-      },
-      // exam or lesson name
-      contentContext: {
-        type: String,
-        required: false,
-      },
-      linkText: {
-        type: String,
-        required: true,
-      },
-      time: {
-        type: String,
-        required: false,
+      showTime: {
+        type: Boolean,
+        default: false,
       },
     },
     computed: {
       statusIcon() {
-        return EventToIconMap[this.eventType];
+        return EventToIconMap[this.notification.event];
       },
       contentIcon() {
-        if (this.objectType === NotificationObjects.QUIZ) {
+        if (this.notification.object === NotificationObjects.QUIZ) {
           return 'exam';
-        } else if (this.objectType === NotificationObjects.LESSON) {
+        } else if (this.notification.object === NotificationObjects.LESSON) {
           return 'lesson';
         } else {
-          return this.resourceType;
+          return this.notification.resource.type;
         }
       },
       context() {
-        if (this.learnerContext && this.contentContext) {
-          return `${this.learnerContext} • ${this.contentContext}`;
-        } else if (this.learnerContext) {
-          return this.learnerContext;
-        } else if (this.contentContext) {
-          return this.contentContext;
+        const contentContext = this.notification.assignment.name;
+        const learnerContext =
+          this.notification.collection.type === CollectionTypes.LEARNERGROUP
+            ? this.notification.collection.name
+            : '';
+        if (learnerContext && contentContext) {
+          return this.isRtl
+            ? `${contentContext} • ${learnerContext}`
+            : `${learnerContext} • ${contentContext}`;
+        } else if (learnerContext) {
+          return learnerContext;
+        } else if (contentContext) {
+          return contentContext;
         }
         return '';
       },
-      mainColSizes() {
-        if (this.time) {
-          return [3, 6, 9];
+      date() {
+        return new Date(this.notification.timestamp);
+      },
+      linkText() {
+        return cardTextForNotification(this.notification);
+      },
+      route() {
+        const targetPage = notificationLink(this.notification);
+        if (targetPage) {
+          return {
+            ...targetPage,
+            query: {
+              ...this.lastQuery,
+            },
+          };
         }
-        return [4, 8, 12];
-      },
-    },
-    methods: {
-      parseDate(dateString) {
-        return new Date(dateString);
-      },
-      getRoute({ name, params, query }) {
-        return this.$router.getRoute(name, params, query);
+        return null;
       },
     },
   };
@@ -162,7 +141,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   .icon {
     // vertically align icon
@@ -197,11 +176,19 @@
     margin-top: 4px;
     margin-bottom: 4px;
     font-size: small;
-    color: gray;
   }
 
   .button-wrapper {
     position: relative;
+  }
+
+  .link {
+    overflow-wrap: break-word;
+  }
+
+  /* Fixes spacing only observed in this notification card content icon */
+  /deep/.content-icon svg {
+    top: -2px !important;
   }
 
 </style>

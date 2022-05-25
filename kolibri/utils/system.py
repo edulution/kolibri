@@ -16,13 +16,18 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import logging
 import os
 import sys
 
 import six
+from django.db import connections
 
 from .conf import KOLIBRI_HOME
+from .conf import OPTIONS
 from kolibri.utils.android import on_android
+
+logger = logging.getLogger(__name__)
 
 
 def _posix_pid_exists(pid):
@@ -40,20 +45,6 @@ def _posix_pid_exists(pid):
         return True
 
 
-def _posix_kill_pid(pid):
-    """Kill a PID by sending a posix signal"""
-    import signal
-
-    try:
-        os.kill(pid, signal.SIGTERM)
-    # process does not exist
-    except OSError:
-        return
-    # process didn't exit cleanly, make one last effort to kill it
-    if pid_exists(pid):
-        os.kill(pid, signal.SIGKILL)
-
-
 def _windows_pid_exists(pid):
     import ctypes
 
@@ -64,20 +55,7 @@ def _windows_pid_exists(pid):
     if process != 0:
         kernel32.CloseHandle(process)
         return True
-    else:
-        return False
-
-
-def _windows_kill_pid(pid):
-    """Kill the proces using pywin32 and pid"""
-    import ctypes
-
-    PROCESS_TERMINATE = 1
-    handle = ctypes.windll.kernel32.OpenProcess(
-        PROCESS_TERMINATE, False, pid
-    )  # @UndefinedVariable
-    ctypes.windll.kernel32.TerminateProcess(handle, -1)  # @UndefinedVariable
-    ctypes.windll.kernel32.CloseHandle(handle)  # @UndefinedVariable
+    return False
 
 
 buffering = int(six.PY3)  # No unbuffered text I/O on Python 3 (#20815).
@@ -153,6 +131,12 @@ class _WindowsNullDevice:
 
 
 def get_free_space(path=KOLIBRI_HOME):
+
+    while path and not os.path.exists(path):
+        path = os.path.dirname(path)  # look to parent if it doesn't exist
+    if not path:
+        raise Exception("Could not calculate free space")
+
     if sys.platform.startswith("win"):
         import ctypes
 
@@ -170,8 +154,9 @@ def get_free_space(path=KOLIBRI_HOME):
             from jnius import autoclass
 
             StatFs = autoclass("android.os.StatFs")
+            AndroidString = autoclass("java.lang.String")
 
-            st = StatFs(KOLIBRI_HOME)
+            st = StatFs(AndroidString(path))
 
             try:
                 # for api version 18+
@@ -186,15 +171,45 @@ def get_free_space(path=KOLIBRI_HOME):
         st = os.statvfs(os.path.realpath(path))
         result = st.f_bavail * st.f_frsize
 
-    return result
+    return max(result - OPTIONS["Deployment"]["MINIMUM_DISK_SPACE"], 0)
 
 
-# Utility functions for pinging or killing PIDs
+_become_daemon_function = None
+
+
+def become_daemon(**kwargs):
+    # close all connections before forking, to avoid SQLite corruption:
+    # https://www.sqlite.org/howtocorrupt.html#_carrying_an_open_database_connection_across_a_fork_
+    connections.close_all()
+    _become_daemon_function(**kwargs)
+
+
+def _posix_get_fd_limit():
+    """
+    Determines the File Descriptor (FD) limit
+    :return: int
+    """
+    import resource
+
+    fd_soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    return fd_soft_limit
+
+
+def _windows_get_fd_limit():
+    """
+    Determines the File Descriptor (FD) limit
+    :return: int
+    """
+    # TODO: "determine" it
+    return 512
+
+
+# Utility functions
 if os.name == "posix":
     pid_exists = _posix_pid_exists
-    kill_pid = _posix_kill_pid
-    become_daemon = _posix_become_daemon
+    get_fd_limit = _posix_get_fd_limit
+    _become_daemon_function = _posix_become_daemon
 else:
     pid_exists = _windows_pid_exists
-    kill_pid = _windows_kill_pid
-    become_daemon = _windows_become_daemon
+    get_fd_limit = _windows_get_fd_limit
+    _become_daemon_function = _windows_become_daemon

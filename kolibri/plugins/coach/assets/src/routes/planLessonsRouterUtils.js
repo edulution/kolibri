@@ -22,26 +22,3 @@ export function selectionRootLink({ classId, lessonId }) {
     },
   };
 }
-
-// Creates a Link to a Topic Listing Page for a Lesson
-export function topicListingLink({ classId, lessonId, topicId }) {
-  return {
-    name: LessonsPageNames.SELECTION,
-    params: {
-      classId,
-      lessonId,
-      topicId,
-    },
-  };
-}
-
-// Creates Link to the Lesson Resource Whole-Classroom Report Page
-export function resourceUserSummaryLink(contentId) {
-  return {
-    name: LessonsPageNames.RESOURCE_USER_SUMMARY,
-    // classId, lessonId filled in by router
-    params: {
-      contentId,
-    },
-  };
-}

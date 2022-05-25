@@ -3,6 +3,8 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from django.core.urlresolvers import reverse
+from django.utils.timezone import now
+from le_utils.constants import content_kinds
 from rest_framework.test import APITestCase
 
 from kolibri.core.auth.models import Classroom
@@ -14,7 +16,8 @@ from kolibri.core.exams.models import Exam
 from kolibri.core.exams.models import ExamAssignment
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.lessons.models import LessonAssignment
-from kolibri.core.logger.models import ExamLog
+from kolibri.core.logger.models import ContentSummaryLog
+from kolibri.core.logger.models import MasteryLog
 
 
 class LearnerClassroomTestCase(APITestCase):
@@ -31,7 +34,7 @@ class LearnerClassroomTestCase(APITestCase):
         )
         self.learner_user.set_password("password")
         self.learner_user.save()
-        self.basename = "kolibri:learnplugin:learnerclassroom"
+        self.basename = "kolibri:kolibri.plugins.learn:learnerclassroom"
         self.own_classroom = Classroom.objects.create(
             name="Own Classroom", parent=self.facility
         )
@@ -116,7 +119,20 @@ class LearnerClassroomTestCase(APITestCase):
         ExamAssignment.objects.create(
             exam=exam_3, collection=lgroup, assigned_by=self.coach_user
         )
-        ExamLog.objects.create(exam=exam_3, user=self.learner_user)
+        summarylog = ContentSummaryLog.objects.create(
+            user=self.learner_user,
+            content_id=exam_3.id,
+            kind=content_kinds.QUIZ,
+            progress=0.0,
+            start_timestamp=now(),
+        )
+
+        MasteryLog.objects.create(
+            user=self.learner_user,
+            summarylog=summarylog,
+            start_timestamp=now(),
+            mastery_level=1,
+        )
         self.client.login(username="learner", password="password")
         get_response = self.client.get(
             reverse(self.basename + "-detail", kwargs={"pk": self.own_classroom.id})
@@ -171,7 +187,7 @@ class LearnerClassroomTestCase(APITestCase):
         self.assertEqual(len(get_response.data[0]["assignments"]["lessons"]), 0)
 
     def test_learner_only_sees_lessons_for_single_classroom_when_enrolled_in_multiple(
-        self
+        self,
     ):
         classroom = Classroom.objects.create(
             name="Other Classroom", parent=self.facility

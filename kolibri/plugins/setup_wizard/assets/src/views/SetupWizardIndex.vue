@@ -15,20 +15,7 @@
     />
 
     <template v-else>
-      <ProgressToolbar
-        :currentStep="onboardingStep"
-        :totalSteps="totalOnboardingSteps"
-        :style="{ backgroundColor: $coreActionNormal }"
-        @backButtonClicked="goToPreviousStep"
-      />
-
-      <component
-        :is="currentOnboardingForm"
-        :submitText="submitText"
-        class="body"
-        :class="!windowIsLarge ? 'mobile' : ''"
-        @submit="continueOnboarding"
-      />
+      <router-view />
     </template>
 
   </div>
@@ -38,100 +25,69 @@
 
 <script>
 
-  import { mapActions, mapState, mapMutations } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
+  import { interpret } from 'xstate';
+  import { mapGetters, mapState } from 'vuex';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import { wizardMachine } from '../machines/wizardMachine';
   import LoadingPage from './submission-states/LoadingPage';
   import ErrorPage from './submission-states/ErrorPage';
-  import ProgressToolbar from './ProgressToolbar';
-  import DefaultLanguageForm from './onboarding-forms/DefaultLanguageForm';
-  // Use the full path until we can figure out why module resolution isn't working on Travis
-  import SuperuserCredentialsForm from './onboarding-forms/SuperuserCredentialsForm.vue';
-  import FacilityPermissionsForm from './onboarding-forms/FacilityPermissionsForm';
-  import GuestAccessForm from './onboarding-forms/GuestAccessForm';
-  import CreateLearnerAccountForm from './onboarding-forms/CreateLearnerAccountForm';
-  import RequirePasswordForLearnersForm from './onboarding-forms/RequirePasswordForLearnersForm';
-  import PersonalDataConsentForm from './onboarding-forms/PersonalDataConsentForm';
-
-  const stepToOnboardingFormMap = {
-    1: DefaultLanguageForm,
-    2: FacilityPermissionsForm,
-    3: GuestAccessForm,
-    4: CreateLearnerAccountForm,
-    5: RequirePasswordForLearnersForm,
-    6: SuperuserCredentialsForm,
-    7: PersonalDataConsentForm,
-  };
 
   export default {
     name: 'SetupWizardIndex',
-    components: {
-      ProgressToolbar,
-      LoadingPage,
-      ErrorPage,
-    },
-    mixins: [responsiveWindow, themeMixin],
-    $trs: {
-      onboardingNextStepButton: 'Continue',
-      onboardingFinishButton: 'Finish',
-      documentTitle: 'Setup Wizard',
-      personalFacilityName: 'Home Facility {name}',
-    },
     metaInfo() {
       return {
         title: this.$tr('documentTitle'),
       };
     },
+    components: {
+      LoadingPage,
+      ErrorPage,
+    },
+    mixins: [commonCoreStrings, responsiveWindowMixin],
     data() {
       return {
-        totalOnboardingSteps: 7,
+        service: interpret(wizardMachine),
+      };
+    },
+    provide() {
+      return {
+        wizardService: this.service,
       };
     },
     computed: {
-      ...mapState(['onboardingStep', 'onboardingData', 'loading', 'error']),
-      currentOnboardingForm() {
-        return stepToOnboardingFormMap[this.onboardingStep] || null;
-      },
-      isLastStep() {
-        return this.onboardingStep === this.totalOnboardingSteps;
-      },
-      submitText() {
-        return this.isLastStep
-          ? this.$tr('onboardingFinishButton')
-          : this.$tr('onboardingNextStepButton');
-      },
+      ...mapGetters('isAppContext'),
+      ...mapState(['loading', 'error']),
     },
-    methods: {
-      ...mapActions(['provisionDevice']),
-      ...mapMutations({
-        goToNextStep: 'INCREMENT_ONBOARDING_STEP',
-        goToPreviousStep: 'DECREMENT_ONBOARDING_STEP',
-      }),
-      goToPreviousStep() {
-        // Clear password if going backwards from SuperUserCredentialsForm or
-        // PersonalDataConsentForm
-        if (this.onboardingStep === 6 || this.onboardingStep === 7) {
-          this.$store.commit('CLEAR_PASSWORD');
+    created() {
+      this.service.start();
+      this.service.onTransition(state => {
+        const stateID = Object.keys(state.meta)[0];
+        let newRoute = state.meta[stateID].route;
+        if (newRoute != this.$router.currentRoute.name) {
+          if ('path' in state.meta[stateID])
+            this.$router.push({ name: newRoute, path: state.meta[stateID].path });
+          else this.$router.push(newRoute);
         }
-        this.$store.commit('DECREMENT_ONBOARDING_STEP');
-      },
-      continueOnboarding() {
-        if (this.isLastStep) {
-          if (this.onboardingData.preset === 'informal') {
-            this.provisionDevice({
-              ...this.onboardingData,
-              facility: {
-                name: this.$tr('personalFacilityName', {
-                  name: this.onboardingData.superuser.full_name,
-                }),
-              },
-            });
-          } else {
-            this.provisionDevice(this.onboardingData);
-          }
-        } else {
-          this.goToNextStep();
-        }
+      });
+      this.service.send({ type: 'CONTINUE', value: this.isAppContext });
+    },
+    destroyed() {
+      this.service.stop();
+    },
+
+    // As a minimal precaution, we restart the entire wizard if a user refreshes in the middle
+    // and loses saved state
+    beforeMount() {
+      if (!this.$store.state.started && this.$route.path !== '/') {
+        this.$router.replace('/');
+      }
+    },
+    $trs: {
+      documentTitle: {
+        message: 'Setup Wizard',
+        context:
+          "The Kolibri set up wizard helps the admin through the process of creating their facility. The text 'Setup Wizard' is the title of the wizard and this can been seen the in the browser tab when the admin is setting up their facility.",
       },
     },
   };
@@ -141,7 +97,22 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
+
+  // from http://nicolasgallagher.com/micro-clearfix-hack/
+  @mixin clearfix() {
+    zoom: 1;
+
+    &::after,
+    &::before {
+      display: table;
+      content: '';
+    }
+
+    &::after {
+      clear: both;
+    }
+  }
 
   .onboarding {
     @include clearfix(); // child margin leaks up into otherwise empty parent
@@ -158,7 +129,20 @@
     margin-left: auto;
   }
 
-  .mobile {
+  .page-wrapper {
+    padding: 8px;
+  }
+
+  // Override KPageContainer styles
+  /deep/ .page-container {
+    overflow: visible;
+
+    &.small {
+      padding: 16px;
+    }
+  }
+
+  /deep/ .mobile {
     margin-top: 40px;
     margin-bottom: 24px;
   }

@@ -3,7 +3,7 @@ Feature: Coach copies lesson
 
   Background:
     Given I am signed in to Kolibri as coach user
-      And I am on *Coach > Plan > Lessons* page
+      And I am on *Coach - '<class>' > Plan > Lessons* page
       And I see the <lesson> lesson
 
   Scenario: Copy lesson to the same class and assign to the entire class
@@ -19,9 +19,9 @@ Feature: Coach copies lesson
     When I click *Copy* button
     Then the modal closes
 			And the snackbar confirmation appears
-    When I click on *Lessons*
-    Then I see the *Copy of '<lesson>'* in the list of lessons on *Coach > Lessons* page
-      And I see *Entire class* value for it under the *Visible to* column header
+    When I click on *All Lessons*
+    Then I see the *Copy of '<lesson>'* in the list of lessons
+      And I see *Entire class* value for it under the *Recipients* heading
 
   Scenario: Copy lesson to a different class and assign it to just one group
     Given there is a class <class2> that has a group <group>
@@ -42,9 +42,9 @@ Feature: Coach copies lesson
     When I open the sidebar
       And I click on *Coach*
       And I click class <class2>
-      And I click on *Lessons* tab
-    Then I see the *Copy of '<lesson>'* in the list of lessons on *Coach > Lessons* page
-      And I see *1 group* value for it under the *Visible to* column header
+      And I click on *Plan > Lessons* tab
+    Then I see the *Copy of '<lesson>'* in the list of lessons
+      And I see *1 group* value for it under the *Recipients* heading
 
 Examples:
 | lesson       | class    | class2    | group     |

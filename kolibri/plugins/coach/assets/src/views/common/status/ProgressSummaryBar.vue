@@ -1,6 +1,9 @@
 <template>
 
-  <div class="bar-wrapper">
+  <div
+    class="bar-wrapper"
+    :style="{ backgroundColor: $themePalette.grey.v_300 }"
+  >
     <div class="bar help" :style="helpLineStyle"></div>
     <div class="bar" :style="barStyleStarted"></div>
     <div class="bar" :style="barStyleCompleted"></div>
@@ -11,17 +14,16 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import tallyMixin from './tallyMixin';
 
   export default {
     name: 'ProgressSummaryBar',
-    mixins: [tallyMixin, themeMixin],
+    mixins: [tallyMixin],
     computed: {
       barStyleCompleted() {
         return {
           width: `${Math.ceil((100 * this.completed) / this.total)}%`,
-          backgroundColor: this.$coreStatusMastered,
+          backgroundColor: this.$themeTokens.mastered,
         };
       },
       barStyleStarted() {
@@ -29,7 +31,7 @@
         return {
           marginLeft: `${Math.ceil((100 * this.completed) / this.total)}%`,
           width: `${Math.ceil(100 * widthRatio)}%`,
-          backgroundColor: this.$coreStatusProgress,
+          backgroundColor: this.$themeTokens.progress,
         };
       },
       helpLineStyle() {
@@ -38,7 +40,7 @@
         return {
           marginLeft: `${Math.ceil((100 * (this.completed + this.started)) / this.total)}%`,
           width: `${Math.ceil(100 * widthRatio)}%`,
-          backgroundColor: this.$coreStatusWrong,
+          backgroundColor: this.$themeTokens.incorrect,
         };
       },
     },
@@ -49,14 +51,13 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
   .bar-wrapper {
     position: relative;
     width: 100%;
     height: 16px;
     overflow: hidden;
-    background-color: #dedede;
     border-radius: $radius;
   }
 

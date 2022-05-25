@@ -1,32 +1,28 @@
 <template>
 
-  <div v-if="examAttempts">
-    <ExamReport
-      :examAttempts="examAttempts"
-      :exam="exam"
-      :userName="userName"
-      :userId="userId"
-      :currentAttempt="currentAttempt"
-      :currentInteractionHistory="currentInteractionHistory"
-      :currentInteraction="currentInteraction"
-      :selectedInteractionIndex="selectedInteractionIndex"
-      :questionNumber="questionNumber"
-      :exercise="exercise"
-      :itemId="itemId"
-      :completionTimestamp="completionTimestamp"
-      :closed="closed"
-      :backPageLink="backPageLink"
-      :navigateToQuestion="navigateToQuestion"
-      :navigateToQuestionAttempt="navigateToQuestionAttempt"
-      :questions="questions"
-      :exerciseContentNodes="exerciseContentNodes"
-    />
-  </div>
-  <div v-else>
-    <p class="no-exercise">
-      {{ $tr('missingContent') }}
-    </p>
-  </div>
+  <KPageContainer :topMargin="0">
+    <div v-if="exerciseContentNodes && exerciseContentNodes.length">
+      <ExamReport
+        :contentId="exam.id"
+        :title="exam.title"
+        :userName="userName"
+        :userId="userId"
+        :selectedInteractionIndex="selectedInteractionIndex"
+        :questionNumber="questionNumber"
+        :tryIndex="tryIndex"
+        :exercise="exercise"
+        :exerciseContentNodes="exerciseContentNodes"
+        :navigateTo="navigateTo"
+        :questions="questions"
+        @noCompleteTries="noCompleteTries"
+      />
+    </div>
+    <div v-else>
+      <p class="no-exercise">
+        {{ $tr('missingContent') }}
+      </p>
+    </div>
+  </KPageContainer>
 
 </template>
 
@@ -49,56 +45,53 @@
     },
     computed: {
       ...mapState('examReportViewer', [
-        'currentAttempt',
-        'currentInteraction',
-        'currentInteractionHistory',
         'exam',
-        'examAttempts',
         'exercise',
         'exerciseContentNodes',
-        'itemId',
         'questionNumber',
         'questions',
+        'tryIndex',
       ]),
       ...mapState('examReportViewer', {
         classId: state => state.exam.collection,
-        userName: state => state.user.full_name,
-        userId: state => state.user.id,
         selectedInteractionIndex: state => state.interactionIndex,
-        completionTimestamp: state => state.examLog.completion_timestamp,
-        closed: state => state.examLog.closed,
       }),
-      backPageLink() {
-        return {
-          name: ClassesPageNames.CLASS_ASSIGNMENTS,
-          params: {
-            classId: this.classId,
-          },
-        };
-      },
+      ...mapState({
+        userName: state => state.core.session.full_name,
+        userId: state => state.core.session.user_id,
+      }),
     },
     methods: {
-      navigateToQuestion(questionNumber) {
-        this.navigateTo(questionNumber, 0);
-      },
-      navigateToQuestionAttempt(interaction) {
-        this.navigateTo(this.questionNumber, interaction);
-      },
-      navigateTo(question, interaction) {
+      navigateTo(tryIndex, questionNumber, interaction) {
         this.$router.push({
           name: ClassesPageNames.EXAM_REPORT_VIEWER,
           params: {
             classId: this.classId,
             questionInteraction: interaction,
-            questionNumber: question,
+            questionNumber,
+            tryIndex,
             examId: this.exam.id,
           },
         });
       },
+      noCompleteTries() {
+        this.$router.replace({
+          name: ClassesPageNames.CLASS_ASSIGNMENTS,
+          params: { classId: this.classId },
+        });
+      },
     },
     $trs: {
-      documentTitle: '{ examTitle } report',
-      missingContent: 'This quiz cannot be displayed because some content was deleted',
+      documentTitle: {
+        message: 'Report for { examTitle }',
+        context:
+          "Title indicating for a learner's report page that also indicates the name of the quiz.",
+      },
+      missingContent: {
+        message: 'This quiz cannot be displayed because some resources were deleted',
+        context:
+          'Error message a user sees if there was a problem accessing a quiz report page. This is because the resource has been removed.',
+      },
     },
   };
 

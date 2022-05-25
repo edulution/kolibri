@@ -1,25 +1,26 @@
 import getpass
-import sys
 
 import requests
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.core.validators import URLValidator
 from django.urls import reverse
 from django.utils.six.moves import input
-from morango.certificates import Certificate
-from morango.certificates import Filter
-from morango.certificates import ScopeDefinition
-from morango.controller import MorangoProfileController
+from morango.models import Certificate
+from morango.models import Filter
 from morango.models import InstanceIDModel
+from morango.models import ScopeDefinition
+from morango.sync.controller import MorangoProfileController
 from requests.exceptions import ConnectionError
 from six.moves.urllib.parse import urljoin
 
-from kolibri.core.auth.constants.morango_scope_definitions import FULL_FACILITY
+from kolibri.core.auth.constants.morango_sync import PROFILE_FACILITY_DATA
+from kolibri.core.auth.constants.morango_sync import ScopeDefinitions
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.device.models import DevicePermissions
-from kolibri.core.device.models import DeviceSettings
 from kolibri.core.device.utils import device_provisioned
+from kolibri.core.device.utils import provision_device
 from kolibri.core.tasks.management.commands.base import AsyncCommand
 
 
@@ -31,6 +32,7 @@ class Command(AsyncCommand):
         parser.add_argument("--base-url", type=str)
         parser.add_argument("--username", type=str)
         parser.add_argument("--password", type=str)
+        parser.add_argument("--chunk-size", type=int, default=500)
 
     def get_dataset_id(self, base_url, dataset_id):
         # get list of facilities and if more than 1, display all choices to user
@@ -43,7 +45,7 @@ class Command(AsyncCommand):
             for idx, f in enumerate(facilities):
                 message += "{}. {}\n".format(idx + 1, f["name"])
             idx = input(message)
-            dataset_id = facilities[int(idx - 1)]["dataset"]
+            dataset_id = facilities[int(idx) - 1]["dataset"]
         elif not dataset_id:
             dataset_id = facilities[0]["dataset"]
         return dataset_id
@@ -51,22 +53,21 @@ class Command(AsyncCommand):
     def get_client_and_server_certs(self, username, password, dataset_id, nc):
         # get servers certificates which server has a private key for
         server_certs = nc.get_remote_certificates(
-            dataset_id, scope_def_id=FULL_FACILITY
+            dataset_id, scope_def_id=ScopeDefinitions.FULL_FACILITY
         )
         if not server_certs:
-            print(
+            raise CommandError(
                 "Server does not have any certificates for dataset_id: {}".format(
                     dataset_id
                 )
             )
-            sys.exit(1)
         server_cert = server_certs[0]
 
         # check for the certs we own for the specific facility
         owned_certs = (
             Certificate.objects.filter(id=dataset_id)
             .get_descendants(include_self=True)
-            .filter(scope_definition_id=FULL_FACILITY)
+            .filter(scope_definition_id=ScopeDefinitions.FULL_FACILITY)
             .exclude(_private_key=None)
         )
 
@@ -79,7 +80,7 @@ class Command(AsyncCommand):
                 password = getpass.getpass("Please enter password: ")
             client_cert = nc.certificate_signing_request(
                 server_cert,
-                FULL_FACILITY,
+                ScopeDefinitions.FULL_FACILITY,
                 {"dataset_id": dataset_id},
                 userargs=username,
                 password=password,
@@ -98,7 +99,9 @@ class Command(AsyncCommand):
                     "Please enter username of account that will become the superuser on this device: "
                 )
             if not FacilityUser.objects.filter(username=username).exists():
-                print("User with username {} does not exist".format(username))
+                self.stderr.write(
+                    "User with username {} does not exist".format(username)
+                )
                 username = None
                 continue
 
@@ -112,49 +115,48 @@ class Command(AsyncCommand):
 
         # if device has not been provisioned, set it up
         if not device_provisioned():
-            device_settings, created = DeviceSettings.objects.get_or_create()
-            device_settings.is_provisioned = True
-            device_settings.save()
+            provision_device()
 
     def handle_async(self, *args, **options):
+        self.stderr.write(
+            "`fullfacilitysync` command is deprecated and will be removed in 0.13.0 in favor of `sync`, which accepts the same options."
+            " Use `sync` command instead."
+        )
+
         # validate url that is passed in
         try:
             URLValidator()((options["base_url"]))
         except ValidationError:
-            print("Base-url is not valid. Please retry command and enter a valid url.")
-            sys.exit(1)
+            raise CommandError(
+                "Base URL is not valid. Please retry command and enter a valid URL."
+            )
 
         # call this in case user directly syncs without migrating database
         if not ScopeDefinition.objects.filter():
             call_command("loaddata", "scopedefinitions")
 
-        # ping server at url with info request
-        info_url = urljoin(options["base_url"], "api/morango/v1/morangoinfo/1/")
-        try:
-            info_resp = requests.get(info_url)
-        except ConnectionError:
-            print(
-                "Can not connect to server with base-url: {}".format(
+        controller = MorangoProfileController(PROFILE_FACILITY_DATA)
+        with self.start_progress(total=7) as progress_update:
+            try:
+                network_connection = controller.create_network_connection(
                     options["base_url"]
                 )
-            )
-            sys.exit(1)
+            except ConnectionError:
+                raise CommandError(
+                    "Can not connect to server with base URL: {}".format(
+                        options["base_url"]
+                    )
+                )
 
-        # if instance_ids are equal, this means device is trying to sync with itself, which we don't allow
-        if (
-            InstanceIDModel.get_or_create_current_instance()[0].id
-            == info_resp.json()["instance_id"]
-        ):
-            print(
-                "Device can not sync with itself. Please re-check base-url and try again."
-            )
-            sys.exit(1)
+            # if instance_ids are equal, this means device is trying to sync with itself, which we don't allow
+            if (
+                InstanceIDModel.get_or_create_current_instance()[0].id
+                == network_connection.server_info["instance_id"]
+            ):
+                raise CommandError(
+                    "Device can not sync with itself. Please recheck base URL and try again."
+                )
 
-        controller = MorangoProfileController("facilitydata")
-        with self.start_progress(total=7) as progress_update:
-            network_connection = controller.create_network_connection(
-                options["base_url"]
-            )
             progress_update(1)
 
             options["dataset_id"] = self.get_dataset_id(
@@ -162,9 +164,11 @@ class Command(AsyncCommand):
             )
             progress_update(1)
 
-            client_cert, server_cert, options[
-                "username"
-            ] = self.get_client_and_server_certs(
+            (
+                client_cert,
+                server_cert,
+                options["username"],
+            ) = self.get_client_and_server_certs(
                 options["username"],
                 options["password"],
                 options["dataset_id"],
@@ -173,7 +177,7 @@ class Command(AsyncCommand):
             progress_update(1)
 
             sync_client = network_connection.create_sync_session(
-                client_cert, server_cert
+                client_cert, server_cert, chunk_size=options["chunk_size"]
             )
             progress_update(1)
 

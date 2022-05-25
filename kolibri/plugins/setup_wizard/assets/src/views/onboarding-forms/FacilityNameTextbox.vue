@@ -17,18 +17,8 @@
 
 <script>
 
-  import KTextbox from 'kolibri.coreVue.components.KTextbox';
-
   export default {
     name: 'FacilityNameTextbox',
-    components: {
-      KTextbox,
-    },
-    $trs: {
-      facilityNameFieldLabel: 'Facility name',
-      facilityNameFieldEmptyErrorMessage: 'Facility cannot be empty',
-      facilityNameFieldMaxLengthReached: 'Facility name cannot be more than 50 characters',
-    },
     data() {
       return {
         facilityName: this.$store.state.onboardingData.facility.name,
@@ -37,7 +27,7 @@
     },
     computed: {
       facilityNameErrorMessage() {
-        if (this.facilityName === '') {
+        if (this.facilityName.trim() === '') {
           return this.$tr('facilityNameFieldEmptyErrorMessage');
         }
         if (this.facilityName.length > 100) {
@@ -53,10 +43,28 @@
       validateFacilityName() {
         this.fieldVisited = true;
       },
+      /**
+       * @public
+       */
       focus() {
-        if (this.$refs['facilityName']) {
-          this.$refs['facilityName'].focus();
+        if (this.$refs.facilityName) {
+          this.$refs.facilityName.focus();
         }
+      },
+    },
+    $trs: {
+      facilityNameFieldLabel: {
+        message: 'Facility name',
+        context: 'The field where the admin adds the name of their facility.',
+      },
+      facilityNameFieldEmptyErrorMessage: {
+        message: 'Facility cannot be empty',
+        context: 'Error message which displays if the admin does not enter a facility name.',
+      },
+      facilityNameFieldMaxLengthReached: {
+        message: 'Facility name cannot be more than 50 characters',
+        context:
+          "Error message which displays if the admin inputs a facility name that's over 50 characters.",
       },
     },
   };

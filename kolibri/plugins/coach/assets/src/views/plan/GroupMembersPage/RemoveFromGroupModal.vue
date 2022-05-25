@@ -3,10 +3,10 @@
   <KModal
     :title="$tr('modalTitle')"
     :hasError="false"
-    :submitText="$tr('remove')"
-    :cancelText="$tr('cancel')"
-    @submit="$emit('confirm')"
+    :submitText="coreString('removeAction')"
+    :cancelText="coreString('cancelAction')"
     @cancel="$emit('cancel')"
+    @submit="$emit('submit')"
   >
     <p>
       {{ $tr('confirmation', { username: username, classname: groupName }) }}
@@ -18,19 +18,11 @@
 
 <script>
 
-  import KModal from 'kolibri.coreVue.components.KModal';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'RemoveFromGroupModal',
-    $trs: {
-      modalTitle: 'Remove user',
-      remove: 'Remove',
-      cancel: 'Cancel',
-      confirmation: "Are you sure you want to remove '{ username }' from '{ classname }'?",
-    },
-    components: {
-      KModal,
-    },
+    mixins: [commonCoreStrings],
     props: {
       groupName: {
         type: String,
@@ -41,15 +33,21 @@
         required: true,
       },
     },
+    $trs: {
+      modalTitle: {
+        message: 'Remove user',
+        context:
+          "Title of the confirmation window that displays when a user uses the 'Remove' button to remove a learner from a group.\n\nNote that learners removed from a group will not be deleted from the database, and their accounts can still accessed from the 'Users' tab in the 'Facility' dashboard.",
+      },
+      confirmation: {
+        message: "Are you sure you want to remove '{ username }' from '{ classname }'?",
+        context:
+          "Description of the confirmation window that displays when a user uses the 'Remove' button to remove a learner from a group.\n\nNote that learners removed from a group will not be deleted from the database, and their accounts can still accessed from the 'Users' tab in the 'Facility' dashboard.",
+      },
+    },
   };
 
 </script>
 
 
-<style lang="scss" scoped>
-
-  p {
-    word-break: keep-all;
-  }
-
-</style>
+<style lang="scss" scoped></style>

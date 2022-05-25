@@ -13,7 +13,6 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
   import { STATUSES } from '../../../modules/classSummary/constants';
   import { VERBS, ICONS } from './constants';
   import LearnerProgressLabel from './LearnerProgressLabel';
@@ -37,7 +36,6 @@
     components: {
       LearnerProgressLabel,
     },
-    mixins: [themeMixin],
     props: {
       verbose: {
         type: Boolean,
@@ -60,7 +58,7 @@
       },
       style() {
         if (this.status === STATUSES.notStarted) {
-          return { color: this.$coreGrey300 };
+          return { color: this.$themeTokens.textDisabled };
         }
         return '';
       },
@@ -82,13 +80,10 @@
 
   .single-line .item {
     display: inline-block;
+
     &:not(:last-child) {
       margin-right: 16px;
     }
-  }
-
-  .lighten {
-    color: #b3b3b3;
   }
 
 </style>

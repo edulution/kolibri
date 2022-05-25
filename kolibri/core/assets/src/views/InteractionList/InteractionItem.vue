@@ -2,37 +2,36 @@
 
   <div
     class="attempt-box"
-    :style="{ border: `2px solid ${selected ? $coreTextDefault : $coreTextDisabled }` }"
+    :style="{
+      border: `2px solid ${selected ? $themeTokens.text : $themeTokens.textDisabled }`,
+      cursor: selected ? 'auto' : 'pointer',
+    }"
   >
     <template v-if="isAnswer">
-      <mat-svg
+      <KIcon
         v-if="interaction.correct"
         class="svg-item"
-        category="action"
-        name="check_circle"
-        :style="[svgItemBorder, { fill: $coreStatusCorrect }]"
+        icon="correct"
+        :style="[svgItemBorder, { fill: $themeTokens.correct }]"
       />
-      <mat-svg
+      <KIcon
         v-if="!interaction.correct"
         class="svg-item"
-        category="navigation"
-        name="cancel"
-        :style="[svgItemBorder, { fill: $coreStatusWrong }]"
+        icon="incorrect"
+        :style="[svgItemBorder, { fill: $themeTokens.incorrect }]"
       />
     </template>
-    <mat-svg
+    <KIcon
       v-else-if="isHint"
       class="svg-item"
-      category="action"
-      name="lightbulb_outline"
-      :style="[svgItemBorder, { fill: $coreTextAnnotation } ]"
+      icon="hint"
+      :style="[svgItemBorder, { fill: $themeTokens.annotation } ]"
     />
-    <mat-svg
+    <KIcon
       v-else-if="isError"
       class="svg-item"
-      category="alert"
-      name="error_outline"
-      :style="[svgItemBorder, { fill: $coreTextAnnotation } ]"
+      icon="helpNeeded"
+      :style="[svgItemBorder, { fill: $themeTokens.annotation } ]"
     />
   </div>
 
@@ -41,11 +40,8 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-
   export default {
     name: 'InteractionItem',
-    mixins: [themeMixin],
     props: {
       interaction: {
         type: Object,
@@ -68,7 +64,7 @@
       },
       svgItemBorder() {
         return {
-          borderBottom: `2px solid ${this.$coreTextDefault}`,
+          borderBottom: `2px solid ${this.$themeTokens.text}`,
         };
       },
     },
@@ -86,7 +82,6 @@
     height: 60px;
     padding: 10px;
     margin-right: 10px;
-    cursor: pointer;
     border-radius: 10px;
   }
 

@@ -5,60 +5,22 @@
 'use strict';
 
 const remove = require('lodash/remove');
-const utils = require('eslint-plugin-vue/lib/utils');
+const eslintPluginVueUtils = require('eslint-plugin-vue/lib/utils');
 
-const GROUP_PROPERTY = 'props';
-const GROUP_DATA = 'data';
-const GROUP_COMPUTED_PROPERTY = 'computed';
-const GROUP_WATCHER = 'watch';
+const utils = require('../utils');
+const constants = require('../constants');
 
-const PROPERTY_LABEL = {
-  [GROUP_PROPERTY]: 'property',
-  [GROUP_DATA]: 'data',
-  [GROUP_COMPUTED_PROPERTY]: 'computed property',
-};
-
-const getReferencesNames = references => {
-  if (!references || !references.length) {
-    return [];
-  }
-
-  return references.map(reference => {
-    if (!reference.id || !reference.id.name) {
-      return;
-    }
-
-    return reference.id.name;
-  });
-};
-
-const reportUnusedProperties = (context, properties) => {
-  if (!properties || !properties.length) {
-    return;
-  }
-
-  properties.forEach(property => {
-    context.report({
-      node: property.node,
-      message: `Unused ${PROPERTY_LABEL[property.groupName]} found: "${property.name}"`,
-    });
-  });
-};
+const { GROUP_PROPS, GROUP_DATA, GROUP_COMPUTED } = constants;
 
 const create = context => {
   let hasTemplate;
-  let rootTemplateEnd;
   let unusedProperties = [];
   let thisExpressionsVariablesNames = [];
+  let befoureRouteEnterInstanceProperties = [];
 
   const initialize = {
     Program(node) {
-      if (context.parserServices.getTemplateBodyTokenStore == null) {
-        context.report({
-          loc: { line: 1, column: 0 },
-          message:
-            'Use the latest vue-eslint-parser. See also https://vuejs.github.io/eslint-plugin-vue/user-guide/#what-is-the-use-the-latest-vue-eslint-parser-error.',
-        });
+      if (!utils.checkVueEslintParser(context)) {
         return;
       }
 
@@ -68,66 +30,65 @@ const create = context => {
 
   const scriptVisitor = Object.assign(
     {},
-    {
-      'MemberExpression[object.type="ThisExpression"][property.type="Identifier"][property.name]'(
-        node
-      ) {
-        thisExpressionsVariablesNames.push(node.property.name);
-      },
-    },
-    utils.executeOnVue(context, obj => {
+    utils.executeOnThisExpressionProperty(property => {
+      thisExpressionsVariablesNames.push(property.name);
+    }),
+    utils.executeOnBefoureRouteEnterInstanceProperty(property => {
+      befoureRouteEnterInstanceProperties.push(property.name);
+    }),
+    eslintPluginVueUtils.executeOnVue(context, obj => {
       unusedProperties = Array.from(
-        utils.iterateProperties(obj, new Set([GROUP_PROPERTY, GROUP_DATA, GROUP_COMPUTED_PROPERTY]))
+        eslintPluginVueUtils.iterateProperties(
+          obj,
+          new Set([GROUP_PROPS, GROUP_DATA, GROUP_COMPUTED])
+        )
       );
 
-      const watchers = Array.from(utils.iterateProperties(obj, new Set([GROUP_WATCHER])));
-      const watchersNames = watchers.map(watcher => watcher.name);
+      const watchersNames = utils.getWatchersNames(obj);
 
       remove(unusedProperties, property => {
         return (
           thisExpressionsVariablesNames.includes(property.name) ||
+          befoureRouteEnterInstanceProperties.includes(property.name) ||
           watchersNames.includes(property.name)
         );
       });
 
       if (!hasTemplate && unusedProperties.length) {
-        reportUnusedProperties(context, unusedProperties);
+        utils.reportUnusedProperties(context, unusedProperties);
       }
     })
   );
 
-  const templateVisitor = {
-    'VExpressionContainer[expression!=null][references]'(node) {
-      const referencesNames = getReferencesNames(node.references);
+  const templateVisitor = Object.assign(
+    {},
+    {
+      'VExpressionContainer[expression!=null][references]'(node) {
+        const referencesNames = utils.getReferencesNames(node.references);
+
+        remove(unusedProperties, property => {
+          return referencesNames.includes(property.name);
+        });
+      },
+    },
+    utils.executeOnDirectiveDynamicArg(node => {
+      const argName = utils.getDirectiveDynamicArgName(node);
 
       remove(unusedProperties, property => {
-        return referencesNames.includes(property.name);
+        return argName === property.name;
       });
-    },
-    // save root template end location - just a helper to be used
-    // for a decision if a parser reached the end of the root template
-    "VElement[name='template']"(node) {
-      if (rootTemplateEnd) {
-        return;
-      }
-
-      rootTemplateEnd = node.loc.end;
-    },
-    "VElement[name='template']:exit"(node) {
-      if (node.loc.end !== rootTemplateEnd) {
-        return;
-      }
-
+    }),
+    utils.executeOnRootTemplateEnd(() => {
       if (unusedProperties.length) {
-        reportUnusedProperties(context, unusedProperties);
+        utils.reportUnusedProperties(context, unusedProperties);
       }
-    },
-  };
+    })
+  );
 
   return Object.assign(
     {},
     initialize,
-    utils.defineTemplateBodyVisitor(context, templateVisitor, scriptVisitor)
+    eslintPluginVueUtils.defineTemplateBodyVisitor(context, templateVisitor, scriptVisitor)
   );
 };
 

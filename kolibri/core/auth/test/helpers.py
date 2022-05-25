@@ -1,15 +1,27 @@
 """
 Helper functions for use across the user/auth/permission-related tests.
 """
+from django.core.cache import caches
+from django.core.cache.backends.base import InvalidCacheBackendError
+
 from ..models import Classroom
 from ..models import Facility
 from ..models import FacilityDataset
 from ..models import FacilityUser
 from ..models import LearnerGroup
+from kolibri.core.auth.constants import role_kinds
 from kolibri.core.device.models import DevicePermissions
-from kolibri.core.device.models import DeviceSettings
+from kolibri.core.device.utils import provision_device  # noqa
 
 DUMMY_PASSWORD = "password"
+
+
+def clear_process_cache():
+    try:
+        process_cache = caches["process_cache"]
+        process_cache.clear()
+    except InvalidCacheBackendError:
+        pass
 
 
 def create_superuser(facility, username="superuser"):
@@ -18,13 +30,6 @@ def create_superuser(facility, username="superuser"):
     superuser.save()
     DevicePermissions.objects.create(user=superuser, is_superuser=True)
     return superuser
-
-
-def provision_device():
-    if DeviceSettings.objects.all().exists():
-        DeviceSettings.objects.update(is_provisioned=True)
-    else:
-        DeviceSettings.objects.create(is_provisioned=True)
 
 
 def setup_device():
@@ -44,7 +49,7 @@ def create_dummy_facility_data(
     cross-dataset permissions. Returns a dict containing objects and lists of objects that were created.
 
     :param int classroom_count: (optional), the number of classrooms to create in the facility (defaults to 2)
-    :param int classroom_count: (optional), the number of learner groups to create in each classroom (defaults to 2)
+    :param int learnergroup_count: (optional), the number of learner groups to create in each classroom (defaults to 2)
     :returns: a dictionary of objects (users, collections, etc) for a dummy facility
     :rtype: dict
     """
@@ -59,7 +64,8 @@ def create_dummy_facility_data(
     # create the Collection hierarchy
     facility = data["facility"] = Facility.objects.create(dataset=dataset)
     data["classrooms"] = [
-        Classroom.objects.create(parent=facility) for i in range(classroom_count)
+        Classroom.objects.create(parent=facility, name="classroom{}".format(i))
+        for i in range(classroom_count)
     ]
     data["learnergroups"] = []
     for classroom in data["classrooms"]:
@@ -77,12 +83,6 @@ def create_dummy_facility_data(
     data["facility_coach"] = FacilityUser.objects.create(
         username="faccoach", password="***", facility=facility
     )
-    data["classroom_admins"] = [
-        FacilityUser.objects.create(
-            username="classadmin%d" % i, password="***", facility=facility
-        )
-        for i, classroom in enumerate(data["classrooms"])
-    ]
     data["classroom_coaches"] = [
         FacilityUser.objects.create(
             username="classcoach%d" % i, password="***", facility=facility
@@ -92,6 +92,9 @@ def create_dummy_facility_data(
     data["learner_all_groups"] = FacilityUser.objects.create(
         username="learnerag", password="***", facility=facility
     )
+    for classroom in data["classrooms"]:
+        classroom.add_member(data["learner_all_groups"])
+
     data["learners_one_group"] = []
     for i, classroom_list in enumerate(data["learnergroups"]):
         data["learners_one_group"].append([])
@@ -102,6 +105,7 @@ def create_dummy_facility_data(
                 facility=facility,
             )
             data["learners_one_group"][i].append(learner)
+            group.get_classroom().add_member(learner)
             group.add_learner(learner)
             group.add_learner(data["learner_all_groups"])
 
@@ -120,10 +124,8 @@ def create_dummy_facility_data(
     # create Roles linking users with Collections
     facility.add_admin(data["facility_admin"])
     facility.add_coach(data["facility_coach"])
-    for classroom, admin, coach in zip(
-        data["classrooms"], data["classroom_admins"], data["classroom_coaches"]
-    ):
-        classroom.add_admin(admin)
+    for classroom, coach in zip(data["classrooms"], data["classroom_coaches"]):
         classroom.add_coach(coach)
+        facility.add_role(coach, role_kinds.ASSIGNABLE_COACH)
 
     return data

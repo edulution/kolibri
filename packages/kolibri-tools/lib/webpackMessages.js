@@ -1,7 +1,9 @@
 /*
  * Vendored from https://github.com/lukeed/webpack-messages and https://github.com/lukeed/webpack-format-messages
  */
-const logging = require('./logging');
+const logger = require('./logging');
+
+const logging = logger.getLogger('Kolibri Build');
 
 const errorLabel = 'Syntax error:';
 const isLikelyASyntaxError = str => str.includes(errorLabel);
@@ -62,8 +64,8 @@ const format = stats => {
   const json = stats.toJson({}, true);
 
   const result = {
-    errors: json.errors.map(msg => formatMessage(msg)),
-    warnings: json.warnings.map(msg => formatMessage(msg)),
+    errors: json.errors.map(msg => formatMessage(msg.message)),
+    warnings: json.warnings.map(msg => formatMessage(msg.message)),
   };
 
   // Only show syntax errors if we have them
@@ -93,14 +95,14 @@ class WebpackMessages {
   }
 
   apply(compiler) {
-    const name = this.name ? `${this.name} bundle` : '';
+    const name = this.name ? `'${this.name}' bundle` : '';
     const onStart = () => logging.info(`Building ${name}...`);
 
     const onComplete = stats => {
       const messages = format(stats);
 
       if (messages.errors.length) {
-        return logging.error(this.format(`Failed to compile${name}!`, messages.errors));
+        return logging.error(this.format(`Failed to compile ${name}!`, messages.errors));
       }
 
       if (messages.warnings.length) {

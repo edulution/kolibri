@@ -9,40 +9,43 @@
       />
     </p>
     <h1>
-      <KLabeledIcon>
-        <KIcon slot="icon" quiz />
-        {{ exam.title }}
-      </KLabeledIcon>
+      <KLabeledIcon icon="quiz" :label="exam.title" />
     </h1>
 
     <HeaderTable>
-      <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('statusLabel') }}
+      <HeaderTableRow v-if="$isPrint">
+        <template #key>
+          {{ coachString('groupNameLabel') }}
         </template>
-        <QuizActive slot="value" :active="exam.active" />
-      </HeaderTableRow>
-      <HeaderTableRow>
-        <template slot="key">
-          {{ coachStrings.$tr('avgScoreLabel') }}
+        <template #value>
+          {{ group.name }}
         </template>
-        <Score slot="value" :value="avgScore" />
       </HeaderTableRow>
-      <!-- TODO COACH
+      <HeaderTableRow v-show="!$isPrint">
+        <template #key>
+          {{ coachString('statusLabel') }}
+        </template>
+        <!--         <template #value>
+          <QuizActive :active="exam.active" />
+        </template> -->
+      </HeaderTableRow>
       <HeaderTableRow>
-        <template slot="key">{{ coachStrings.$tr('questionOrderLabel') }}</template>
-        <template slot="value">{{ coachStrings.$tr('orderRandomLabel') }}</template>
+        <template #key>
+          {{ coachString('avgScoreLabel') }}
+        </template>
+        <template #value>
+          <Score :value="avgScore" />
+        </template>
       </HeaderTableRow>
-       -->
     </HeaderTable>
 
-    <HeaderTabs>
+    <HeaderTabs :enablePrint="true">
       <HeaderTab
-        :text="coachStrings.$tr('reportLabel')"
+        :text="coachString('reportLabel')"
         :to="classRoute('ReportsGroupReportQuizLearnerListPage')"
       />
       <HeaderTab
-        :text="coachStrings.$tr('difficultQuestionsLabel')"
+        :text="coachString('difficultQuestionsLabel')"
         :to="classRoute('ReportsGroupReportQuizQuestionListPage')"
       />
     </HeaderTabs>
@@ -58,7 +61,6 @@
 
   export default {
     name: 'ReportsGroupReportQuizHeader',
-    components: {},
     mixins: [commonCoach],
     computed: {
       avgScore() {
@@ -73,10 +75,6 @@
       recipients() {
         return this.getLearnersForGroups([this.$route.params.groupId]);
       },
-    },
-    $trs: {
-      back: 'All quizzes',
-      quizPerformanceLabel: "'{quiz}' performance",
     },
   };
 

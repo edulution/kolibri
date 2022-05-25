@@ -4,7 +4,10 @@ import { createTranslator } from 'kolibri.utils.i18n';
 import { lessonSummaryLink } from '../../routes/planLessonsRouterUtils';
 
 const translator = createTranslator('LessonRootActionTexts', {
-  newLessonCreated: 'New lesson created',
+  newLessonCreated: {
+    message: 'New lesson created',
+    context: 'Notification that a new lesson has been created.',
+  },
 });
 
 export function refreshClassLessons(store, classId) {
@@ -24,12 +27,15 @@ export function refreshClassLessons(store, classId) {
 
 export function createLesson(store, { classId, payload }) {
   return new Promise((resolve, reject) => {
+    const lesson_assignments = payload.assignments;
+    delete payload.assignments;
+    const data = {
+      ...payload,
+      lesson_assignments,
+      collection: classId,
+    };
     return LessonResource.saveModel({
-      data: {
-        ...payload,
-        lesson_resources: [],
-        collection: classId,
-      },
+      data,
     })
       .then(newLesson => {
         store.dispatch('createSnackbar', translator.$tr('newLessonCreated'), { root: true });

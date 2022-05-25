@@ -1,21 +1,38 @@
 <template>
 
-  <div ref="wrapper" :class="['wrapper', $computedClass(progressStyle)]">
-    <div v-show="loading" class="fill-space">
-      <KCircularLoader
-        class="loader"
-        :delay="true"
-      />
-    </div>
-    <CoreFullscreen
-      v-show="!loading"
-      ref="container"
-      class="fill-space"
+  <MediaPlayerFullscreen
+    ref="fullscreen"
+    class="fill-space fullscreen-wrapper"
+    :style="{
+      'border-color': $themeTokens.fineLine,
+      padding: fullscreenWrapperPadding,
+    }"
+    @changeFullscreen="isFullscreen = $event"
+  >
+    <div
+      ref="wrapper"
+      :class="[
+        'wrapper',
+        {
+          'keyboard-modality': $inputModality === 'keyboard',
+          'video-loading': loading,
+          'transcript-visible': transcriptVisible,
+          'transcript-wrap': transcriptWrap,
+        },
+        $computedClass(progressStyle)
+      ]"
     >
+      <div v-show="loading" class="fill-space loading-space">
+        <KCircularLoader
+          class="loader"
+          :delay="true"
+        />
+      </div>
+
       <video
         v-if="isVideo"
         ref="player"
-        class="video-js custom-skin vjs-big-play-centered vjs-show-big-play-button-on-pause"
+        class="custom-skin video-js vjs-big-play-centered vjs-show-big-play-button-on-pause"
       >
         <template v-for="video in videoSources">
           <source
@@ -36,17 +53,19 @@
         </template>
       </video>
 
-      <audio v-else ref="player" class="video-js custom-skin">
+      <audio v-else ref="player" class="custom-skin video-js">
         <template v-for="audio in audioSources">
           <source
             :key="audio.storage_url"
             :src="audio.storage_url"
-            :type="`audio/${audio.extension}`"
+            :type="audioSourceType(audio.extension)"
           >
         </template>
       </audio>
-    </CoreFullscreen>
-  </div>
+
+      <MediaPlayerTranscript v-if="transcriptVisible" ref="transcript" />
+    </div>
+  </MediaPlayerFullscreen>
 
 </template>
 
@@ -54,55 +73,37 @@
 <script>
 
   import vue from 'kolibri.lib.vue';
+  import { mapActions, mapState, mapGetters } from 'vuex';
   import videojs from 'video.js';
   import throttle from 'lodash/throttle';
-  import Lockr from 'lockr';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KCircularLoader from 'kolibri.coreVue.components.KCircularLoader';
-  import ResponsiveElement from 'kolibri.coreVue.mixins.responsiveElement';
-  import contentRendererMixin from 'kolibri.coreVue.mixins.contentRendererMixin';
-  import CoreFullscreen from 'kolibri.coreVue.components.CoreFullscreen';
-  import { fullscreenApiIsSupported } from 'kolibri.utils.browser';
-  import { ReplayButton, ForwardButton, MimicFullscreenToggle } from './customButtons';
+  import { languageIdToCode } from 'kolibri.utils.i18n';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import Settings from '../utils/settings';
+  import { ReplayButton, ForwardButton } from './customButtons';
+  import MediaPlayerFullscreen from './MediaPlayerFullscreen';
+  import MimicFullscreenToggle from './MediaPlayerFullscreen/mimicFullscreenToggle';
+  import MediaPlayerTranscript from './MediaPlayerTranscript';
+  import CaptionsButton from './MediaPlayerCaptions/captionsButton';
+  import LanguagesButton from './MediaPlayerLanguages/languagesButton';
   import audioIconPoster from './audio-icon-poster.svg';
 
   const GlobalLangCode = vue.locale;
-
-  const MEDIA_PLAYER_SETTINGS_KEY = 'kolibriMediaPlayerSettings';
-
+  const componentsToRegister = {
+    MimicFullscreenToggle,
+    ReplayButton,
+    ForwardButton,
+    CaptionsButton,
+    LanguagesButton,
+  };
+  Object.entries(componentsToRegister).forEach(([name, component]) =>
+    videojs.registerComponent(name, component)
+  );
   export default {
     name: 'MediaPlayerIndex',
-    $trs: {
-      replay: 'Go back 10 seconds',
-      // Pulled from https://github.com/videojs/video.js/blob/master/lang/en.json
-      forward: 'Go forward 10 seconds',
-      play: 'Play',
-      pause: 'Pause',
-      currentTime: 'Current time',
-      durationTime: 'Duration time',
-      loaded: 'Loaded',
-      progress: 'Progress',
-      progressBar: 'Progress bar',
-      fullscreen: 'Fullscreen',
-      nonFullscreen: 'Non-fullscreen',
-      mute: 'Mute',
-      unmute: 'Unmute',
-      playbackRate: 'Playback rate',
-      captions: 'Captions',
-      captionsOff: 'Captions off',
-      volumeLevel: 'Volume level',
-      networkError: 'A network error caused the media download to fail part-way',
-      formatError:
-        'The media could not be loaded, either because the server or network failed or because the format is not supported',
-      corruptionOrSupportError:
-        'The media playback was aborted due to a corruption problem or because the media used features your browser did not support',
-      sourceError: 'No compatible source was found for this media',
-      encryptionError: 'The media is encrypted and we do not have the keys to decrypt it',
-    },
-    components: { KCircularLoader, CoreFullscreen },
-
-    mixins: [ResponsiveElement, contentRendererMixin, themeMixin],
-
+    components: { MediaPlayerFullscreen, MediaPlayerTranscript },
+    mixins: [commonCoreStrings, responsiveWindowMixin, responsiveElementMixin],
     data: () => ({
       dummyTime: 0,
       progressStartingPoint: 0,
@@ -111,11 +112,19 @@
       playerVolume: 1.0,
       playerMuted: false,
       playerRate: 1.0,
-      videoLangCode: GlobalLangCode,
+      // TODO figure if this prop is supposed to be used
+      // defaultLangCode: GlobalLangCode,
       updateContentStateInterval: null,
+      isFullscreen: false,
     }),
-
     computed: {
+      ...mapState('mediaPlayer/captions', {
+        transcript: state => state.transcript,
+        captionLanguage: state => state.language,
+      }),
+      ...mapGetters('mediaPlayer/captions', {
+        captionTracks: 'tracks',
+      }),
       posterSources() {
         const posterFileExtensions = ['png', 'jpg'];
         return this.thumbnailFiles.filter(file =>
@@ -142,6 +151,18 @@
           trackFileExtensions.some(ext => ext === file.extension)
         );
       },
+      audioSourceType() {
+        return function(extension) {
+          switch (extension) {
+            case 'mp3':
+              // the correct type for mp3
+              return 'audio/mpeg';
+            default:
+              // generally speaking, this should work for others
+              return `audio/${extension}`;
+          }
+        };
+      },
       isVideo() {
         return this.videoSources.length;
       },
@@ -154,46 +175,78 @@
       progressStyle() {
         return {
           '.vjs-play-progress': {
-            backgroundColor: this.$coreActionNormal,
+            backgroundColor: this.$themeTokens.primary,
             '::before': {
-              color: this.$coreActionNormal,
+              color: this.$themeTokens.primary,
             },
           },
         };
       },
+      transcriptVisible() {
+        return this.transcript && !this.loading && this.captionTracks.length > 0;
+      },
+      /* eslint-disable kolibri/vue-no-unused-properties */
+      /**
+       * @public
+       */
+      defaultDuration() {
+        return this.player.duration();
+      },
+      /* eslint-enable kolibri/vue-no-unused-properties */
+      transcriptWrap() {
+        return this.windowIsPortrait || (!this.isFullscreen && this.windowIsSmall);
+      },
+      fullscreenWrapperPadding() {
+        if (this.isFullscreen) {
+          return 0;
+        }
+
+        return this.transcriptWrap ? '16px' : '32px 24px';
+      },
+    },
+    watch: {
+      isFullscreen() {
+        this.resizePlayer();
+      },
     },
     created() {
-      ReplayButton.prototype.controlText_ = this.$tr('replay');
-      ForwardButton.prototype.controlText_ = this.$tr('forward');
-      videojs.registerComponent('ReplayButton', ReplayButton);
-      videojs.registerComponent('ForwardButton', ForwardButton);
-      const { videoLangCode = this.videoLangCode } = this.getSavedSettings();
-      this.videoLangCode = videoLangCode;
+      this.settings = new Settings({
+        playerVolume: this.playerVolume,
+        playerMuted: this.playerMuted,
+        playerRate: this.playerRate,
+      });
     },
     mounted() {
       this.initPlayer();
       window.addEventListener('resize', this.throttledResizePlayer);
     },
     beforeDestroy() {
+      clearInterval(this.updateContentStateInterval);
       this.updateContentState();
       this.$emit('stopTracking');
       window.removeEventListener('resize', this.throttledResizePlayer);
-      this.player.dispose();
-      clearInterval(this.updateContentStateInterval);
+      this.resetState();
     },
     methods: {
+      ...mapActions('mediaPlayer', ['setPlayer', 'resetState']),
       isDefaultTrack(langCode) {
-        const shortLangCode = langCode.split('-')[0];
-        const shortGlobalLangCode = this.videoLangCode.split('-')[0];
-        if (shortLangCode === shortGlobalLangCode) {
-          return true;
+        if (!this.captionLanguage) {
+          return false;
         }
-        return false;
+        const shortLangCode = languageIdToCode(langCode);
+        const shortGlobalLangCode = languageIdToCode(this.captionLanguage);
+        return shortLangCode === shortGlobalLangCode;
       },
       initPlayer() {
+        this.$nextTick(() => {
+          this.player = videojs(this.$refs.player, this.getPlayerConfig(), this.handleReadyPlayer);
+          this.setPlayer(this.player);
+        });
+      },
+      getPlayerConfig() {
         const videojsConfig = {
-          fluid: true,
-          aspectRatio: '16:9',
+          fluid: false,
+          fill: true,
           controls: true,
           textTrackDisplay: true,
           bigPlayButton: true,
@@ -201,19 +254,27 @@
           playbackRates: [0.5, 1.0, 1.25, 1.5, 2.0],
           controlBar: {
             children: [
-              { name: 'playToggle' },
+              { name: 'PlayToggle' },
               { name: 'ReplayButton' },
               { name: 'ForwardButton' },
-              { name: 'currentTimeDisplay' },
-              { name: 'progressControl' },
-              { name: 'timeDivider' },
-              { name: 'durationDisplay' },
+              { name: 'CurrentTimeDisplay' },
+              { name: 'ProgressControl' },
+              { name: 'TimeDivider' },
+              { name: 'DurationDisplay' },
               {
-                name: 'volumePanel',
+                name: 'VolumePanel',
                 inline: false,
               },
-              { name: 'playbackRateMenuButton' },
-              { name: 'captionsButton' },
+              { name: 'PlaybackRateMenuButton' },
+              {
+                name: 'CaptionsButton',
+                settings: this.settings,
+              },
+              {
+                name: 'LanguagesButton',
+                settings: this.settings,
+              },
+              { name: 'MimicFullscreenToggle' },
             ],
           },
           language: GlobalLangCode,
@@ -221,10 +282,12 @@
             [GlobalLangCode]: {
               Play: this.$tr('play'),
               Pause: this.$tr('pause'),
+              Replay: this.$tr('replay'),
+              Forward: this.$tr('forward'),
               'Current Time': this.$tr('currentTime'),
               'Duration Time': this.$tr('durationTime'),
               Loaded: this.$tr('loaded'),
-              Progress: this.$tr('progress'),
+              Progress: this.coreString('progressLabel'),
               'Progress Bar': this.$tr('progressBar'),
               Fullscreen: this.$tr('fullscreen'),
               'Non-Fullscreen': this.$tr('nonFullscreen'),
@@ -233,6 +296,9 @@
               'Playback Rate': this.$tr('playbackRate'),
               Captions: this.$tr('captions'),
               'captions off': this.$tr('captionsOff'),
+              Transcript: this.coreString('transcript'),
+              'Transcript off': this.$tr('transcriptOff'),
+              Languages: this.$tr('languages'),
               'Volume Level': this.$tr('volumeLevel'),
               'A network error caused the media download to fail part-way.': this.$tr(
                 'networkError'
@@ -250,28 +316,15 @@
             },
           },
         };
-
         if (!this.isVideo) {
           videojsConfig.poster = this.audioPoster;
         }
-
-        // Add appropriate fullscreen button
-        if (fullscreenApiIsSupported) {
-          videojsConfig.controlBar.children.push({ name: 'fullscreenToggle' });
-        } else {
-          videojs.registerComponent('MimicFullscreenToggle', MimicFullscreenToggle);
-          videojsConfig.controlBar.children.push({ name: 'MimicFullscreenToggle' });
-        }
-
-        this.$nextTick(() => {
-          this.player = videojs(this.$refs.player, videojsConfig, this.handleReadyPlayer);
-        });
+        return videojsConfig;
       },
       handleReadyPlayer() {
         const startTime = this.savedLocation >= this.player.duration() ? 0 : this.savedLocation;
         this.player.currentTime(startTime);
         this.player.play();
-
         this.player.on('play', () => {
           this.focusOnPlayControl();
           this.setPlayState(true);
@@ -285,85 +338,47 @@
         this.player.on('seeking', this.handleSeek);
         this.player.on('volumechange', this.throttledUpdateVolume);
         this.player.on('ratechange', this.updateRate);
-        this.player.on('texttrackchange', this.updateLang);
         this.player.on('ended', () => this.setPlayState(false));
-        this.player.on('mimicFullscreenToggled', () => {
-          this.$refs.container.toggleFullscreen();
-        });
         this.$watch('elementWidth', this.updatePlayerSizeClass);
         this.updatePlayerSizeClass();
         this.resizePlayer();
         this.useSavedSettings();
         this.loading = false;
         this.$refs.player.tabIndex = -1;
-
         this.updateContentStateInterval = setInterval(this.updateContentState, 30000);
       },
       resizePlayer() {
-        const wrapperWidth = this.$refs.wrapper.clientWidth;
+        if (this.isFullscreen) {
+          this.$refs.wrapper.style.height = `100%`;
+          return;
+        }
         const aspectRatio = 16 / 9;
-        const adjustedHeight = wrapperWidth * (1 / aspectRatio);
-        this.$refs.wrapper.setAttribute('style', `height:${adjustedHeight}px`);
+        const adjustedHeight = this.$refs.wrapper.clientWidth * (1 / aspectRatio);
+        this.$refs.wrapper.style.height = `${adjustedHeight}px`;
       },
       throttledResizePlayer: throttle(function resizePlayer() {
         this.resizePlayer();
       }, 300),
-
       throttledUpdateVolume: throttle(function updateVolume() {
         this.updateVolume();
       }, 1000),
-
-      getSavedSettings() {
-        return Lockr.get(MEDIA_PLAYER_SETTINGS_KEY) || {};
-      },
-      saveSettings(updatedSettings) {
-        const savedSettings = this.getSavedSettings();
-        Lockr.set(MEDIA_PLAYER_SETTINGS_KEY, {
-          ...savedSettings,
-          ...updatedSettings,
-        });
-      },
       updateVolume() {
-        this.saveSettings({
-          playerVolume: this.player.volume(),
-          playerMuted: this.player.muted(),
-        });
+        this.settings.playerVolume = this.player.volume();
+        this.settings.playerMuted = this.player.muted();
       },
-
       updateRate() {
-        this.saveSettings({
-          playerRate: this.player.playbackRate(),
-        });
+        this.settings.playerRate = this.player.playbackRate();
       },
-
-      updateLang() {
-        const currentTrack = Array.from(this.player.textTracks()).find(
-          track => track.mode === 'showing'
-        );
-        if (currentTrack) {
-          this.saveSettings({
-            videoLangCode: currentTrack.language,
-          });
-        }
-      },
-
       useSavedSettings() {
-        const {
-          savedPlayerVolume = this.playerVolume,
-          savedPlayerMuted = this.playerMuted,
-          savedPlayerRate = this.playerRate,
-        } = this.getSavedSettings();
-        this.playerVolume = savedPlayerVolume;
-        this.playerMuted = savedPlayerMuted;
-        this.playerRate = savedPlayerRate;
+        this.playerVolume = this.settings.playerVolume;
+        this.playerMuted = this.settings.playerMuted;
+        this.playerRate = this.settings.playerRate;
         this.player.volume(this.playerVolume);
         this.player.muted(this.playerMuted);
         this.player.playbackRate(this.playerRate);
       },
-
       focusOnPlayControl() {
-        const wrapper = this.$refs.wrapper;
-        wrapper.getElementsByClassName('vjs-play-control')[0].focus();
+        this.$refs.wrapper.getElementsByClassName('vjs-play-control')[0].focus();
       },
       handleSeek() {
         // record progress before updating the times,
@@ -401,20 +416,23 @@
         }
       },
       recordProgress() {
-        this.$emit(
-          'updateProgress',
-          Math.max(
-            0,
-            (this.dummyTime - this.progressStartingPoint) / Math.floor(this.player.duration())
-          )
-        );
-        this.progressStartingPoint = this.player.currentTime();
+        if (this.forceDurationBasedProgress) {
+          this.$emit('updateProgress', this.durationBasedProgress);
+        } else {
+          this.$emit(
+            'addProgress',
+            Math.max(
+              0,
+              (this.dummyTime - this.progressStartingPoint) / Math.floor(this.player.duration())
+            )
+          );
+        }
+        this.progressStartingPoint = this.dummyTime;
       },
       updatePlayerSizeClass() {
         this.player.removeClass('player-medium');
         this.player.removeClass('player-small');
         this.player.removeClass('player-tiny');
-
         if (this.elementWidth < 600) {
           this.player.addClass('player-medium');
         }
@@ -439,6 +457,112 @@
         this.$emit('updateContentState', contentState);
       },
     },
+    $trs: {
+      replay: {
+        message: 'Go back 10 seconds',
+        context: 'Option to rewind a video or audio file by 10 seconds.',
+      },
+      // Pulled from https://github.com/videojs/video.js/blob/master/lang/en.json
+      forward: {
+        message: 'Go forward 10 seconds',
+        context: 'Option to advance a video or audio file by 10 seconds.',
+      },
+      play: {
+        message: 'Play',
+        context: 'Describes button used to play a media file. This toggles between play and pause.',
+      },
+      pause: {
+        message: 'Pause',
+        context:
+          'Describes button used to stop or pause a media file in the player. This toggles between play and pause.',
+      },
+      currentTime: {
+        message: 'Current time',
+        context:
+          'Indicates the moment in time that the video or audio is at. For example, 1:10, meaning one minute and 10 seconds.',
+      },
+      durationTime: {
+        message: 'Duration time',
+        context:
+          'Indicates the length of a video or audio file. For example, 5:15, meaning 5 minutes and 15 seconds.',
+      },
+      loaded: {
+        message: 'Loaded',
+        context: 'Indicates a media file has loaded into the player.',
+      },
+      progressBar: {
+        message: 'Progress bar',
+        context:
+          'Describes the time tracker indicator bar in the bottom of the media player which allows a learner to view the progress through a media file and skip to specific times. Not related to learner progress.',
+      },
+      fullscreen: {
+        message: 'Enter fullscreen',
+        context:
+          'Learners can use the full screen button in the bottom right corner to open the media player in fullscreen view.',
+      },
+      nonFullscreen: {
+        message: 'Exit fullscreen',
+        context:
+          'Learners can use the full screen button in the bottom right corner to exit the media player from fullscreen view. This text appears upon mouse over of the button.\n',
+      },
+      mute: {
+        message: 'Mute',
+        context: 'Option to silence the audio track of a media file.',
+      },
+      unmute: {
+        message: 'Unmute',
+        context: 'Option to un-silence the audio track of a media file.',
+      },
+      playbackRate: {
+        message: 'Playback rate',
+        context:
+          'Speed at which a media file can be played. For example, a video could be played a 1.5 times the original speed.',
+      },
+      captions: {
+        message: 'Captions',
+        context:
+          "The Kolibri media player allows learners to view audiovisual content with subtitles (captions) in different languages. These are accessed via the 'CC' option on the player.",
+      },
+      captionsOff: {
+        message: 'Captions off',
+        context: 'Option for the learner to turn off subtitles (captions) in the media player.',
+      },
+      transcriptOff: {
+        message: 'Transcript off',
+        context: 'Option to turn off the transcript on a video or audio file.',
+      },
+      languages: {
+        message: 'Languages',
+        context: 'Indicates languages which are used in a media file.',
+      },
+      volumeLevel: {
+        message: 'Volume level',
+        context: 'Indicates the volume control scrollbar.',
+      },
+      networkError: {
+        message: 'A network error caused the media download to fail part-way',
+        context:
+          'Error message displayed in the media player when a media download fails because the internet connection cuts out.\n',
+      },
+      formatError: {
+        message:
+          'The media could not be loaded, either because the server or network failed or because the format is not supported',
+        context: 'Error message displayed in the media player.\n',
+      },
+      corruptionOrSupportError: {
+        message:
+          'The media playback was aborted due to a corruption problem or because the media used features your browser did not support',
+        context: 'Error message displayed in the media player.',
+      },
+      sourceError: {
+        message: 'No compatible source was found for this media',
+        context: 'Error message displayed in the media player.',
+      },
+      encryptionError: {
+        message: 'The media is encrypted and we do not have the keys to decrypt it',
+        context: 'Error message displayed in the media player.\n',
+      },
+    },
   };
 
 </script>
@@ -450,53 +574,143 @@
   @import './videojs-style/video-js.min.css';
   // Custom build icons.
   @import './videojs-style/videojs-font/css/videojs-icons.css';
-  @import '~kolibri.styles.definitions';
+  @import './videojs-style/variables';
+  @import '~kolibri-design-system/lib/styles/definitions';
 
-  .wrapper {
-    width: 854px;
-    max-width: 100%;
-    height: 480px;
-    max-height: 480px;
+  .fullscreen-wrapper {
+    box-sizing: border-box;
   }
 
-  .fill-space {
+  .wrapper {
+    box-sizing: content-box;
+    max-width: 100%;
+    max-height: #{$video-player-max-vh};
+  }
+
+  .wrapper.transcript-visible.transcript-wrap {
+    padding-bottom: #{$transcript-wrap-height};
+  }
+
+  .wrapper.video-loading video {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.1;
+  }
+
+  .fill-space,
+  /deep/ .fill-space {
     position: relative;
     width: 100%;
     height: 100%;
+    border: 1px solid transparent;
   }
 
-  .loader {
+  .loading-space,
+  /deep/ .loading-space {
+    box-sizing: border-box;
+    padding-top: #{$video-player-height-by-width};
+  }
+
+  /deep/ .loader {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
   }
 
+  .media-player-transcript {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    box-sizing: border-box;
+
+    /deep/ .fill-space {
+      height: auto;
+    }
+
+    [dir='rtl'] & {
+      right: auto;
+      left: 0;
+    }
+  }
+
+  .wrapper:not(.transcript-wrap) .media-player-transcript {
+    top: 0;
+    width: 33.333%;
+
+    /deep/ .loading-space {
+      padding-top: #{300% * 9 / 16};
+    }
+  }
+
+  .wrapper.transcript-wrap .media-player-transcript {
+    left: 0;
+    height: #{$transcript-wrap-height};
+
+    /deep/ .loading-space {
+      padding-top: 90px;
+    }
+
+    [dir='rtl'] & {
+      right: 0;
+    }
+  }
+
+  .normalize-fullscreen,
+  .mimic-fullscreen {
+    border-color: transparent !important;
+
+    .wrapper {
+      max-height: none;
+    }
+
+    .wrapper.transcript-visible.transcript-wrap {
+      padding-bottom: 0;
+    }
+
+    .wrapper.transcript-visible.transcript-wrap .media-player-transcript {
+      top: 0;
+      height: auto;
+      margin-top: #{$video-player-height-by-width};
+    }
+
+    .wrapper.transcript-visible.transcript-wrap .video-js.vjs-fill {
+      height: auto;
+      padding-top: #{$video-player-height-by-width};
+    }
+  }
+
   /***** PLAYER OVERRIDES *****/
 
   /* !!rtl:begin:ignore */
-
-  /** COLOR PALLETTE **/
-  $video-player-color: #212121;
-  // tint if $video-player-color = black-ish, shade if $video-player-color = white-ish
-  $video-player-color-2: tint($video-player-color, 7%);
-  $video-player-color-3: tint($video-player-color, 15%);
-  $video-player-font-color: white;
-
-  $video-player-font-size: 12px;
+  .transcript-visible:not(.transcript-wrap) > .video-js.vjs-fill {
+    width: 66.666%;
+  }
 
   /* Hide control bar when playing & inactive */
-  /deep/ .vjs-has-started.vjs-playing.vjs-user-inactive {
-    .vjs-control-bar {
-      visibility: hidden;
+  /deep/ .vjs-has-started.vjs-playing.vjs-user-inactive .vjs-control-bar {
+    visibility: hidden;
+
+    /* Always show control bar in keyboard modality */
+    .keyboard-modality & {
+      visibility: visible;
+      opacity: 1;
     }
+  }
+
+  /* Mimics glow video.js adds on fullscreen button when focused */
+  /deep/ .vjs-captions-button.active .vjs-icon-placeholder,
+  /deep/ .vjs-languages-button.active .vjs-icon-placeholder {
+    text-shadow: 0 0 1em #ffffff;
   }
 
   /*** CUSTOM VIDEOJS SKIN ***/
   /deep/ .custom-skin {
     $button-height-normal: 40px;
     $button-font-size-normal: 24px;
-
     @include font-family-noto;
 
     font-size: $video-player-font-size;
@@ -596,6 +810,20 @@
       margin-left: auto;
     }
 
+    /* Transcript button */
+    .vjs-button-transcript img {
+      max-width: 20px;
+    }
+
+    .vjs-transcript-visible > .vjs-tech,
+    .vjs-transcript-visible > .vjs-modal-dialog,
+    .vjs-transcript-visible > .vjs-text-track-display,
+    .vjs-transcript-visible > .vjs-text-track-settings,
+    .vjs-transcript-visible > .vjs-control-bar {
+      right: auto;
+      width: calc(100% - 330px);
+    }
+
     /* Menus */
     .vjs-menu {
       li {
@@ -647,6 +875,7 @@
     .vjs-duration {
       display: block;
       padding-left: 0;
+
       .vjs-duration-display {
         font-size: $video-player-font-size;
         line-height: $button-height-normal;
@@ -684,6 +913,10 @@
     /* Time divider is displayed. */
     .vjs-time-divider {
       display: block;
+    }
+
+    .vjs-slider-bar::before {
+      z-index: 0;
     }
   }
 

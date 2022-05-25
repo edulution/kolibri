@@ -7,53 +7,113 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
-    <KPageContainer>
-      <ReportsHeader />
-      <KSelect
-        v-model="filter"
-        :label="$tr('show')"
-        :options="filterOptions"
-        :inline="true"
-      />
+    <KPageContainer :class="{ 'print': $isPrint }">
+      <ReportsHeader :title="$isPrint ? $tr('printLabel', { className }) : null" />
+      <ReportsControls @export="exportCSV">
+        <!-- Hidden temporarily per https://github.com/learningequality/kolibri/issues/6174
+        <KSelect
+          v-model="filter"
+          :label="coreString('showAction')"
+          :options="filterOptions"
+          :inline="true"
+        />
+        -->
+      </ReportsControls>
       <CoreTable :emptyMessage="emptyMessage">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('titleLabel') }}</th>
-            <th>{{ coachStrings.$tr('avgScoreLabel') }}</th>
-            <th>{{ coachStrings.$tr('progressLabel') }}</th>
-            <th>{{ coachStrings.$tr('recipientsLabel') }}</th>
-            <th>{{ coachStrings.$tr('statusLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KLabeledIcon>
-                <KIcon slot="icon" quiz />
+        <template #headers>
+          <th>{{ coachString('titleLabel') }}</th>
+          <th style="position:relative;">
+            {{ coachString('avgScoreLabel') }}
+            <AverageScoreTooltip v-show="!$isPrint" />
+          </th>
+          <th>{{ coreString('progressLabel') }}</th>
+          <th>{{ coachString('recipientsLabel') }}</th>
+          <th v-show="!$isPrint" class="center-text">
+            {{ coachString('statusLabel') }}
+          </th>
+        </template>
+        <template #tbody>
+          <transition-group tag="tbody" name="list">
+            <tr v-for="tableRow in table" :key="tableRow.id">
+              <td>
                 <KRouterLink
                   :text="tableRow.title"
                   :to="classRoute('ReportsQuizLearnerListPage', { quizId: tableRow.id })"
+                  icon="quiz"
                 />
-              </KLabeledIcon>
-            </td>
-            <td>
-              <Score :value="tableRow.avgScore" />
-            </td>
-            <td>
-              <StatusSummary
-                :tally="tableRow.tally"
-                :verbose="true"
-              />
-            </td>
-            <td><Recipients :groupNames="tableRow.groupNames" /></td>
-            <td>
-              <QuizActive :active="tableRow.active" />
-            </td>
-          </tr>
-        </transition-group>
+              </td>
+              <td>
+                <Score :value="tableRow.avgScore" />
+              </td>
+              <td>
+                <StatusSummary
+                  :tally="tableRow.tally"
+                  :verbose="true"
+                  :includeNotStarted="true"
+                />
+              </td>
+              <td>
+                <Recipients
+                  :groupNames="getRecipientNamesForExam(tableRow)"
+                  :hasAssignments="tableRow.hasAssignments"
+                />
+              </td>
+              <td
+                v-show="!$isPrint"
+                class="button-col center-text core-table-button-col"
+              >
+                <!-- Open quiz button -->
+                <KButton
+                  v-if="!tableRow.active && !tableRow.archive"
+                  :text="coachString('openQuizLabel')"
+                  appearance="flat-button"
+                  class="table-left-aligned-button"
+                  @click="showOpenConfirmationModal = true; modalQuizId = tableRow.id"
+                />
+                <!-- Close quiz button -->
+                <KButton
+                  v-if="tableRow.active && !tableRow.archive"
+                  :text="coachString('closeQuizLabel')"
+                  appearance="flat-button"
+                  class="table-left-aligned-button"
+                  @click="showCloseConfirmationModal = true; modalQuizId = tableRow.id;"
+                />
+                <div
+                  v-if="tableRow.archive"
+                  class="quiz-closed-label"
+                >
+                  {{ coachString('quizClosedLabel') }}
+                </div>
+              </td>
+            </tr>
+          </transition-group>
+        </template>
       </CoreTable>
+      <!-- Modals for Close & Open of quiz from right-most column -->
+      <KModal
+        v-if="showOpenConfirmationModal"
+        :title="coachString('openQuizLabel')"
+        :submitText="coreString('continueAction')"
+        :cancelText="coreString('cancelAction')"
+        @cancel="showOpenConfirmationModal = false"
+        @submit="handleOpenQuiz(modalQuizId)"
+      >
+        <div>{{ coachString('openQuizModalDetail') }}</div>
+      </KModal>
+      <KModal
+        v-if="showCloseConfirmationModal"
+        :title="coachString('closeQuizLabel')"
+        :submitText="coreString('continueAction')"
+        :cancelText="coreString('cancelAction')"
+        @cancel="showCloseConfirmationModal = false"
+        @submit="handleCloseQuiz(modalQuizId)"
+      >
+        <div>{{ coachString('closeQuizModalDetail') }}</div>
+      </KModal>
     </KPageContainer>
   </CoreBase>
 
@@ -62,52 +122,59 @@
 
 <script>
 
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { ExamResource } from 'kolibri.resources';
   import commonCoach from '../common';
-  import CoachExamsPage from '../plan/CoachExamsPage';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsControls from './ReportsControls';
   import ReportsHeader from './ReportsHeader';
-
-  const CoachExamsPageStrings = crossComponentTranslator(CoachExamsPage);
 
   export default {
     name: 'ReportsQuizListPage',
     components: {
+      ReportsControls,
       ReportsHeader,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
     data() {
       return {
         filter: 'allQuizzes',
+        showOpenConfirmationModal: false,
+        showCloseConfirmationModal: false,
+        modalQuizId: null,
       };
     },
     computed: {
       emptyMessage() {
         if (this.filter.value === 'allQuizzes') {
-          return this.coachStrings.$tr('quizListEmptyState');
+          return this.coachString('quizListEmptyState');
         }
-        if (this.filter.value === 'activeQuizzes') {
-          return CoachExamsPageStrings.$tr('noActiveExams');
-        }
-        if (this.filter.value === 'inactiveQuizzes') {
-          return CoachExamsPageStrings.$tr('noInactiveExams');
-        }
+        // if (this.filter.value === 'activeQuizzes') {
+        //   return this.$tr('noActiveExams');
+        // }
+        // if (this.filter.value === 'inactiveQuizzes') {
+        //   return this.$tr('noInactiveExams');
+        // }
 
         return '';
       },
       filterOptions() {
         return [
           {
-            label: this.$tr('allQuizzes'),
+            label: this.coachString('allQuizzesLabel'),
             value: 'allQuizzes',
+            // noActiveExams: 'No active quizzes',
+            // noInactiveExams: 'No inactive quizzes',
           },
-          {
-            label: this.$tr('activeQuizzes'),
-            value: 'activeQuizzes',
-          },
-          {
-            label: this.$tr('inactiveQuizzes'),
-            value: 'inactiveQuizzes',
-          },
+          // {
+          //   label: this.coachString('activeQuizzesLabel'),
+          //   value: 'activeQuizzes',
+          // },
+          // {
+          //   label: this.coachString('inactiveQuizzesLabel'),
+          //   value: 'inactiveQuizzes',
+          // },
         ];
       },
       table() {
@@ -120,33 +187,102 @@
             return !exam.active;
           }
         });
-        const sorted = this._.sortBy(filtered, ['title', 'active']);
-        const mapped = sorted.map(exam => {
-          const learnersForQuiz = this.getLearnersForGroups(exam.groups);
+        const sorted = this._.orderBy(filtered, ['date_created'], ['desc']);
+        return sorted.map(exam => {
+          const learnersForQuiz = this.getLearnersForExam(exam);
           const tableRow = {
             totalLearners: learnersForQuiz.length,
             tally: this.getExamStatusTally(exam.id, learnersForQuiz),
             groupNames: this.getGroupNames(exam.groups),
+            recipientNames: this.getRecipientNamesForExam(exam),
             avgScore: this.getExamAvgScore(exam.id, learnersForQuiz),
+            hasAssignments: learnersForQuiz.length > 0,
           };
           Object.assign(tableRow, exam);
           return tableRow;
         });
-        return mapped;
       },
     },
     beforeMount() {
       this.filter = this.filterOptions[0];
     },
+    methods: {
+      handleOpenQuiz(quizId) {
+        let promise = ExamResource.saveModel({
+          id: quizId,
+          data: {
+            active: true,
+            date_activated: new Date(),
+          },
+          exists: true,
+        });
+
+        return promise
+          .then(() => {
+            this.$store.dispatch('classSummary/refreshClassSummary');
+            this.showOpenConfirmationModal = false;
+            this.$store.dispatch('createSnackbar', this.coachString('quizOpenedMessage'));
+          })
+          .catch(() => {
+            this.$store.dispatch('createSnackbar', this.coachString('quizFailedToOpenMessage'));
+          });
+      },
+      handleCloseQuiz(quizId) {
+        let promise = ExamResource.saveModel({
+          id: quizId,
+          data: {
+            archive: true,
+            date_archived: new Date(),
+          },
+          exists: true,
+        });
+
+        return promise
+          .then(() => {
+            this.$store.dispatch('classSummary/refreshClassSummary');
+            this.showCloseConfirmationModal = false;
+            this.$store.dispatch('createSnackbar', this.coachString('quizClosedMessage'));
+          })
+          .catch(() => {
+            this.$store.dispatch('createSnackbar', this.coachString('quizFailedToCloseMessage'));
+          });
+      },
+      exportCSV() {
+        const columns = [
+          ...csvFields.title(),
+          ...csvFields.avgScore(),
+          ...csvFields.recipients(this.className),
+          ...csvFields.tally(),
+        ];
+
+        const fileName = this.$tr('printLabel', { className: this.className });
+        new CSVExporter(columns, fileName).export(this.table);
+      },
+    },
     $trs: {
-      show: 'Show',
-      allQuizzes: 'All quizzes',
-      activeQuizzes: 'Active quizzes',
-      inactiveQuizzes: 'Inactive quizzes',
+      // noActiveExams: 'No active quizzes',
+      // noInactiveExams: 'No inactive quizzes',
+      printLabel: {
+        message: '{className} Quizzes',
+        context:
+          "Title that displays on a printed copy of the 'Reports' > 'Quizzes' page. This shows if the user uses the 'Print' option by clicking on the printer icon and displays on the downloadable CSV file.",
+      },
     },
   };
 
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../common/print-table';
+
+  .center-text {
+    text-align: center;
+  }
+
+  .button-col {
+    vertical-align: middle;
+  }
+
+</style>

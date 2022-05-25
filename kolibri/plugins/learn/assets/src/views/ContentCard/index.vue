@@ -3,14 +3,18 @@
   <router-link
     :to="link"
     class="card"
-    :class="{ 'mobile-card': isMobile }"
-    :style="{ backgroundColor: $coreBgLight }"
+    :class="[
+      { 'mobile-card': isMobile },
+      $computedClass({ ':focus': $coreOutline })
+    ]"
+    :style="{ backgroundColor: $themeTokens.surface }"
   >
     <CardThumbnail
       class="thumbnail"
-      v-bind="{ thumbnail, progress, kind, isMobile, showContentIcon }"
+      :kind="content.kind"
+      v-bind="{ thumbnail, progress, isMobile, showContentIcon }"
     />
-    <div class="text" :style="{ color: $coreTextDefault }">
+    <div class="text" :style="{ color: $themeTokens.text }">
       <h3 class="title" dir="auto">
         <TextTruncator
           :text="title"
@@ -27,6 +31,7 @@
       </p>
       <div class="footer">
         <CoachContentLabel
+          v-if="isUserLoggedIn && !isLearner"
           class="coach-content-label"
           :value="numCoachContents"
           :isTopic="isTopic"
@@ -47,43 +52,31 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import { validateLinkObject, validateContentNodeKind } from 'kolibri.utils.validators';
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+  import { mapGetters } from 'vuex';
+  import { validateLinkObject } from 'kolibri.utils.validators';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
   import TextTruncator from 'kolibri.coreVue.components.TextTruncator';
-  import KButton from 'kolibri.coreVue.components.KButton';
   import CardThumbnail from './CardThumbnail';
 
   export default {
     name: 'ContentCard',
-    $trs: {
-      copies: '{ num, number} locations',
-    },
     components: {
       CardThumbnail,
       CoachContentLabel,
       TextTruncator,
-      KButton,
     },
-    mixins: [themeMixin],
     props: {
       title: {
         type: String,
         required: true,
       },
-      subtitle: {
-        type: String,
-        required: false,
-      },
       thumbnail: {
         type: String,
-        required: false,
+        default: null,
       },
-      kind: {
-        type: String,
+      isLeaf: {
+        type: Boolean,
         required: true,
-        validator: validateContentNodeKind,
       },
       showContentIcon: {
         type: Boolean,
@@ -115,16 +108,17 @@
       },
       contentId: {
         type: String,
-        required: false,
+        default: null,
       },
       copiesCount: {
         type: Number,
-        required: false,
+        default: null,
       },
     },
     computed: {
+      ...mapGetters(['isLearner', 'isUserLoggedIn']),
       isTopic() {
-        return this.kind === ContentNodeKinds.TOPIC || this.kind === ContentNodeKinds.CHANNEL;
+        return !this.isLeaf;
       },
       maxTitleHeight() {
         if (this.hasFooter && this.subtitle) {
@@ -138,6 +132,13 @@
         return this.numCoachContents > 0 || this.copiesCount > 1;
       },
     },
+    $trs: {
+      copies: {
+        message: '{ num, number} locations',
+        context:
+          'Some Kolibri resources may be duplicated in different topics or channels.\n\nSearch results will indicate when a resource is duplicated, and learners can click on the "...locations" link to discover the details for each location of the resource.',
+      },
+    },
   };
 
 </script>
@@ -145,7 +146,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
   @import './card';
 
   $margin: 16px;
@@ -160,14 +161,14 @@
     display: inline-block;
     width: $thumb-width-desktop;
     text-decoration: none;
-    word-break: break-all; // fallback
-    word-break: break-word;
     vertical-align: top;
     border-radius: 2px;
     transition: box-shadow $core-time ease;
+
     &:hover {
       @extend %dropshadow-8dp;
     }
+
     &:focus {
       outline-width: 4px;
       outline-offset: 6px;
@@ -216,19 +217,22 @@
 
   .mobile-card.card {
     width: 100%;
-    height: $thumb-height-mobile;
+    height: 450px;
   }
 
   .mobile-card {
     .thumbnail {
       position: absolute;
     }
-    .text {
-      height: 84px;
-      margin-left: $thumb-width-mobile;
+
+    .description {
+      padding: 8px;
+      margin-top: $thumb-height-mobile;
     }
-    .subtitle {
-      top: 36px;
+
+    .title {
+      margin-left: 16px;
+      text-decoration: none;
     }
   }
 

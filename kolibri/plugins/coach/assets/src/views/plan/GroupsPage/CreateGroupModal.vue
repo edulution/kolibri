@@ -3,17 +3,17 @@
   <KModal
     :title="$tr('newLearnerGroup')"
     size="small"
-    :submitText="$tr('save')"
-    :cancelText="$tr('cancel')"
+    :submitText="coreString('saveAction')"
+    :cancelText="coreString('cancelAction')"
     :submitDisabled="submitting"
+    @cancel="$emit('cancel')"
     @submit="callCreateGroup"
-    @cancel="close"
   >
     <KTextbox
       ref="name"
       v-model.trim="name"
       type="text"
-      :label="$tr('learnerGroupName')"
+      :label="coachString('groupNameLabel')"
       :autofocus="true"
       :invalid="nameIsInvalid"
       :invalidText="nameIsInvalidText"
@@ -28,23 +28,12 @@
 <script>
 
   import { mapActions, mapState } from 'vuex';
-  import KModal from 'kolibri.coreVue.components.KModal';
-  import KTextbox from 'kolibri.coreVue.components.KTextbox';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { coachStringsMixin } from '../../common/commonCoachStrings';
 
   export default {
     name: 'CreateGroupModal',
-    $trs: {
-      newLearnerGroup: 'Create new group',
-      learnerGroupName: 'Group name',
-      cancel: 'Cancel',
-      save: 'Save',
-      duplicateName: 'A group with that name already exists',
-      required: 'This field is required',
-    },
-    components: {
-      KModal,
-      KTextbox,
-    },
+    mixins: [coachStringsMixin, commonCoreStrings],
     props: {
       groups: {
         type: Array,
@@ -74,7 +63,7 @@
         if (this.submitting) return '';
         if (this.nameBlurred || this.formSubmitted) {
           if (this.name === '') {
-            return this.$tr('required');
+            return this.coreString('requiredFieldError');
           }
           if (this.duplicateName) {
             return this.$tr('duplicateName');
@@ -90,20 +79,28 @@
       },
     },
     methods: {
-      ...mapActions('groups', ['displayModal', 'createGroup']),
+      ...mapActions('groups', ['createGroup']),
       callCreateGroup() {
         this.formSubmitted = true;
         if (this.formIsValid) {
           this.submitting = true;
           this.createGroup({ groupName: this.name, classId: this.classId }).then(() => {
-            this.$emit('success');
+            this.$emit('submit');
           });
         } else {
           this.$refs.name.focus();
         }
       },
-      close() {
-        this.displayModal(false);
+    },
+    $trs: {
+      newLearnerGroup: {
+        message: 'Create new group',
+        context: 'Name of window used to create a new group of learners.',
+      },
+      duplicateName: {
+        message: 'A group with that name already exists',
+        context:
+          'Error message that displays if user creates a group with a name that already exisits.',
       },
     },
   };

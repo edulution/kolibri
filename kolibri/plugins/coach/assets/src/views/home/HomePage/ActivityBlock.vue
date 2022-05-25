@@ -1,28 +1,34 @@
 <template>
 
   <Block
-    :allLinkText="$tr('viewAll')"
+    :allLinkText="coachString('viewAllAction')"
     :allLinkRoute="$router.getRoute('HomeActivityPage')"
+    :showAllLink="notifications.length > 0"
   >
-    <template slot="title">
-      {{ $tr('classActivity') }}
+
+    <template #title>
+      <KLabeledIcon :label="$tr('classActivityLabel')" />
     </template>
 
-    <ContentIcon slot="icon" :kind="ContentNodeKinds.ACTIVITY" />
+    <template #icon>
+      <ContentIcon :kind="ContentNodeKinds.ACTIVITY" />
+    </template>
+
+    <p v-if="notifications.length === 0">
+      {{ $tr('noActivityLabel') }}
+    </p>
+
     <transition-group name="list">
       <BlockItem
         v-for="notification in notifications"
         :key="notification.groupCode + '_' + notification.lastId"
       >
         <NotificationCard
-          v-bind="cardPropsForNotification(notification)"
-          :linkText="cardTextForNotification(notification)"
+          :notification="notification"
+          :lastQuery="lastQuery"
         />
       </BlockItem>
     </transition-group>
-    <div v-if="notifications.length === 0">
-      {{ $tr('noActivity') }}
-    </div>
   </Block>
 
 </template>
@@ -31,12 +37,10 @@
 <script>
 
   import { mapGetters } from 'vuex';
-  import orderBy from 'lodash/orderBy';
   import commonCoach from '../../common';
   import NotificationCard from '../../common/notifications/NotificationCard';
   import { nStringsMixin } from '../../common/notifications/notificationStrings';
-  import { CollectionTypes } from '../../../constants/lessonsConstants';
-  import { notificationLink } from '../../../modules/coachNotifications/gettersUtils';
+  import { LastPages } from '../../../constants/lastPagesConstants';
   import Block from './Block';
   import BlockItem from './BlockItem';
 
@@ -53,37 +57,25 @@
     computed: {
       ...mapGetters('coachNotifications', ['summarizedNotifications']),
       notifications() {
-        return orderBy(this.summarizedNotifications, ({ lastId }) => Number(lastId), [
-          'desc',
-        ]).slice(0, MAX_NOTIFICATIONS);
+        return this.summarizedNotifications.slice(0, MAX_NOTIFICATIONS);
       },
-    },
-    methods: {
-      cardPropsForNotification(notification) {
-        const { collection } = notification;
-        const learnerContext =
-          collection.type === CollectionTypes.LEARNERGROUP ? collection.name : '';
+      lastQuery() {
         return {
-          eventType: notification.event,
-          objectType: notification.object,
-          resourceType: notification.resource.type,
-          targetPage: {
-            ...notificationLink(notification),
-            query: {
-              last: 'homepage',
-            },
-          },
-          contentContext: notification.assignment.name,
-          learnerContext,
+          last: LastPages.HOME_PAGE,
         };
       },
     },
     $trs: {
-      classActivity: 'Class activity',
-      recentActivity: 'Recent activity',
-      recentClassActivity: 'Recent Class activity',
-      noActivity: 'No activity in your class',
-      viewAll: 'View all',
+      classActivityLabel: {
+        message: 'Class activity',
+        context:
+          "Refers to the section within the 'Class home' tab which provides real time notifications of what's happening with the learners in a class. \n\nCoaches can track learners' progress here.",
+      },
+      noActivityLabel: {
+        message: 'No activity in your class',
+        context:
+          "Message that displays in the 'Class activity' section when there is no activity in that specific class.",
+      },
     },
   };
 

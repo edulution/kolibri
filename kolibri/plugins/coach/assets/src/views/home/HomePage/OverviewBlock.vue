@@ -4,28 +4,43 @@
     <p>
       <BackLink
         v-if="classListPageEnabled"
-        :to="$router.getRoute('CoachClassListPage')"
-        :text="$tr('back')"
+        :to="classListLink"
+        :text="$tr('allClassesLabel')"
       />
     </p>
-    <h1>{{ $store.state.classSummary.name }}</h1>
+
+    <h1>
+      <KLabeledIcon icon="classes" :label="$store.state.classSummary.name" />
+    </h1>
     <HeaderTable>
       <HeaderTableRow>
-        <KLabeledIcon slot="key">
-          <KIcon slot="icon" coach />
-          {{ $tr('coach', {count: coachNames.length}) }}
-        </KLabeledIcon>
-        <template slot="value">
+        <template #key>
+          <KLabeledIcon
+            icon="coach"
+            :label="$tr('coach', { count: coachNames.length })"
+          />
+        </template>
+        <template #value>
           <TruncatedItemList :items="coachNames" />
         </template>
       </HeaderTableRow>
       <HeaderTableRow>
-        <KLabeledIcon slot="key">
-          <KIcon slot="icon" people />
-          {{ $tr('learner', {count: learnerNames.length}) }}
-        </KLabeledIcon>
-        <template slot="value">
-          {{ coachStrings.$tr('integer', {value: learnerNames.length}) }}
+        <template #key>
+          <KLabeledIcon
+            icon="people"
+            :label="$tr('learner', { count: learnerNames.length })"
+          />
+        </template>
+        <template #value>
+          {{ $formatNumber(learnerNames.length) }}
+          <template v-if="learnerNames.length > 0">
+            <KRouterLink
+              :text="$tr('viewLearners')"
+              appearance="basic-link"
+              :to="classLearnersListRoute"
+              style="margin-left: 24 px;"
+            />
+          </template>
         </template>
       </HeaderTableRow>
     </HeaderTable>
@@ -37,18 +52,14 @@
 <script>
 
   import { mapGetters } from 'vuex';
+  import pickBy from 'lodash/pickBy';
+  import { ClassesPageNames } from '../../../../../../learn/assets/src/constants';
   import commonCoach from '../../common';
+  import { LastPages } from '../../../constants/lastPagesConstants';
 
   export default {
     name: 'OverviewBlock',
-    components: {},
     mixins: [commonCoach],
-    $trs: {
-      back: 'All classes',
-      changeClass: 'Change class',
-      coach: '{count, plural, one {Coach} other {Coaches}}',
-      learner: '{count, plural, one {Learner} other {Learners}}',
-    },
     computed: {
       ...mapGetters(['classListPageEnabled']),
       coachNames() {
@@ -56,6 +67,47 @@
       },
       learnerNames() {
         return this.learners.map(learner => learner.name);
+      },
+      classListLink() {
+        let facility_id;
+        if (this.$store.getters.userIsMultiFacilityAdmin) {
+          facility_id = this.$store.state.classSummary.facility_id;
+        }
+        return this.$router.getRoute('CoachClassListPage', {}, { facility_id });
+      },
+      classLearnersListRoute() {
+        const { query } = this.$route;
+        const route = {
+          name: ClassesPageNames.CLASS_LEARNERS_LIST_VIEWER,
+          params: {
+            id: this.classId,
+          },
+          query: {
+            ...query,
+            ...pickBy({
+              last: LastPages.HOME_PAGE,
+            }),
+          },
+        };
+        return route;
+      },
+    },
+    $trs: {
+      allClassesLabel: {
+        message: 'All classes',
+        context: "Link to take coach back to the 'Classes' section.",
+      },
+      coach: {
+        message: '{count, plural, one {Coach} other {Coaches}}',
+        context: 'Refers to the coach or coaches who have been assigned to a class. ',
+      },
+      learner: {
+        message: '{count, plural, one {Learner} other {Learners}}',
+        context: 'Refers to the learner or learners who are in a class.',
+      },
+      viewLearners: {
+        message: 'View learners',
+        context: 'Button which allows coach to view a list of learners in a class.',
       },
     },
   };

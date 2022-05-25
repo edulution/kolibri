@@ -3,7 +3,7 @@ Feature: Coach creates quizzes
 
   Background:
     Given I am signed in to Kolibri as a coach user
-      And I am on the *Coach > Plan > Quizzes* page
+      And I am on the *Coach - '<class>' > Plan > Quizzes* page
 
   Scenario: Create new quiz
     When I click the *New quiz* button
@@ -12,13 +12,13 @@ Feature: Coach creates quizzes
       And I see a list of channels that contain exercises
         But I don't see any checkboxes
 
-  # Given there are no channels that have exercises
-  # Then there should not be any channels available to select
+    # Given there are no channels that have exercises
+    # Then there should not be any channels available to select
   Scenario: Try and fail to create new quiz when no channel on device contains exercises
     When I click the *New quiz* button
     Then I see a new *Create new quiz* page
       And I see empty *Title* and *Number of questions* fields
-      But I don't see any channels
+        But I don't see any channels
 
   Scenario: Check validation for the number of questions field
     When I input a number outside the range of 1-50
@@ -30,7 +30,6 @@ Feature: Coach creates quizzes
     When I don't input anything into the number field
       And I leave the input field or attempt to continue or finish the quiz
     Then an input validation error appears
-    # This is not working right, quiz is saved even if the number of questions is left empty
     When I input a valid number
     Then I don't see the validation error anymore
 
@@ -40,8 +39,7 @@ Feature: Coach creates quizzes
 
   Scenario: Navigate resources
     When I click on a channel or topic card
-    Then I am redirected to a new page
-      And I see channel/topic resources
+    Then I see channel/topic resources
       And I see the breadcrumb path for the channel/topic
     When I click on a parent topic breadcrumb
     Then I am redirected back to that topic
@@ -100,7 +98,13 @@ Feature: Coach creates quizzes
     When I enter a keyword into the search box
       And I click the search icon button or press Enter
     Then I am redirected to the search results page
-      And I see the *No results found...* message
+      And I see the *No results for...* message
+
+  Scenario: Clear results and reset search
+    Given that there are results from the previous search
+    When I press the *X* button in the search field
+      Or I delete the previous search term and press *Enter*
+    Then I still see the previous search results (no change)
 
   Scenario: Add a topic or exercise from the search results page
     Given I am on the search results page
@@ -140,6 +144,8 @@ Feature: Coach creates quizzes
       And I don't see content from channels that do not contain exercises
     When I select a specific channel from the channel filter dropdown
     Then I see the search results are filtered and present content only from the selected channel
+    When I select *All* in the filter dropdown
+    Then I see that results are not filtered anymore
 
   Scenario: Filter coach content in and out
     Given I am on the search results page
@@ -179,43 +185,63 @@ Feature: Coach creates quizzes
   Scenario: Exit the search results page
     Given I am on the search results page
       When I click *Exit search*
-      Then I see the topic and channel I was viewing before I initiated the search
+      Then I see the *Create new quiz* page again
 
-  Scenario: Preview Quiz
+  Scenario: Preview quiz and change the question order
     Given I am on *Create new quiz* page
       And there are no validation errors
     When I click “Continue”
-    Then I see a *Preview quiz* page with a question list pulled randomly from each exercise
-    When I click on *Randomize questions* button
-    Then I see the modal is refreshed with reordered randomized question list
+    Then I see a *Preview quiz* page
+      And I see the *Question order* is by default *Randomized*, with a questions displayed as a list pulled randomly from selected exercises
+    When I select *Fixed* radio button
+    Then I see the order of questions is refreshed, and questions are displayed as a numbered list.
 
   Scenario: Check validation for the title field
     When I try to enter a name with more than 100 characters
     Then I see that the title is cut at 100
     When I input a quiz title same as for an already existing quiz
-    Then I see the error notification *A quiz with that name already exists* 
+    Then I see the error notification *A quiz with that name already exists*
     When I leave the name field empty
       And I click *Finish*
     Then I see the error notification *This field is required*
     When I input a valid title into the field
       And I click *Finish*
     Then I don't see the validation error anymore
-      And I see the quiz on the list at *Coach > Plan > Quizzes* tab 
+      And I see the quiz on the list at *Coach - '<class>' > Plan > Quizzes* tab
 
   Scenario: Save quiz
-    Given I am on *Create new quiz* page
+    Given I am on quiz preview page
       And there are no validation errors
     When I click “Finish”
-    Then I am redirected to the *Coach > Plan > Quizzes* page
+    Then I am redirected to the *Coach - '<class>' > Plan > Quizzes* page
       And I see a snackbar confirmation that the quiz is created
 
   Scenario: Exit quiz creation without finishing
     Given I am on *Create new quiz* page
       But I did not save the quiz
     When I click the *back arrow* button
-    Then I am redirected to the *Coach > Plan > Quizzes* page
-      And I loose all quiz creation progress
+    Then I am redirected to the *Coach - '<class>' > Plan > Quizzes* page
+    And I lose all quiz creation progress
 
-    Examples:
-      | quiz_title    | number_of_question | exercises_questions | channel                | topic               |
-      | First Quarter | 5                  | Mathématiques       | Khan Academy (English) | Recognize fractions |
+	Scenario: Create channel-based quiz
+		When I click the *New quiz* button
+			And I see the dropdown option to "Select channel quiz"
+			And I click "Select channel quiz"
+		Then I see a list of channel cards that contain channel quizzes
+			And I can click through all the cards to the "Preview page"
+
+	Scenario: Select a channel-based quiz
+		Given I am on the "Preview page" after creating a channel-based quiz
+		When I click "Select quiz"
+		Then I am redirected to the *Coach - '<class>' > Plan > Quizzes* page
+			And I see a snackbar confirmation
+
+	Scenario: Select a duplicate channel-based quiz
+		Given I have created a channel-based quiz already
+			And I am creating a second copy of the same channel-based quiz
+		When I am on the "Preview page" of this second copy
+		Then I see that the title of the channel quiz has a number appended to it to indicate it is a copy
+
+Examples:
+    | quiz          | number_of_question | exercises_questions | channel                | topic               |
+    | First Quarter | 5                  | Mathématiques       | Khan Academy (English) | Recognize fractions |

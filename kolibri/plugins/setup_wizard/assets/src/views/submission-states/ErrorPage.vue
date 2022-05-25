@@ -13,7 +13,7 @@
       @click="refreshPage"
     />
 
-    <p class="error-page-subtext" :style="{ color: $coreTextAnnotation }">
+    <p class="error-page-subtext" :style="{ color: $themeTokens.annotation }">
       {{ $tr('errorPageAdditionalGuidance') }}
     </p>
 
@@ -25,24 +25,32 @@
 
 <script>
 
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import KButton from 'kolibri.coreVue.components.KButton';
   import SubmissionStatePage from './SubmissionStatePage';
 
   export default {
     name: 'ErrorPage',
-    components: { SubmissionStatePage, KButton },
-    $trs: {
-      errorPageHeader: 'Something went wrong',
-      errorPageSubheader: 'Please check your server connection and retry.',
-      errorPageAdditionalGuidance:
-        "If retrying doesn't work, restart the server and refresh the page.",
-      errorPageRetryButtonLabel: 'Retry',
-    },
-    mixins: [themeMixin],
+    components: { SubmissionStatePage },
     methods: {
       refreshPage() {
         global.location.reload(true);
+      },
+    },
+    $trs: {
+      errorPageHeader: {
+        message: 'Something went wrong',
+        context: 'Generic error message.',
+      },
+      errorPageSubheader: {
+        message: 'Please check your server connection and retry.',
+        context: 'Error message containing some helper information.',
+      },
+      errorPageAdditionalGuidance: {
+        message: "If retrying doesn't work, restart the server and refresh the page.",
+        context: 'Guidance for the admin for handling errors.',
+      },
+      errorPageRetryButtonLabel: {
+        message: 'Retry',
+        context: 'Button to aid admin troubleshooting.',
       },
     },
   };

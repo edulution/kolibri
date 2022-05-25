@@ -54,7 +54,7 @@ Preparation of client-side resources involves:
 - Generating source maps
 - Providing mechanisms for decoupled "Kolibri plugins" to interact with each other and asynchronously load dependencies
 
-The *Makefile* contains the top-level commands for building Python distributions, in particular `wheel files <https://pythonwheels.com/>`__ (``make dist``) and `pex files <https://pex.readthedocs.io/en/stable/>`__ (``make pex``).
+The *Makefile* contains the top-level commands for building Python distributions, in particular `wheel files <https://pythonwheels.com/>`__ (``make dist``) and `pex files <https://pex.readthedocs.io/en/latest/>`__ (``make pex``).
 
 The builds are automated using `buildkite <https://buildkite.com/learningequality>`__, whose top-level configuration lives in the Kolibri repo. Other platform distributions such as `Windows <https://github.com/learningequality/kolibri-installer-windows>`__, `Debian <https://github.com/learningequality/kolibri-installer-debian>`__, and `Android <https://github.com/learningequality/kolibri-installer-android/issues>`__ are built from the wheel files and maintained in their own repositories.
 
@@ -67,7 +67,7 @@ We use a number of mechanisms to help encourage code quality and consistency. Mo
 - We use `EditorConfig <http://editorconfig.org/>`__ to help developers set their editor preferences
 - `tox <https://tox.readthedocs.io/en/latest/>`__ is used to run our test suites under a range of Python and Node environment versions
 - ``sphinx-build -b linkcheck`` checks the validity of documentation links
-- `pytest <http://pytest.org/latest/>`__ runs our Python unit tests. We also leverage the `Django test framework <https://docs.djangoproject.com/en/1.9/topics/testing/>`__.
+- `pytest <http://pytest.org/latest/>`__ runs our Python unit tests. We also leverage the `Django test framework <https://docs.djangoproject.com/en/1.11/topics/testing/>`__.
 - In addition to building client assets, `webpack <https://webpack.github.io/>`__ runs linters on client-side code: `ESLint <http://eslint.org/>`__ for ES6 JavaScript, `Stylelint <https://stylelint.io/>`__ for SCSS, and `HTMLHint <http://htmlhint.com/>`__ for HTML and Vue.js components.
 - Client-side code is tested using `Jest <https://facebook.github.io/jest/>`__
 - `codecov <https://codecov.io/>`__ reports on the test coverage

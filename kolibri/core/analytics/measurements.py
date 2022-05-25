@@ -18,7 +18,7 @@ from kolibri.utils.server import NotRunning
 from kolibri.utils.server import PID_FILE
 
 try:
-    import kolibri.core.analytics.pskolibri as psutil
+    import kolibri.utils.pskolibri as psutil
 except NotImplementedError:
     # This module can't work on this OS
     psutil = None
@@ -121,7 +121,8 @@ def get_requests_info():
             requests.get(base_url).elapsed.total_seconds()
         )
         recommended_url = format_url(
-            "/api/content/contentnode_slim/popular/?by_role=true", base_url
+            "/api/content/contentnode_slim/popular/?include_coach_content=false",
+            base_url,
         )
         recommended_time = "{:.2f} s".format(
             requests.get(recommended_url).elapsed.total_seconds()
@@ -144,8 +145,8 @@ def get_machine_info():
     if not SUPPORTED_OS:
         return (None, None, None, None)
     used_cpu = str(psutil.cpu_percent())
-    used_memory = str(psutil.virtual_memory().used / pow(2, 20))  # In Megabytes
-    total_memory = str(psutil.virtual_memory().total / pow(2, 20))  # In Megabytes
+    used_memory = str(psutil.virtual_memory().used / pow(10, 6))  # In Megabytes
+    total_memory = str(psutil.virtual_memory().total / pow(10, 6))  # In Megabytes
     total_processes = str(len(psutil.pids()))
 
     return (used_cpu, used_memory, total_memory, total_processes)
@@ -199,7 +200,7 @@ def get_kolibri_use(development=False):
     if kolibri_pid:
         try:
             kolibri_proc = psutil.Process(kolibri_pid)
-            kolibri_mem = str(kolibri_proc.memory_info().rss / pow(2, 20))
+            kolibri_mem = str(kolibri_proc.memory_info().rss / pow(10, 6))
             kolibri_cpu = str(kolibri_proc.cpu_percent())
         except psutil.NoSuchProcess:
             # Kolibri server is not running

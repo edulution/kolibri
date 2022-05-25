@@ -7,53 +7,25 @@
     :showSubNav="true"
   >
 
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
 
-      <ReportsGroupReportLessonExerciseHeader />
+      <ReportsResourceHeader :resource="resource" @previewClick="onPreviewClick" />
 
-      <p>
-        <StatusSummary :tally="tally" />
-      </p>
+      <ReportsControls @export="exportCSV">
+        <p>
+          <StatusSummary :tally="tally" />
+        </p>
+      </ReportsControls>
 
-      <CoreTable :emptyMessage="coachStrings.$tr('activityListEmptyState')">
-        <thead slot="thead">
-          <tr>
-            <th>{{ coachStrings.$tr('nameLabel') }}</th>
-            <th>{{ coachStrings.$tr('progressLabel') }}</th>
-            <th>{{ coachStrings.$tr('timeSpentLabel') }}</th>
-            <th>{{ coachStrings.$tr('groupsLabel') }}</th>
-            <th>{{ coachStrings.$tr('lastActivityLabel') }}</th>
-          </tr>
-        </thead>
-        <transition-group slot="tbody" tag="tbody" name="list">
-          <tr v-for="tableRow in table" :key="tableRow.id">
-            <td>
-              <KRouterLink
-                v-if="showLink(tableRow.statusObj.status)"
-                :text="tableRow.name"
-                :to="link(tableRow.id)"
-              />
-              <template v-else>
-                {{ tableRow.name }}
-              </template>
-            </td>
-            <td>
-              <StatusSimple :status="tableRow.statusObj.status" />
-            </td>
-            <td>
-              <TimeDuration :seconds="tableRow.statusObj.time_spent" />
-            </td>
-            <td>
-              <TruncatedItemList :items="tableRow.groups" />
-            </td>
-            <td>
-              <ElapsedTime :date="tableRow.statusObj.last_activity" />
-            </td>
-          </tr>
-        </transition-group>
-      </CoreTable>
+      <ReportsLearnersTable
+        :entries="table"
+        :questionCount="resource.assessmentmetadata &&
+          resource.assessmentmetadata.number_of_assessments"
+      />
     </KPageContainer>
   </CoreBase>
 
@@ -62,17 +34,33 @@
 
 <script>
 
+  import sortBy from 'lodash/sortBy';
+  import { mapState } from 'vuex';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import { PageNames } from '../../constants';
-  import ReportsGroupReportLessonExerciseHeader from './ReportsGroupReportLessonExerciseHeader';
+  import CSVExporter from '../../csv/exporter';
+  import * as csvFields from '../../csv/fields';
+  import ReportsResourceHeader from './ReportsResourceHeader';
+  import ReportsControls from './ReportsControls';
+  import ReportsLearnersTable from './ReportsLearnersTable';
 
   export default {
     name: 'ReportsGroupReportLessonExerciseLearnerListPage',
     components: {
-      ReportsGroupReportLessonExerciseHeader,
+      ReportsResourceHeader,
+      ReportsControls,
+      ReportsLearnersTable,
     },
-    mixins: [commonCoach],
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
+      ...mapState('resourceDetail', ['resource']),
+      lesson() {
+        return this.lessonMap[this.$route.params.lessonId];
+      },
+      group() {
+        return this.groupMap[this.$route.params.groupId];
+      },
       recipients() {
         return this.getLearnersForGroups([this.$route.params.groupId]);
       },
@@ -81,19 +69,21 @@
       },
       table() {
         const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
-        const sorted = this._.sortBy(learners, ['name']);
-        const mapped = sorted.map(learner => {
+        const sorted = sortBy(learners, ['name']);
+        return sorted.map(learner => {
+          const groups = this.getGroupNamesForLearner(learner.id);
           const tableRow = {
-            groups: this.getGroupNamesForLearner(learner.id),
+            groups,
             statusObj: this.getContentStatusObjForLearner(
               this.$route.params.exerciseId,
               learner.id
             ),
+            link: this.link(learner.id),
           };
+
           Object.assign(tableRow, learner);
           return tableRow;
         });
-        return mapped;
       },
     },
     methods: {
@@ -102,8 +92,34 @@
           learnerId,
         });
       },
-      showLink(status) {
-        return status !== this.STATUSES.notStarted;
+      exportCSV() {
+        const columns = [
+          ...csvFields.name(),
+          ...csvFields.learnerProgress('statusObj.status'),
+          ...csvFields.timeSpent('statusObj.time_spent'),
+          ...csvFields.list('groups', 'groupsLabel'),
+          ...csvFields.lastActivity(),
+        ];
+
+        const exporter = new CSVExporter(columns, this.className);
+        exporter.addNames({
+          group: this.group.name,
+          lesson: this.lesson.title,
+          resource: this.resource.title,
+        });
+
+        exporter.export(this.table);
+      },
+      onPreviewClick() {
+        this.$router.push(
+          this.$router.getRoute(
+            'RESOURCE_CONTENT_PREVIEW',
+            {
+              contentId: this.resource.id,
+            },
+            this.defaultBackLinkQuery
+          )
+        );
       },
     },
   };
@@ -112,6 +128,8 @@
 
 
 <style lang="scss" scoped>
+
+  @import '../common/print-table';
 
   .stats {
     margin-right: 16px;

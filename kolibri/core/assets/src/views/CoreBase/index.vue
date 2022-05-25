@@ -1,26 +1,27 @@
 <template>
 
   <div
+    ref="mainWrapper"
     class="main-wrapper"
     :style="mainWrapperStyles"
-    :class="fullScreen ? '' : 'scrolling-pane'"
-    @scroll.passive="throttledHandleScroll"
   >
 
     <div v-if="blockDoubleClicks" class="click-mask"></div>
 
     <ScrollingHeader
-      :height="appbarHeight"
       :scrollPosition="scrollPosition"
       :alwaysVisible="fixedAppBar"
+      :mainWrapperScrollHeight="mainWrapperScrollHeight"
+      :isHidden.sync="headerIsHidden"
+      :skipNextUpdate.sync="headerSkipNextUpdate"
     >
       <ImmersiveToolbar
         v-if="immersivePage && !fullScreen"
         :appBarTitle="toolbarTitle || appBarTitle"
         :icon="immersivePageIcon"
         :route="immersivePageRoute"
-        :primary="immersivePagePrimary"
-        :height="headerHeight"
+        :isFullscreen="!immersivePagePrimary"
+        :height="topBarHeight"
         @nav-icon-click="$emit('navIconClick')"
       />
       <AppBar
@@ -28,36 +29,37 @@
         ref="appBar"
         class="app-bar"
         :title="toolbarTitle || appBarTitle"
-        :height="headerHeight"
+        :height="topBarHeight"
         :navShown="navShown"
         @toggleSideNav="navShown = !navShown"
         @showLanguageModal="languageModalShown = true"
       >
-        <slot slot="totalPointsMenuItem" name="totalPointsMenuItem"></slot>
-        <div slot="app-bar-actions" class="app-bar-actions">
-          <slot name="app-bar-actions"></slot>
-        </div>
-        <slot
-          v-if="showSubNav"
-          slot="sub-nav"
-          name="sub-nav"
-        >
-        </slot>
+        <template #totalPointsMenuItem>
+          <slot name="totalPointsMenuItem"></slot>
+        </template>
+        <template #app-bar-actions>
+          <div class="app-bar-actions">
+            <slot name="app-bar-actions"></slot>
+          </div>
+        </template>
+        <template v-if="showSubNav" #sub-nav>
+          <slot name="sub-nav"></slot>
+        </template>
       </AppBar>
       <KLinearLoader
         v-if="loading && !fullScreen"
         class="loader"
-        :style="{top: `${appbarHeight}px`}"
+        :style="{ top: `${appbarHeight}px` }"
         type="indeterminate"
         :delay="false"
       />
     </ScrollingHeader>
 
     <SideNav
+      ref="sideNav"
       :navShown="navShown"
-      :headerHeight="headerHeight"
-      :width="navWidth"
-      @toggleSideNav="navShown=!navShown"
+      @toggleSideNav="navShown = !navShown"
+      @shouldFocusFirstEl="findFirstEl()"
     />
 
     <div
@@ -65,6 +67,12 @@
       :class="fullScreen ? 'scrolling-pane' : 'content'"
       :style="contentStyles"
     >
+      <CoreBanner v-if="coreBannerComponent && showDemoBanner">
+        <template #default="props">
+          <component :is="coreBannerComponent" :bannerClosed="props.bannerClosed" />
+        </template>
+      </CoreBanner>
+
       <div v-if="debug" class="debug">
         <div>{{ contentComponentName }}</div>
         <div>{{ routePath }}</div>
@@ -81,23 +89,32 @@
         <AppError />
       </KPageContainer>
 
-      <slot v-else></slot>
+      <div
+        v-else
+        id="main"
+        role="main"
+        tabindex="-1"
+        class="main"
+        :style="mainStyles"
+      >
+        <slot></slot>
+      </div>
     </div>
 
     <GlobalSnackbar />
     <UpdateNotification
-      v-if="!loading && showNotification && !busy"
+      v-if="!loading && showNotification && mostRecentNotification"
       :id="mostRecentNotification.id"
       :title="mostRecentNotification.title"
       :msg="mostRecentNotification.msg"
       :linkText="mostRecentNotification.linkText"
       :linkUrl="mostRecentNotification.linkUrl"
-      @closeModal="dismissUpdateModal"
+      @submit="dismissUpdateModal"
     />
     <LanguageSwitcherModal
       v-if="languageModalShown"
-      :style="{ color: $coreTextDefault }"
-      @close="languageModalShown = false"
+      :style="{ color: $themeTokens.text }"
+      @cancel="languageModalShown = false"
     />
 
   </div>
@@ -108,45 +125,81 @@
 <script>
 
   import { mapState, mapGetters } from 'vuex';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import AppBar from 'kolibri.coreVue.components.AppBar';
   import SideNav from 'kolibri.coreVue.components.SideNav';
   import AuthMessage from 'kolibri.coreVue.components.AuthMessage';
-  import KLinearLoader from 'kolibri.coreVue.components.KLinearLoader';
-  import KPageContainer from 'kolibri.coreVue.components.KPageContainer';
   import { throttle } from 'frame-throttle';
   import Lockr from 'lockr';
   import { UPDATE_MODAL_DISMISSED } from 'kolibri.coreVue.vuex.constants';
   import { currentLanguage, defaultLanguage } from 'kolibri.utils.i18n';
+  import coreBannerContent from 'kolibri.utils.coreBannerContent';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import navComponentsMixin from '../../mixins/nav-components';
   import AppError from '../AppError';
   import GlobalSnackbar from '../GlobalSnackbar';
   import ImmersiveToolbar from '../ImmersiveToolbar';
   import UpdateNotification from '../UpdateNotification';
   import LanguageSwitcherModal from '../language-switcher/LanguageSwitcherModal';
+  import CoreBanner from '../CoreBanner';
   import ScrollingHeader from './ScrollingHeader';
+
+  // NOTE: there is a new useScrollPosition composable in kolibri.core
+  // that can be used when CoreBase is refactored
+  // This version should be depricated
+  const scrollPositions = {
+    _scrollPositions: {},
+    getScrollPosition() {
+      // Use key set by Vue Router on the history state.
+      const key = (window.history.state || {}).key;
+      const defaultPos = { x: 0, y: 0 };
+      if (key && this._scrollPositions[key]) {
+        return this._scrollPositions[key];
+      }
+      return defaultPos;
+    },
+    setScrollPosition({ x, y }) {
+      const key = (window.history.state || {}).key;
+      // Only set if we have a vue router key on the state,
+      // otherwise we don't do anything.
+      if (key) {
+        this._scrollPositions[window.history.state.key] = { x, y };
+      }
+    },
+  };
 
   export default {
     name: 'CoreBase',
-    $trs: {
-      kolibriMessage: 'Kolibri',
-      kolibriTitleMessage: '{ title } - Kolibri',
-      errorPageTitle: 'Error',
+    metaInfo() {
+      return {
+        // Use arrow function to bind $tr to this component
+        titleTemplate: title => {
+          if (this.error) {
+            return this.$tr('kolibriTitleMessage', { title: this.$tr('errorPageTitle') });
+          }
+          if (!title) {
+            // If no child component sets title, it reads 'Kolibri'
+            return this.coreString('kolibriLabel');
+          }
+          // If child component sets title, it reads 'Child Title - Kolibri'
+          return this.$tr('kolibriTitleMessage', { title });
+        },
+        title: this.pageTitle,
+      };
     },
     components: {
       AppBar,
       AppError,
+      CoreBanner,
       ImmersiveToolbar,
       SideNav,
       AuthMessage,
       GlobalSnackbar,
-      KLinearLoader,
-      KPageContainer,
       ScrollingHeader,
       UpdateNotification,
       LanguageSwitcherModal,
     },
-    mixins: [responsiveWindow, themeMixin],
+    mixins: [navComponentsMixin, responsiveWindowMixin, commonCoreStrings],
     props: {
       appBarTitle: {
         type: String,
@@ -155,6 +208,11 @@
       },
       // Prop that determines whether to show nav components and provide margins
       fullScreen: {
+        type: Boolean,
+        default: false,
+      },
+      // Prop that determines if the page contains an embedded sidebar
+      hasSidebar: {
         type: Boolean,
         default: false,
       },
@@ -171,15 +229,15 @@
       },
       authorizedRole: {
         type: String,
-        required: false,
+        default: null,
       },
       authorizationErrorHeader: {
         type: String,
-        required: false,
+        default: null,
       },
       authorizationErrorDetails: {
         type: String,
-        required: false,
+        default: null,
       },
       // IMMERSIVE-SPECIFIC
       immersivePage: {
@@ -197,6 +255,7 @@
       immersivePageRoute: {
         type: Object,
         required: false,
+        default: null,
       },
       // determines the color, primary being the classic kolibri appbar color
       immersivePagePrimary: {
@@ -225,23 +284,16 @@
         type: Boolean,
         default: false,
       },
-    },
-    metaInfo() {
-      return {
-        // Use arrow function to bind $tr to this component
-        titleTemplate: title => {
-          if (this.error) {
-            return this.$tr('kolibriTitleMessage', { title: this.$tr('errorPageTitle') });
-          }
-          if (!title) {
-            // If no child component sets title, it reads 'Kolibri'
-            return this.$tr('kolibriMessage');
-          }
-          // If child component sets title, it reads 'Child Title - Kolibri'
-          return this.$tr('kolibriTitleMessage', { title });
-        },
-        title: this.pageTitle,
-      };
+      maxMainWidth: {
+        type: Number,
+        required: false,
+        default: 1000,
+      },
+      showDemoBanner: {
+        type: Boolean,
+        default: false,
+        required: false,
+      },
     },
     data() {
       return {
@@ -250,6 +302,9 @@
         unwatchScrollHeight: undefined,
         notificationModalShown: true,
         languageModalShown: false,
+        headerIsHidden: false,
+        headerSkipNextUpdate: false,
+        mainWrapperScrollHeight: 0,
       };
     },
     computed: {
@@ -258,42 +313,41 @@
         error: state => state.core.error,
         loading: state => state.core.loading,
         blockDoubleClicks: state => state.core.blockDoubleClicks,
-        busy: state => state.core.signInBusy,
         notifications: state => state.core.notifications,
-        startingScroll: state => state.core.scrollPosition,
       }),
-      headerHeight() {
-        return this.windowIsSmall ? 56 : 64;
-      },
       appbarHeight() {
         if (this.showSubNav) {
           // Adds the height of KNavBar
-          return this.headerHeight + 48;
+          return this.topBarHeight + 48;
         }
-        return this.headerHeight;
-      },
-      navWidth() {
-        return this.headerHeight * 4;
+        return this.topBarHeight;
       },
       notAuthorized() {
         // catch "not authorized" error, display AuthMessage
-        if (this.error && this.error.status && this.error.status.code == 403) {
+        if (
+          this.error &&
+          this.error.response &&
+          this.error.response.status &&
+          this.error.response.status == 403
+        ) {
           return true;
         }
         return !this.authorized;
       },
       mainWrapperStyles() {
-        if (this.fullScreen) {
-          return { top: 0, bottom: 0 };
+        if (this.$isPrint) {
+          return {};
         }
+
         return {
-          top: this.fixedAppBar ? `${this.appbarHeight}px` : 0,
-          bottom: `${this.marginBottom}px`,
-          backgroundColor: this.$coreBgCanvas,
+          width: '100vw',
+          backgroundColor: this.$themePalette.grey.v_100,
+          paddingTop: `${this.appbarHeight}px`,
+          paddingBottom: `${this.marginBottom}px`,
         };
       },
       contentStyles() {
-        if (this.fullScreen) {
+        if (this.fullScreen || this.$isPrint || this.hasSidebar) {
           return {
             marginTop: '0px',
             marginBottom: '0px',
@@ -301,9 +355,25 @@
           };
         }
         return {
-          marginTop: `${this.fixedAppBar ? 0 : this.appbarHeight}px`,
-          padding: `${this.windowIsSmall ? 16 : 32}px`,
+          top: this.fixedAppBar ? `${this.appbarHeight}px` : 0,
+          padding: `32px ${this.windowIsSmall ? 16 : 32}px`,
         };
+      },
+      mainStyles() {
+        let styles = {
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        };
+        if (!this.fullScreen) {
+          styles['maxWidth'] = this.maxMainWidth + 'px';
+        }
+        if (this.hasSidebar) {
+          styles = {
+            marginLeft: '0',
+            marginRight: '0',
+          };
+        }
+        return styles;
       },
       fixedAppBar() {
         return this.windowIsLarge && !this.windowIsShort;
@@ -327,17 +397,21 @@
         let languageCode = defaultLanguage.id;
         // notifications should already be ordered by timestamp
         const notification = this.notifications[0];
-        // check if translated message is available for current language
-        if (notification.i18n[currentLanguage] !== undefined) {
-          languageCode = currentLanguage;
+        if (notification) {
+          // check if translated message is available for current language
+          if (notification.i18n[currentLanguage] !== undefined) {
+            languageCode = currentLanguage;
+          }
+          // i18n data structure generated by nutritionfacts_i18n.py
+          return {
+            id: notification.id,
+            title: notification.i18n[languageCode].title,
+            msg: notification.i18n[languageCode].msg,
+            linkText: notification.i18n[languageCode].link_text,
+            linkUrl: notification.link_url,
+          };
         }
-        return {
-          id: notification.id,
-          title: notification.i18n[languageCode].title,
-          msg: notification.i18n[languageCode].msg,
-          linkText: notification.i18n[languageCode].link_text,
-          linkUrl: notification.link_url,
-        };
+        return null;
       },
       contentComponentName() {
         return this.$slots.default[0].context.$options.name;
@@ -348,12 +422,22 @@
         }
         return '';
       },
+      coreBannerComponent() {
+        return coreBannerContent[0];
+      },
     },
     watch: {
-      startingScroll(newVal) {
+      $route() {
+        // If there's a scrollTo parameter, it will be handled by
+        // the vue-router via `scrollBehavior`.
+        if (this.$route.params.scrollTo) {
+          // Show the header by default when navigating with a scrollTo parameter.
+          this.showHeader();
+          return;
+        }
         // Set a watcher so that if the router sets a new
-        // starting scroll position based on the history, then it gets
-        // set here.
+        // route, we update our scroll position based on the ones
+        // we have tracked in the scrollPosition object above.
         if (this.unwatchScrollHeight) {
           this.unwatchScrollHeight();
         }
@@ -368,27 +452,40 @@
             this.$nextTick(() => {
               // Set the scroll in next tick for safety, to ensure
               // that the child components have finished mounting
-              this.setScroll(newVal);
+              this.setScroll();
             });
           });
         } else {
-          this.setScroll(newVal);
+          this.setScroll();
         }
       },
+      windowWidth() {
+        if (this.fixedAppBar && this.headerIsHidden) {
+          this.headerIsHidden = false;
+        }
+        this.updateScrollHeight();
+      },
+    },
+    beforeRouteUpdate() {
+      this.recordScroll();
+    },
+    beforeRouteLeave() {
+      this.recordScroll();
     },
     mounted() {
-      this.setScroll(this.startingScroll);
+      window.addEventListener('scroll', this.throttledHandleScroll, { passive: true });
+      this.setScroll();
+    },
+    beforeDestroy() {
+      window.removeEventListener('scroll', this.throttledHandleScroll);
     },
     methods: {
-      handleScroll(e) {
-        this.scrollPosition = e.target.scrollTop;
-        // Setting this will not affect the page layout,
-        // but this will then get properly stored in the
-        // browser history.
-        try {
-          // This property can sometimes be readonly in older browsers
-          window.pageYOffset = this.scrollPosition;
-        } catch (e) {} // eslint-disable-line no-empty
+      handleScroll() {
+        this.scrollPosition = window.pageYOffset;
+        this.recordScroll();
+      },
+      recordScroll() {
+        scrollPositions.setScrollPosition({ y: window.pageYOffset });
       },
       dismissUpdateModal() {
         if (this.notifications.length === 0) {
@@ -396,12 +493,47 @@
           Lockr.set(UPDATE_MODAL_DISMISSED, true);
         }
       },
-      setScroll(scrollValue) {
-        this.$el.scrollTop = scrollValue;
-        try {
-          // This property can sometimes be readonly in older browsers
-          window.pageYOffset = scrollValue;
-        } catch (e) {} // eslint-disable-line no-empty
+      updateScrollHeight() {
+        this.mainWrapperScrollHeight = Math.max(
+          this.$refs.mainWrapper.offsetHeight,
+          this.$refs.mainWrapper.scrollHeight
+        );
+      },
+      updateHeaderHidden(isHidden) {
+        // This provides a mechanism to tell the `ScrollingHeader` component to
+        // ignore scroll changes triggered here in `CoreBase` e.g. during usage of
+        // the forward/back buttons.
+
+        this.headerSkipNextUpdate = true;
+        this.headerIsHidden = isHidden;
+      },
+      showHeader() {
+        this.updateHeaderHidden(false);
+      },
+      setScroll() {
+        this.updateScrollHeight();
+        window.scrollTo(0, scrollPositions.getScrollPosition().y);
+        this.scrollPosition = window.pageYOffset;
+        // If recorded scroll is applied, immediately un-hide the header
+        if (this.scrollPosition > 0) {
+          this.$nextTick().then(this.showHeader);
+        }
+      },
+      findFirstEl() {
+        this.$nextTick(() => {
+          this.$refs.sideNav.focusFirstEl();
+        });
+      },
+    },
+    $trs: {
+      kolibriTitleMessage: {
+        message: '{ title } - Kolibri',
+        context: 'DO NOT TRANSLATE\nCopy the source string.',
+      },
+      errorPageTitle: {
+        message: 'Error',
+        context:
+          "When Kolibri throws an error, this is the text that's used as the title of the error page. The description of the error follows below.",
       },
     },
   };
@@ -411,7 +543,29 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri.styles.definitions';
+  @import '~kolibri-design-system/lib/styles/definitions';
+
+  .main-wrapper {
+    display: inline-block;
+    width: 100vw;
+
+    @media print {
+      /* Without this, things won't print correctly
+         *  - Firefox: Tables will get cutoff
+         *  - Chrome: Table header won't repeat correctly on each page
+         */
+      display: block;
+    }
+  }
+
+  .main {
+    height: 100%;
+  }
+
+  // When focused by SkipNavigationLink, don't outline non-buttons/links
+  /deep/ [tabindex='-1'] {
+    outline-style: none !important;
+  }
 
   .scrolling-pane {
     position: absolute;
@@ -420,7 +574,6 @@
     bottom: 0;
     left: 0;
     overflow-x: auto;
-    overflow-y: scroll; // has to be scroll, not auto
   }
 
   .click-mask {
@@ -449,7 +602,6 @@
   }
 
   .content {
-    max-width: 1000px;
     margin-right: auto;
     margin-bottom: 128px;
     margin-left: auto;

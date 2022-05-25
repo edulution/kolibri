@@ -5,7 +5,6 @@ import union from 'lodash/union';
 import shuffled from 'kolibri.utils.shuffled';
 import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
 import { ContentNodeResource, ContentNodeSearchResource } from 'kolibri.resources';
-import { createTranslator } from 'kolibri.utils.i18n';
 import { getContentNodeThumbnail } from 'kolibri.utils.contentNode';
 import router from 'kolibri.coreVue.router';
 import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
@@ -13,10 +12,6 @@ import { PageNames } from '../../constants';
 import { MAX_QUESTIONS } from '../../constants/examConstants';
 import { createExam } from '../examShared/exams';
 import selectQuestions from './selectQuestions';
-
-const snackbarTranslator = createTranslator('ExamCreateSnackbarTexts', {
-  newExamCreated: 'New quiz created',
-});
 
 export function resetExamCreationState(store) {
   store.commit('RESET_STATE');
@@ -40,7 +35,7 @@ export function updateAvailableQuestions(store) {
   if (Object.keys(selectedExercises).length > 0) {
     if (MAX_QUESTIONS > Object.keys(selectedExercises).length) {
       return ContentNodeResource.fetchNodeAssessments(Object.keys(selectedExercises)).then(resp => {
-        store.commit('SET_AVAILABLE_QUESTIONS', resp.entity);
+        store.commit('SET_AVAILABLE_QUESTIONS', resp.data);
       });
     } else {
       store.commit('SET_AVAILABLE_QUESTIONS', MAX_QUESTIONS);
@@ -66,7 +61,6 @@ export function fetchAdditionalSearchResults(store, params) {
         exclude_content_ids: store.state.searchResults.contentIdsFetched,
       }),
       kind_in: kinds,
-      include_fields: ['num_coach_contents'],
     },
   }).then(results => {
     return filterAndAnnotateContentList(results.results).then(contentList => {
@@ -92,20 +86,39 @@ export function fetchAdditionalSearchResults(store, params) {
   });
 }
 
-export function createExamAndRoute(store, classId) {
+export function createPracticeQuizAndRoute(store, { classId, randomized }) {
+  // 'randomized' means question order IS random, so fixed order means randomized is false
+  store.commit('SET_FIXED_ORDER', !randomized);
   const exam = {
     collection: classId,
     title: store.state.title,
     seed: store.state.seed,
     question_count: store.state.selectedQuestions.length,
     question_sources: store.state.selectedQuestions,
-    assignments: [{ collection: classId }],
+    assignments: [classId],
     learners_see_fixed_order: store.state.learnersSeeFixedOrder,
+    date_archived: null,
+    date_activated: null,
   };
-
   return createExam(store, exam).then(() => {
-    router.push({ name: PageNames.EXAMS });
-    store.dispatch('createSnackbar', snackbarTranslator.$tr('newExamCreated'), { root: true });
+    return router.push({ name: PageNames.EXAMS });
+  });
+}
+
+export function createExamAndRoute(store, { classId }) {
+  const exam = {
+    collection: classId,
+    title: store.state.title,
+    seed: store.state.seed,
+    question_count: store.state.selectedQuestions.length,
+    question_sources: store.state.selectedQuestions,
+    assignments: [classId],
+    learners_see_fixed_order: store.state.learnersSeeFixedOrder,
+    date_archived: null,
+    date_activated: null,
+  };
+  return createExam(store, exam).then(() => {
+    return router.push({ name: PageNames.EXAMS });
   });
 }
 
@@ -121,7 +134,7 @@ function _getTopicsWithExerciseDescendants(topicIds = []) {
 
     topicsNumAssessmentDescendantsPromise.then(response => {
       const topicsWithExerciseDescendants = [];
-      response.entity.forEach(descendantAssessments => {
+      response.data.forEach(descendantAssessments => {
         if (descendantAssessments.num_assessments > 0) {
           topicsWithExerciseDescendants.push({
             id: descendantAssessments.id,
@@ -131,10 +144,13 @@ function _getTopicsWithExerciseDescendants(topicIds = []) {
         }
       });
 
-      ContentNodeResource.fetchDescendants(topicsWithExerciseDescendants.map(topic => topic.id), {
-        descendant_kind: ContentNodeKinds.EXERCISE,
-      }).then(response => {
-        response.entity.forEach(exercise => {
+      ContentNodeResource.fetchDescendants(
+        topicsWithExerciseDescendants.map(topic => topic.id),
+        {
+          descendant_kind: ContentNodeKinds.EXERCISE,
+        }
+      ).then(response => {
+        response.data.forEach(exercise => {
           const topic = topicsWithExerciseDescendants.find(t => t.id === exercise.ancestor_id);
           topic.exercises.push(exercise);
         });
@@ -218,5 +234,14 @@ export function updateSelectedQuestions(store) {
       store.commit('LOADING_NEW_QUESTIONS', false);
       resolve();
     });
+  });
+}
+
+export function fetchPracticeQuizzes(parent = null) {
+  return ContentNodeResource.fetchCollection({
+    getParams: {
+      [parent ? 'parent' : 'parent__isnull']: parent ? parent : true,
+      contains_quiz: true,
+    },
   });
 }

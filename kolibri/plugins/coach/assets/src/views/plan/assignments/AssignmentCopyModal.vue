@@ -1,44 +1,37 @@
 <template>
 
-  <div>
+  <KModal
+    :title="modalTitle"
+    size="large"
+    v-bind="modalTexts"
+    @submit="handleSubmit"
+    @cancel="$emit('cancel')"
+  >
     <!-- Classroom Selection Form -->
-    <KModal
-      v-if="stage === Stages.SELECT_CLASSROOM"
-      id="select-classroom"
-      :title="modalTitle"
-      :submitText="$tr('continue')"
-      :cancelText="$tr('cancel')"
-      @cancel="closeModal"
-      @submit="goToAvailableGroups"
-    >
+    <div v-if="stage === Stages.SELECT_CLASSROOM" id="select-classroom">
       <KRadioButton
         v-for="classroom in availableClassrooms"
         :key="classroom.id"
         v-model="selectedClassroomId"
         :label="classroomLabel(classroom)"
         :value="classroom.id"
+        data-test="radio-button"
       />
-    </KModal>
-
+    </div>
     <!-- Learner Group Selection Form -->
-    <KModal
-      v-else
-      id="select-learnergroup"
-      :title="modalTitle"
-      :submitText="$tr('makeCopy')"
-      :cancelText="$tr('cancel')"
-      @cancel="closeModal"
-      @submit="$emit('copy', selectedClassroomId, selectedCollectionIds)"
-    >
+    <div v-else id="select-learnergroup">
       <p>{{ $tr('destinationExplanation', { classroomName: selectedClassroomName }) }}</p>
       <p>{{ assignmentQuestion }}</p>
       <RecipientSelector
         v-model="selectedCollectionIds"
         :groups="availableGroups"
         :classId="selectedClassroomId"
+        :initialAdHocLearners="[]"
+        data-test="recipient-selector"
+        @updateLearners="learners => adHocLearners = learners"
       />
-    </KModal>
-  </div>
+    </div>
+  </KModal>
 
 </template>
 
@@ -47,11 +40,10 @@
 
   import sortBy from 'lodash/sortBy';
   import find from 'lodash/find';
-  import { mapActions } from 'vuex';
   import { error as logError } from 'kolibri.lib.logging';
-  import KModal from 'kolibri.coreVue.components.KModal';
-  import KRadioButton from 'kolibri.coreVue.components.KRadioButton';
   import { LearnerGroupResource } from 'kolibri.resources';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { coachStringsMixin } from '../../common/commonCoachStrings';
   import RecipientSelector from './RecipientSelector';
 
   const Stages = {
@@ -62,10 +54,9 @@
   export default {
     name: 'AssignmentCopyModal',
     components: {
-      KModal,
-      KRadioButton,
       RecipientSelector,
     },
+    mixins: [coachStringsMixin, commonCoreStrings],
     props: {
       modalTitle: {
         type: String,
@@ -92,6 +83,7 @@
         selectedClassroomId: null,
         selectedCollectionIds: [],
         stage: Stages.SELECT_CLASSROOM,
+        adHocLearners: [],
       };
     },
     computed: {
@@ -105,14 +97,37 @@
         // put current classroom on the top
         return sortBy(this.classList, classroom => (this.isCurrentClassroom(classroom) ? -1 : 1));
       },
+      modalTexts() {
+        if (this.stage === this.Stages.SELECT_CLASSROOM) {
+          return {
+            submitText: this.coreString('continueAction'),
+            cancelText: this.coreString('cancelAction'),
+          };
+        }
+        return {
+          submitText: this.coachString('copyAction'),
+          cancelText: this.coreString('cancelAction'),
+        };
+      },
     },
     created() {
       this.selectedClassroomId = this.classId;
     },
     methods: {
-      ...mapActions(['handleApiError']),
       getLearnerGroupsForClassroom(classroomId) {
         return LearnerGroupResource.fetchCollection({ getParams: { parent: classroomId } });
+      },
+      handleSubmit() {
+        if (this.stage === this.Stages.SELECT_CLASSROOM) {
+          this.goToAvailableGroups();
+        } else {
+          this.$emit(
+            'submit',
+            this.selectedClassroomId,
+            this.selectedCollectionIds,
+            this.adHocLearners
+          );
+        }
       },
       goToAvailableGroups() {
         // Do nothing if user presses Continue more than once
@@ -128,9 +143,9 @@
             this.stage = Stages.SELECT_GROUPS;
             this.blockControls = false;
           })
-          .catch(err => {
-            this.handleApiError(err);
-            logError(err);
+          .catch(error => {
+            this.$store.dispatch('handleApiError', error);
+            logError(error);
             this.blockControls = false;
           });
       },
@@ -140,19 +155,20 @@
         }
         return classroom.name;
       },
-      closeModal() {
-        return this.$emit('cancel');
-      },
       isCurrentClassroom(classroom) {
         return classroom.id === this.classId;
       },
     },
     $trs: {
-      currentClass: '{ name } (current class)',
-      continue: 'Continue',
-      cancel: 'Cancel',
-      makeCopy: 'Copy',
-      destinationExplanation: `Will be copied to '{classroomName}'`,
+      currentClass: {
+        message: '{ name } (current class)',
+        context: 'Indicates the name of the current class.',
+      },
+      destinationExplanation: {
+        message: `Will be copied to '{classroomName}'`,
+        context:
+          'Coaches can copy lessons to a different group or or another class in their facility. This is a validation message informing the coach where the lesson will be copied to.',
+      },
     },
   };
 

@@ -2,11 +2,11 @@
 
   <CoreBase
     :immersivePage="true"
-    immersivePageIcon="arrow_back"
-    :immersivePagePrimary="false"
+    immersivePageIcon="back"
+    :immersivePagePrimary="true"
     :primary="true"
-    :toolbarTitle="groupsPageStrings.$tr('classGroups')"
-    :appBarTitle="groupsPageStrings.$tr('classGroups')"
+    :toolbarTitle="currentGroup.name"
+    :appBarTitle="currentGroup.name"
     :immersivePageRoute="$router.getRoute('GroupMembersPage')"
     :pageTitle="pageTitle"
   >
@@ -16,7 +16,7 @@
       </h1>
       <form @submit.prevent="addSelectedUsersToGroup">
         <div class="actions-header">
-          <KFilterTextbox
+          <FilterTextbox
             v-model.trim="filterInput"
             :placeholder="$tr('searchForUser')"
             @input="pageNum = 1"
@@ -29,60 +29,45 @@
           v-model="selectedUsers"
           :users="visibleFilteredUsers"
           :selectable="true"
-          :selectAllLabel="$tr('selectAllOnPage')"
-          :userCheckboxLabel="$tr('selectUser')"
           :emptyMessage="emptyMessage"
-        />
+          :infoDescriptor="$tr('learnerGroups')"
+        >
+          <template #info="userRow">
+            <TruncatedItemList :items="getGroupsForLearner(userRow.user.id)" />
+          </template>
+        </UserTable>
 
-        <nav>
-          <span>
+        <nav class="pagination-nav">
+          <span class="pagination-label">
             {{ $tr('pagination', {
               visibleStartRange,
               visibleEndRange,
               numFilteredUsers
             }) }}
           </span>
-          <UiIconButton
-            type="primary"
-            :ariaLabel="$tr('previousResults')"
-            :disabled="pageNum === 1"
-            size="small"
-            @click="goToPage(pageNum - 1)"
-          >
-            <mat-svg
-              v-if="isRtl"
-              name="chevron_right"
-              category="navigation"
+          <KButtonGroup style="margin-top: 8px;">
+            <KIconButton
+              icon="chevronLeft"
+              :ariaLabel="$tr('previousResults')"
+              :disabled="pageNum === 1"
+              size="small"
+
+              @click="goToPage(pageNum - 1)"
             />
-            <mat-svg
-              v-else
-              name="chevron_left"
-              category="navigation"
+            <KIconButton
+              icon="chevronRight"
+              :ariaLabel="$tr('nextResults')"
+              :disabled="numPages === 0 || pageNum === numPages"
+              size="small"
+
+              @click="goToPage(pageNum + 1)"
             />
-          </UiIconButton>
-          <UiIconButton
-            type="primary"
-            :ariaLabel="$tr('nextResults')"
-            :disabled="pageNum === numPages"
-            size="small"
-            @click="goToPage(pageNum + 1)"
-          >
-            <mat-svg
-              v-if="isRtl"
-              name="chevron_left"
-              category="navigation"
-            />
-            <mat-svg
-              v-else
-              name="chevron_right"
-              category="navigation"
-            />
-          </UiIconButton>
+          </KButtonGroup>
         </nav>
 
         <div class="footer">
           <KButton
-            :text="$tr('confirmSelectionButtonLabel')"
+            :text="coreString('confirmAction')"
             :primary="true"
             type="submit"
             :disabled="selectedUsers.length === 0"
@@ -99,58 +84,33 @@
 
 <script>
 
-  import { mapActions, mapState } from 'vuex';
+  import { mapActions, mapGetters, mapState } from 'vuex';
   import differenceWith from 'lodash/differenceWith';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import KButton from 'kolibri.coreVue.components.KButton';
-  import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
-  import KFilterTextbox from 'kolibri.coreVue.components.KFilterTextbox';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import FilterTextbox from 'kolibri.coreVue.components.FilterTextbox';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import filterUsersByNames from 'kolibri.utils.filterUsersByNames';
   import commonCoach from '../../common';
-  import {
-    userMatchesFilter,
-    filterAndSortUsers,
-  } from '../../../../../../facility_management/assets/src/userSearchUtils';
-  import UserTable from '../../../../../../facility_management/assets/src/views/UserTable';
-  import GroupsPage from '../GroupsPage';
-
-  const groupsPageStrings = crossComponentTranslator(GroupsPage);
+  import UserTable from '../../../../../../facility/assets/src/views/UserTable';
 
   export default {
     name: 'GroupEnrollPage',
     components: {
-      KButton,
-      UiIconButton,
-      KFilterTextbox,
+      FilterTextbox,
       UserTable,
     },
-    mixins: [responsiveWindow, commonCoach],
+    mixins: [responsiveWindowMixin, commonCoach, commonCoreStrings],
     data() {
       return {
         filterInput: '',
         perPage: 10,
         pageNum: 1,
         selectedUsers: [],
-        groupsPageStrings,
       };
-    },
-    $trs: {
-      pageHeader: "Enroll learners into '{className}'",
-      confirmSelectionButtonLabel: 'Confirm',
-      searchForUser: 'Search for a user',
-      userTableLabel: 'User List',
-      noUsersExist: 'No users exist',
-      noUsersMatch: 'No users match',
-      previousResults: 'Previous results',
-      nextResults: 'Next results',
-      selectAllOnPage: 'Select all on page',
-      allUsersAlready: 'All users are already enrolled in this class',
-      selectUser: 'Select user',
-      pagination:
-        '{ visibleStartRange, number } - { visibleEndRange, number } of { numFilteredUsers, number }',
     },
     computed: {
       ...mapState('groups', ['groups', 'classUsers']),
+      ...mapGetters('classSummary', ['getGroupNamesForLearner']),
       pageTitle() {
         return this.$tr('pageHeader', { className: this.currentGroup.name });
       },
@@ -167,9 +127,7 @@
         return differenceWith(this.classUsers, this.currentGroupUsers, (a, b) => a.id === b.id);
       },
       sortedFilteredUsers() {
-        return filterAndSortUsers(this.usersNotInClass, user =>
-          userMatchesFilter(user, this.filterInput)
-        );
+        return filterUsersByNames(this.usersNotInClass, this.filterInput);
       },
       numFilteredUsers() {
         return this.sortedFilteredUsers.length;
@@ -194,14 +152,17 @@
       },
       emptyMessage() {
         if (this.classUsers.length === 0) {
-          return this.$tr('noUsersExist');
+          return this.coreString('noUsersExistLabel');
         }
         if (this.usersNotInClass.length === 0) {
           return this.$tr('allUsersAlready');
         }
         if (this.sortedFilteredUsers.length === 0 && this.filterInput !== '') {
           // TODO internationalize this
-          return `${this.$tr('noUsersMatch')}: '${this.filterInput}'`;
+          return this.coreString('labelColonThenDetails', {
+            label: this.$tr('noUsersMatch'),
+            details: this.filterInput,
+          });
         }
 
         return '';
@@ -209,31 +170,68 @@
     },
     methods: {
       ...mapActions('groups', ['addUsersToGroup']),
-      ...mapActions(['createSnackbar']),
       addSelectedUsersToGroup() {
         this.addUsersToGroup({
           groupId: this.currentGroup.id,
           userIds: this.selectedUsers,
         }).then(() => {
           this.$router.push(this.$router.getRoute('GroupMembersPage'), () => {
-            this.createSnackbar(this.coachStrings.$tr('updatedNotification'));
+            this.showSnackbarNotification('learnersEnrolledNoCount', {
+              count: this.selectedUsers.length,
+            });
           });
         });
-      },
-      reducePageNum() {
-        while (this.visibleFilteredUsers.length === 0 && this.pageNum > 1) {
-          this.pageNum = this.pageNum - 1;
-        }
       },
       goToPage(page) {
         this.pageNum = page;
       },
-      pageWithinRange(page) {
-        const maxOnEachSide = 1;
-        if (this.pageNum === 1 || this.pageNum === this.numPages) {
-          return Math.abs(this.pageNum - page) <= maxOnEachSide + 1;
-        }
-        return Math.abs(this.pageNum - page) <= maxOnEachSide;
+      getGroupsForLearner(learnerId) {
+        return this.getGroupNamesForLearner(learnerId);
+      },
+    },
+    $trs: {
+      pageHeader: {
+        message: "Enroll learners into '{className}'",
+        context: 'Describes title of page where the coach enrolls learners in a new group.',
+      },
+      searchForUser: {
+        message: 'Search for a user',
+        context: 'Text in the search field.',
+      },
+      userTableLabel: {
+        message: 'User List',
+        context: 'Indicates list of users that can be enrolled into a specific group.',
+      },
+      noUsersMatch: {
+        message: 'No users match',
+        context:
+          'If no users can be found when a coach searches for users to enroll in a group, this message will display.',
+      },
+      previousResults: {
+        message: 'Previous results',
+        context:
+          'Indicates previous page of results shown on the enroll learners page. This is not seen in the UI.\n',
+      },
+      nextResults: {
+        message: 'Next results',
+        context:
+          'Indicates next page of results shown on the enroll learners page. This is not seen in the UI.',
+      },
+      allUsersAlready: {
+        message: 'All users are already enrolled in this class',
+        context:
+          'Message that displays on group when all learners in a class have already been added to the group and there are no more to add.',
+      },
+      pagination: {
+        message:
+          '{ visibleStartRange, number } - { visibleEndRange, number } of { numFilteredUsers, number }',
+
+        context:
+          "Indicates the pagination of the enroll users into a group page.\nTranslate ONLY the word 'of'.",
+      },
+      learnerGroups: {
+        message: 'Current groups',
+        context: 'Indicates the groups that the learner is already part of.',
       },
     },
   };
@@ -249,8 +247,18 @@
 
   .actions-header,
   .footer,
-  nav {
+  .pagination-nav {
     text-align: right;
+  }
+
+  .pagination-nav {
+    margin-bottom: 8px;
+  }
+
+  .pagination-label {
+    position: relative;
+    top: -2px;
+    display: inline;
   }
 
 </style>

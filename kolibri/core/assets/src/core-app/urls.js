@@ -4,20 +4,67 @@
  */
 
 import setWebpackPublicPath from '../utils/setWebpackPublicPath';
+import plugin_data from 'plugin_data';
+
+function generateUrl(baseUrl, { url, origin, port } = {}) {
+  let urlObject = new URL(baseUrl, origin || window.location.origin);
+  if (port) {
+    urlObject.port = port;
+  }
+  if (url) {
+    urlObject = new URL(url, urlObject);
+  }
+  return urlObject.href;
+}
 
 const urls = {
   setUp() {
-    Object.assign(this, global.kolibriUrls);
-    this.__staticURL = global.staticUrl;
+    // Set urls onto this object for export
+    // This will add functions for every reversible URL
+    // and strings for __staticURL, __mediaURL, and __contentURL
+    // this behaviour is defined in kolibri/core/kolibri_plugin.py
+    // in the url_tag method of the FrontEndCoreAppAssetHook.
+    Object.assign(this, plugin_data.urls);
     setWebpackPublicPath(this);
   },
-  static(url) {
-    if (!this.__staticURL) {
-      throw new ReferenceError('Static URL is not defined');
+  hashi() {
+    if (!this.__hashiUrl) {
+      throw new ReferenceError('Hashi Url is not defined');
     }
-    const base = new URL(this.__staticURL, window.location.origin);
-    const urlObject = new URL(url, base);
-    return urlObject.href;
+    return generateUrl(this.__hashiUrl, {
+      origin: this.__zipContentOrigin,
+      port: this.__zipContentPort,
+    });
+  },
+  static(url) {
+    if (!this.__staticUrl) {
+      throw new ReferenceError('Static Url is not defined');
+    }
+    return generateUrl(this.__staticUrl, { url });
+  },
+  media(url) {
+    if (!this.__mediaUrl) {
+      throw new ReferenceError('Media Url is not defined');
+    }
+    return generateUrl(this.__mediaUrl, { url });
+  },
+  zipContentUrl(fileId, extension, embeddedFilePath = '') {
+    const filename = `${fileId}.${extension}`;
+    if (!this.__zipContentUrl) {
+      throw new ReferenceError('Zipcontent Url is not defined');
+    }
+    return generateUrl(this.__zipContentUrl, {
+      url: `${filename}/${embeddedFilePath}`,
+      origin: this.__zipContentOrigin,
+      port: this.__zipContentPort,
+    });
+  },
+  storageUrl(fileId, extension) {
+    const filename = `${fileId}.${extension}`;
+    if (!this.__contentUrl) {
+      throw new ReferenceError('Zipcontent Url is not defined');
+    }
+    return generateUrl(this.__contentUrl, { url: `${filename[0]}/${filename[1]}/${filename}` });
   },
 };
 

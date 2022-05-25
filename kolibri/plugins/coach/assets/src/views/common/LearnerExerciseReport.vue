@@ -1,77 +1,22 @@
 <template>
 
-  <MultiPaneLayout ref="multiPaneLayout">
-    <div slot="header">
-      <h1 class="learner-name">
-        {{ learner.name }}
-      </h1>
-      <p class="exercise-detail-section">
-        <ContentIcon
-          class="exercise-detail-icons"
-          :kind="ContentNodeKinds.EXERCISE"
-          :showTooltip="false"
-        />
-        {{ exercise.title }}
-        <CoachContentLabel
-          class="exercise-detail-icons"
-          :value="exercise.num_coach_contents || 0"
-          :isTopic="false"
-        />
-      </p>
-      <HeaderTable>
-        <HeaderTableRow>
-          <template slot="key">
-            {{ coachStrings.$tr('masteryModelLabel') }}
-          </template>
-          <template slot="value">
-            <MasteryModel />
-          </template>
-        </HeaderTableRow>
-        <HeaderTableRow>
-          <template slot="key">
-            {{ coachStrings.$tr('statusLabel') }}
-          </template>
-          <template slot="value">
-            <StatusSimple :status="status" />
-          </template>
-        </HeaderTableRow>
-      </HeaderTable>
-    </div>
-    <template v-if="attemptLogs.length > 0">
-      <AttemptLogList
-        slot="aside"
-        :attemptLogs="attemptLogs"
-        :selectedQuestionNumber="attemptLogIndex"
-        @select="navigateToNewAttempt($event)"
-      />
-      <div slot="main" class="exercise-section" :style="{ backgroundColor: $coreBgLight }">
-        <KCheckbox
-          :label="coachStrings.$tr('showCorrectAnswerLabel')"
-          :checked="showCorrectAnswer"
-          @change="toggleShowCorrectAnswer"
-        />
-        <InteractionList
-          v-if="!showCorrectAnswer"
-          :interactions="currentInteractionHistory"
-          :selectedInteractionIndex="interactionIndex"
-          @select="navigateToNewInteraction($event)"
-        />
-        <ContentRenderer
-          v-if="currentInteraction"
-          :itemId="currentAttemptLog.item"
-          :assessment="true"
-          :allowHints="false"
-          :kind="exercise.kind"
-          :files="exercise.files"
-          :available="exercise.available"
-          :answerState="answerState"
-          :showCorrectAnswer="showCorrectAnswer"
-          :interactive="false"
-          :extraFields="exercise.extra_fields"
-        />
-      </div>
-    </template>
-  </MultiPaneLayout>
+  <KPageContainer :topMargin="0">
+    <ExamReport
+      :contentId="exercise.content_id"
+      :title="exercise.title"
+      :userName="learner.name"
+      :userId="learner.id"
+      :selectedInteractionIndex="interactionIndex"
+      :questionNumber="questionId"
+      :tryIndex="tryIndex"
+      :exercise="exercise"
+      :exerciseContentNodes="[exercise]"
+      :navigateTo="navigateTo"
+      :questions="questions"
+      :isQuiz="isQuiz"
+      :isSurvey="isSurvey"
+    />
+  </KPageContainer>
 
 </template>
 
@@ -79,86 +24,53 @@
 <script>
 
   import { mapGetters, mapState } from 'vuex';
-  import themeMixin from 'kolibri.coreVue.mixins.themeMixin';
-  import ContentRenderer from 'kolibri.coreVue.components.ContentRenderer';
-  import AttemptLogList from 'kolibri.coreVue.components.AttemptLogList';
-  import InteractionList from 'kolibri.coreVue.components.InteractionList';
-  import KCheckbox from 'kolibri.coreVue.components.KCheckbox';
-  import MultiPaneLayout from 'kolibri.coreVue.components.MultiPaneLayout';
-  import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import ExamReport from 'kolibri.coreVue.components.ExamReport';
   import commonCoach from '../common';
 
   export default {
     name: 'LearnerExerciseReport',
     components: {
-      ContentRenderer,
-      AttemptLogList,
-      InteractionList,
-      KCheckbox,
-      MultiPaneLayout,
-      CoachContentLabel,
+      ExamReport,
     },
-    mixins: [commonCoach, themeMixin],
-    $trs: {},
-    data() {
-      return {
-        showCorrectAnswer: false,
-      };
-    },
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
-      ...mapGetters('exerciseDetail', [
-        'currentAttemptLog',
-        'currentInteraction',
-        'currentInteractionHistory',
-        'attemptLogs',
-        'attemptLogIndex',
-      ]),
-      ...mapGetters('classSummary', ['getContentStatusObjForLearner']),
+      ...mapGetters('exerciseDetail', ['isQuiz', 'isSurvey']),
       ...mapState('classSummary', ['learnerMap']),
-      ...mapState('exerciseDetail', ['attemptId', 'exercise', 'interactionIndex', 'learnerId']),
-      status() {
-        return this.getContentStatusObjForLearner(this.exercise.content_id, this.learnerId).status;
-      },
+      ...mapState('exerciseDetail', [
+        'questionId',
+        'exercise',
+        'tryIndex',
+        'interactionIndex',
+        'learnerId',
+      ]),
       learner() {
         return this.learnerMap[this.learnerId];
       },
-      // Do not pass in answerState if showCorrectAnswer is set to true
-      // answerState has a precedence over showCorrectAnswer
-      answerState() {
-        if (
-          !this.showCorrectAnswer &&
-          this.currentInteraction &&
-          this.currentInteraction.type === 'answer'
-        ) {
-          return this.currentInteraction.answer;
-        }
-        return null;
+      questions() {
+        return this.exercise
+          ? this.exercise.assessmentmetadata.assessment_item_ids.map((id, index) => ({
+              item: id,
+              question_id: id,
+              exercise_id: this.exercise.id,
+              counter_in_exercise: index,
+              title: this.exercise.title,
+            }))
+          : [];
       },
     },
     methods: {
-      navigateToNewAttempt(attemptLogIndex) {
-        this.showCorrectAnswer = false;
-        this.$emit('navigate', {
-          exerciseId: this.exercise.content_id,
-          learnerId: this.learnerId,
-          interactionIndex: 0,
-          attemptId: this.attemptLogs[attemptLogIndex].id,
-        });
-        this.$refs.multiPaneLayout.scrollMainToTop();
-      },
-      navigateToNewInteraction(interactionIndex) {
+      navigateTo(tryIndex, questionId, interactionIndex) {
         this.$emit('navigate', {
           exerciseId: this.exercise.content_id,
           learnerId: this.learnerId,
           interactionIndex,
-          attemptId: this.attemptId,
+          questionId,
+          tryIndex,
         });
       },
-      toggleShowCorrectAnswer() {
-        this.showCorrectAnswer = !this.showCorrectAnswer;
-        this.$forceUpdate();
-      },
     },
+    $trs: {},
   };
 
 </script>
@@ -168,13 +80,6 @@
 
   .exercise-section {
     padding: 16px;
-    h3 {
-      margin-top: 0;
-    }
-  }
-
-  .learner-name {
-    margin-bottom: 0;
   }
 
   .exercise-detail-section {

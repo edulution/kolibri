@@ -1,13 +1,15 @@
 import logging
 import os
-from time import sleep
 
 from django.core.management.base import CommandError
+from le_utils.constants import content_kinds
 
 from ...utils import channel_import
 from ...utils import paths
 from ...utils import transfer
-from ...utils.import_export_content import retry_import
+from ...utils.annotation import update_content_metadata
+from kolibri.core.content.models import ContentNode
+from kolibri.core.content.utils.importability_annotation import clear_channel_stats
 from kolibri.core.errors import KolibriUpgradeError
 from kolibri.core.tasks.management.commands.base import AsyncCommand
 from kolibri.utils import conf
@@ -21,7 +23,7 @@ COPY_METHOD = "copy"
 
 def import_channel_by_id(channel_id, cancel_check):
     try:
-        channel_import.import_channel_from_local_db(
+        return channel_import.import_channel_from_local_db(
             channel_id, cancel_check=cancel_check
         )
     except channel_import.InvalidSchemaVersionError:
@@ -64,6 +66,11 @@ class Command(AsyncCommand):
                 default_studio_url
             ),
         )
+        network_subparser.add_argument(
+            "--no_upgrade",
+            action="store_true",
+            help="Only download database to an upgrade file path.",
+        )
 
         local_subparser = subparsers.add_parser(
             name="disk", cmd=self, help="Copy the content from the given folder."
@@ -76,85 +83,111 @@ class Command(AsyncCommand):
         local_subparser.add_argument(
             "directory", type=str, help="Import content from this directory."
         )
+        local_subparser.add_argument(
+            "--no_upgrade",
+            action="store_true",
+            help="Only download database to an upgrade file path.",
+        )
 
-    def download_channel(self, channel_id, baseurl):
+    def download_channel(self, channel_id, baseurl, no_upgrade):
         logger.info("Downloading data for channel id {}".format(channel_id))
-        self._transfer(DOWNLOAD_METHOD, channel_id, baseurl)
+        self._transfer(DOWNLOAD_METHOD, channel_id, baseurl, no_upgrade=no_upgrade)
 
-    def copy_channel(self, channel_id, path):
+    def copy_channel(self, channel_id, path, no_upgrade):
         logger.info("Copying in data for channel id {}".format(channel_id))
-        self._transfer(COPY_METHOD, channel_id, path=path)
+        self._transfer(COPY_METHOD, channel_id, path=path, no_upgrade=no_upgrade)
 
-    def _transfer(self, method, channel_id, baseurl=None, path=None):
+    def _transfer(self, method, channel_id, baseurl=None, path=None, no_upgrade=False):
 
-        dest = paths.get_content_database_file_path(channel_id)
+        new_channel_dest = paths.get_upgrade_content_database_file_path(channel_id)
+        dest = (
+            new_channel_dest
+            if no_upgrade
+            else paths.get_content_database_file_path(channel_id)
+        )
 
+        # if new channel version db has previously been downloaded, just copy it over
+        if os.path.exists(new_channel_dest) and not no_upgrade:
+            method = COPY_METHOD
         # determine where we're downloading/copying from, and create appropriate transfer object
         if method == DOWNLOAD_METHOD:
             url = paths.get_content_database_file_url(channel_id, baseurl=baseurl)
             logger.debug("URL to fetch: {}".format(url))
-            filetransfer = transfer.FileDownload(url, dest)
+            filetransfer = transfer.FileDownload(
+                url, dest, cancel_check=self.is_cancelled
+            )
         elif method == COPY_METHOD:
-            srcpath = paths.get_content_database_file_path(channel_id, datafolder=path)
-            filetransfer = transfer.FileCopy(srcpath, dest)
+            # if there is a new channel version db, set that as source path
+            srcpath = (
+                new_channel_dest
+                if os.path.exists(new_channel_dest)
+                else paths.get_content_database_file_path(channel_id, datafolder=path)
+            )
+            filetransfer = transfer.FileCopy(
+                srcpath, dest, cancel_check=self.is_cancelled
+            )
 
         logger.debug("Destination: {}".format(dest))
 
-        finished = False
-        while not finished:
-            finished = self._start_file_transfer(filetransfer, channel_id, dest)
-            if self.is_cancelled():
-                self.cancel()
-                break
+        try:
+            self._start_file_transfer(
+                filetransfer, channel_id, dest, no_upgrade=no_upgrade
+            )
+        except transfer.TransferCanceled:
+            pass
 
-    def _start_file_transfer(self, filetransfer, channel_id, dest):
+        if self.is_cancelled():
+            try:
+                os.remove(dest)
+            except OSError as e:
+                logger.info(
+                    "Tried to remove {}, but exception {} occurred.".format(dest, e)
+                )
+            self.cancel()
+
+        # if we are trying to upgrade, remove new channel db
+        if os.path.exists(new_channel_dest) and not no_upgrade:
+            os.remove(new_channel_dest)
+
+    def _start_file_transfer(self, filetransfer, channel_id, dest, no_upgrade=False):
         progress_extra_data = {"channel_id": channel_id}
 
-        try:
-            with filetransfer, self.start_progress(
-                total=filetransfer.total_size
-            ) as progress_update:
-                for chunk in filetransfer:
-
-                    if self.is_cancelled():
-                        filetransfer.cancel()
-                        break
-                    progress_update(len(chunk), progress_extra_data)
+        with filetransfer, self.start_progress(
+            total=filetransfer.total_size
+        ) as progress_update:
+            for chunk in filetransfer:
+                progress_update(len(chunk), progress_extra_data)
+            # if upgrading, import the channel
+            if not no_upgrade:
                 try:
-                    import_channel_by_id(channel_id, self.is_cancelled)
+                    # evaluate list so we have the current node ids
+                    node_ids = list(
+                        ContentNode.objects.filter(
+                            channel_id=channel_id, available=True
+                        )
+                        .exclude(kind=content_kinds.TOPIC)
+                        .values_list("id", flat=True)
+                    )
+                    import_ran = import_channel_by_id(channel_id, self.is_cancelled)
+                    if node_ids and import_ran:
+                        # annotate default channel db based on previously annotated leaf nodes
+                        update_content_metadata(channel_id, node_ids=node_ids)
+                    if import_ran:
+                        # Clear any previously set channel availability stats for this channel
+                        clear_channel_stats(channel_id)
                 except channel_import.ImportCancelError:
                     # This will only occur if is_cancelled is True.
                     pass
-                if self.is_cancelled():
-                    try:
-                        os.remove(dest)
-                    except IOError as e:
-                        logger.error(
-                            "Tried to remove {}, but exception {} occurred.".format(
-                                dest, e
-                            )
-                        )
-                    self.cancel()
-                return True
-
-        except Exception as e:
-            logger.error("An error occurred during channel import: {}".format(e))
-            retry_import(e, skip_404=False)
-
-            logger.info(
-                "Waiting for 30 seconds before retrying import: {}\n".format(
-                    filetransfer.source
-                )
-            )
-            sleep(30)
-
-            return False
 
     def handle_async(self, *args, **options):
         if options["command"] == "network":
-            self.download_channel(options["channel_id"], options["baseurl"])
+            self.download_channel(
+                options["channel_id"], options["baseurl"], options["no_upgrade"]
+            )
         elif options["command"] == "disk":
-            self.copy_channel(options["channel_id"], options["directory"])
+            self.copy_channel(
+                options["channel_id"], options["directory"], options["no_upgrade"]
+            )
         else:
             self._parser.print_help()
             raise CommandError(

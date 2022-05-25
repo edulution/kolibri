@@ -102,6 +102,7 @@ import os
 import pkgutil
 import re
 import subprocess
+import sys
 
 from .compat import parse_version
 from .lru_cache import lru_cache
@@ -109,6 +110,11 @@ from .lru_cache import lru_cache
 logger = logging.getLogger(__name__)
 
 ORDERED_VERSIONS = ("alpha", "beta", "rc", "final")
+MAJOR_VERSION = "major"
+MINOR_VERSION = "minor"
+PATCH_VERSION = "patch"
+PRERELEASE_VERSION = "prerelease"
+BUILD_VERSION = "build"
 
 
 def get_major_version(version=None):
@@ -128,8 +134,10 @@ def get_complete_version(version=None):
     if version is None:
         from kolibri import VERSION as version
     else:
-        assert len(version) == 5
-        assert version[3] in ORDERED_VERSIONS
+        if len(version) != 5:
+            raise AssertionError
+        if version[3] not in ORDERED_VERSIONS:
+            raise AssertionError
 
     return version
 
@@ -141,8 +149,7 @@ def get_docs_version(version=None):
     version = get_complete_version(version)
     if version[3] != "final":
         return "dev"
-    else:
-        return "%d.%d" % version[:2]
+    return "%d.%d" % version[:2]
 
 
 def get_git_changeset():
@@ -186,6 +193,12 @@ def get_git_describe(version):
     Detects a valid tag, 1.2.3-<alpha|beta|rc>(-123-sha123)
     :returns: None if no git tag available (no git, no tags, or not in a repo)
     """
+
+    # Do not try to run git in app mode, as on Mac it will prompt the app user to install
+    # developer tools. App packaging tools set sys.frozen to True, so we use that as our test.
+    if hasattr(sys, "frozen"):
+        return None
+
     valid_pattern = re.compile(r"^v[0-9-.]+(-(alpha|beta|rc)[0-9]+)?(-\d+-\w+)?$")
     repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     try:
@@ -415,3 +428,98 @@ def get_version(version=None):
         sub = ".post{}".format(version[4])
 
     return str(major + sub)
+
+
+def get_version_and_operator_from_range(version_range):
+    # extract and normalize version strings
+    match = re.match(r"([<>=!]*)(\d.*)", version_range)
+    if match is not None:
+        operator, range_version = match.groups()
+        return operator, normalize_version_to_semver(range_version)
+    raise TypeError("Invalid semver value or range value")
+
+
+#  Copied from https://github.com/learningequality/nutritionfacts/commit/b33e19400ae639cbcf2b2e9b312d37493eb1e566#diff-5b7513e7bc7d64d348fd8d3f2222b573
+#  TODO: move to le-utils package
+def version_matches_range(version, version_range):
+    # Import semver here to allow other functions in the module to be imported in a lower
+    # dependency environment.
+    import semver
+
+    # if no version range is provided, assume we don't have opinions about the version
+    if not version_range or version_range == "*":
+        return True
+
+    # support having multiple comma-delimited version criteria
+    if "," in version_range:
+        return all(
+            version_matches_range(version, vrange)
+            for vrange in version_range.split(",")
+        )
+
+    # extract and normalize version strings
+    operator, range_version = get_version_and_operator_from_range(version_range)
+    version = normalize_version_to_semver(version)
+
+    # check whether the version is in the range
+    return semver.match(version, operator + range_version)
+
+
+def normalize_version_to_semver(version):
+
+    _, dev = re.match(r"(.*?)(\.dev.*)?$", version).groups()
+
+    # extract the numeric semver component and the stuff that comes after
+    numeric, after = re.match(r"(\d+\.\d+\.\d+)([^\d].*)?", version).groups()
+
+    # clean up the different variations of the post-numeric component to ease checking
+    after = (after or "").strip("-").strip("+").strip(".").split("+")[0]
+
+    # split up the alpha/beta letters from the numbers, to sort numerically not alphabetically
+    after_pieces = re.match(r"([a-z])(\d+)", after)
+    if after_pieces:
+        after = ".".join([piece for piece in after_pieces.groups() if piece])
+
+    # position final releases between alphas, betas, and further dev
+    if not dev:
+        after = (after + ".c").strip(".")
+
+    # make sure dev versions are sorted nicely relative to one another
+    dev = (dev or "").replace("+", ".").replace("-", ".")
+
+    return "{}-{}{}".format(numeric, after, dev).strip("-")
+
+
+def truncate_version(version, truncation_level=PATCH_VERSION):
+    """
+    Truncates a version string to a specific level
+
+    >>> truncate_version("0.15.0a5.dev0+git.682.g0be46de2")
+    '0.15.0'
+    >>> truncate_version("0.14.7", truncation_level=MINOR_VERSION)
+    '0.14.0'
+
+    :param version: The version str to truncate
+    :param truncation_level: The level beyond which to truncate the version
+    :return: A truncated version string
+    """
+    import semver
+
+    v = semver.parse_version_info(
+        normalize_version_to_semver(version).replace(".dev", "+dev")
+    )
+
+    if truncation_level == MAJOR_VERSION:
+        return semver.format_version(v.major, 0, 0)
+    if truncation_level == MINOR_VERSION:
+        return semver.format_version(v.major, v.minor, 0)
+    if truncation_level == PATCH_VERSION:
+        return semver.format_version(v.major, v.minor, v.patch)
+    if truncation_level == PRERELEASE_VERSION:
+        truncated_version = semver.format_version(
+            v.major, v.minor, v.patch, prerelease=v.prerelease
+        )
+        # ensure prerelease formatting matches our convention
+        truncated_version, prerelease_version = truncated_version.split("-")
+        return "{}{}".format(truncated_version, prerelease_version.replace(".", ""))
+    return version

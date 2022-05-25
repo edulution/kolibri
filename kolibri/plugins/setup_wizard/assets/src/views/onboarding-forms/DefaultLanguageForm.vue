@@ -2,8 +2,7 @@
 
   <OnboardingForm
     :header="$tr('languageFormHeader')"
-    :submitText="submitText"
-    @submit="setLanguage"
+    @submit="handleSubmit"
   >
     <LanguageSwitcherList />
   </OnboardingForm>
@@ -13,37 +12,27 @@
 
 <script>
 
-  import { mapMutations, mapState } from 'vuex';
   import LanguageSwitcherList from 'kolibri.coreVue.components.LanguageSwitcherList';
   import OnboardingForm from './OnboardingForm';
 
   export default {
     name: 'DefaultLanguageForm',
-    $trs: {
-      languageFormHeader: 'Please select the default language for Kolibri',
-    },
     components: {
       OnboardingForm,
       LanguageSwitcherList,
     },
-    props: {
-      submitText: {
-        type: String,
-        required: true,
+    inject: ['wizardService'],
+    methods: {
+      handleSubmit() {
+        const currentLanguageId = this.$store.state.onboardingData.language_id;
+        this.$store.commit('SET_LANGUAGE', currentLanguageId);
+        this.wizardService.send('CONTINUE');
       },
     },
-    computed: {
-      ...mapState({
-        currentLanguageId: state => state.onboardingData.language_id,
-      }),
-    },
-    methods: {
-      ...mapMutations({
-        submitDefaultLanguage: 'SET_LANGUAGE',
-      }),
-      setLanguage() {
-        this.submitDefaultLanguage(this.currentLanguageId);
-        this.$emit('submit');
+    $trs: {
+      languageFormHeader: {
+        message: 'Please select the default language for Kolibri',
+        context: 'Admins must pick the default language they want to use in Kolibri.',
       },
     },
   };

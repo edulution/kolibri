@@ -1,16 +1,16 @@
 <template>
 
   <Block
-    :allLinkText="viewAllString"
+    :allLinkText="coachString('viewAllAction')"
     :allLinkRoute="classRoute('ReportsLessonListPage', {})"
+    :showAllLink="table.length > 0"
   >
-    <KLabeledIcon slot="title">
-      <KIcon slot="icon" lesson />
-      {{ coachStrings.$tr('lessonsLabel') }}
-    </KLabeledIcon>
+    <template #title>
+      <KLabeledIcon icon="lesson" :label="coreString('lessonsLabel')" />
+    </template>
 
     <p v-if="table.length === 0">
-      {{ coachStrings.$tr('lessonListEmptyState') }}
+      {{ coachString('lessonListEmptyState') }}
     </p>
 
     <BlockItem
@@ -21,7 +21,8 @@
       <ItemProgressDisplay
         :name="tableRow.name"
         :tally="tableRow.tally"
-        :groupNames="tableRow.groups"
+        :groupNames="groupAndAdHocLearnerNames(tableRow.groups, tableRow.assignments)"
+        :hasAssignments="tableRow.hasAssignments"
         :to="classRoute('ReportsLessonLearnerListPage', { lessonId: tableRow.key })"
       />
     </BlockItem>
@@ -33,16 +34,13 @@
 <script>
 
   import orderBy from 'lodash/orderBy';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../../common';
   import Block from './Block';
   import BlockItem from './BlockItem';
   import ItemProgressDisplay from './ItemProgressDisplay';
-  import ActivityBlock from './ActivityBlock';
 
   const MAX_LESSONS = 3;
-
-  const translator = crossComponentTranslator(ActivityBlock);
 
   export default {
     name: 'LessonsBlock',
@@ -51,25 +49,21 @@
       Block,
       BlockItem,
     },
-    mixins: [commonCoach],
-    $trs: {
-      viewAll: 'All lessons',
-    },
+    mixins: [commonCoach, commonCoreStrings],
     computed: {
       table() {
         const recent = orderBy(this.lessons, this.lastActivity, ['desc']).slice(0, MAX_LESSONS);
         return recent.map(lesson => {
-          const assigned = this.getLearnersForGroups(lesson.groups);
+          const assigned = this.getLearnersForLesson(lesson);
           return {
             key: lesson.id,
             name: lesson.title,
             tally: this.getLessonStatusTally(lesson.id, assigned),
             groups: lesson.groups.map(groupId => this.groupMap[groupId].name),
+            hasAssignments: assigned.length > 0,
+            assignments: lesson.assignments,
           };
         });
-      },
-      viewAllString() {
-        return translator.$tr('viewAll');
       },
     },
     methods: {
@@ -86,6 +80,14 @@
           }
         });
         return last;
+      },
+      groupAndAdHocLearnerNames(groups, assignments) {
+        const adHocGroup = this.adHocGroups.find(group => assignments.includes(group.id));
+        let adHocLearners = [];
+        if (adHocGroup) {
+          adHocLearners = adHocGroup.member_ids.map(learnerId => this.learnerMap[learnerId].name);
+        }
+        return groups.concat(adHocLearners);
       },
     },
   };

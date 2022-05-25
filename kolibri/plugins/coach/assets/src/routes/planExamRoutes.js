@@ -3,15 +3,24 @@ import { PageNames } from '../constants';
 import {
   showExamCreationRootPage,
   showExamCreationTopicPage,
+  showExamCreationBookmarksPage,
+  showExamCreationAllBookmarks,
   showExamCreationSearchPage,
   showExamCreationQuestionSelectionPage,
   showExamCreationPreviewPage,
+  showPracticeQuizCreationRootPage,
+  showPracticeQuizCreationTopicPage,
+  showPracticeQuizCreationPreviewPage,
 } from '../modules/examCreation/handlers';
+import CreatePracticeQuizPage from '../views/plan/CreateExamPage/CreatePracticeQuizPage.vue';
 import CreateExamPage from '../views/plan/CreateExamPage';
 import CreateExamPreview from '../views/plan/CreateExamPage/CreateExamPreview.vue';
 import PlanQuizPreviewPage from '../views/plan/PlanQuizPreviewPage';
 import CoachExamsPage from '../views/plan/CoachExamsPage';
 import { showExamsPage } from '../modules/examsRoot/handlers';
+import QuizSummaryPage from '../views/plan/QuizSummaryPage';
+import QuizEditDetailsPage from '../views/plan/QuizEditDetailsPage';
+import PlanPracticeQuizPreviewPage from '../views/plan/CreateExamPage/PlanPracticeQuizPreviewPage';
 
 export default [
   {
@@ -34,11 +43,43 @@ export default [
     },
   },
   {
+    name: PageNames.EXAM_CREATION_PRACTICE_QUIZ,
+    path: '/:classId/plan/quizzes/new/practice_quiz',
+    component: CreatePracticeQuizPage,
+    handler: toRoute => {
+      showPracticeQuizCreationRootPage(store, toRoute.params);
+    },
+  },
+  {
+    name: PageNames.EXAM_CREATION_SELECT_PRACTICE_QUIZ_TOPIC,
+    path: '/:classId/plan/quizzes/new/practice_quiz/topic/:topicId',
+    component: CreatePracticeQuizPage,
+    handler: toRoute => {
+      showPracticeQuizCreationTopicPage(store, toRoute.params);
+    },
+  },
+  {
     name: PageNames.EXAM_CREATION_TOPIC,
     path: '/:classId/plan/quizzes/new/topic/:topicId',
     component: CreateExamPage,
     handler: toRoute => {
       showExamCreationTopicPage(store, toRoute.params);
+    },
+  },
+  {
+    name: PageNames.EXAM_CREATION_BOOKMARKS,
+    path: '/:classId/plan/quizzes/new/bookmark/:topicId',
+    component: CreateExamPage,
+    handler: toRoute => {
+      showExamCreationBookmarksPage(store, toRoute.params);
+    },
+  },
+  {
+    name: PageNames.EXAM_CREATION_BOOKMARKS_MAIN,
+    path: '/:classId/plan/quizzes/new/bookmarks',
+    component: CreateExamPage,
+    handler: toRoute => {
+      showExamCreationAllBookmarks(store, toRoute.params);
     },
   },
   {
@@ -58,11 +99,32 @@ export default [
     },
   },
   {
+    name: PageNames.EXAM_CREATION_PRACTICE_QUIZ_PREVIEW,
+    path: '/:classId/plan/quizzes/new/practice_quiz/preview/',
+    component: PlanPracticeQuizPreviewPage,
+    handler: toRoute => {
+      showPracticeQuizCreationPreviewPage(store, toRoute.params);
+    },
+  },
+  {
     name: PageNames.EXAM_CREATION_PREVIEW,
     path: '/:classId/plan/quizzes/new/preview/',
     component: PlanQuizPreviewPage,
-    handler: toRoute => {
-      showExamCreationPreviewPage(store, toRoute.params);
+    handler: (toRoute, fromRoute) => {
+      showExamCreationPreviewPage(store, toRoute.params, fromRoute);
     },
+  },
+  {
+    name: QuizSummaryPage.name,
+    path: '/:classId/plan/quizzes/:quizId',
+    component: QuizSummaryPage,
+    meta: {
+      titleParts: ['QUIZ_NAME', 'quizzesLabel', 'CLASS_NAME'],
+    },
+  },
+  {
+    name: QuizEditDetailsPage.name,
+    path: '/:classId/plan/quizzes/:quizId/edit',
+    component: QuizEditDetailsPage,
   },
 ];

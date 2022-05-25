@@ -6,41 +6,37 @@
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <TopNavbar slot="sub-nav" />
+    <template #sub-nav>
+      <TopNavbar />
+    </template>
 
     <KPageContainer>
       <PlanHeader />
       <div class="ta-r">
         <KButton
-          class="new-group-button"
-          :text="$tr('newGroup')"
+          :text="$tr('newGroupAction')"
           :primary="true"
           @click="openCreateGroupModal"
         />
       </div>
 
       <CoreTable>
-        <thead slot="thead">
-          <tr>
-            <th>
-              {{ coachStrings.$tr('nameLabel') }}
-            </th>
-            <th>
-              {{ coachStrings.$tr('learnersLabel') }}
-            </th>
-            <th></th>
-          </tr>
-
-        </thead>
-        <tbody slot="tbody">
-          <GroupRowTr
-            v-for="group in sortedGroups"
-            :key="group.id"
-            :group="group"
-            @rename="openRenameGroupModal"
-            @delete="openDeleteGroupModal"
-          />
-        </tbody>
+        <template #headers>
+          <th>{{ coachString('nameLabel') }}</th>
+          <th>{{ coreString('learnersLabel') }}</th>
+          <th></th>
+        </template>
+        <template #tbody>
+          <tbody>
+            <GroupRowTr
+              v-for="group in sortedGroups"
+              :key="group.id"
+              :group="group"
+              @rename="openRenameGroupModal"
+              @delete="openDeleteGroupModal"
+            />
+          </tbody>
+        </template>
       </CoreTable>
 
       <p v-if="!sortedGroups.length">
@@ -50,7 +46,8 @@
       <CreateGroupModal
         v-if="showCreateGroupModal"
         :groups="sortedGroups"
-        @success="handleSuccessCreateGroup"
+        @submit="handleSuccessCreateGroup"
+        @cancel="closeModal"
       />
 
       <RenameGroupModal
@@ -58,13 +55,15 @@
         :groupName="selectedGroup.name"
         :groupId="selectedGroup.id"
         :groups="sortedGroups"
+        @cancel="closeModal"
       />
 
       <DeleteGroupModal
         v-if="showDeleteGroupModal"
         :groupName="selectedGroup.name"
         :groupId="selectedGroup.id"
-        @success="handleSuccessDeleteGroup"
+        @submit="handleSuccessDeleteGroup"
+        @cancel="closeModal"
       />
 
     </KPageContainer>
@@ -75,10 +74,11 @@
 
 <script>
 
+  import { ref } from 'kolibri.lib.vueCompositionApi';
   import { mapState, mapActions } from 'vuex';
   import orderBy from 'lodash/orderBy';
-  import KButton from 'kolibri.coreVue.components.KButton';
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../../common';
   import PlanHeader from '../../plan/PlanHeader';
   import { GroupModals } from '../../../constants';
@@ -89,27 +89,25 @@
 
   export default {
     name: 'GroupsPage',
-    $trs: {
-      classGroups: 'Groups',
-      newGroup: 'New group',
-      noGroups: 'You do not have any groups',
-      documentTitle: 'Groups',
-    },
     components: {
       CoreTable,
       PlanHeader,
-      KButton,
       GroupRowTr,
       CreateGroupModal,
       RenameGroupModal,
       DeleteGroupModal,
     },
-    mixins: [commonCoach],
-    data() {
+    mixins: [commonCoach, commonCoreStrings],
+    setup() {
+      const selectedGroup = ref({
+        name: '',
+        id: '',
+      });
+
       return {
-        selectedGroup: {
-          name: '',
-          id: '',
+        selectedGroup,
+        setSelectedGroup(name, id) {
+          selectedGroup.value = { name, id };
         },
       };
     },
@@ -130,31 +128,38 @@
     },
     methods: {
       ...mapActions('groups', ['displayModal']),
-      ...mapActions(['createSnackbar']),
+      closeModal() {
+        this.displayModal(false);
+      },
       openCreateGroupModal() {
         this.displayModal(GroupModals.CREATE_GROUP);
       },
       openRenameGroupModal(groupName, groupId) {
-        this.selectedGroup = {
-          name: groupName,
-          id: groupId,
-        };
+        this.setSelectedGroup(groupName, groupId);
         this.displayModal(GroupModals.RENAME_GROUP);
       },
       openDeleteGroupModal(groupName, groupId) {
-        this.selectedGroup = {
-          name: groupName,
-          id: groupId,
-        };
+        this.setSelectedGroup(groupName, groupId);
         this.displayModal(GroupModals.DELETE_GROUP);
       },
       handleSuccessCreateGroup() {
-        this.createSnackbar(this.coachStrings.$tr('createdNotification'));
+        this.showSnackbarNotification('groupCreated');
         this.displayModal(false);
       },
       handleSuccessDeleteGroup() {
-        this.createSnackbar(this.coachStrings.$tr('deletedNotification'));
+        this.showSnackbarNotification('groupDeleted');
         this.displayModal(false);
+      },
+    },
+    $trs: {
+      newGroupAction: {
+        message: 'New group',
+        context:
+          "Button used to create a new group of learners. Located on the 'Plan your class' page for coaches.",
+      },
+      noGroups: {
+        message: 'You do not have any groups',
+        context: 'Message displayed when there are no groups within a class.',
       },
     },
   };

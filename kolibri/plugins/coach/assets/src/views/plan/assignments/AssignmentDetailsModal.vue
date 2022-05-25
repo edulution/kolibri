@@ -1,105 +1,102 @@
 <template>
 
-  <KModal
-    :title="modalTitle"
-    :hasError="showServerError || !formIsValid"
-    :submitText="isInEditMode ? $tr('save') : $tr('continue')"
-    :cancelText="$tr('cancel')"
-    @submit="submitData"
-    @cancel="closeModal"
-  >
-    <UiAlert
-      v-if="showServerError"
-      type="error"
-      :dismissible="false"
-    >
-      {{ submitErrorMessage }}
-    </UiAlert>
-    <KTextbox
-      ref="titleField"
-      v-model="title"
-      :label="$tr('titlePlaceholder')"
-      :maxlength="50"
-      :autofocus="true"
-      :invalid="titleIsInvalid"
-      :invalidText="titleIsInvalidText"
-      :disabled="formIsSubmitted"
-      @blur="titleIsVisited = true"
-      @input="showTitleError = false"
-    />
-    <KTextbox
-      v-if="showDescriptionField"
-      v-model="description"
-      :label="$tr('description')"
-      :maxlength="200"
-      :disabled="formIsSubmitted"
-    />
-    <fieldset v-if="showActiveOption">
-      <legend>{{ coachStrings.$tr('statusLabel') }}</legend>
-      <KRadioButton
-        v-model="activeIsSelected"
-        :label="modalActiveText"
-        :value="true"
-      />
-      <KRadioButton
-        v-model="activeIsSelected"
-        :label="modalInactiveText"
-        :value="false"
-      />
-    </fieldset>
-    <fieldset>
-      <legend>{{ $tr('assignedGroupsLabel') }}</legend>
-      <RecipientSelector
-        v-model="selectedCollectionIds"
-        :groups="groups"
-        :classId="classId"
-        :disabled="formIsSubmitted"
-      />
-    </fieldset>
-  </KModal>
+  <div>
+    <form @submit.prevent="submitData">
+      <UiAlert
+        v-if="showServerError"
+        type="error"
+        :dismissible="false"
+      >
+        {{ submitErrorMessage }}
+      </UiAlert>
+
+      <fieldset>
+        <KTextbox
+          ref="titleField"
+          v-model="title"
+          :label="coachString('titleLabel')"
+          :maxlength="50"
+          :autofocus="true"
+          :invalid="titleIsInvalid"
+          :invalidText="titleIsInvalidText"
+          :disabled="disabled || formIsSubmitted"
+          @blur="titleIsVisited = true"
+          @input="showTitleError = false"
+          @keydown.enter="submitData"
+        />
+
+        <KTextbox
+          v-if="showDescriptionField"
+          v-model="description"
+          :label="coachString('descriptionLabel')"
+          :maxlength="200"
+          :disabled="disabled || formIsSubmitted"
+          :textArea="true"
+        />
+      </fieldset>
+
+      <fieldset>
+        <legend>
+          {{ coachString('recipientsLabel') }}
+        </legend>
+        <RecipientSelector
+          v-model="selectedCollectionIds"
+          :groups="groups"
+          :classId="classId"
+          :disabled="disabled || formIsSubmitted"
+          :initialAdHocLearners="initialAdHocLearners"
+          @updateLearners="learners => adHocLearners = learners"
+        />
+      </fieldset>
+
+      <slot name="resourceTable"></slot>
+    </form>
+
+    <BottomAppBar>
+      <KButtonGroup>
+        <KButton
+          :text="coreString('cancelAction')"
+          appearance="flat-button"
+          :primary="false"
+          :disabled="disabled || formIsSubmitted"
+          @click="$emit('cancel')"
+        />
+        <KButton
+          :text="coreString('saveChangesAction')"
+          :primary="true"
+          :disabled="disabled || formIsSubmitted"
+          @click="submitData"
+        />
+      </KButtonGroup>
+    </BottomAppBar>
+  </div>
 
 </template>
 
 
 <script>
 
-  import xor from 'lodash/xor';
-  import KModal from 'kolibri.coreVue.components.KModal';
-  import KTextbox from 'kolibri.coreVue.components.KTextbox';
-  import KRadioButton from 'kolibri.coreVue.components.KRadioButton';
-  import UiAlert from 'keen-ui/src/UiAlert';
+  import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
+  import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { coachStringsMixin } from '../../common/commonCoachStrings';
   import RecipientSelector from './RecipientSelector';
 
   export default {
     name: 'AssignmentDetailsModal',
     components: {
-      KModal,
-      KTextbox,
-      KRadioButton,
+      BottomAppBar,
       RecipientSelector,
       UiAlert,
     },
-    mixins: [coachStringsMixin],
+    mixins: [coachStringsMixin, commonCoreStrings],
     props: {
-      modalTitle: {
-        type: String,
-        required: true,
-      },
       modalTitleErrorMessage: {
         type: String,
-        required: false,
+        default: null,
       },
       submitErrorMessage: {
         type: String,
-        required: true,
-      },
-      showDescriptionField: {
-        type: Boolean,
-        required: true,
-      },
-      isInEditMode: {
-        type: Boolean,
         required: true,
       },
       initialTitle: {
@@ -115,6 +112,10 @@
         type: Array,
         required: true,
       },
+      initialAdHocLearners: {
+        type: Array,
+        required: true,
+      },
       classId: {
         type: String,
         required: true,
@@ -123,21 +124,19 @@
         type: Array,
         required: true,
       },
-      showActiveOption: {
-        type: Boolean,
-        default: false,
-      },
       initialActive: {
         type: Boolean,
         required: false,
       },
-      modalActiveText: {
-        type: String,
-        required: false,
+      // If set to true, all of the forms are disabled
+      disabled: {
+        type: Boolean,
+        default: false,
       },
-      modalInactiveText: {
+      // Should be 'quiz', 'lesson', or 'new_lesson'
+      assignmentType: {
         type: String,
-        required: false,
+        required: true,
       },
     },
     data() {
@@ -147,6 +146,7 @@
         description: this.initialDescription,
         selectedCollectionIds: this.initialSelectedCollectionIds,
         activeIsSelected: this.initialActive,
+        adHocLearners: this.initialAdHocLearners,
         titleIsVisited: false,
         formIsSubmitted: false,
         showServerError: false,
@@ -154,19 +154,30 @@
       };
     },
     computed: {
-      formData() {
-        return {
-          title: this.title,
-          description: this.description,
-          assignments: this.selectedCollectionIds.map(groupId => ({ collection: groupId })),
-          active: this.activeIsSelected,
-        };
-      },
       titleIsInvalidText() {
         // submission is handled because "blur" event happens on submit
-        if (this.titleIsVisited) {
+        if (!this.disabled && !this.formIsSubmitted && this.titleIsVisited) {
           if (this.title === '') {
-            return this.$tr('fieldRequiredErro');
+            return this.coreString('requiredFieldError');
+          }
+          if (this.assignmentIsQuiz) {
+            if (
+              this.$store.getters['classSummary/quizTitleUnavailable']({
+                title: this.title,
+                excludeId: this.$route.params.quizId,
+              })
+            ) {
+              return this.coachString('quizDuplicateTitleError');
+            }
+          } else {
+            if (
+              this.$store.getters['classSummary/lessonTitleUnavailable']({
+                title: this.title,
+                excludeId: this.$route.params.lessonId,
+              })
+            ) {
+              return this.coachString('lessonDuplicateTitleError');
+            }
           }
           if (this.showTitleError) {
             return this.modalTitleErrorMessage;
@@ -174,73 +185,68 @@
         }
         return '';
       },
+      assignmentIsQuiz() {
+        return this.assignmentType === 'quiz';
+      },
+      showDescriptionField() {
+        // Quizzes don't have descriptions
+        return !this.assignmentIsQuiz;
+      },
       titleIsInvalid() {
         return Boolean(this.titleIsInvalidText);
       },
       formIsValid() {
         return !this.titleIsInvalid;
       },
-      groupsHaveChanged() {
-        const unsharedIds = xor(this.selectedCollectionIds, this.initialSelectedCollectionIds);
-        return unsharedIds.length > 0;
-      },
-      detailsHaveChanged() {
-        return (
-          this.initialTitle !== this.title ||
-          this.initialDescription !== this.description ||
-          this.groupsHaveChanged ||
-          this.initialActive !== this.activeIsSelected
-        );
-      },
     },
     methods: {
       submitData() {
         this.showServerError = false;
         this.showTitleError = false;
+
         // Return immediately if "submit" has already been clicked
-        if (this.formIsSubmitted) {
-          // IDEA a loading indictor or something would probably be handy
+        if (this.disabled) {
           return;
+        }
+
+        // TODO: Add error handling & snackbar message that notifies user when they have
+        // selected ONLY the AdHoc Learners Group, but selects no learners
+        // For now - if the only thing selected is AdHoc Learners but there
+        // are no learners actually selected, pretend they selected Entire class
+        // NOT DONE due to this being 0.13.0 post string freeze.
+        // Create an issue for this and it'll be a quick fix in 0.13.1
+        if (this.selectedCollectionIds.length === 0 && this.adHocLearners.length === 0) {
+          this.selectedCollectionIds.push(this.classId);
         }
 
         if (this.formIsValid) {
           this.formIsSubmitted = true;
-          if (!this.detailsHaveChanged) {
-            this.closeModal();
-            return;
-          }
-
-          return this.isInEditMode
-            ? this.$emit('save', this.formData)
-            : this.$emit('continue', this.formData);
+          this.$emit('submit', {
+            title: this.title,
+            description: this.description,
+            assignments: this.selectedCollectionIds,
+            active: this.activeIsSelected,
+            learner_ids: this.adHocLearners,
+          });
         } else {
-          // shouldn't ever be true, but being safe
           this.formIsSubmitted = false;
           this.$refs.titleField.focus();
         }
       },
-      closeModal() {
-        this.$emit('cancel');
-      },
-      // NOTE: These methods are not used inside the component, but may be called
-      // from a parent component
+      /**
+       * @public
+       */
       handleSubmitFailure() {
         this.formIsSubmitted = false;
         this.showServerError = true;
       },
+      /**
+       * @public
+       */
       handleSubmitTitleFailure() {
         this.formIsSubmitted = false;
         this.showTitleError = true;
       },
-    },
-    $trs: {
-      cancel: 'Cancel',
-      continue: 'Continue',
-      description: 'Description',
-      fieldRequiredErro: 'This field is required',
-      save: 'Save',
-      titlePlaceholder: 'Title',
-      assignedGroupsLabel: 'Visible to',
     },
   };
 
@@ -251,13 +257,13 @@
 
   fieldset {
     padding: 0;
-    margin: 0;
+    margin: 24px 0;
     border: 0;
   }
 
   legend {
-    padding-top: 16px;
-    padding-bottom: 8px;
+    font-size: 16px;
+    font-weight: bold;
   }
 
 </style>
