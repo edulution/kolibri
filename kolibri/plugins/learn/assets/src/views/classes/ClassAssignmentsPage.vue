@@ -5,7 +5,7 @@
       {{ classroomName }}
     </h1>
     <!-- <AssignedLessonsCards :lessons="lessons" :isMobile="windowIsSmall" />
- --> 
+ -->
     <AssignedExamsCards
       :exams="exams"
       :isMobile="windowIsSmall"
