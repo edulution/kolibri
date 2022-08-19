@@ -27,11 +27,11 @@
                 {{ $tr('signInError') }}
               </UiAlert>
               <UiAlert
-                v-else-if="unknownUser"
+                v-else-if="inactiveUser"
                 type="error"
                 :dismissible="false"
               >
-                {{ $tr('userDoesNotExist') }}
+                {{ $tr('userIsDeactivated') }}
               </UiAlert>
               <transition name="textbox">
                 <KTextbox
@@ -162,7 +162,7 @@
       usernameNotAlphaNumUnderscore: 'Username can only contain letters, numbers, and underscores',
       documentTitle: 'User Sign In',
       privacyLink: 'Usage and privacy',
-      userDoesNotExist: 'User does not exist',
+      userIsDeactivated: 'This user has been deactivated',
     },
     metaInfo() {
       return {
@@ -205,7 +205,7 @@
       ...mapState({
         passwordMissing: state => state.core.loginError === LoginErrors.PASSWORD_MISSING,
         invalidCredentials: state => state.core.loginError === LoginErrors.INVALID_CREDENTIALS,
-        unknownUser: state => state.core.loginError === LoginErrors.UNKNOWN_USER,
+        inactiveUser: state => state.core.loginError === LoginErrors.INACTIVE_USER,
         busy: state => state.core.signInBusy,
       }),
       simpleSignIn() {
@@ -263,7 +263,7 @@
         return this.$tr('poweredBy', { version: __version });
       },
       hasServerError() {
-        return Boolean(this.passwordMissing || this.invalidCredentials || this.unknownUser);
+        return Boolean(this.passwordMissing || this.invalidCredentials || this.inactiveUser);
       },
       needPasswordField() {
         return !this.simpleSignIn || this.hasServerError;
