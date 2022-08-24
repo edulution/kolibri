@@ -86,6 +86,7 @@ const MaxPointsPerContent = 500;
 const LoginErrors = {
   PASSWORD_MISSING: 'PASSWORD_MISSING',
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  INACTIVE_USER: 'INACTIVE_USER',
 };
 
 const PermissionTypes = {
@@ -115,6 +116,7 @@ const ERROR_CONSTANTS = {
   NETWORK_LOCATION_NOT_FOUND: 'NETWORK_LOCATION_NOT_FOUND',
   // 401 error constants
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  INACTIVE_USER: 'INACTIVE_USER',
   // 404 error constants
   NOT_FOUND: 'NOT_FOUND',
   // 403 error constants

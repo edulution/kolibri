@@ -554,6 +554,16 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
 
     facility = models.ForeignKey("Facility")
 
+    deleted = models.BooleanField(default=False)
+
+    @property
+    def is_deleted(self):
+        return self.deleted
+
+    @is_deleted.setter
+    def set_deleted(self,value):
+        self.deleted = value
+
     is_facility_user = True
 
     def calculate_partition(self):
