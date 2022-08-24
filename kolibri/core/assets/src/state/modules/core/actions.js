@@ -278,12 +278,15 @@ export function kolibriLogin(store, sessionPayload) {
       const errorsCaught = CatchErrors(error, [
         ERROR_CONSTANTS.INVALID_CREDENTIALS,
         ERROR_CONSTANTS.MISSING_PASSWORD,
+        ERROR_CONSTANTS.INACTIVE_USER,
       ]);
       if (errorsCaught) {
         if (errorsCaught.includes(ERROR_CONSTANTS.INVALID_CREDENTIALS)) {
           store.commit('CORE_SET_LOGIN_ERROR', LoginErrors.INVALID_CREDENTIALS);
         } else if (errorsCaught.includes(ERROR_CONSTANTS.MISSING_PASSWORD)) {
           store.commit('CORE_SET_LOGIN_ERROR', LoginErrors.PASSWORD_MISSING);
+        } else if (errorsCaught.includes(ERROR_CONSTANTS.INACTIVE_USER)) {
+          store.commit('CORE_SET_LOGIN_ERROR', LoginErrors.INACTIVE_USER);
         }
       } else {
         store.dispatch('handleApiError', error);

@@ -320,8 +320,9 @@ class SessionViewSet(viewsets.ViewSet):
         username = request.data.get('username', '')
         password = request.data.get('password', '')
         facility_id = request.data.get('facility', None)
+        
         user = authenticate(username=username, password=password, facility=facility_id)
-        if user is not None and user.is_active:
+        if user is not None and user.is_active and not user.is_deleted:
             # Correct password, and the user is marked "active"
             login(request, user)
             # Success!
@@ -329,6 +330,13 @@ class SessionViewSet(viewsets.ViewSet):
             # If so, they will not have any UserSessionLogs until we call get_session.
             request.session['first_login'] = not UserSessionLog.objects.filter(user=user).exists()
             return Response(self.get_session(request))
+        elif user.is_deleted:
+            # Respond with error
+            return Response([{'id': error_constants.INACTIVE_USER,
+                              'metadata': {
+                                'message': 'This user has been deactivated.'
+                              }}],
+                            status=status.HTTP_401_UNAUTHORIZED)
         elif not password and FacilityUser.objects.filter(username__iexact=username, facility=facility_id).exists():
             # Password was missing, but username is valid, prompt to give password
             return Response([{'id': error_constants.MISSING_PASSWORD,
