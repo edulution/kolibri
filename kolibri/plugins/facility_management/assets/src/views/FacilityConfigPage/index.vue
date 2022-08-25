@@ -1,17 +1,10 @@
 <template>
-
   <div>
-
-    <Notifications
-      :notification="notification"
-      @dismiss="dismissNotification()"
-    />
-
+    <Notifications :notification="notification" @dismiss="dismissNotification()" />
     <div class="mb">
       <h1>{{ $tr('pageHeader') }}</h1>
       <p>{{ $tr('pageDescription') }}</p>
     </div>
-
     <template v-if="settings!==null">
       <div class="mb">
         <h2>{{ $tr('currentFacilityHeader') }}</h2>
@@ -19,51 +12,28 @@
           {{ facilityName }}
         </p>
       </div>
-
       <div class="mb">
         <div class="settings">
           <template v-for="setting in settingsList">
-            <KCheckbox
-              :key="setting"
-              :label="$tr(setting)"
-              :checked="settings[setting]"
-              @change="toggleSetting(setting)"
-            />
+            <KCheckbox :key="setting" :label="$tr(setting)" :checked="settings[setting]" @change="toggleSetting(setting)" />
           </template>
         </div>
-
         <div>
-          <KButton
-            :primary="false"
-            appearance="raised-button"
-            :text="$tr('resetToDefaultSettings')"
-            name="reset-settings"
-            @click="showModal=true"
-          />
-
-          <KButton
-            :primary="true"
-            appearance="raised-button"
-            :text="$tr('saveChanges')"
-            name="save-settings"
-            :disabled="!settingsHaveChanged"
+          <KButton :primary="false" appearance="raised-button" :text="$tr('resetToDefaultSettings')" name="reset-settings" @click="showModal=true" />
+          <KButton 
+            :primary="true" 
+            appearance="raised-button" 
+            :text="$tr('saveChanges')" 
+            name="save-settings" 
+            :disabled="!settingsHaveChanged" 
             @click="saveConfig()"
           />
         </div>
       </div>
     </template>
-
-    <ConfirmResetModal
-      v-if="showModal"
-      id="confirm-reset"
-      @click-confirm="resetToDefaultSettings"
-      @click-cancel="showModal=false"
-    />
+    <ConfirmResetModal v-if="showModal" id="confirm-reset" @click-confirm="resetToDefaultSettings" @click-cancel="showModal=false" />
   </div>
-
 </template>
-
-
 <script>
 
   import { mapState, mapActions, mapMutations } from 'vuex';
@@ -80,6 +50,7 @@
     'learnerCanLoginWithNoPassword',
     'showDownloadButtonInLearn',
     'allowGuestAccess',
+    'learnerCanViewLessons',
   ];
 
   export default {
@@ -150,6 +121,7 @@
       learnerCanLoginWithNoPassword: 'Allow learners to sign in with no password',
       showDownloadButtonInLearn: "Show 'download' button with content",
       allowGuestAccess: 'Allow users to access content without signing in',
+      learnerCanViewLessons: 'Allow learners to access all lessons',
       pageDescription: 'Configure various settings',
       pageHeader: 'Facility settings',
       resetToDefaultSettings: 'Reset to defaults',
@@ -159,8 +131,6 @@
   };
 
 </script>
-
-
 <style lang="scss" scoped>
 
   .mb {
