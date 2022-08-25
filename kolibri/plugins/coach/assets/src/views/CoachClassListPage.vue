@@ -1,37 +1,22 @@
 <template>
-
-  <CoreBase
-    :immersivePage="false"
-    :appBarTitle="coachStrings.$tr('coachLabel')"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="false"
-  >
-
+  <CoreBase :immersivePage="false" :appBarTitle="coachStrings.$tr('coachLabel')" :authorized="userIsAuthorized" authorizedRole="adminOrCoach" :showSubNav="false">
     <TopNavbar slot="sub-nav" />
-
     <KPageContainer>
       <h1>{{ coachStrings.$tr('classesLabel') }}</h1>
       <p>{{ $tr('classPageSubheader') }}</p>
-
       <p v-if="classList.length === 0">
-        <KExternalLink
-          v-if="isAdmin && createClassUrl"
-          :text="$tr('noClassesDetailsForAdmin')"
-          :href="createClassUrl"
-        />
+        <KExternalLink v-if="isAdmin && createClassUrl" :text="$tr('noClassesDetailsForAdmin')" :href="createClassUrl" />
         <span v-else>
           {{ emptyStateDetails }}
         </span>
       </p>
-
       <CoreTable v-else>
         <thead slot="thead">
           <tr>
             <th>{{ $tr('classNameLabel') }}</th>
             <th>{{ coachStrings.$tr('coachesLabel') }}</th>
             <th>{{ coachStrings.$tr('learnersLabel') }}</th>
-            <th>{{ $tr('channelsLabel') }}</th>
+            <th v-if="userIsAdminOrSuperuser">{{ $tr('channelsLabel') }}</th>
           </tr>
         </thead>
         <transition-group slot="tbody" tag="tbody" name="list">
@@ -39,10 +24,7 @@
             <td>
               <KLabeledIcon>
                 <KIcon slot="icon" classroom />
-                <KRouterLink
-                  :text="classObj.name"
-                  :to="$router.getRoute('HomePage', { classId: classObj.id })"
-                />
+                <KRouterLink :text="classObj.name" :to="$router.getRoute('HomePage', { classId: classObj.id })" />
               </KLabeledIcon>
             </td>
             <td>
@@ -51,32 +33,18 @@
             <td>
               {{ coachStrings.$tr('integer', { value: classObj.learner_count }) }}
             </td>
-            <td>
+            <td v-if="userIsAdminOrSuperuser">
               <div class="button">
-                <KButton
-                  :primary="false"
-                  :text="$tr('subscribeChannelsButton')"
-                  @click="openSubscribeModal(classObj)"
-                />
+                <KButton :primary="false" :text="$tr('subscribeChannelsButton')" @click="openSubscribeModal(classObj)" />
               </div>
             </td>
           </tr>
         </transition-group>
       </CoreTable>
-
-      <SubscribeModal
-        v-if="subscriptionModalShown===Modals.CHOOSE_CLASS_SUBSCRIPTIONS"
-        :collectionId="currentClass.id"
-        :collectionName="currentClass.name"
-      />
-
+      <SubscribeModal v-if="subscriptionModalShown===Modals.CHOOSE_CLASS_SUBSCRIPTIONS" :collectionId="currentClass.id" :collectionName="currentClass.name" />
     </KPageContainer>
-
   </CoreBase>
-
 </template>
-
-
 <script>
 
   import { mapGetters, mapState, mapActions } from 'vuex';
@@ -99,7 +67,7 @@
       };
     },
     computed: {
-      ...mapGetters(['isAdmin', 'isClassCoach', 'isFacilityCoach']),
+      ...mapGetters(['isSuperuser', 'isAdmin', 'isClassCoach', 'isFacilityCoach']),
       ...mapState(['classList']),
       ...mapState('subscriptions', ['subscriptionModalShown', 'selectedSubscriptions']),
       Modals: () => SubscriptionModals,
@@ -120,6 +88,9 @@
         if (facilityUrl) {
           return facilityUrl();
         }
+      },
+      userIsAdminOrSuperuser() {
+        return this.isAdmin || this.isSuperuser;
       },
     },
     methods: {
@@ -144,6 +115,4 @@
   };
 
 </script>
-
-
 <style lang="scss" scoped></style>
