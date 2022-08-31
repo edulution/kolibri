@@ -30,6 +30,7 @@ export const defaultFacilityConfig = {
   learnerCanLoginWithNoPassword: false,
   showDownloadButtonInLearn: false,
   allowGuestAccess: true,
+  learnerCanViewLessons: false,
 };
 
 export const notificationTypes = {

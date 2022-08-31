@@ -1,6 +1,8 @@
 {
-  "formal": {
-    "mappings": {
+  "formal":
+  {
+    "mappings":
+    {
       "learner_can_edit_username": false,
       "learner_can_edit_name": false,
       "learner_can_edit_password": false,
@@ -8,12 +10,16 @@
       "learner_can_delete_account": false,
       "learner_can_login_with_no_password": true,
       "show_download_button_in_learn": false,
-      "allow_guest_access": false
+      "allow_guest_access": false,
+      "learner_can_view_lessons": false
+
     }
   },
-  "nonformal": {
+  "nonformal":
+  {
     "default": true,
-    "mappings": {
+    "mappings":
+    {
       "learner_can_edit_username": true,
       "learner_can_edit_name": true,
       "learner_can_edit_password": true,
@@ -21,11 +27,14 @@
       "learner_can_delete_account": true,
       "learner_can_login_with_no_password": false,
       "show_download_button_in_learn": true,
-      "allow_guest_access": true
+      "allow_guest_access": true,
+      "learner_can_view_lessons": true
     }
   },
-  "informal": {
-    "mappings": {
+  "informal":
+  {
+    "mappings":
+    {
       "learner_can_edit_username": true,
       "learner_can_edit_name": true,
       "learner_can_edit_password": true,
@@ -33,7 +42,9 @@
       "learner_can_delete_account": true,
       "learner_can_login_with_no_password": false,
       "show_download_button_in_learn": true,
-      "allow_guest_access": true
+      "allow_guest_access": true,
+      "learner_can_view_lessons": true
+
     }
   }
 }

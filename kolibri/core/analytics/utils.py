@@ -35,6 +35,7 @@ facility_settings = [
     "learner_can_login_with_no_password",
     "show_download_button_in_learn",
     "allow_guest_access",
+    "learner_can_view_lessons",
 ]
 
 
@@ -43,6 +44,7 @@ def dump_zipped_json(data):
     try:
         # perform the import in here as zlib isn't available on some platforms
         import zlib
+
         jsondata = zlib.compress(jsondata)
     except:  # noqa
         pass
@@ -54,12 +56,17 @@ def dump_zipped_json(data):
 def version_matches_range(version, version_range):
 
     # if no version range is provided, assume we don't have opinions about the version
-    if not version_range or version_range == '*':
+    if not version_range or version_range == "*":
         return True
 
     # support having multiple comma-delimited version criteria
     if "," in version_range:
-        return all([version_matches_range(version, vrange) for vrange in version_range.split(",")])
+        return all(
+            [
+                version_matches_range(version, vrange)
+                for vrange in version_range.split(",")
+            ]
+        )
 
     # extract and normalize version strings
     operator, range_version = re.match(r"([<>=!]*)(\d.*)", version_range).groups()
@@ -99,31 +106,47 @@ def extract_facility_statistics(facility):
 
     dataset_id = facility.dataset_id
 
-    settings = {name: getattr(facility.dataset, name) for name in facility_settings if hasattr(facility.dataset, name)}
+    settings = {
+        name: getattr(facility.dataset, name)
+        for name in facility_settings
+        if hasattr(facility.dataset, name)
+    }
 
-    learners = FacilityUser.objects.filter(dataset_id=dataset_id).exclude(roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH])
-    coaches = FacilityUser.objects.filter(dataset_id=dataset_id, roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH])
+    learners = FacilityUser.objects.filter(dataset_id=dataset_id).exclude(
+        roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH]
+    )
+    coaches = FacilityUser.objects.filter(
+        dataset_id=dataset_id, roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH]
+    )
 
     usersessions = UserSessionLog.objects.filter(dataset_id=dataset_id)
-    contsessions = ContentSessionLog.objects.filter(dataset_id=dataset_id, time_spent__lt=3600 * 2)
+    contsessions = ContentSessionLog.objects.filter(
+        dataset_id=dataset_id, time_spent__lt=3600 * 2
+    )
 
     # the aggregates below are used to calculate the first and most recent times this device was used
-    usersess_agg = (usersessions
-                    .filter(start_timestamp__gt=datetime.datetime(2016, 1, 1))
-                    .aggregate(first=Min("start_timestamp"), last=Max("last_interaction_timestamp")))
-    contsess_agg = (contsessions
-                    .filter(start_timestamp__gt=datetime.datetime(2016, 1, 1))
-                    .aggregate(first=Min("start_timestamp"), last=Max("end_timestamp")))
+    usersess_agg = usersessions.filter(
+        start_timestamp__gt=datetime.datetime(2016, 1, 1)
+    ).aggregate(first=Min("start_timestamp"), last=Max("last_interaction_timestamp"))
+    contsess_agg = contsessions.filter(
+        start_timestamp__gt=datetime.datetime(2016, 1, 1)
+    ).aggregate(first=Min("start_timestamp"), last=Max("end_timestamp"))
 
     # extract the first and last times we've seen logs, ignoring any that are None
     first_times = [d["first"] for d in [usersess_agg, contsess_agg] if d["first"]]
     last_times = [d["last"] for d in [usersess_agg, contsess_agg] if d["last"]]
 
     # since newly provisioned devices won't have logs, we don't know whether we have an available datetime object
-    first_interaction_timestamp = getattr(min(first_times), 'strftime', None) if first_times else None
-    last_interaction_timestamp = getattr(max(last_times), 'strftime', None) if last_times else None
+    first_interaction_timestamp = (
+        getattr(min(first_times), "strftime", None) if first_times else None
+    )
+    last_interaction_timestamp = (
+        getattr(max(last_times), "strftime", None) if last_times else None
+    )
 
-    sesslogs_by_kind = contsessions.order_by("kind").values("kind").annotate(count=Count("kind"))
+    sesslogs_by_kind = (
+        contsessions.order_by("kind").values("kind").annotate(count=Count("kind"))
+    )
     sesslogs_by_kind = {log["kind"]: log["count"] for log in sesslogs_by_kind}
 
     summarylogs = ContentSummaryLog.objects.filter(dataset_id=dataset_id)
@@ -133,21 +156,35 @@ def extract_facility_statistics(facility):
 
     return {
         # facility_id
-        "fi": base64.encodestring(hashlib.md5(facility.id.encode()).digest())[:10].decode(),
+        "fi": base64.encodestring(hashlib.md5(facility.id.encode()).digest())[
+            :10
+        ].decode(),
         # settings
         "s": settings,
         # learners_count
         "lc": learners.count(),
         # learner_login_count
-        "llc": usersessions.exclude(user__roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH]).distinct().count(),
+        "llc": usersessions.exclude(
+            user__roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH]
+        )
+        .distinct()
+        .count(),
         # coaches_count
         "cc": coaches.count(),
         # coach_login_count
-        "clc": usersessions.filter(user__roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH]).distinct().count(),
+        "clc": usersessions.filter(
+            user__roles__kind__in=[role_kinds.ADMIN, role_kinds.COACH]
+        )
+        .distinct()
+        .count(),
         # first
-        "f" : first_interaction_timestamp("%Y-%m-%d") if first_interaction_timestamp else None,
+        "f": first_interaction_timestamp("%Y-%m-%d")
+        if first_interaction_timestamp
+        else None,
         # last
-        "l": last_interaction_timestamp("%Y-%m-%d") if last_interaction_timestamp else None,
+        "l": last_interaction_timestamp("%Y-%m-%d")
+        if last_interaction_timestamp
+        else None,
         # summ_started
         "ss": summarylogs.count(),
         # summ_complete
@@ -169,9 +206,21 @@ def extract_facility_statistics(facility):
         # sess_anon_count
         "sac": contsessions_anon.count(),
         # sess_user_time
-        "sut": int((contsessions_user.aggregate(total_time=Sum("time_spent"))["total_time"] or 0) / 60),
+        "sut": int(
+            (
+                contsessions_user.aggregate(total_time=Sum("time_spent"))["total_time"]
+                or 0
+            )
+            / 60
+        ),
         # sess_anon_time
-        "sat": int((contsessions_anon.aggregate(total_time=Sum("time_spent"))["total_time"] or 0) / 60),
+        "sat": int(
+            (
+                contsessions_anon.aggregate(total_time=Sum("time_spent"))["total_time"]
+                or 0
+            )
+            / 60
+        ),
     }
 
 
@@ -180,15 +229,25 @@ def extract_channel_statistics(channel):
     channel_id = channel.id
     tree_id = channel.root.tree_id
 
-    sessionlogs = ContentSessionLog.objects.filter(channel_id=channel_id, time_spent__lt=3600 * 2)
+    sessionlogs = ContentSessionLog.objects.filter(
+        channel_id=channel_id, time_spent__lt=3600 * 2
+    )
     summarylogs = ContentSummaryLog.objects.filter(channel_id=channel_id)
 
-    sesslogs_by_kind = sessionlogs.order_by("kind").values("kind").annotate(count=Count("kind"))
+    sesslogs_by_kind = (
+        sessionlogs.order_by("kind").values("kind").annotate(count=Count("kind"))
+    )
     sesslogs_by_kind = {log["kind"]: log["count"] for log in sesslogs_by_kind}
 
-    pop = list(sessionlogs.values("content_id").annotate(count=Count("id")).order_by("-count")[:50])
+    pop = list(
+        sessionlogs.values("content_id")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:50]
+    )
 
-    localfiles = LocalFile.objects.filter(available=True, files__contentnode__tree_id=tree_id).distinct()
+    localfiles = LocalFile.objects.filter(
+        available=True, files__contentnode__tree_id=tree_id
+    ).distinct()
 
     contsessions_user = sessionlogs.exclude(user=None)
     contsessions_anon = sessionlogs.filter(user=None)
@@ -199,13 +258,16 @@ def extract_channel_statistics(channel):
         # version
         "v": channel.version,
         # updated
-        "u": channel.last_updated.strftime("%Y-%m-%d") if channel.last_updated else None,
+        "u": channel.last_updated.strftime("%Y-%m-%d")
+        if channel.last_updated
+        else None,
         # popular_ids
         "pi": [item["content_id"][:10] for item in pop],
         # popular_counts
         "pc": [item["count"] for item in pop],
         # storage calculated by the MB
-        "s": (localfiles.aggregate(Sum("file_size"))["file_size__sum"] or 0) / (2 ** 20),
+        "s": (localfiles.aggregate(Sum("file_size"))["file_size__sum"] or 0)
+        / (2**20),
         # summ_started
         "ss": summarylogs.count(),
         # summ_complete
@@ -217,25 +279,41 @@ def extract_channel_statistics(channel):
         # sess_anon_count
         "sac": contsessions_anon.count(),
         # sess_user_time
-        "sut": int((contsessions_user.aggregate(total_time=Sum("time_spent"))["total_time"] or 0) / 60),
+        "sut": int(
+            (
+                contsessions_user.aggregate(total_time=Sum("time_spent"))["total_time"]
+                or 0
+            )
+            / 60
+        ),
         # sess_anon_time
-        "sat": int((contsessions_anon.aggregate(total_time=Sum("time_spent"))["total_time"] or 0) / 60),
+        "sat": int(
+            (
+                contsessions_anon.aggregate(total_time=Sum("time_spent"))["total_time"]
+                or 0
+            )
+            / 60
+        ),
     }
 
 
 @transaction.atomic
 def create_and_update_notifications(data, source):
-    messages = [obj for obj in data.get('messages', []) if obj.get('msg_id')]
-    excluded_ids = [obj.get('msg_id') for obj in messages]
-    PingbackNotification.objects.filter(source=source).exclude(id__in=excluded_ids).update(active=False)
+    messages = [obj for obj in data.get("messages", []) if obj.get("msg_id")]
+    excluded_ids = [obj.get("msg_id") for obj in messages]
+    PingbackNotification.objects.filter(source=source).exclude(
+        id__in=excluded_ids
+    ).update(active=False)
     for msg in messages:
         new_msg = {
-            'id': msg['msg_id'],
-            'version_range': msg.get('version_range'),
-            'link_url': msg.get('link_url'),
-            'i18n': msg.get('i18n'),
-            'timestamp': msg.get('timestamp'),
-            'source': source,
-            'active': True,
+            "id": msg["msg_id"],
+            "version_range": msg.get("version_range"),
+            "link_url": msg.get("link_url"),
+            "i18n": msg.get("i18n"),
+            "timestamp": msg.get("timestamp"),
+            "source": source,
+            "active": True,
         }
-        PingbackNotification.objects.update_or_create(id=new_msg['id'], defaults=new_msg)
+        PingbackNotification.objects.update_or_create(
+            id=new_msg["id"], defaults=new_msg
+        )
