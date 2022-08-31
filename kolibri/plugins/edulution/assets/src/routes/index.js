@@ -1,7 +1,7 @@
 import store from 'kolibri.coreVue.vuex.store';
 import { showKnowledgeMap } from '../modules/topicsTree/handlers';
 import { PageNames } from '../constants';
-import routes from '../../../../learn/assets/src/routes';
+import routes from '../../../learn/assets/src/routes';
 import { showChannels } from '../modules/topicsRoot/handlers';
 
 export default [
