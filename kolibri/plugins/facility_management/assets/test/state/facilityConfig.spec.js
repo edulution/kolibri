@@ -10,7 +10,8 @@ const fakeFacility = {
   name: 'Nalanda Maths',
 };
 
-const fakeDatasets = [{
+const fakeDatasets = [
+  {
     id: 'dataset_2',
     learner_can_edit_name: true,
     learner_can_edit_username: false,
