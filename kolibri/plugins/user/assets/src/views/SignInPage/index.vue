@@ -1,12 +1,6 @@
 <template>
-
   <div class="fh">
-
-    <FacilityModal
-      v-if="facilityModalVisible"
-      @close="closeFacilityModal"
-    />
-
+    <FacilityModal v-if="facilityModalVisible" @close="closeFacilityModal" />
     <div class="wrapper-table">
       <div class="table-row main-row" :style="backgroundImageStyle">
         <div class="table-cell main-cell">
@@ -19,80 +13,53 @@
               {{ $tr('kolibri') }}
             </h1> -->
             <form ref="form" class="login-form" @submit.prevent="signIn">
-              <UiAlert
-                v-if="invalidCredentials"
-                type="error"
-                :dismissible="false"
-              >
+              <UiAlert v-if="invalidCredentials" type="error" :dismissible="false">
                 {{ $tr('signInError') }}
               </UiAlert>
-              <UiAlert
-                v-else-if="inactiveUser"
-                type="error"
-                :dismissible="false"
-              >
+              <UiAlert v-else-if="inactiveUser" type="error" :dismissible="false">
                 {{ $tr('userIsDeactivated') }}
               </UiAlert>
               <transition name="textbox">
-                <KTextbox
-                  id="username"
-                  ref="username"
-                  v-model="username"
-                  autocomplete="username"
-                  :autofocus="!hasMultipleFacilities"
-                  :label="$tr('username')"
-                  :invalid="usernameIsInvalid"
-                  :invalidText="usernameIsInvalidText"
-                  @blur="handleUsernameBlur"
-                  @input="showDropdown = true"
+                <KTextbox 
+                  id="username" 
+                  ref="username" 
+                  v-model="username" 
+                  autocomplete="username" 
+                  :autofocus="!hasMultipleFacilities" 
+                  :label="$tr('username')" 
+                  :invalid="usernameIsInvalid" 
+                  :invalidText="usernameIsInvalidText" 
+                  @blur="handleUsernameBlur" 
+                  @input="showDropdown = true" 
                   @keydown="handleKeyboardNav"
                 />
               </transition>
               <transition name="textbox">
-                <KTextbox
-                  v-if="needPasswordField"
-                  id="password"
-                  ref="password"
-                  v-model="password"
-                  type="password"
-                  autocomplete="current-password"
-                  :label="$tr('password')"
-                  :autofocus="simpleSignIn"
-                  :invalid="passwordIsInvalid"
-                  :invalidText="passwordIsInvalidText"
-                  :floatingLabel="!autoFilledByChromeAndNotEdited"
-                  @blur="passwordBlurred = true"
+                <KTextbox 
+                  v-if="needPasswordField" 
+                  id="password" 
+                  ref="password" 
+                  v-model="password" 
+                  type="password" 
+                  autocomplete="current-password" 
+                  :label="$tr('password')" 
+                  :autofocus="simpleSignIn" 
+                  :invalid="passwordIsInvalid" 
+                  :invalidText="passwordIsInvalidText" 
+                  :floatingLabel="!autoFilledByChromeAndNotEdited" 
+                  @blur="passwordBlurred = true" 
                   @input="handlePasswordChanged"
                 />
               </transition>
               <div>
-                <KButton
-                  class="login-btn"
-                  type="submit"
-                  :text="$tr('signIn')"
-                  :primary="true"
-                  :disabled="busy"
-                />
+                <KButton class="login-btn" type="submit" :text="$tr('signIn')" :primary="true" :disabled="busy" />
               </div>
             </form>
-
             <p class="create">
-              <KRouterLink
-                v-if="canSignUp"
-                :text="$tr('createAccount')"
-                :to="signUpPage"
-                :primary="true"
-                appearance="flat-button"
-              />
+              <KRouterLink v-if="canSignUp" :text="$tr('createAccount')" :to="signUpPage" :primary="true" appearance="flat-button" />
             </p>
             <p class="guest small-text">
-              <KExternalLink
-                v-if="allowGuestAccess"
-                :text="$tr('accessAsGuest')"
-                :href="guestURL"
-                :primary="true"
-                appearance="basic-link"
-              />
+              <KExternalLink v-if="allowGuestAccess" :text="$tr('accessAsGuest')" :href="guestURL" :primary="true" appearance="basic-link" />
             </p>
           </div>
         </div>
@@ -105,26 +72,14 @@
               {{ versionMsg }}
             </span>
             •
-            <KButton
-              :text="$tr('privacyLink')"
-              appearance="basic-link"
-              @click="privacyModalVisible = true"
-            />
+            <KButton :text="$tr('privacyLink')" appearance="basic-link" @click="privacyModalVisible = true" />
           </div>
         </div>
       </div>
     </div>
-
-    <PrivacyInfoModal
-      v-if="privacyModalVisible"
-      @cancel="privacyModalVisible = false"
-    />
-
+    <PrivacyInfoModal v-if="privacyModalVisible" @cancel="privacyModalVisible = false" />
   </div>
-
 </template>
-
-
 <script>
 
   import { mapState, mapGetters, mapActions } from 'vuex';
@@ -285,9 +240,9 @@
         return urls['kolibri:core:guest']();
       },
       getImagePath() {
-        var today = new Date().getDate();
-        let numOfPhotos = (today % 17) + 1;
-        return require('./background' + numOfPhotos + '.jpg');
+        let numAvailablePhotos = 28;
+        let photoNum = Math.floor(Math.random() * (numAvailablePhotos - 1) + 1);
+        return require('./background' + photoNum + '.jpg');
       },
       backgroundImageStyle() {
         return {
@@ -428,129 +383,126 @@
   };
 
 </script>
-
-
 <style lang="scss" scoped>
+@import '~kolibri.styles.definitions';
 
-  @import '~kolibri.styles.definitions';
+.fh {
+  height: 100%;
+}
 
-  .fh {
-    height: 100%;
-  }
+.wrapper-table {
+  display: table;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+}
 
-  .wrapper-table {
-    display: table;
-    width: 100%;
-    height: 100%;
-    text-align: center;
-  }
+.table-row {
+  display: table-row;
+}
 
-  .table-row {
-    display: table-row;
-  }
+.main-row {
+  text-align: center;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
 
-  .main-row {
-    text-align: center;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: cover;
-  }
+.table-cell {
+  display: table-cell;
+}
 
-  .table-cell {
-    display: table-cell;
-  }
+.main-cell {
+  height: 100%;
+  vertical-align: middle;
+}
 
-  .main-cell {
-    height: 100%;
-    vertical-align: middle;
-  }
+.box {
+  @extend %dropshadow-16dp;
 
-  .box {
-    @extend %dropshadow-16dp;
+  width: 300px;
+  padding: 16px 32px;
+  margin: 16px auto;
+  border-radius: $radius;
+}
 
-    width: 300px;
-    padding: 16px 32px;
-    margin: 16px auto;
-    border-radius: $radius;
-  }
+.login-form {
+  text-align: left;
+}
 
-  .login-form {
-    text-align: left;
-  }
+.login-btn {
+  width: calc(100% - 16px);
+}
 
-  .login-btn {
-    width: calc(100% - 16px);
-  }
+.create {
+  margin-top: 32px;
+  margin-bottom: 8px;
+}
 
-  .create {
-    margin-top: 32px;
-    margin-bottom: 8px;
-  }
+.guest {
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
 
-  .guest {
-    margin-top: 8px;
-    margin-bottom: 16px;
-  }
+.small-text {
+  font-size: 0.8em;
+}
 
-  .small-text {
-    font-size: 0.8em;
-  }
+.version-string {
+  white-space: nowrap;
+}
 
-  .version-string {
-    white-space: nowrap;
-  }
+.footer-cell {
+  @extend %dropshadow-8dp;
 
-  .footer-cell {
-    @extend %dropshadow-8dp;
+  padding: 16px;
+}
 
-    padding: 16px;
-  }
+.footer-cell .small-text {
+  margin-top: 8px;
+}
 
-  .footer-cell .small-text {
-    margin-top: 8px;
-  }
+.suggestions-wrapper {
+  position: relative;
+  width: 100%;
+}
 
-  .suggestions-wrapper {
-    position: relative;
-    width: 100%;
-  }
+.suggestions {
+  @extend %dropshadow-1dp;
 
-  .suggestions {
-    @extend %dropshadow-1dp;
+  position: absolute;
+  z-index: 8;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  // Move up snug against the textbox
+  margin-top: -2em;
+  list-style-type: none;
+  background-color: white;
+}
 
-    position: absolute;
-    z-index: 8;
-    width: 100%;
-    padding: 0;
-    margin: 0;
-    // Move up snug against the textbox
-    margin-top: -2em;
-    list-style-type: none;
-    background-color: white;
-  }
+.textbox-enter-active {
+  transition: opacity 0.5s;
+}
 
-  .textbox-enter-active {
-    transition: opacity 0.5s;
-  }
+.textbox-enter {
+  opacity: 0;
+}
 
-  .textbox-enter {
-    opacity: 0;
-  }
+.list-leave-active {
+  transition: opacity 0.1s;
+}
 
-  .list-leave-active {
-    transition: opacity 0.1s;
-  }
+.textbox-leave {
+  transition: opacity 0s;
+}
 
-  .textbox-leave {
-    transition: opacity 0s;
-  }
-
-  .kolibri-title {
-    margin-top: 0;
-    margin-bottom: 8px;
-    font-size: 1.5em;
-    font-weight: 100;
-    color: #9174a9;
-  }
+.kolibri-title {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 1.5em;
+  font-weight: 100;
+  color: #9174a9;
+}
 
 </style>
