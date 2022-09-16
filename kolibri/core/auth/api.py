@@ -295,6 +295,9 @@ class SignUpViewSet(viewsets.ViewSet):
             "full_name": request.data.get('full_name', ''),
             "password": request.data.get('password', ''),
             "facility": Facility.get_default_facility().id,
+            "gender": request.data.get('gender', ''),
+            "birth_year": request.data.get('birth_year', ''),
+            "exam_number": request.data.get('exam_number', ''),
         }
 
     def create(self, request):
@@ -364,6 +367,9 @@ class SessionViewSet(viewsets.ViewSet):
             return {'id': session_key,
                     'username': '',
                     'full_name': '',
+                    'gender': '',
+                    'birth_year': '',
+                    'exam_number': '',
                     'user_id': None,
                     'facility_id': getattr(Facility.get_default_facility(), 'id', None),
                     'kind': ['anonymous'],
@@ -378,6 +384,9 @@ class SessionViewSet(viewsets.ViewSet):
         session = {'id': session_key,
                    'username': user.username,
                    'full_name': user.full_name,
+                   'gender': user.gender,
+                    'birth_year': user.birth_year,
+                    'exam_number': user.exam_number,
                    'user_id': user.id,
                    'can_manage_content': user.can_manage_content,
                    'server_time': server_time}

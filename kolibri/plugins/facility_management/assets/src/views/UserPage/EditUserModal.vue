@@ -74,6 +74,26 @@
       </fieldset>
     </template>
 
+    <KTextbox 
+      ref="examNumber"
+      v-model="newExamNumber"
+      type="text"
+      :label="$tr('examNumber')"
+      :maxlength="20"
+      :invalid="examNumberIsInvalid"
+      :invalidText="examNumberIsInValidText"
+      @blur="examNumberBlurred = true"
+      @input="setError(null)"
+    />
+    <BirthYearSelect
+      :value.sync="newBirthYear"
+      class="select"
+    />
+
+    <GenderSelect
+      :value.sync="newGender"
+      class="select"
+    />
   </KModal>
 
 </template>
@@ -91,6 +111,8 @@
   import UserTypeDisplay from 'kolibri.coreVue.components.UserTypeDisplay';
   import KSelect from 'kolibri.coreVue.components.KSelect';
   import KRadioButton from 'kolibri.coreVue.components.KRadioButton';
+  import GenderSelect from 'kolibri.coreVue.components.GenderSelect';
+  import BirthYearSelect from 'kolibri.coreVue.components.BirthYearSelect';
 
   // IDEA use UserTypeDisplay for strings in options
   export default {
@@ -114,6 +136,8 @@
       classCoachDescription: "Can only instruct classes that they're assigned to",
       facilityCoachLabel: 'Facility coach',
       facilityCoachDescription: 'Can instruct all classes in your facility',
+      examNumber: 'Exam/ID number (Optional)',
+      examNumberAlreadyExists: 'Exam number/ID number already exists',
     },
     components: {
       KModal,
@@ -122,6 +146,8 @@
       KRadioButton,
       KExternalLink,
       UserTypeDisplay,
+      GenderSelect,
+      BirthYearSelect,
     },
     props: {
       id: {
@@ -140,6 +166,18 @@
         type: String,
         required: true,
       },
+      examNumber: {
+        type: String,
+        required: true,
+      },
+      gender: {
+        type: String,
+        required: true,
+      },
+      birthYear: {
+        type: String,
+        required: true,
+      },
     },
     data() {
       return {
@@ -149,6 +187,10 @@
         typeSelected: null, // see beforeMount
         nameBlurred: false,
         usernameBlurred: false,
+        newExamNumber: this.examNumber,
+        newBirthYear: this.birthYear,
+        newGender: this.gender,
+        examNumberBlurred: false,
       };
     },
     computed: {
@@ -217,8 +259,34 @@
       usernameIsInvalid() {
         return Boolean(this.usernameIsInvalidText);
       },
+      examNumberAlreadyExists() {
+        if (this.examNumber === this.newExamNumber) {
+          return false;
+        }
+
+        if (this.error) {
+          if (this.error.includes(ERROR_CONSTANTS.EXAM_NUMBER_ALREADY_EXISTS)) {
+            return true;
+          }
+        }
+        return this.facilityUsers.find(({ exam_number }) => exam_number === this.newExamNumber);
+      },
+      examNumberIsInValidText() {
+        if (this.examNumberBlurred) {
+          if (this.newExamNumber === '') {
+            return '';
+          }
+          if (this.examNumberAlreadyExists) {
+            return this.$tr('examNumberAlreadyExists');
+          }
+        }
+        return '';
+      },
+      examNumberIsInvalid() {
+        return Boolean(this.examNumberIsInValidText);
+      },
       formIsInvalid() {
-        return this.nameIsInvalid || this.usernameIsInvalid;
+        return this.nameIsInvalid || this.usernameIsInvalid || this.examNumberIsInvalid;
       },
       editingSelf() {
         return this.currentUserId === this.id;
@@ -268,6 +336,8 @@
             this.$refs.name.focus();
           } else if (this.usernameIsInvalid) {
             this.$refs.username.focus();
+          } else if (this.examNumberIsInvalid) {
+            this.$refs.examNumber.focus();
           }
 
           return;
@@ -276,6 +346,9 @@
         const updates = {
           username: this.newUsername,
           full_name: this.newName,
+          exam_number: this.newExamNumber,
+          gender: this.newGender,
+          birth_year: this.newBirthYear,
         };
 
         if (this.newType) {
@@ -328,6 +401,10 @@
 
   .user-type.header {
     font-size: 16px;
+  }
+  
+  .select {
+    margin: 18px 0 36px;
   }
 
 </style>

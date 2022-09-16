@@ -592,7 +592,7 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
     birth_year = models.CharField(
         max_length=16, default="", validators=[validate_birth_year], blank=True
     )
-    exam_number = models.CharField(max_length=64, default="", blank=True)
+    exam_number = models.CharField(max_length=20, default="", blank=True)
 
     grade = models.CharField(max_length=15,default="", blank=True)
 

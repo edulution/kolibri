@@ -57,6 +57,9 @@
       :name="selectedUser.full_name"
       :username="selectedUser.username"
       :kind="selectedUser.kind"
+      :examNumber="selectedUser.exam_number"
+      :gender="selectedUser.gender"
+      :birthYear="selectedUser.birth_year"
     />
 
     <ResetUserPasswordModal
@@ -64,6 +67,9 @@
       :id="selectedUser.id"
       :name="selectedUser.full_name"
       :username="selectedUser.username"
+      :examNumber="selectedUser.exam_number"
+      :gender="selectedUser.gender"
+      :birthYear="selectedUser.birth_year"
     />
 
     <DeleteUserModal
@@ -71,6 +77,9 @@
       :id="selectedUser.id"
       :name="selectedUser.full_name"
       :username="selectedUser.username"
+      :examNumber="selectedUser.exam_number"
+      :gender="selectedUser.gender"
+      :birthYear="selectedUser.birth_year"
     />
 
   </div>

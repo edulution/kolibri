@@ -35,6 +35,9 @@ export default {
       if (match) {
         Vue.set(match, 'username', updatedUser.username);
         Vue.set(match, 'full_name', updatedUser.full_name);
+        Vue.set(match, 'exam_number', updatedUser.exam_number);
+        Vue.set(match, 'gender', updatedUser.gender);
+        Vue.set(match, 'birth_year', updatedUser.birth_year);
         Vue.set(match, 'kind', updatedUser.kind);
         Vue.set(match, 'roles', [...updatedUser.roles]);
       }

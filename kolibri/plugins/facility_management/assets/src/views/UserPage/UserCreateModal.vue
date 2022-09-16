@@ -69,6 +69,25 @@
           :value="false"
         />
       </fieldset>
+      <KTextbox 
+        ref="examNumber"
+        v-model="examNumber"
+        type="text"
+        :label="$tr('examNumber')"
+        :maxlength="20"
+        :invalid="examNumberIsInvalid"
+        :invalidText="examNumberIsInValidText"
+        @blur="examNumberBlurred=true"
+      />
+      <BirthYearSelect
+        class="select"
+        :value.sync="birthYear"
+      />
+      <GenderSelect
+        class="select" 
+        :value.sync="gender"
+      />
+      
     </section>
   </KModal>
 
@@ -85,6 +104,8 @@
   import KModal from 'kolibri.coreVue.components.KModal';
   import KTextbox from 'kolibri.coreVue.components.KTextbox';
   import KSelect from 'kolibri.coreVue.components.KSelect';
+  import GenderSelect from 'kolibri.coreVue.components.GenderSelect';
+  import BirthYearSelect from 'kolibri.coreVue.components.BirthYearSelect';
 
   export default {
     name: 'UserCreateModal',
@@ -111,12 +132,16 @@
       unknownError: 'Whoops, something went wrong. Try again',
       loadingConfirmation: 'Loading...',
       required: 'This field is required',
+      examNumber: 'Exam number/ID number (Optional)',
+      examNumberAlreadyExists: 'Exam/ID number already exists',
     },
     components: {
       KRadioButton,
       KModal,
       KTextbox,
       KSelect,
+      GenderSelect,
+      BirthYearSelect,
     },
     data() {
       return {
@@ -124,6 +149,9 @@
         username: '',
         password: '',
         confirmedPassword: '',
+        gender: '',
+        birthYear: '',
+        examNumber: '',
         kind: {
           label: this.$tr('learner'),
           value: UserKinds.LEARNER,
@@ -136,6 +164,8 @@
         passwordBlurred: false,
         confirmedPasswordBlurred: false,
         formSubmitted: false,
+        examNumberBlurred: false,
+        examNumberAlreadyExistsOnServer: false,
       };
     },
     computed: {
@@ -169,6 +199,23 @@
         return this.facilityUsers.find(
           ({ username }) => username.toLowerCase() === this.username.toLowerCase()
         );
+      },
+      examNumberAlreadyExists() {
+        return this.facilityUsers.find(({ exam_number }) => exam_number === this.examNumber);
+      },
+      examNumberIsInValidText() {
+        if (this.examNumberBlurred || this.formSubmitted) {
+          if (this.examNumber === '') {
+            return '';
+          }
+          if (this.examNumberAlreadyExists || this.examNumberAlreadyExistsError) {
+            return this.$tr('examNumberAlreadyExists');
+          }
+        }
+        return '';
+      },
+      examNumberIsInvalid() {
+        return Boolean(this.examNumberIsInValidText);
       },
       usernameIsInvalidText() {
         if (this.usernameBlurred || this.formSubmitted) {
@@ -217,7 +264,8 @@
           !this.nameIsInvalid &&
           !this.usernameIsInvalid &&
           !this.passwordIsInvalid &&
-          !this.confirmedPasswordIsInvalid
+          !this.confirmedPasswordIsInvalid &&
+          !this.examNumberIsInvalid
         );
       },
       userKindDropdownOptions() {
@@ -242,12 +290,16 @@
       ...mapActions(['handleApiError']),
       createNewUser() {
         this.usernameAlreadyExistsOnServer = false;
+        this.examNumberAlreadyExistsOnServer = false;
         this.formSubmitted = true;
         if (this.formIsValid) {
           this.submitting = true;
           this.createUser({
             username: this.username,
             full_name: this.fullName,
+            exam_number: this.examNumber,
+            gender: this.gender,
+            birth_year: this.birthYear,
             role: {
               kind: this.newUserRole,
               collection: this.currentFacilityId,
@@ -261,9 +313,16 @@
               const usernameAlreadyExistsError = CatchErrors(error, [
                 ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS,
               ]);
+
+              const examNumberAlreadyExistsError = CatchErrors(error, [
+                ERROR_CONSTANTS.EXAM_NUMBER_ALREADY_EXISTS,
+              ]);
               if (usernameAlreadyExistsError) {
                 this.submitting = false;
                 this.usernameAlreadyExistsOnServer = true;
+              } else if (examNumberAlreadyExistsError) {
+                this.submitting = false;
+                this.examNumberAlreadyExistsOnServer = true;
               } else {
                 this.handleApiError(error);
               }
@@ -282,6 +341,8 @@
           this.$refs.password.focus();
         } else if (this.confirmedPasswordIsInvalid) {
           this.$refs.confirmedPassword.focus();
+        } else if (this.examNumberIsInvalid) {
+          this.$refs.examNumber.focus();
         }
       },
       close() {

@@ -13,4 +13,4 @@ choices = (
     (DEFERRED, "Defers for later"),
 )
 
-DEMO_FIELDS = ("gender", "birth_year", "id_number")
+DEMO_FIELDS = ("gender", "birth_year", "exam_number")

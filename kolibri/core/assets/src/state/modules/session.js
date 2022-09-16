@@ -9,6 +9,9 @@ export const baseSessionState = {
   kind: [UserKinds.ANONYMOUS],
   user_id: undefined,
   username: '',
+  exam_number: '',
+  gender: '',
+  birth_year: '',
 };
 
 export default {

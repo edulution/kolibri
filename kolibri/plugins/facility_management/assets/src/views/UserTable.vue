@@ -108,6 +108,8 @@
   import KLabeledIcon from 'kolibri.coreVue.components.KLabeledIcon';
   import KIcon from 'kolibri.coreVue.components.KIcon';
   import difference from 'lodash/difference';
+  import GenderDisplayText from 'kolibri.coreVue.components.GenderDisplayText';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'UserTable',
@@ -117,8 +119,9 @@
       UserTypeDisplay,
       KLabeledIcon,
       KIcon,
+      GenderDisplayText,
     },
-    mixins: [themeMixin],
+    mixins: [themeMixin, commonCoreStrings],
     props: {
       users: {
         type: Array,
