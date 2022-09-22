@@ -3,9 +3,9 @@ import {
   ClassroomResource,
   LearnerGroupResource,
 } from 'kolibri.resources';
-import { LearnerClassroomResource } from '../../../../learn/assets/src/apiResources';
+import { LearnerClassroomResource } from '../../apiResources';
 import { PageNames } from '../../constants';
-import { _collectionState } from '../../../../learn/assets/src/modules/coreLearn/utils';
+import { _collectionState } from '../coreLearn/utils';
 
 function displaySubscribedChannels(store, channels, channelRootIds, include_fields) {
   ContentNodeSlimResource.fetchCollection({

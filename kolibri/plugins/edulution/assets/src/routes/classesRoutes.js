@@ -1,5 +1,5 @@
 import store from 'kolibri.coreVue.vuex.store';
-import { ClassesPageNames } from '../constants';
+import { ClassesPageNames } from '../../src/constants';
 import { showLessonPlaylist, showLessonResourceViewer } from '../modules/lessonPlaylist/handlers';
 import { showClassAssignmentsPage } from '../modules/classAssignments/handlers';
 import { showAllClassesPage } from '../modules/classes/handlers';

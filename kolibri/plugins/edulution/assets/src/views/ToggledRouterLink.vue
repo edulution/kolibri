@@ -62,7 +62,7 @@
 <style lang="scss" scoped>
 
   @import '~kolibri.styles.definitions';
-  @import '../../../learn/assets/src/views/ContentCard/card';
+  @import './ContentCard/card';
 
   $margin: 16px;
 
