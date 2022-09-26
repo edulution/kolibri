@@ -86,49 +86,8 @@
         <p>{{ session.username }}</p>
       </template>
 
-      <KTextbox
-         
-        v-if="canEditExamNumber"
-        ref="examNumber"
-        v-model="examNumber"
-        type="text"
-        autocomplete="examNumber"
-        :label="$tr('examNumber')"
-        :disabled="busy"
-        :maxlength="20"
-        :invalid="examNumberIsInvalid"
-        :invalidText="examNumberIsInvalidText"
-        @blur="examNumberBlurred = true"
-        @input="resetProfileState"
-      />
-      <template v-else>
-        <h2>{{ $tr('examNumber') }}</h2>
-        <p>{{ session.exam_number }}</p>
-      </template>       
-
-      <GenderSelect
-        v-if="canEditGender"
-        :value.sync="gender"
-        class="select"
-      />
-      <template v-else>
-        <h2>{{ $tr('gender') }}</h2>
-        <p><GenderDisplayText :gender="session.gender" /></p>
-      </template>
-
-      <BirthYearSelect
-        v-if="canEditBirthYear"
-        :value.sync="birthYear"
-        class="select"
-      />
-      <template v-else>
-        <h2>{{ $tr('birthYear') }}</h2>
-        <p><BirthYearDisplayText :birthYear="session.birth_year" /></p>
-      </template>
-
-
       <KButton
-        v-if="canEditUsername || canEditName || canEditExamNumber"
+        v-if="canEditUsername || canEditName"
         type="submit"
         class="submit"
         :text="$tr('updateProfile')"
@@ -173,11 +132,6 @@
   import UserTypeDisplay from 'kolibri.coreVue.components.UserTypeDisplay';
   import UiAlert from 'keen-ui/src/UiAlert';
   import { PermissionTypes, ERROR_CONSTANTS } from 'kolibri.coreVue.vuex.constants';
-  import GenderDisplayText from 'kolibri.coreVue.components.GenderDisplayText';
-  import BirthYearDisplayText from 'kolibri.coreVue.components.BirthYearDisplayText';
-  import GenderSelect from 'kolibri.coreVue.components.GenderSelect';
-  import BirthYearSelect from 'kolibri.coreVue.components.BirthYearSelect';
-  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import SignUpPage from '../SignUpPage';
   import ChangeUserPasswordModal from './ChangeUserPasswordModal';
 
@@ -203,10 +157,6 @@
       changePasswordPrompt: 'Change password',
       usernameAlreadyExists: 'An account with that username already exists',
       documentTitle: 'User Profile',
-      examNumber: 'Exam/ID Number',
-      gender: 'Gender',
-      birthYear: 'Birth Year',
-      examNumberAlreadyExists: 'Exam number/ID number already exists',
     },
     metaInfo() {
       return {
@@ -222,23 +172,15 @@
       PermissionsIcon,
       ChangeUserPasswordModal,
       UserTypeDisplay,
-      GenderDisplayText,
-      BirthYearDisplayText,
-      BirthYearSelect,
-      GenderSelect,
     },
-    mixins: [responsiveWindow, themeMixin, commonCoreStrings],
+    mixins: [responsiveWindow, themeMixin],
     data() {
       return {
         username: this.$store.state.core.session.username,
         name: this.$store.state.core.session.full_name,
-        examNumber: this.$store.state.core.session.exam_number,
-        gender: this.$store.state.core.session.gender,
-        birthYear: this.$store.state.core.session.birth_year,
         usernameBlurred: false,
         nameBlurred: false,
         formSubmitted: false,
-        examNumberBlurred: false,
       };
     },
     computed: {
@@ -296,24 +238,6 @@
         }
         return true;
       },
-      canEditExamNumber() {
-        if (this.isCoach || this.isLearner) {
-          return this.facilityConfig.learnerCanEditExamNumber;
-        }
-        return true;
-      },
-      canEditGender() {
-        if (this.isCoach || this.isLearner) {
-          return this.facilityConfig.learnerCanEditGender;
-        }
-        return true;
-      },
-      canEditBirthYear() {
-        if (this.isCoach || this.isLearner) {
-          return this.facilityConfig.learnerCanEditBirthYear;
-        }
-        return true;
-      },
       canEditName() {
         if (this.isCoach || this.isLearner) {
           return this.facilityConfig.learnerCanEditName;
@@ -354,25 +278,8 @@
       usernameAlreadyExists() {
         return this.profileErrors.includes(ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS);
       },
-      examNumberAlreadyExists() {
-        return this.profileErrors.includes(ERROR_CONSTANTS.EXAM_NUMBER_ALREADY_EXISTS);
-      },
-      examNumberIsInvalidText() {
-        if (this.examNumberBlurred || this.formSubmitted) {
-          if (this.examNumber === '') {
-            return '';
-          }
-          if (this.examNumberAlreadyExists) {
-            return this.$tr('examNumberAlreadyExists');
-          }
-        }
-        return '';
-      },
-      examNumberIsInvalid() {
-        return Boolean(this.examNumberIsInvalidText);
-      },
       formIsValid() {
-        return !this.usernameIsInvalid || !this.examNumberIsInvalid;
+        return !this.usernameIsInvalid;
       },
     },
     created() {
@@ -393,9 +300,6 @@
             edits: {
               username: this.username,
               full_name: this.name,
-              exam_number: this.examNumber,
-              gender: this.gender,
-              birth_year: this.birthYear,
             },
             session: this.session,
           });
@@ -404,8 +308,6 @@
             this.$refs.name.focus();
           } else if (this.usernameIsInvalid) {
             this.$refs.username.focus();
-          } else if (this.examNumberIsInvalid) {
-            this.$refs.examNumber.focus();
           }
         }
       },

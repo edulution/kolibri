@@ -33,9 +33,6 @@ export function createUser(store, stateUserData) {
       username: stateUserData.username,
       full_name: stateUserData.full_name,
       password: stateUserData.password,
-      gender: stateUserData.gender,
-      birth_year: stateUserData.birth_year,
-      exam_number: stateUserData.exam_number,
     },
   })
     .then(userModel => {
@@ -87,10 +84,7 @@ export function updateUser(store, { userId, updates }) {
     })
     .catch(error => {
       store.commit('SET_BUSY', false);
-      const errorsCaught = CatchErrors(error, [
-        ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS,
-        ERROR_CONSTANTS.EXAM_NUMBER_ALREADY_EXISTS,
-      ]);
+      const errorsCaught = CatchErrors(error, [ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS]);
       if (errorsCaught) {
         setError(store, errorsCaught);
       } else {

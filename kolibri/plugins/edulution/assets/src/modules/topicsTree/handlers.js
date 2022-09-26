@@ -6,7 +6,7 @@ import { PageNames } from '../../constants';
 import {
   _collectionState,
   normalizeContentNode,
-} from '../../../../learn/assets/src/modules/coreLearn/utils';
+} from '../../../../../learn/assets/src/modules/coreLearn/utils';
 import { KnowledgeMapResource } from '../../apiResources';
 
 export function showKnowledgeMap(store, id) {

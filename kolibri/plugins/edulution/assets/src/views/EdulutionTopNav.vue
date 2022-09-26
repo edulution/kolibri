@@ -12,15 +12,10 @@
         category="communication"
       />
     </KNavbarLink>
-    <KNavbarLink
-      :title="$tr('channels')"
-      :link="channelsLink"
-    >
-      <mat-svg
-        name="apps"
-        category="navigation"
-      />
+    <KNavbarLink :title="$tr('channels')" :link="channelsLink">
+      <mat-svg name="apps" category="navigation" />
     </KNavbarLink>
+
   </KNavbar>
 
 </template>

@@ -32,7 +32,7 @@
 
   import { validateLinkObject } from 'kolibri.utils.validators';
   import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import CopiesModal from '../../../learn/assets/src/views/CopiesModal';
+  import CopiesModal from '../../../../learn/assets/src/views/CopiesModal';
   import EdulutionContentCard from './EdulutionContentCard';
 
   export default {

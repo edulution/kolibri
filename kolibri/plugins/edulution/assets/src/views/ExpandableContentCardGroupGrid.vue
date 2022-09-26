@@ -66,7 +66,7 @@
   import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
   import { PageNames } from '../constants';
-  import PageHeader from '../../../learn/assets/src/views/PageHeader';
+  import PageHeader from '../../../../learn/assets/src/views/PageHeader';
   import ContentCardGroupGrid from './ContentCardGroupGrid';
 
   export default {
@@ -124,7 +124,7 @@
 
 <style lang="scss">
 
-  @import '../../../learn/assets/src/views/ContentCard/card';
+  @import '../../../../learn/assets/src/views/ContentCard/card';
 
   .collapsible-grid {
     margin-bottom: 8px;

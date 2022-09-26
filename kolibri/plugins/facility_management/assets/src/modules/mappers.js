@@ -16,8 +16,6 @@ export function _userState(facilityUser) {
     kind: UserType(facilityUser),
     is_superuser: facilityUser.is_superuser,
     roles: facilityUser.roles,
-    gender: facilityUser.gender,
-    birth_year: facilityUser.birth_year,
-    exam_number: facilityUser.exam_number,
+    deleted: facilityUser.deleted,
   };
 }

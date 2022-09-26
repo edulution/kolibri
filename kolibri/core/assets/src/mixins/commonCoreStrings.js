@@ -99,6 +99,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   labelColonThenDetails: '{label}: {details}',
   commaSeparatedPair: '{item1}, {item2}',
 
+  //soft delete
+  deletedOptionDeactivated: 'Deactivated',
+  deletedOptionActive: 'Active',
+
   // Demographic-specific strings
   genderOptionMale: 'Male',
   genderOptionFemale: 'Female',

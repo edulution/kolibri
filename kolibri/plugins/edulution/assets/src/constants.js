@@ -4,7 +4,7 @@ import {
   RecommendedPages as LearnRecommendedPage,
   ClassesPageNames as LearnClassesPageNames,
   pageNameToModuleMap as learnPageNameToModuleMap,
-} from '../../learn/assets/src/constants';
+} from '../../../learn/assets/src/constants';
 
 export const PageNames = {
   ...LearnPageNames,

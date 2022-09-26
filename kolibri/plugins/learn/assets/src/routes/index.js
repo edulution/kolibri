@@ -1,5 +1,4 @@
 import store from 'kolibri.coreVue.vuex.store';
-import router from 'kolibri.coreVue.router';
 import { showSearch } from '../modules/search/handlers';
 import {
   showTopicsTopic,
@@ -13,12 +12,14 @@ import {
   showResumePage,
 } from '../modules/recommended/handlers';
 import { showChannels } from '../modules/topicsRoot/handlers';
-import { PageNames, ClassesPageNames } from '../constants';
+import { PageNames } from '../constants';
 import classesRoutes from './classesRoutes';
 
 export default [
   ...classesRoutes,
-  {
+  /*Commented out original root page code.Overriden in edulution plugin
+   */
+  /*  {
     name: PageNames.ROOT,
     path: '/',
     handler: () => {
@@ -28,7 +29,7 @@ export default [
         name: memberships.length > 0 ? ClassesPageNames.ALL_CLASSES : PageNames.TOPICS_ROOT,
       });
     },
-  },
+  }*/
   {
     name: PageNames.TOPICS_ROOT,
     path: '/topics',

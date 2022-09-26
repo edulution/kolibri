@@ -94,6 +94,7 @@ import GenderSelect from '../views/GenderSelect';
 import BirthYearSelect from '../views/BirthYearSelect';
 import GenderDisplayText from '../views/GenderDisplayText';
 import BirthYearDisplayText from '../views/BirthYearDisplayText';
+import SoftDeletedDisplayText from '../views/SoftDeletedDisplayText';
 import commonCoreStrings from '../mixins/commonCoreStrings';
 
 // webpack optimization
@@ -203,6 +204,7 @@ export default {
       GenderDisplayText,
       BirthYearSelect,
       BirthYearDisplayText,
+      SoftDeletedDisplayText,
     },
     router,
     mixins: {

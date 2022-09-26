@@ -67,8 +67,6 @@ from .permissions.general import IsAdminForOwnFacility
 from .permissions.general import IsFromSameFacility
 from .permissions.general import IsOwn
 from .permissions.general import IsSelf
-from kolibri.core.auth.constants.demographics import choices as GENDER_CHOICES
-from kolibri.core.auth.constants.demographics import DEFERRED
 from kolibri.core.auth.constants.morango_scope_definitions import FULL_FACILITY
 from kolibri.core.auth.constants.morango_scope_definitions import SINGLE_USER
 from kolibri.core.errors import KolibriValidationError
@@ -528,33 +526,6 @@ class FacilityUserModelManager(SyncableModelManager, UserManager):
         # make the user into a superuser on this device
         DevicePermissions.objects.create(user=superuser, is_superuser=True)
 
-def validate_birth_year(value):
-    error = ""
-
-    if value == "NOT_SPECIFIED" or value == "DEFERRED":
-        return
-
-    try:
-        if int(value) < 1900:
-            error = (
-                "Birth year {value} is invalid, as it is prior to the year 1900".format(
-                    value=value
-                )
-            )
-
-        elif int(value) > 3000:
-            error = (
-                "Birth year {value} is invalid, as it is after the year 3000".format(
-                    value=value
-                )
-            )
-
-    except ValueError:
-        error = "{value} is not a valid value for birth_year".format(value=value)
-
-    if error != "":
-        raise ValidationError(error)
-
 
 @python_2_unicode_compatible
 class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
@@ -584,18 +555,6 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
     facility = models.ForeignKey("Facility")
 
     deleted = models.BooleanField(default=False)
-
-    gender = models.CharField(
-        max_length=16, choices=GENDER_CHOICES, default="", blank=True
-    )
-
-    birth_year = models.CharField(
-        max_length=16, default="", validators=[validate_birth_year], blank=True
-    )
-    exam_number = models.CharField(max_length=20, default="", blank=True)
-
-    grade = models.CharField(max_length=15,default="", blank=True)
-
 
     @property
     def is_deleted(self):

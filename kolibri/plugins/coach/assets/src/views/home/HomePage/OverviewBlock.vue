@@ -1,23 +1,18 @@
 <template>
-
   <KPageContainer>
     <p>
-      <BackLink
-        v-if="classListPageEnabled"
-        :to="$router.getRoute('CoachClassListPage')"
-        :text="$tr('back')"
-      />
+      <BackLink v-if="classListPageEnabled" :to="$router.getRoute('CoachClassListPage')" :text="$tr('back')" />
     </p>
     <KGrid>
       <KGridItem sizes="100, 50, 50" percentage>
         <h1>{{ $store.state.classSummary.name }}</h1>
       </KGridItem>
       <KGridItem sizes="100, 50, 50" percentage align="right">
-        <KButton
+        <!-- <KButton
           :text="$tr('newUserButtonLabel')"
           :primary="true"
           @click="displayModal(Modals.COACH_CREATE_USER)"
-        />
+        /> -->
       </KGridItem>
       <KGridItem sizes="100, 50, 50" percentage>
         <HeaderTable>
@@ -26,7 +21,8 @@
               <KIcon slot="icon" coach />
               {{ $tr('coach', {count: coachNames.length}) }}
             </KLabeledIcon>
-            <template slot="value"><TruncatedItemList :items="coachNames" /></template>
+            <template slot="value">
+            <TruncatedItemList :items="coachNames" /></template>
           </HeaderTableRow>
           <HeaderTableRow>
             <KLabeledIcon slot="key">
@@ -47,22 +43,14 @@
         />
       </KGridItem> -->
     </KGrid>
-
-    <CoachUserCreateModal
-      v-if="modalShown===Modals.COACH_CREATE_USER"
-      :classId="thisClassId.join('')"
-      :className="thisClassName.join('')"
-    />
+    <CoachUserCreateModal v-if="modalShown===Modals.COACH_CREATE_USER" :classId="thisClassId.join('')" :className="thisClassName.join('')" />
     <!--     <SubscribeModal
       v-if="modalShown===SubscriptionModals.CHOOSE_CLASS_SUBSCRIPTIONS"
       :collectionId="thisClassId.join('')"
       :collectionName="thisClassName.join('')"
     /> -->
   </KPageContainer>
-
 </template>
-
-
 <script>
 
   import { mapActions, mapState, mapGetters } from 'vuex';
@@ -134,6 +122,4 @@
   };
 
 </script>
-
-
 <style lang="scss" scoped></style>

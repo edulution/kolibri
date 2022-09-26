@@ -19,15 +19,6 @@ export function updateUserProfile(store, { edits, session }) {
   if (edits.username && edits.username !== session.username) {
     changedValues.username = edits.username;
   }
-  if (edits.exam_number && edits.exam_number !== session.exam_number) {
-    changedValues.exam_number = edits.exam_number;
-  }
-  if (edits.gender && edits.gender !== session.gender) {
-    changedValues.gender = edits.gender;
-  }
-  if (edits.birth_year && edits.birth_year !== session.birth_year) {
-    changedValues.birth_year = edits.birth_year;
-  }
   // if (edits.password && edits.password !== session.password) {
   //   changedValues.password = edits.password;
   // }
@@ -51,10 +42,7 @@ export function updateUserProfile(store, { edits, session }) {
       store.commit('SET_PROFILE_ERRORS', []);
     },
     error => {
-      const errorsCaught = CatchErrors(error, [
-        ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS,
-        ERROR_CONSTANTS.EXAM_NUMBER_ALREADY_EXISTS,
-      ]);
+      const errorsCaught = CatchErrors(error, [ERROR_CONSTANTS.USERNAME_ALREADY_EXISTS]);
       if (errorsCaught) {
         store.commit('SET_PROFILE_ERRORS', errorsCaught);
         store.commit('SET_PROFILE_SUCCESS', false);
