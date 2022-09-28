@@ -95,6 +95,8 @@ import BirthYearSelect from '../views/BirthYearSelect';
 import GenderDisplayText from '../views/GenderDisplayText';
 import BirthYearDisplayText from '../views/BirthYearDisplayText';
 import commonCoreStrings from '../mixins/commonCoreStrings';
+import PaginatedListContainer from '../views/PaginatedListContainer';
+import FilterTextbox from '../views/FilterTextbox';
 
 // webpack optimization
 import CoreInfoIcon from '../views/CoreInfoIcon';
@@ -107,6 +109,7 @@ import KLinearLoader from '../views/KLinearLoader';
 import KCircularLoader from '../views/KCircularLoader';
 
 import MultiPaneLayout from '../views/MultiPaneLayout';
+import filterUsersByNames from '../utils/filterUsersByNames';
 import navComponents from '../utils/navComponents';
 import CatchErrors from '../utils/CatchErrors';
 import KTooltip from '../views/KTooltip';
@@ -203,6 +206,8 @@ export default {
       GenderDisplayText,
       BirthYearSelect,
       BirthYearDisplayText,
+      PaginatedListContainer,
+      FilterTextbox,
     },
     router,
     mixins: {
@@ -228,6 +233,7 @@ export default {
     exams,
     validators,
     serverClock,
+    filterUsersByNames,
     i18n,
     navComponents,
     samePageCheckGenerator,

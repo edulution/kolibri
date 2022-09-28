@@ -16,6 +16,16 @@
       :disabled="disabled"
       @change="toggleGroup($event, group.id)"
     />
+
+    <!-- Individual learners -->
+    <IndividualLearnerSelector
+      :isVisible="individualSelectorIsVisible"
+      :selectedGroupIds="selectedGroupIds"
+      :selectedLearnerIds.sync="selectedLearnerIds"
+      :targetClassId="classId"
+      :disabled="disabled"
+      @togglevisibility="toggleIndividualSelector"
+    />
   </div>
 
 </template>
@@ -26,13 +36,17 @@
   import isEqual from 'lodash/isEqual';
   import KCheckbox from 'kolibri.coreVue.components.KCheckbox';
   import KRadioButton from 'kolibri.coreVue.components.KRadioButton';
+  import { coachStringsMixin } from '../../common/commonCoachStrings';
+  import IndividualLearnerSelector from './IndividualLearnerSelector';
 
   export default {
     name: 'RecipientSelector',
     components: {
       KCheckbox,
       KRadioButton,
+      IndividualLearnerSelector,
     },
+    mixins: [coachStringsMixin],
     props: {
       // Needs to equal [classId] if entire class is selected
       // Otherwise, [groupId_1, groupId_2] for individual Learner Groups
@@ -62,10 +76,43 @@
         type: Boolean,
         default: false,
       },
+      initialAdHocLearners: {
+        type: Array,
+        required: false,
+        default: new Array(),
+      },
+    },
+    data() {
+      return {
+        // Determines whether the individual learner table is visible.
+        // Is initially open if item is assigned to individuals.
+        individualSelectorIsVisible: this.initialAdHocLearners.length > 0,
+        // This is .sync'd with IndividualLearnerSelector, but not with AssignmentDetailsModal
+        // which recieves updates via handler in watch.selectedLearnerIds
+        selectedLearnerIds: [...this.initialAdHocLearners],
+        // Determines whether the group's checkbox is checked and affects which
+        // learners are selectable in IndividualLearnerSelector
+        selectedGroupIds: this.value.filter(id => id !== this.classId),
+      };
     },
     computed: {
       entireClassIsSelected() {
         return isEqual(this.value, [this.classId]) || !this.value.length;
+      },
+      currentCollectionIds() {
+        if (this.entireClassIsSelected) {
+          return [this.classId];
+        } else {
+          return this.selectedGroupIds;
+        }
+      },
+    },
+    watch: {
+      selectedLearnerIds(newVal) {
+        this.$emit('updateLearners', newVal);
+      },
+      currentCollectionIds(newVal) {
+        this.$emit('input', newVal);
       },
     },
     methods: {
@@ -74,6 +121,20 @@
       },
       selectEntireClass() {
         this.$emit('input', [this.classId]);
+      },
+      toggleIndividualSelector(isChecked) {
+        if (!isChecked) {
+          this.clearLearnerIds();
+        } else {
+          this.individualSelectorIsVisible = true;
+        }
+      },
+      groupIsSelected({ id }) {
+        return this.value.includes(id);
+      },
+      clearLearnerIds() {
+        this.selectedLearnerIds = [];
+        this.individualSelectorIsVisible = false;
       },
       toggleGroup(isChecked, id) {
         let newValue;

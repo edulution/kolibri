@@ -54,6 +54,7 @@
         :groups="groups"
         :classId="classId"
         :disabled="formIsSubmitted"
+        :initialAdHocLearners="initialAdHocLearners"
       />
     </fieldset>
   </KModal>
@@ -139,6 +140,10 @@
         type: String,
         required: false,
       },
+      initialAdHocLearners: {
+        type: Array,
+        required: true,
+      },
     },
     data() {
       return {
@@ -151,6 +156,7 @@
         formIsSubmitted: false,
         showServerError: false,
         showTitleError: false,
+        adHocLearners: this.initialAdHocLearners,
       };
     },
     computed: {
