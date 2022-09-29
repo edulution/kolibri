@@ -1,6 +1,5 @@
 import store from 'kolibri.coreVue.vuex.store';
 import router from 'kolibri.coreVue.router';
-import { showKnowledgeMap } from '../modules/topicsTree/handlers';
 import { PageNames, ClassesPageNames } from '../constants';
 import { showChannels } from '../modules/topicsRoot/handlers';
 import { showSearch } from '../modules/search/handlers';
@@ -8,6 +7,7 @@ import {
   showTopicsTopic,
   showTopicsChannel,
   showTopicsContent,
+  showKnowledgeMap,
 } from '../modules/topicsTree/handlers';
 import {
   showRecommended,
