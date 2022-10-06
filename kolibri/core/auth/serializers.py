@@ -49,6 +49,9 @@ class FacilityUserSerializer(serializers.ModelSerializer):
             "facility",
             "roles",
             "is_superuser",
+            "gender",
+            "birth_year",
+            "exam_number",
         )
 
     def validate(self, attrs):

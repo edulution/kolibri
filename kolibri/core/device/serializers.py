@@ -29,7 +29,7 @@ class NoFacilityFacilityUserSerializer(FacilityUserSerializer):
 
     class Meta:
         model = FacilityUser
-        fields = ('id', 'username', 'full_name', 'password', )
+        fields = ('id', 'username', 'full_name', 'password', 'gender','birth_year')
 
     def validate(self, attrs):
         return attrs

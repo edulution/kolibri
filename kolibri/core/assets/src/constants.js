@@ -1,3 +1,14 @@
+// coach-facing
+export { default as ContentNodeResourceType } from 'kolibri-constants/labels/ResourceType';
+export { default as LearningActivities } from 'kolibri-constants/labels/LearningActivities';
+export {
+  default as AccessibilityCategories,
+} from 'kolibri-constants/labels/AccessibilityCategories';
+// Used to categorize the level or audience of content
+export { default as ContentLevels } from 'kolibri-constants/labels/Levels';
+export { default as ResourcesNeededTypes } from 'kolibri-constants/labels/Needs';
+export { default as Categories } from 'kolibri-constants/labels/Subjects';
+
 const UserKinds = {
   ADMIN: 'admin',
   COACH: 'coach',
@@ -29,6 +40,8 @@ const ContentNodeKinds = {
 
 // used internally on the client as a hack to allow content-icons to display users
 const USER = 'user';
+
+const NoCategories = 'no_categories';
 
 const MasteryLoggingMap = {
   id: 'id',
@@ -114,6 +127,7 @@ const ERROR_CONSTANTS = {
   UNIQUE: 'UNIQUE',
   INVALID_NETWORK_LOCATION_FORMAT: 'INVALID_NETWORK_LOCATION_FORMAT',
   NETWORK_LOCATION_NOT_FOUND: 'NETWORK_LOCATION_NOT_FOUND',
+  EXAM_NUMBER_ALREADY_EXISTS: 'EXAM_NUMBER_ALREADY_EXISTS',
   // 401 error constants
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   INACTIVE_USER: 'INACTIVE_USER',
@@ -122,6 +136,18 @@ const ERROR_CONSTANTS = {
   // 403 error constants
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
+};
+
+const DemographicConstants = {
+  NOT_SPECIFIED: 'NOT_SPECIFIED',
+  DEFERRED: 'DEFERRED',
+};
+
+// See FacilityUser model
+const FacilityUserGender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  ...DemographicConstants,
 };
 
 export {
@@ -140,4 +166,7 @@ export {
   UPDATE_MODAL_DISMISSED,
   NavComponentSections,
   ERROR_CONSTANTS,
+  DemographicConstants,
+  FacilityUserGender,
+  NoCategories,
 };
