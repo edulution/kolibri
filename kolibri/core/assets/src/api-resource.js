@@ -230,6 +230,50 @@ export class Model {
     return promise;
   }
 
+  update() {
+    const promise = new ConditionalPromise((resolve, reject) => {
+      Promise.all(this.promises).then(
+        () => {
+          if (!this.id) {
+            // Nothing to delete, so just resolve the promise now.
+            reject('Can not delete model that we do not have an id for');
+          } else {
+            // Otherwise, DELETE the Model
+            const clientObj = { path: this.url, method: 'DELETE' };
+            this.resource.client(clientObj).then(
+              () => {
+                // delete this instance
+                this.resource.removeModel(this);
+                // Set a flag so that any collection containing this can ignore this model
+                this.deleted = true;
+                // Any collection containing this model is now probably out of date,
+                // set synced to false to ensure that they update their data on fetch
+                this.synced = false;
+                this.new = true;
+                // Resolve the promise with the id.
+                // Vuex will use this id to delete the model in its state.
+                resolve(this.id);
+                // Clean up the reference to this promise
+                this.promises.splice(this.promises.indexOf(promise), 1);
+              },
+              response => {
+                logging.error('An error occurred', response);
+                reject(response);
+                // Clean up the reference to this promise
+                this.promises.splice(this.promises.indexOf(promise), 1);
+              }
+            );
+          }
+        },
+        reason => {
+          reject(reason);
+        }
+      );
+    });
+    this.promises.push(promise);
+    return promise;
+  }
+
   get url() {
     return this._url ? this._url : this.resource.modelUrl(this.id);
   }
@@ -784,6 +828,13 @@ export class Resource {
    * @return {Promise}                         Promise that resolves on delete with the model id
    */
   deleteModel({ id, getParams = {} } = {}) {
+    if (!id) {
+      throw TypeError('An id must be specified');
+    }
+    return this.getModel(id, getParams).delete();
+  }
+
+  deactivateUserModel({ id, getParams = {} } = {}) {
     if (!id) {
       throw TypeError('An id must be specified');
     }
