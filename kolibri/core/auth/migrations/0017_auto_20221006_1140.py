@@ -9,28 +9,38 @@ import kolibri.core.auth.models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('kolibriauth', '0016_facilitydataset_learner_can_view_lessons'),
+        ("kolibriauth", "0016_facilitydataset_learner_can_view_lessons"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='facilityuser',
-            name='birth_year',
-            field=models.CharField(blank=True, default='', max_length=16, validators=[kolibri.core.auth.models.validate_birth_year]),
+            model_name="facilityuser",
+            name="birth_year",
+            field=models.CharField(
+                blank=True,
+                default="",
+                max_length=16,
+                validators=[kolibri.core.auth.models.validate_birth_year],
+            ),
         ),
         migrations.AddField(
-            model_name='facilityuser',
-            name='exam_number',
-            field=models.CharField(blank=True, default='', max_length=20),
+            model_name="facilityuser",
+            name="exam_number",
+            field=models.CharField(blank=True, default="", max_length=20),
         ),
         migrations.AddField(
-            model_name='facilityuser',
-            name='gender',
-            field=models.CharField(blank=True, choices=[('MALE', 'Male'), ('FEMALE', 'Female'), ('NOT_SPECIFIED', 'Not specified'), ('DEFERRED', 'Defers for later')], default='', max_length=16),
-        ),
-        migrations.AddField(
-            model_name='facilityuser',
-            name='grade',
-            field=models.CharField(blank=True, default='', max_length=15),
+            model_name="facilityuser",
+            name="gender",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("MALE", "Male"),
+                    ("FEMALE", "Female"),
+                    ("NOT_SPECIFIED", "Not specified"),
+                    ("DEFERRED", "Defers for later"),
+                ],
+                default="",
+                max_length=16,
+            ),
         ),
     ]
