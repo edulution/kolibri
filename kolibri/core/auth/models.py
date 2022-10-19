@@ -583,6 +583,7 @@ class FacilityUserModelManager(SyncableModelManager, UserManager):
         # make the user into a superuser on this device
         DevicePermissions.objects.create(user=superuser, is_superuser=True)
 
+
 def validate_birth_year(value):
     error = ""
 
@@ -648,9 +649,6 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
         max_length=16, default="", validators=[validate_birth_year], blank=True
     )
     exam_number = models.CharField(max_length=20, default="", blank=True)
-
-    grade = models.CharField(max_length=15,default="", blank=True)
-
 
     @property
     def is_deleted(self):
