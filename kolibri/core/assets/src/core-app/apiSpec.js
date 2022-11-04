@@ -90,10 +90,10 @@ import KPageContainer from '../views/KPageContainer';
 import KIcon from '../views/icons/KIcon';
 import KLabeledIcon from '../views/icons/KLabeledIcon';
 import KBasicContentIcon from '../views/icons/KBasicContentIcon';
-import GenderSelect from '../views/GenderSelect';
-import BirthYearSelect from '../views/BirthYearSelect';
-import GenderDisplayText from '../views/GenderDisplayText';
-import BirthYearDisplayText from '../views/BirthYearDisplayText';
+// import GenderSelect from '../views/GenderSelect';
+// import BirthYearSelect from '../views/BirthYearSelect';
+// import GenderDisplayText from '../views/GenderDisplayText';
+// import BirthYearDisplayText from '../views/BirthYearDisplayText';
 import SoftDeletedDisplayText from '../views/SoftDeletedDisplayText';
 import commonCoreStrings from '../mixins/commonCoreStrings';
 
@@ -200,10 +200,10 @@ export default {
       KIcon,
       KLabeledIcon,
       KBasicContentIcon,
-      GenderSelect,
-      GenderDisplayText,
-      BirthYearSelect,
-      BirthYearDisplayText,
+      // GenderSelect,
+      // GenderDisplayText,
+      // BirthYearSelect,
+      // BirthYearDisplayText,
       SoftDeletedDisplayText,
     },
     router,

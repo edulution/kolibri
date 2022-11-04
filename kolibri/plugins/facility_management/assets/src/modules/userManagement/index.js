@@ -36,6 +36,7 @@ export default {
         Vue.set(match, 'username', updatedUser.username);
         Vue.set(match, 'full_name', updatedUser.full_name);
         Vue.set(match, 'kind', updatedUser.kind);
+        Vue.set(match, 'deleted', updatedUser.deleted);
         Vue.set(match, 'roles', [...updatedUser.roles]);
       }
     },

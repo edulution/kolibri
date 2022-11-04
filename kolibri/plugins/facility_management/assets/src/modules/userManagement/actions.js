@@ -137,22 +137,3 @@ export function deleteUser(store, id) {
     }
   );
 }
-
-export function deactivateUser(store, id) {
-  if (!id) {
-    // if no id passed, abort the function
-    return;
-  }
-  FacilityUserResource.deactivateUserModel({ id }).then(
-    () => {
-      store.commit('DEACTIVATE_USER', id);
-      store.dispatch('displayModal', false);
-      if (store.rootState.core.session.user_id === id) {
-        store.dispatch('kolibriLogout', { root: true });
-      }
-    },
-    error => {
-      store.dispatch('handleApiError', error, { root: true });
-    }
-  );
-}

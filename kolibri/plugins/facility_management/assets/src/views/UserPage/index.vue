@@ -57,6 +57,7 @@
       :name="selectedUser.full_name"
       :username="selectedUser.username"
       :kind="selectedUser.kind"
+      :initialSoftDelete="selectedUser.deleted"
     />
 
     <ResetUserPasswordModal
@@ -70,13 +71,6 @@
       v-if="modalShown===Modals.DELETE_USER"
       :id="selectedUser.id"
       :name="selectedUser.full_name"
-      :username="selectedUser.username"
-    />
-
-    <DeactivateUserModal 
-      v-if="modalShown===Modals.DEACTIVATE_USER" 
-      :id="selectedUser.id" 
-      :name="selectedUser.full_name" 
       :username="selectedUser.username"
     />
     
@@ -102,7 +96,6 @@
   import EditUserModal from './EditUserModal';
   import ResetUserPasswordModal from './ResetUserPasswordModal';
   import DeleteUserModal from './DeleteUserModal';
-  import DeactivateUserModal from './DeactivateUserModal';
 
   const ALL_FILTER = 'all';
 
@@ -125,7 +118,6 @@
       KGrid,
       KGridItem,
       UserTable,
-      DeactivateUserModal,
     },
     data() {
       return {
@@ -188,7 +180,6 @@
             value: Modals.DELETE_USER,
             disabled: userId === this.currentUserId,
           },
-          { label: this.$tr('deactivateUser'), value: Modals.DEACTIVATE_USER },
         ];
       },
       handleManageUserSelection(selection, user) {
@@ -224,7 +215,6 @@
       userActions: 'User management actions',
       userPageTitle: 'Users',
       activateUser: 'Activate',
-      deactivateUser: 'Deactivate',
     },
   };
 

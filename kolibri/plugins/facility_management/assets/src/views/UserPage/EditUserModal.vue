@@ -72,6 +72,19 @@
           :value="false"
         />
       </fieldset>
+      <fieldset class="soft-delete">
+        <legend>{{ $tr('statusLabel') }}</legend>
+        <KRadioButton
+          v-model="softDeleteValue"
+          :label="$tr('changeSoftDeleteStatusActive')"
+          :value="false"
+        />
+        <KRadioButton
+          v-model="softDeleteValue"
+          :label="$tr('changeSoftDeleteStatusInactive')"
+          :value="true"
+        />
+      </fieldset>
     </template>
 
   </KModal>
@@ -114,6 +127,9 @@
       classCoachDescription: "Can only instruct classes that they're assigned to",
       facilityCoachLabel: 'Facility coach',
       facilityCoachDescription: 'Can instruct all classes in your facility',
+      changeSoftDeleteStatusActive: 'Activate',
+      changeSoftDeleteStatusInactive: 'Deactivate',
+      statusLabel: 'Status',
     },
     components: {
       KModal,
@@ -140,6 +156,10 @@
         type: String,
         required: true,
       },
+      initialSoftDelete: {
+        type: Boolean,
+        required: false,
+      },
     },
     data() {
       return {
@@ -149,6 +169,7 @@
         typeSelected: null, // see beforeMount
         nameBlurred: false,
         usernameBlurred: false,
+        softDeleteValue: this.initialSoftDelete,
       };
     },
     computed: {
@@ -276,6 +297,7 @@
         const updates = {
           username: this.newUsername,
           full_name: this.newName,
+          deleted: this.softDeleteValue,
         };
 
         if (this.newType) {
@@ -328,6 +350,16 @@
 
   .user-type.header {
     font-size: 16px;
+  }
+
+  .soft-delete {
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+  legend {
+    padding-top: 16px;
+    padding-bottom: 8px;
   }
 
 </style>

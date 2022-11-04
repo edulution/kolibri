@@ -834,13 +834,6 @@ export class Resource {
     return this.getModel(id, getParams).delete();
   }
 
-  deactivateUserModel({ id, getParams = {} } = {}) {
-    if (!id) {
-      throw TypeError('An id must be specified');
-    }
-    return this.getModel(id, getParams).delete();
-  }
-
   /**
    * Fetch a collection from a resource
    * @param  {Object} [options.getParams={}]   any getParams to use when fetching the collection
