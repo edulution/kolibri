@@ -6,9 +6,10 @@
       key="adHocLearners"
       :checked="isVisible"
       :disabled="disabled"
+      :label="$tr('individualLearnersLabel')"
       @change="$emit('togglevisibility', $event)"
     >
-      <KLabeledIcon icon="people" :label="$tr('individualLearnersLabel')" />
+      <!-- <KLabeledIcon icon="people" :label="$tr('individualLearnersLabel')" /> -->
     </KCheckbox>
 
     <!-- Paginated list of learners -->
@@ -85,6 +86,7 @@
   import { mapState } from 'vuex';
   import { formatList } from 'kolibri.utils.i18n';
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
+  import KLabeledIcon from 'kolibri.coreVue.components.KLabeledIcon';
   import PaginatedListContainer from 'kolibri.coreVue.components.PaginatedListContainer';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import flatMap from 'lodash/flatMap';
@@ -98,7 +100,7 @@
 
   export default {
     name: 'IndividualLearnerSelector',
-    components: { CoreTable, PaginatedListContainer },
+    components: { CoreTable, PaginatedListContainer, KLabeledIcon },
     mixins: [commonCoreStrings, commonCoachStrings],
     props: {
       // If true, the main checkbox is checked and the list of learners is shown

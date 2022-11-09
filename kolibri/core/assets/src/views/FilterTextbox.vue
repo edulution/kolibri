@@ -128,7 +128,7 @@
 
 <style lang="scss" scoped>
 
-  @import '~kolibri-design-system/lib/styles/definitions';
+  @import '~kolibri.styles.definitions';
 
   .k-filter {
     position: relative;

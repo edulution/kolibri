@@ -55,6 +55,7 @@
         :classId="classId"
         :disabled="formIsSubmitted"
         :initialAdHocLearners="initialAdHocLearners"
+        @updateLearners="learners => adHocLearners = learners"
       />
     </fieldset>
   </KModal>
@@ -142,7 +143,7 @@
       },
       initialAdHocLearners: {
         type: Array,
-        required: true,
+        required: false,
       },
     },
     data() {
@@ -209,6 +210,16 @@
           return;
         }
 
+        // TODO: Add error handling & snackbar message that notifies user when they have
+        // selected ONLY the AdHoc Learners Group, but selects no learners
+        // For now - if the only thing selected is AdHoc Learners but there
+        // are no learners actually selected, pretend they selected Entire class
+        // NOT DONE due to this being 0.13.0 post string freeze.
+        // Create an issue for this and it'll be a quick fix in 0.13.1
+        if (this.selectedCollectionIds.length === 0 && this.adHocLearners.length === 0) {
+          this.selectedCollectionIds.push(this.classId);
+        }
+
         if (this.formIsValid) {
           this.formIsSubmitted = true;
           if (!this.detailsHaveChanged) {
@@ -216,6 +227,13 @@
             return;
           }
 
+          this.$emit('submit', {
+            title: this.title,
+            description: this.description,
+            assignments: this.selectedCollectionIds,
+            active: this.activeIsSelected,
+            learner_ids: this.adHocLearners,
+          });
           return this.isInEditMode
             ? this.$emit('save', this.formData)
             : this.$emit('continue', this.formData);

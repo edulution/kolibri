@@ -9,7 +9,7 @@
       :submitText="$tr('continue')"
       :cancelText="$tr('cancel')"
       @cancel="closeModal"
-      @submit="goToAvailableGroups"
+      @submit="handleSubmit"
     >
       <KRadioButton
         v-for="classroom in availableClassrooms"
@@ -36,6 +36,9 @@
         v-model="selectedCollectionIds"
         :groups="availableGroups"
         :classId="selectedClassroomId"
+        :initialAdHocLearners="[]"
+        data-test="recipient-selector"
+        @updateLearners="learners => adHocLearners = learners"
       />
     </KModal>
   </div>
@@ -92,6 +95,7 @@
         selectedClassroomId: null,
         selectedCollectionIds: [],
         stage: Stages.SELECT_CLASSROOM,
+        adHocLearners: [],
       };
     },
     computed: {
@@ -113,6 +117,18 @@
       ...mapActions(['handleApiError']),
       getLearnerGroupsForClassroom(classroomId) {
         return LearnerGroupResource.fetchCollection({ getParams: { parent: classroomId } });
+      },
+      handleSubmit() {
+        if (this.stage === this.Stages.SELECT_CLASSROOM) {
+          this.goToAvailableGroups();
+        } else {
+          this.$emit(
+            'submit',
+            this.selectedClassroomId,
+            this.selectedCollectionIds,
+            this.adHocLearners
+          );
+        }
       },
       goToAvailableGroups() {
         // Do nothing if user presses Continue more than once
