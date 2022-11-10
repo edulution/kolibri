@@ -35,7 +35,7 @@ class FacilityUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = FacilityUser
         extra_kwargs = {'password': {'write_only': True}}
-        fields = ('id', 'username', 'full_name', 'password', 'facility', 'roles', 'is_superuser','gender','birth_year','exam_number','deleted')
+        fields = ('id', 'username', 'full_name', 'password', 'facility', 'roles', 'is_superuser','deleted')
 
     def validate(self, attrs):
         username = attrs.get('username')
