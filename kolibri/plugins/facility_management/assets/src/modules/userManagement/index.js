@@ -40,6 +40,7 @@ export default {
         Vue.set(match, 'birth_year', updatedUser.birth_year);
         Vue.set(match, 'kind', updatedUser.kind);
         Vue.set(match, 'roles', [...updatedUser.roles]);
+        Vue.set(match, 'deleted', updatedUser.deleted);
       }
     },
   },
