@@ -105,6 +105,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   genderOptionOther: 'Other',
   genderOptionNotSpecified: 'Not specified',
   birthYearNotSpecified: 'Not specified',
+
+  //soft delete
+  deletedOptionDeactivated: 'Deactivated',
+  deletedOptionActive: 'Active',
+
   identifierInputTooltip: {
     message:
       'Examples: a student ID number or an existing user identification number. Avoid using highly sensitive personal information because it might put your users at risk.',
