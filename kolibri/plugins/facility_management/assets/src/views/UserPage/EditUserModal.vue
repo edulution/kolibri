@@ -71,6 +71,20 @@
           :description="$tr('facilityCoachDescription')"
           :value="false"
         />
+        </fieldset>
+        </fieldset>
+            <fieldset class="soft-delete">
+        <legend>{{ $tr('statusLabel') }}</legend>
+        <KRadioButton
+          v-model="softDeleteValue"
+          :label="$tr('changeSoftDeleteStatusActive')"
+          :value="false"
+        />
+        <KRadioButton
+          v-model="softDeleteValue"
+          :label="$tr('changeSoftDeleteStatusInactive')"
+          :value="true"
+        />
       </fieldset>
     </template>
 
@@ -94,6 +108,7 @@
       :value.sync="newGender"
       class="select"
     />
+    
   </KModal>
 
 </template>
@@ -138,6 +153,9 @@
       facilityCoachDescription: 'Can instruct all classes in your facility',
       examNumber: 'Exam/ID number (Optional)',
       examNumberAlreadyExists: 'Exam number/ID number already exists',
+      changeSoftDeleteStatusActive: 'Activate',
+      changeSoftDeleteStatusInactive: 'Deactivate',
+      statusLabel: 'Status',
     },
     components: {
       KModal,
@@ -178,6 +196,10 @@
         type: String,
         required: true,
       },
+       initialSoftDelete: {
+        type: Boolean,
+        required: false,
+      },
     },
     data() {
       return {
@@ -191,6 +213,7 @@
         newBirthYear: this.birthYear,
         newGender: this.gender,
         examNumberBlurred: false,
+        softDeleteValue: this.initialSoftDelete,
       };
     },
     computed: {
@@ -349,6 +372,7 @@
           exam_number: this.newExamNumber,
           gender: this.newGender,
           birth_year: this.newBirthYear,
+          deleted: this.softDeleteValue,
         };
 
         if (this.newType) {
@@ -405,6 +429,16 @@
   
   .select {
     margin: 18px 0 36px;
+  }
+
+  .soft-delete {
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+  legend {
+    padding-top: 16px;
+    padding-bottom: 8px;
   }
 
 </style>
