@@ -2,8 +2,10 @@
   <span>{{ displayText }}</span>
 </template>
 <script>
+
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { FacilityUserSoftDeleted } from 'kolibri.coreVue.vuex.constants';
+
   const { TRUE, FALSE } = FacilityUserSoftDeleted;
   export default {
     name: 'SoftDeletedDisplayText',
@@ -24,5 +26,6 @@
       },
     },
   };
+
 </script>
 <style lang="scss" scoped></style> 
