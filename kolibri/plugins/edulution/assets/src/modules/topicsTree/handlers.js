@@ -1,11 +1,18 @@
-import { ContentNodeSlimResource, ContentNodeResource,ContentNodeProgressResource } from 'kolibri.resources';
+import {
+  ContentNodeSlimResource,
+  ContentNodeResource,
+  ContentNodeProgressResource,
+} from 'kolibri.resources';
 import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
 import ConditionalPromise from 'kolibri.lib.conditionalPromise';
 import router from 'kolibri.coreVue.router';
 import { PageNames } from '../../constants';
-import { _collectionState, normalizeContentNode,contentState } from '../../modules/coreLearn/utils';
+import {
+  _collectionState,
+  normalizeContentNode,
+  contentState,
+} from '../../modules/coreLearn/utils';
 import { KnowledgeMapResource } from '../../apiResources';
-
 
 export function showKnowledgeMap(store, id) {
   return store.dispatch('loading').then(() => {
