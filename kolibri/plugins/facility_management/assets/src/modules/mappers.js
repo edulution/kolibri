@@ -19,5 +19,6 @@ export function _userState(facilityUser) {
     gender: facilityUser.gender,
     birth_year: facilityUser.birth_year,
     exam_number: facilityUser.exam_number,
+    deleted: facilityUser.deleted,
   };
 }
