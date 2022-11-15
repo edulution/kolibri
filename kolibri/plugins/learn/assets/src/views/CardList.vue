@@ -171,6 +171,10 @@
   $h-padding: 24px;
   $v-padding: 16px;
 
+  a {
+    display: block;
+  }
+
   .card {
     @extend %dropshadow-1dp;
 
@@ -179,7 +183,7 @@
     width: 100%;
     min-height: 246px;
     padding: $v-padding $h-padding;
-    margin-bottom: 24px;
+    margin-top: $h-padding;
     text-decoration: none;
     vertical-align: top;
     border-radius: 8px;

@@ -10,14 +10,15 @@ from .api import DeviceRestartView
 from .api import DeviceSettingsView
 from .api import DriveInfoViewSet
 from .api import FreeSpaceView
+from .api import RemoteFacilitiesViewset
 from .api import UserSyncStatusViewSet
 
 router = routers.SimpleRouter()
 router.register(
-    r"devicepermissions", DevicePermissionsViewSet, base_name="devicepermissions"
+    r"devicepermissions", DevicePermissionsViewSet, basename="devicepermissions"
 )
-router.register(r"usersyncstatus", UserSyncStatusViewSet, base_name="usersyncstatus")
-router.register(r"driveinfo", DriveInfoViewSet, base_name="driveinfo")
+router.register(r"usersyncstatus", UserSyncStatusViewSet, basename="usersyncstatus")
+router.register(r"driveinfo", DriveInfoViewSet, basename="driveinfo")
 
 
 urlpatterns = [
@@ -32,4 +33,7 @@ urlpatterns = [
     url(r"^devicesettings/", DeviceSettingsView.as_view(), name="devicesettings"),
     url(r"^devicename/", DeviceNameView.as_view(), name="devicename"),
     url(r"^devicerestart/", DeviceRestartView.as_view(), name="devicerestart"),
+    url(
+        r"^remotefacilities", RemoteFacilitiesViewset.as_view(), name="remotefacilities"
+    ),
 ]

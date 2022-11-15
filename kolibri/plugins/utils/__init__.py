@@ -8,10 +8,7 @@ from django.apps import apps
 from django.conf import settings as django_settings
 from django.core.exceptions import AppRegistryNotReady
 from django.core.management import call_command
-from django.core.urlresolvers import reverse
-from pkg_resources import DistributionNotFound
-from pkg_resources import get_distribution
-from pkg_resources import iter_entry_points
+from django.urls import reverse
 from semver import VersionInfo
 
 import kolibri
@@ -79,8 +76,7 @@ def _import_python_module(plugin_name):
     try:
         importlib.import_module(plugin_name)
     except ImportError as e:
-        # Python 2: message, Python 3: msg
-        exc_message = getattr(e, "message", getattr(e, "msg", None))
+        exc_message = str(e)
         if exc_message.startswith("No module named"):
             msg = (
                 "Plugin '{}' does not seem to exist. Is it on the PYTHONPATH?"
@@ -90,7 +86,7 @@ def _import_python_module(plugin_name):
             raise
 
 
-def initialize_plugins_and_hooks(all_classes, plugin_name):
+def initialize_plugins_and_hooks(all_classes, plugin_name, initialize_hooks=True):
     was_configured = django_settings.configured
     plugin_objects = []
     for class_definition in all_classes:
@@ -103,7 +99,7 @@ def initialize_plugins_and_hooks(all_classes, plugin_name):
                         class_definition.__name__, plugin_name
                     )
                 )
-        elif issubclass(class_definition, KolibriHook):
+        elif issubclass(class_definition, KolibriHook) and initialize_hooks:
             class_definition.add_hook_to_registries()
             if not was_configured and django_settings.configured:
                 raise PluginLoadsApp(
@@ -126,11 +122,14 @@ def initialize_plugins_and_hooks(all_classes, plugin_name):
         raise MultiplePlugins("More than one plugin defined in kolibri_plugin module")
 
 
-def initialize_kolibri_plugin(plugin_name):
+def initialize_kolibri_plugin(plugin_name, initialize_hooks=True):
     """
     Try to load kolibri_plugin from given plugin module identifier
     In so doing, it will instantiate the KolibriPlugin object if it
     exists, and also register any hooks found in the module.
+
+    Set the initialize_hooks argument to False to just retrieve the kolibri plugin without registering
+    its hooks.
 
     :returns: the KolibriPlugin object for the module
     """
@@ -171,7 +170,9 @@ def initialize_kolibri_plugin(plugin_name):
             for cls in plugin_module.__dict__.values()
             if is_plugin_module(cls) and isinstance(cls, type)
         ]
-        return initialize_plugins_and_hooks(all_classes, plugin_name)
+        return initialize_plugins_and_hooks(
+            all_classes, plugin_name, initialize_hooks=initialize_hooks
+        )
 
     except ImportError as e:
         # Python 2: message, Python 3: msg
@@ -191,9 +192,9 @@ def initialize_kolibri_plugin(plugin_name):
         raise PluginLoadsApp(msg)
 
 
-def enable_plugin(plugin_name):
+def enable_plugin(plugin_name, initialize_hooks=False):
     try:
-        obj = initialize_kolibri_plugin(plugin_name)
+        obj = initialize_kolibri_plugin(plugin_name, initialize_hooks=initialize_hooks)
         if obj:
             obj.enable()
             return True
@@ -201,9 +202,9 @@ def enable_plugin(plugin_name):
         logger.error(str(e))
 
 
-def disable_plugin(plugin_name):
+def disable_plugin(plugin_name, initialize_hooks=False):
     try:
-        obj = initialize_kolibri_plugin(plugin_name)
+        obj = initialize_kolibri_plugin(plugin_name, initialize_hooks=initialize_hooks)
         if obj:
             obj.disable()
             return True
@@ -219,6 +220,12 @@ def disable_plugin(plugin_name):
 def _get_plugin_version(plugin_name):
     if is_external_plugin(plugin_name):
         top_level_module = plugin_name.split(".")[0]
+        # pkg_resources is very slow to import, so we defer
+        # its import until needed to avoid imports at module scope
+        # c.f. https://github.com/pypa/setuptools/issues/926
+        from pkg_resources import DistributionNotFound
+        from pkg_resources import get_distribution
+
         try:
             return get_distribution(top_level_module).version
         except (DistributionNotFound, AttributeError):
@@ -460,6 +467,11 @@ def check_plugin_config_file_location(version):
 
 
 def iterate_plugins():
+    # pkg_resources is very slow to import, so we defer
+    # its import until needed to avoid imports at module scope
+    # c.f. https://github.com/pypa/setuptools/issues/926
+    from pkg_resources import iter_entry_points
+
     # Use to dedupe plugins
     plugin_ids = set()
     for entry_point in iter_entry_points("kolibri.plugins"):

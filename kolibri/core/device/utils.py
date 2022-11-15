@@ -90,13 +90,13 @@ def set_device_settings(**kwargs):
         raise DeviceNotProvisioned
 
 
-def provision_device(device_name=None, **kwargs):
+def provision_device(device_name=None, is_provisioned=True, **kwargs):
     from .models import DeviceSettings
 
     device_settings, _ = DeviceSettings.objects.get_or_create(defaults=kwargs)
     if device_name is not None:
         device_settings.name = device_name
-    device_settings.is_provisioned = True
+    device_settings.is_provisioned = is_provisioned
     device_settings.save()
 
 
@@ -248,7 +248,7 @@ def setup_device_and_facility(
                     )
                 )
             except ValidationError:
-                logger.warn(
+                logger.warning(
                     "An account with username '{username}' already exists in facility '{facility}', not creating user account.".format(
                         username=username, facility=facility
                     )
@@ -265,7 +265,7 @@ def get_facility_by_name(facility_name):
 
         if facility_query.exists():
             facility = facility_query.get()
-            logger.warn(
+            logger.warning(
                 "Facility with name '{name}' already exists, not modifying preset.".format(
                     name=facility.name
                 )
@@ -285,7 +285,7 @@ def remove_provisioning_file(file_path):
             )
         )
     except (IOError, OSError):
-        logger.warn(
+        logger.warning(
             "Unable to remove provisioning file {} after successful provisioning".format(
                 file_path
             ),

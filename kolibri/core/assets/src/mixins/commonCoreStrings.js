@@ -60,6 +60,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       "Indicates going back to a previous step.\n\nFor example, when a user creates a quiz in Kolibri using the quiz builder they can either 'CONTINUE' to the next phase of the builder or 'GO BACK'.\n\nIf you go back you exit the quiz builder and loose the resource selection.",
   },
+  backAction: {
+    message: 'Back',
+    context:
+      'Indicates going back to a previous step in multi-step workflows. It can be used as a label of the back button that is displayed next to the continue button.',
+  },
   importAction: {
     message: 'Import',
     context:
@@ -132,6 +137,14 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   saveToBookmarks: {
     message: 'Save to bookmarks',
     context: "An action that adds a resource or topic to a user's bookmarks",
+  },
+  zoomIn: {
+    message: 'Zoom in',
+    context: 'Label for a button used to zoom in the document view (make it larger)',
+  },
+  zoomOut: {
+    message: 'Zoom out',
+    context: 'Label for a button used to zoom out the document view (make it smaller)',
   },
 
   // labels, phrases, titles, headers...
@@ -352,6 +365,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Search',
     context: 'Test used to indicate the Kolibri search field.',
   },
+  searchForUser: {
+    message: 'Search for a user...',
+    context:
+      'Text which appears in the search field above the table with users from whom to choose from (e.g. when enrolling learners to a class, selecting users to sync, etc.)',
+  },
   findSomethingToLearn: {
     message: 'Find something to learn',
     context: 'Suggestion located inside the the keyword search field.',
@@ -444,6 +462,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Transcript',
     context:
       'Refers to the option to present the captions (subtitles) of the video in the form of the interactive transcript.',
+  },
+  rememberThisAccountInformation: {
+    message: 'Important: please remember this account information. Write it down if needed.',
+    context: 'Helper/information text to remind user to take note of their account information.',
   },
 
   // Learning Activities
@@ -1057,6 +1079,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Completion requirement',
     context: 'Denotes whether a specific exercise needs to be completed by the learner.',
   },
+  changeLearningFacility: {
+    message: 'Change learning facility',
+    context: 'Menu or screen used for the user to move to a different learning facility',
+  },
 });
 
 // We forgot a string, so we are using one from the PerseusInternalMessages namespace
@@ -1115,41 +1141,42 @@ const MetadataLookup = invert(
     METADATA.ResourcesNeededTypes
   )
 );
+/**
+ * Return translated string for key defined in the coreStrings translator. Will map
+ * ID keys generated in the kolibri-constants library to their appropriate translations
+ * if available.
+ *
+ * @param {string} key - A key as defined in the coreStrings translator; also accepts keys
+ * for the object MetadataLookup.
+ * @param {object} args - An object with keys matching ICU syntax arguments for the translation
+ * string mapping to the values to be passed for those arguments.
+ */
+export function coreString(key, args) {
+  if (key === 'None of the above' || key === METADATA.NoCategories) {
+    return noneOfTheAboveTranslator.$tr('None of the above', args);
+  }
+
+  if (key === 'overCertainNumberOfSearchResults') {
+    return overResultsTranslator.$tr(key, args);
+  }
+
+  const metadataKey = get(MetadataLookup, key, null);
+  key = metadataKey ? camelCase(metadataKey) : key;
+
+  if (nonconformingKeys[key]) {
+    return coreStrings.$tr(nonconformingKeys[key], args);
+  }
+
+  if (nonconformingKeys[metadataKey]) {
+    return coreStrings.$tr(nonconformingKeys[metadataKey], args);
+  }
+
+  return coreStrings.$tr(key, args);
+}
 
 export default {
   methods: {
-    /**
-     * Return translated string for key defined in the coreStrings translator. Will map
-     * ID keys generated in the kolibri-constants library to their appropriate translations
-     * if available.
-     *
-     * @param {string} key - A key as defined in the coreStrings translator; also accepts keys
-     * for the object MetadataLookup.
-     * @param {object} args - An object with keys matching ICU syntax arguments for the translation
-     * string mapping to the values to be passed for those arguments.
-     */
-    coreString(key, args) {
-      if (key === 'None of the above' || key === METADATA.NoCategories) {
-        return noneOfTheAboveTranslator.$tr('None of the above', args);
-      }
-
-      if (key === 'overCertainNumberOfSearchResults') {
-        return overResultsTranslator.$tr(key, args);
-      }
-
-      const metadataKey = get(MetadataLookup, key, null);
-      key = metadataKey ? camelCase(metadataKey) : key;
-
-      if (nonconformingKeys[key]) {
-        return coreStrings.$tr(nonconformingKeys[key], args);
-      }
-
-      if (nonconformingKeys[metadataKey]) {
-        return coreStrings.$tr(nonconformingKeys[metadataKey], args);
-      }
-
-      return coreStrings.$tr(key, args);
-    },
+    coreString,
     /**
      * Shows a specific snackbar notification from our notificationStrings translator.
      *

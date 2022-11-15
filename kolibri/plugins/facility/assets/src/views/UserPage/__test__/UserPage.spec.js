@@ -1,5 +1,6 @@
 import mock from 'xhr-mock';
-import { mount, RouterLinkStub } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
+import VueRouter from 'vue-router';
 import makeStore from '../../../../test/makeStore';
 import UserPage from '../index';
 
@@ -7,15 +8,23 @@ jest.mock('kolibri.lib.logging');
 jest.mock('kolibri.urls');
 jest.mock('lockr');
 
+const router = new VueRouter({
+  routes: [
+    {
+      path: '/userpage/',
+      name: 'UserPage',
+    },
+  ],
+});
+
 UserPage.computed.newUserLink = () => ({});
 
 function makeWrapper() {
   const store = makeStore();
   const wrapper = mount(UserPage, {
     store,
-    stubs: {
-      RouterLink: RouterLinkStub,
-    },
+    router,
+    stubs: ['RouterLinkStub', 'FacilityTopNav'],
   });
   return { wrapper, store };
 }

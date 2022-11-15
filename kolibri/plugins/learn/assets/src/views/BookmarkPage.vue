@@ -1,37 +1,40 @@
 <template>
 
-  <div>
-    <h1>
-      {{ $tr('bookmarksHeader') }}
-    </h1>
-    <p v-if="!bookmarks.length && !loading">
-      {{ $tr('noBookmarks') }}
-    </p>
+  <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
+    <div id="main" role="main">
 
-    <CardList
-      v-for="content in bookmarks"
-      v-else
-      :key="content.id"
-      :content="content"
-      class="card-grid-item"
-      :isMobile="windowIsSmall"
-      :link="genContentLink(content)"
-      :footerIcons="footerIcons"
-      :createdDate="content.bookmark ? content.bookmark.created : null"
-      @viewInformation="toggleInfoPanel(content)"
-      @removeFromBookmarks="removeFromBookmarks(content.bookmark)"
-    />
+      <h1>
+        {{ $tr('bookmarksHeader') }}
+      </h1>
+      <p v-if="!bookmarks.length && !loading">
+        {{ $tr('noBookmarks') }}
+      </p>
 
-    <KButton
-      v-if="more && !loading"
-      data-test="load-more-button"
-      :text="coreString('viewMoreAction')"
-      @click="loadMore"
-    />
-    <KCircularLoader
-      v-else-if="loading"
-      :delay="false"
-    />
+      <CardList
+        v-for="content in bookmarks"
+        v-else
+        :key="content.id"
+        :content="content"
+        class="card-grid-item"
+        :isMobile="windowIsSmall"
+        :link="genContentLink(content)"
+        :footerIcons="footerIcons"
+        :createdDate="content.bookmark ? content.bookmark.created : null"
+        @viewInformation="toggleInfoPanel(content)"
+        @removeFromBookmarks="removeFromBookmarks(content.bookmark)"
+      />
+
+      <KButton
+        v-if="more && !loading"
+        data-test="load-more-button"
+        :text="coreString('viewMoreAction')"
+        @click="loadMore"
+      />
+      <KCircularLoader
+        v-else-if="loading"
+        :delay="false"
+      />
+    </div>
 
     <!-- Side panel for showing the information of selected content with a link to view it -->
     <SidePanelModal
@@ -67,7 +70,7 @@
         :showLocationsInChannel="true"
       />
     </SidePanelModal>
-  </div>
+  </LearnAppBarPage>
 
 </template>
 
@@ -84,6 +87,8 @@
   import genContentLink from '../utils/genContentLink';
   import { normalizeContentNode } from '../modules/coreLearn/utils.js';
   import useContentNodeProgress from '../composables/useContentNodeProgress';
+  import commonLearnStrings from './commonLearnStrings';
+  import LearnAppBarPage from './LearnAppBarPage';
   import LearningActivityChip from './LearningActivityChip';
   import CardList from './CardList';
 
@@ -101,8 +106,9 @@
       SidePanelModal,
       LearningActivityChip,
       CardList,
+      LearnAppBarPage,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings, commonLearnStrings, responsiveWindowMixin],
     setup() {
       const { fetchContentNodeProgress } = useContentNodeProgress();
       return { fetchContentNodeProgress };

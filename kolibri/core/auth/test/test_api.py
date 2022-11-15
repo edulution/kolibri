@@ -5,12 +5,19 @@ from __future__ import unicode_literals
 import base64
 import collections
 import sys
+import time
 import uuid
+from datetime import datetime
 from importlib import import_module
 
 import factory
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from django.utils import timezone
+from morango.constants import transfer_stages
+from morango.constants import transfer_statuses
+from morango.models import SyncSession
+from morango.models import TransferSession
 from rest_framework import status
 from rest_framework.test import APITestCase as BaseTestCase
 
@@ -83,8 +90,9 @@ class LearnerGroupAPITestCase(APITestCase):
             cls.learner_groups += [
                 LearnerGroupFactory.create(parent=classroom) for _ in range(5)
             ]
+        cls.user = FacilityUserFactory.create(facility=cls.facility)
 
-    def setUp(self):
+    def login_superuser(self):
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
@@ -92,6 +100,7 @@ class LearnerGroupAPITestCase(APITestCase):
         )
 
     def test_learnergroup_list(self):
+        self.login_superuser()
         response = self.client.get(
             reverse("kolibri:core:learnergroup-list"), format="json"
         )
@@ -112,7 +121,35 @@ class LearnerGroupAPITestCase(APITestCase):
             self.assertItemsEqual(group.pop("user_ids"), expected[i].pop("user_ids"))
         self.assertItemsEqual(response.data, expected)
 
+    def test_learnergroup_list_user(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse("kolibri:core:learnergroup-list"), format="json"
+        )
+        expected = []
+        self.assertItemsEqual(response.data, expected)
+
+    def test_learnergroup_list_user_parent_filter(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse("kolibri:core:learnergroup-list")
+            + "?parent="
+            + self.classrooms[0].id,
+            format="json",
+        )
+        expected = []
+        self.assertItemsEqual(response.data, expected)
+
     def test_learnergroup_detail(self):
+        self.login_superuser()
         response = self.client.get(
             reverse(
                 "kolibri:core:learnergroup-detail",
@@ -128,7 +165,23 @@ class LearnerGroupAPITestCase(APITestCase):
         }
         self.assertItemsEqual(response.data, expected)
 
+    def test_learnergroup_detail_user(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse(
+                "kolibri:core:learnergroup-detail",
+                kwargs={"pk": self.learner_groups[0].id},
+            ),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+
     def test_parent_in_queryparam_with_one_id(self):
+        self.login_superuser()
         classroom_id = self.classrooms[0].id
         response = self.client.get(
             reverse("kolibri:core:learnergroup-list"),
@@ -154,6 +207,7 @@ class LearnerGroupAPITestCase(APITestCase):
         self.assertItemsEqual(response.data, expected)
 
     def test_cannot_create_learnergroup_same_name(self):
+        self.login_superuser()
         classroom_id = self.classrooms[0].id
         learner_group_name = (
             models.LearnerGroup.objects.filter(parent_id=classroom_id).first().name
@@ -167,6 +221,7 @@ class LearnerGroupAPITestCase(APITestCase):
         self.assertEqual(response.data[0]["id"], error_constants.UNIQUE)
 
     def test_cannot_create_learnergroup_no_classroom_parent(self):
+        self.login_superuser()
         classroom_id = self.classrooms[0].id
         learner_group_id = (
             models.LearnerGroup.objects.filter(parent_id=classroom_id).first().id
@@ -189,8 +244,9 @@ class ClassroomAPITestCase(APITestCase):
             ClassroomFactory.create(parent=cls.facility) for _ in range(10)
         ]
         cls.learner_group = LearnerGroupFactory.create(parent=cls.classrooms[0])
+        cls.user = FacilityUserFactory.create(facility=cls.facility)
 
-    def setUp(self):
+    def login_superuser(self):
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
@@ -198,6 +254,7 @@ class ClassroomAPITestCase(APITestCase):
         )
 
     def test_classroom_list(self):
+        self.login_superuser()
         response = self.client.get(
             reverse("kolibri:core:classroom-list"), format="json"
         )
@@ -215,7 +272,31 @@ class ClassroomAPITestCase(APITestCase):
         ]
         self.assertItemsEqual(response.data, expected)
 
+    def test_classroom_list_user(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse("kolibri:core:classroom-list"), format="json"
+        )
+        self.assertItemsEqual(response.data, [])
+
+    def test_classroom_list_user_parent_filter(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse("kolibri:core:classroom-list") + "?parent=" + self.facility.id,
+            format="json",
+        )
+        self.assertItemsEqual(response.data, [])
+
     def test_classroom_detail(self):
+        self.login_superuser()
         response = self.client.get(
             reverse(
                 "kolibri:core:classroom-detail", kwargs={"pk": self.classrooms[0].id}
@@ -231,7 +312,22 @@ class ClassroomAPITestCase(APITestCase):
         }
         self.assertDictEqual(response.data, expected)
 
+    def test_classroom_detail_user(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse(
+                "kolibri:core:classroom-detail", kwargs={"pk": self.classrooms[0].id}
+            ),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+
     def test_classroom_detail_assigned_coach_super_user(self):
+        self.login_superuser()
         self.classrooms[0].add_coach(self.superuser)
         response = self.client.get(
             reverse(
@@ -266,6 +362,7 @@ class ClassroomAPITestCase(APITestCase):
         self.assertDictEqual(response.data, expected)
 
     def test_classroom_detail_assigned_coach_admin(self):
+        self.login_superuser()
         admin = FacilityUserFactory.create(facility=self.facility)
         self.facility.add_admin(admin)
         self.classrooms[0].add_coach(admin)
@@ -300,6 +397,7 @@ class ClassroomAPITestCase(APITestCase):
         self.assertDictEqual(response.data, expected)
 
     def test_classroom_facility_coach_role_for_filter(self):
+        self.login_superuser()
         coach = FacilityUserFactory.create(facility=self.facility)
         self.facility.add_coach(coach)
         response = self.client.get(
@@ -311,6 +409,7 @@ class ClassroomAPITestCase(APITestCase):
         self.assertEqual(len(response.data), len(self.classrooms))
 
     def test_cannot_create_classroom_same_name(self):
+        self.login_superuser()
         classroom_name = self.classrooms[0].name
         response = self.client.post(
             reverse("kolibri:core:classroom-list"),
@@ -321,6 +420,7 @@ class ClassroomAPITestCase(APITestCase):
         self.assertEqual(response.data[0]["id"], error_constants.UNIQUE)
 
     def test_cannot_create_classroom_no_facility_parent(self):
+        self.login_superuser()
         classroom_id = self.classrooms[0].id
         response = self.client.post(
             reverse("kolibri:core:classroom-list"),
@@ -339,6 +439,31 @@ class FacilityAPITestCase(APITestCase):
         cls.facility2 = FacilityFactory.create()
         cls.user1 = FacilityUserFactory.create(facility=cls.facility1)
         cls.user2 = FacilityUserFactory.create(facility=cls.facility2)
+        cls.date_completed_transfer_session = datetime(2022, 6, 30, tzinfo=timezone.utc)
+        cls.date_failed_transfer_session = datetime(2022, 6, 14, tzinfo=timezone.utc)
+        cls.sync_session = SyncSession.objects.create(
+            id=uuid.uuid4().hex,
+            profile="facilitydata",
+            last_activity_timestamp=cls.date_completed_transfer_session,
+        )
+        cls.completed_push_transfer_session = TransferSession.objects.create(
+            id=uuid.uuid4().hex,
+            sync_session_id=cls.sync_session.id,
+            filter=cls.facility1.dataset_id,
+            push=True,
+            active=False,
+            transfer_stage=transfer_stages.CLEANUP,
+            transfer_stage_status=transfer_statuses.COMPLETED,
+            last_activity_timestamp=cls.date_completed_transfer_session,
+        )
+        cls.failed_transfer_session = TransferSession.objects.create(
+            id=uuid.uuid4().hex,
+            sync_session_id=cls.sync_session.id,
+            filter=cls.facility1.dataset_id,
+            push=True,
+            transfer_stage_status=transfer_statuses.ERRORED,
+            last_activity_timestamp=cls.date_failed_transfer_session,
+        )
 
     def test_sanity(self):
         self.assertTrue(
@@ -359,9 +484,41 @@ class FacilityAPITestCase(APITestCase):
             reverse("kolibri:core:facility-detail", kwargs={"pk": self.facility1.pk}),
             format="json",
         )
-        # .assertDictContainsSubset checks that the first argument is a subset of the second argument
-        self.assertDictContainsSubset(
-            {"name": self.facility1.name}, dict(response.data)
+        self.assertEqual(
+            dict(response.data),
+            # Merge smaller dict into larger dict, if the smaller dict is a subset of the larger one, the result should be equal to the larger one
+            # Generalized dict unpacking can be used in Python 3.5+: assertEqual(larger_dict, {**larger_dict, **smaller_dict})
+            # The dict union operator can be used in Python 3.9+: assertEqual(larger_dict, larger_dict | smaller_dict)
+            dict(response.data, **{"name": self.facility1.name}),
+        )
+
+    def test_facility_user_can_get_last_successful_sync(self):
+        self.client.login(
+            username=self.user1.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility1,
+        )
+        response = self.client.get(
+            reverse("kolibri:core:facility-detail", kwargs={"pk": self.facility1.pk}),
+            format="json",
+        )
+        self.assertEqual(
+            response.data["last_successful_sync"],
+            self.date_completed_transfer_session,
+        )
+
+    def test_facility_user_can_get_last_failed_sync(self):
+        self.client.login(
+            username=self.user1.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility1,
+        )
+        response = self.client.get(
+            reverse("kolibri:core:facility-detail", kwargs={"pk": self.facility1.pk}),
+            format="json",
+        )
+        self.assertEqual(
+            response.data["last_failed_sync"], self.date_failed_transfer_session
         )
 
     def test_device_admin_can_create_facility(self):
@@ -712,14 +869,12 @@ class UserRetrieveTestCase(APITestCase):
         cls.facility.add_admin(cls.superuser)
         cls.user = FacilityUserFactory.create(facility=cls.facility)
 
-    def setUp(self):
+    def test_user_list(self):
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
             facility=self.facility,
         )
-
-    def test_user_list(self):
         response = self.client.get(reverse("kolibri:core:facilityuser-list"))
         self.assertEqual(response.status_code, 200)
         self.assertItemsEqual(
@@ -755,6 +910,66 @@ class UserRetrieveTestCase(APITestCase):
                 },
             ],
         )
+
+    def test_user_list_self(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(reverse("kolibri:core:facilityuser-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertItemsEqual(
+            response.data,
+            [
+                {
+                    "id": self.user.id,
+                    "username": self.user.username,
+                    "full_name": self.user.full_name,
+                    "facility": self.user.facility_id,
+                    "id_number": self.user.id_number,
+                    "gender": self.user.gender,
+                    "birth_year": self.user.birth_year,
+                    "is_superuser": False,
+                    "roles": [],
+                },
+            ],
+        )
+
+    def test_anonymous_user_list(self):
+        response = self.client.get(reverse("kolibri:core:facilityuser-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertItemsEqual(
+            response.data,
+            [],
+        )
+
+    def test_user_no_retrieve_admin(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse(
+                "kolibri:core:facilityuser-detail", kwargs={"pk": self.superuser.id}
+            )
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_anonymous_no_retrieve_admin(self):
+        response = self.client.get(
+            reverse(
+                "kolibri:core:facilityuser-detail", kwargs={"pk": self.superuser.id}
+            )
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_anonymous_no_retrieve_user(self):
+        response = self.client.get(
+            reverse("kolibri:core:facilityuser-detail", kwargs={"pk": self.user.id})
+        )
+        self.assertEqual(response.status_code, 404)
 
 
 class FacilityUserFilterTestCase(APITestCase):
@@ -894,6 +1109,7 @@ class LoginLogoutTestCase(APITestCase):
             format="json",
         )
         expire_date = self.client.session.get_expiry_date()
+        time.sleep(0.01)
         self.client.get(
             reverse("kolibri:core:session-detail", kwargs={"pk": "current"})
         )
@@ -1136,7 +1352,7 @@ class FacilityDatasetAPITestCase(APITestCase):
         for setting in ["formal", "nonformal", "informal"]:
             set_all_false_and_preset(facility, setting)
             response = post_resetsettings()
-            self.assertDictContainsSubset(mappings[setting], response.data)
+            self.assertEqual(response.data, dict(response.data, **mappings[setting]))
 
     def test_for_incompatible_settings_together(self):
         self.client.login(username=self.admin.username, password=DUMMY_PASSWORD)
@@ -1197,7 +1413,7 @@ class FacilityDatasetAPITestCase(APITestCase):
         self.assertEqual(response.status_code, 400)
 
 
-class MembershipCascadeDeletion(APITestCase):
+class MembershipAPITestCase(APITestCase):
     @classmethod
     def setUpTestData(cls):
         provision_device()
@@ -1215,14 +1431,83 @@ class MembershipCascadeDeletion(APITestCase):
         models.Membership.objects.create(collection=cls.classroom, user=cls.other_user)
         models.Membership.objects.create(collection=cls.lg, user=cls.other_user)
 
-    def setUp(self):
+    def login_superuser(self):
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
             facility=self.facility,
         )
 
+    def test_user_list_own(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(reverse("kolibri:core:membership-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        for membership in response.data:
+            self.assertEqual(membership["user"], self.user.id)
+
+    def test_other_user_list_own(self):
+        self.client.login(
+            username=self.other_user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(reverse("kolibri:core:membership-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        for membership in response.data:
+            self.assertEqual(membership["user"], self.other_user.id)
+
+    def test_superuser_list_all(self):
+        self.login_superuser()
+        response = self.client.get(reverse("kolibri:core:membership-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 4)
+
+    def test_user_retrieve_own(self):
+        self.client.login(
+            username=self.user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse(
+                "kolibri:core:membership-detail",
+                kwargs={"pk": self.classroom_membership.id},
+            )
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_user_retrieve_other(self):
+        self.client.login(
+            username=self.other_user.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        response = self.client.get(
+            reverse(
+                "kolibri:core:membership-detail",
+                kwargs={"pk": self.classroom_membership.id},
+            )
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_superuser_retrieve_other(self):
+        self.login_superuser()
+        response = self.client.get(
+            reverse(
+                "kolibri:core:membership-detail",
+                kwargs={"pk": self.classroom_membership.id},
+            )
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_delete_classroom_membership(self):
+        self.login_superuser()
         url = reverse("kolibri:core:membership-list") + "?user={}&collection={}".format(
             self.user.id, self.classroom.id
         )
@@ -1231,6 +1516,7 @@ class MembershipCascadeDeletion(APITestCase):
         self.assertFalse(models.Membership.objects.filter(user=self.user).exists())
 
     def test_delete_detail(self):
+        self.login_superuser()
         response = self.client.delete(
             reverse(
                 "kolibri:core:membership-detail",
@@ -1241,6 +1527,7 @@ class MembershipCascadeDeletion(APITestCase):
         self.assertFalse(models.Membership.objects.filter(user=self.user).exists())
 
     def test_delete_does_not_affect_other_user_memberships(self):
+        self.login_superuser()
         expected_count = models.Membership.objects.filter(user=self.other_user).count()
         self.client.delete(
             reverse(

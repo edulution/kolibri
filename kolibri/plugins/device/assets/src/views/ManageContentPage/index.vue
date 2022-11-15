@@ -1,67 +1,80 @@
 <template>
 
-  <div>
+  <AppBarPage :title="pageTitle">
 
-    <div>
-      <HeaderWithOptions :headerText="coreString('channelsLabel')">
-        <template #options>
-          <KButtonGroup>
-            <!-- Margins to and bottom adds space when buttons are vertically stacked -->
-            <KDropdownMenu
-              v-if="channelsAreInstalled"
-              appearance="raised-button"
-              :text="coreString('optionsLabel')"
-              position="bottom left"
-              :options="dropdownOptions"
-              style="margin-top: 16px; margin-bottom: -16px;"
-              class="options-btn"
-              @select="handleSelect"
-            />
-            <KButton
-              :text="$tr('import')"
-              style="margin-top: 16px; margin-bottom: -16px;"
-              :primary="true"
-              @click="startImportWorkflow()"
-            />
-          </KButtonGroup>
-        </template>
-      </HeaderWithOptions>
+    <template #subNav>
+      <DeviceTopNav />
+    </template>
 
-      <TasksBar
-        v-if="managedTasks.length > 0"
-        :tasks="managedTasks"
-        :taskManagerLink="{ name: 'MANAGE_TASKS' }"
-        @clearall="handleClickClearAll"
-      />
+    <KPageContainer class="device-container">
 
-      <p v-if="!channelsAreInstalled">
-        {{ $tr('emptyChannelListMessage') }}
-      </p>
+      <div>
+        <HeaderWithOptions :headerText="coreString('channelsLabel')">
+          <template #options>
+            <KButtonGroup>
+              <!-- Margins to and bottom adds space when buttons are vertically stacked -->
+              <KButton
+                v-if="channelsAreInstalled"
+                hasDropdown
+                appearance="raised-button"
+                :text="coreString('optionsLabel')"
+                :style="{ margin: '16px 8px -16px 0' }"
+              >
+                <template #menu>
+                  <KDropdownMenu
+                    position="bottom left"
+                    :options="dropdownOptions"
+                    @select="handleSelect"
+                  />
+                </template>
+              </KButton>
+              <KButton
+                :text="$tr('import')"
+                style="margin-top: 16px; margin-bottom: -16px;"
+                :primary="true"
+                @click="startImportWorkflow()"
+              />
+            </KButtonGroup>
+          </template>
+        </HeaderWithOptions>
 
-      <div class="channels-list">
-        <ChannelPanel
-          v-for="channel in sortedChannels"
-          :key="channel.id"
-          :channel="channel"
-          :disabled="channelIsBeingDeleted(channel.id)"
-          :showNewLabel="showNewLabel(channel.id)"
-          @select_delete="deleteChannelId = channel.id"
-          @select_manage="handleSelectManage(channel.id)"
+        <TasksBar
+          v-if="managedTasks.length > 0"
+          :tasks="managedTasks"
+          :taskManagerLink="{ name: 'MANAGE_TASKS' }"
+          @clearall="handleClickClearAll"
         />
+
+        <p v-if="!channelsAreInstalled">
+          {{ $tr('emptyChannelListMessage') }}
+        </p>
+
+        <div class="channels-list">
+          <ChannelPanel
+            v-for="channel in sortedChannels"
+            :key="channel.id"
+            :channel="channel"
+            :disabled="channelIsBeingDeleted(channel.id)"
+            :showNewLabel="showNewLabel(channel.id)"
+            @select_delete="deleteChannelId = channel.id"
+            @select_manage="handleSelectManage(channel.id)"
+          />
+        </div>
+
+        <SelectTransferSourceModal :pageName="pageName" />
+
+        <DeleteChannelModal
+          v-if="deleteChannelId"
+          :channelTitle="selectedChannelTitle"
+          @submit="handleDeleteChannel"
+          @cancel="deleteChannelId = null"
+        />
+
       </div>
 
-      <SelectTransferSourceModal :pageName="pageName" />
+    </KPageContainer>
 
-      <DeleteChannelModal
-        v-if="deleteChannelId"
-        :channelTitle="selectedChannelTitle"
-        @submit="handleDeleteChannel"
-        @cancel="deleteChannelId = null"
-      />
-    </div>
-
-
-  </div>
+  </AppBarPage>
 
 </template>
 
@@ -69,14 +82,20 @@
 <script>
 
   import find from 'lodash/find';
+
   import get from 'lodash/get';
   import sortBy from 'lodash/sortBy';
   import { mapState, mapGetters, mapActions } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
   import { TaskResource } from 'kolibri.resources';
+  import { TaskStatuses, TaskTypes } from 'kolibri.utils.syncTaskUtils';
   import taskNotificationMixin from '../taskNotificationMixin';
-  import { PageNames, TaskStatuses } from '../../constants';
+  import useContentTasks from '../../composables/useContentTasks';
+  import { PageNames } from '../../constants';
   import HeaderWithOptions from '../HeaderWithOptions';
+  import DeviceTopNav from '../DeviceTopNav';
+  import { deviceString } from '../commonDeviceStrings';
   import SelectTransferSourceModal from './SelectTransferSourceModal';
   import ChannelPanel from './ChannelPanel/WithSizeAndOptions';
   import DeleteChannelModal from './DeleteChannelModal';
@@ -90,13 +109,18 @@
       };
     },
     components: {
+      AppBarPage,
       ChannelPanel,
       DeleteChannelModal,
+      DeviceTopNav,
       HeaderWithOptions,
       SelectTransferSourceModal,
       TasksBar,
     },
     mixins: [commonCoreStrings, taskNotificationMixin],
+    setup() {
+      useContentTasks();
+    },
     data() {
       return {
         deleteChannelId: null,
@@ -110,6 +134,9 @@
         'managedTasks',
       ]),
       ...mapState('manageContent/wizard', ['pageName']),
+      pageTitle() {
+        return deviceString('deviceManagementTitle');
+      },
       doneTasks() {
         return this.managedTasks.filter(task => task.status === TaskStatuses.COMPLETED).length;
       },
@@ -186,7 +213,11 @@
         if (this.deleteChannelId) {
           const channelId = this.deleteChannelId;
           this.deleteChannelId = null;
-          return TaskResource.deleteChannel({ channelId })
+          return TaskResource.startTask({
+            type: TaskTypes.DELETECHANNEL,
+            channel_id: channelId,
+            channel_name: this.selectedChannelTitle,
+          })
             .then(task => {
               this.notifyAndWatchTask(task);
             })
@@ -205,7 +236,7 @@
         this.$router.push({ name: PageNames.MANAGE_CHANNEL, params: { channel_id: channelId } });
       },
       handleClickClearAll() {
-        TaskResource.deleteFinishedTasks();
+        TaskResource.clearAll();
       },
       // @public (used by taskNotificationMixin)
       onWatchedTaskFinished() {
@@ -246,13 +277,14 @@
 
 <style lang="scss" scoped>
 
-  .buttons {
-    margin: auto;
+  @import '../../styles/definitions';
+
+  .device-container {
+    @include device-kpagecontainer;
   }
 
-  .options-btn {
-    margin: 0;
-    margin-right: 8px;
+  .buttons {
+    margin: auto;
   }
 
 </style>

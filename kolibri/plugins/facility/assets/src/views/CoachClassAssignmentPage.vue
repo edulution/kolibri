@@ -1,6 +1,6 @@
 <template>
 
-  <ImmersivePageRoot
+  <ImmersivePage
     :appBarTitle="className"
     :route="$store.getters.facilityPageLinks.ClassEditPage($route.params.id)"
   >
@@ -9,13 +9,14 @@
       <p>{{ $tr('pageSubheader') }}</p>
       <ClassEnrollForm
         :facilityUsers="facilityUsers"
-        :classUsers="classUsers"
+        :totalPageNumber="totalPageNumber"
+        :totalUsers="totalLearners"
         pageType="coaches"
         :disabled="formIsDisabled"
         @submit="assignCoaches"
       />
     </KPageContainer>
-  </ImmersivePageRoot>
+  </ImmersivePage>
 
 </template>
 
@@ -23,9 +24,9 @@
 <script>
 
   import { mapState, mapActions } from 'vuex';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import ClassEnrollForm from './ClassEnrollForm';
-  import ImmersivePageRoot from './ImmersivePageRoot';
 
   export default {
     name: 'CoachClassAssignmentPage',
@@ -36,7 +37,7 @@
     },
     components: {
       ClassEnrollForm,
-      ImmersivePageRoot,
+      ImmersivePage,
     },
     mixins: [commonCoreStrings],
     data() {
@@ -45,7 +46,12 @@
       };
     },
     computed: {
-      ...mapState('classAssignMembers', ['class', 'classUsers', 'facilityUsers']),
+      ...mapState('classAssignMembers', [
+        'class',
+        'facilityUsers',
+        'totalLearners',
+        'totalPageNumber',
+      ]),
       className() {
         return this.class.name;
       },

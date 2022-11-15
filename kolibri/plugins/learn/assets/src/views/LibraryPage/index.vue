@@ -1,6 +1,10 @@
 <template>
 
-  <div>
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+    :appearanceOverrides="{}"
+    :loading="loading"
+  >
     <main
       class="main-grid"
       :style="gridOffset"
@@ -104,7 +108,7 @@
         :showLocationsInChannel="true"
       />
     </SidePanelModal>
-  </div>
+  </LearnAppBarPage>
 
 </template>
 
@@ -114,11 +118,11 @@
   import { mapState } from 'vuex';
 
   import { onMounted } from 'kolibri.lib.vueCompositionApi';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import FilterTextbox from 'kolibri.coreVue.components.FilterTextbox';
   import SidePanelModal from 'kolibri.coreVue.components.SidePanelModal';
   import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
   import useSearch from '../../composables/useSearch';
   import useLearnerResources from '../../composables/useLearnerResources';
   import BrowseResourceMetadata from '../BrowseResourceMetadata';
@@ -126,6 +130,7 @@
   import ChannelCardGroupGrid from '../ChannelCardGroupGrid';
   import LearningActivityChip from '../LearningActivityChip';
   import SearchResultsGrid from '../SearchResultsGrid';
+  import LearnAppBarPage from '../LearnAppBarPage';
   import ResumableContentGrid from './ResumableContentGrid';
   import SidePanel from './SidePanel';
 
@@ -144,8 +149,9 @@
       ResumableContentGrid,
       SearchResultsGrid,
       SidePanel,
+      LearnAppBarPage,
     },
-    mixins: [commonLearnStrings, commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonLearnStrings, commonCoreStrings],
     setup() {
       const {
         searchTerms,
@@ -167,6 +173,12 @@
         moreResumableContentNodes,
         fetchMoreResumableContentNodes,
       } = useLearnerResources();
+      const {
+        windowBreakpoint,
+        windowIsLarge,
+        windowIsMedium,
+        windowIsSmall,
+      } = useKResponsiveWindow();
 
       onMounted(() => {
         const keywords = currentRoute().query.keywords;
@@ -191,7 +203,17 @@
         resumableContentNodes,
         moreResumableContentNodes,
         fetchMoreResumableContentNodes,
+        windowBreakpoint,
+        windowIsLarge,
+        windowIsMedium,
+        windowIsSmall,
       };
+    },
+    props: {
+      loading: {
+        type: Boolean,
+        default: null,
+      },
     },
     data: function() {
       return {
@@ -273,7 +295,7 @@
 <style lang="scss" scoped>
 
   .main-grid {
-    margin-top: 40px;
+    margin-top: 140px;
     margin-right: 24px;
   }
 

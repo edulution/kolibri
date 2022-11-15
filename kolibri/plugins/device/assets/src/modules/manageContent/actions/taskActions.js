@@ -5,7 +5,7 @@ import client from 'kolibri.client';
 import urls from 'kolibri.urls';
 import isEqual from 'lodash/isEqual';
 import pick from 'lodash/fp/pick';
-import { TaskStatuses, TaskTypes } from '../../../constants';
+import { TaskStatuses, TaskTypes } from 'kolibri.utils.syncTaskUtils';
 
 const logging = logger.getLogger(__filename);
 
@@ -18,7 +18,7 @@ export function cancelTask(store, taskId) {
         TaskStatuses.CANCELED,
       () => {
         cancelWatch();
-        TaskResource.deleteFinishedTask(taskId).then(resolve);
+        TaskResource.clear(taskId).then(resolve);
       }
     );
     TaskResource.cancelTask(taskId);
@@ -38,7 +38,7 @@ function _taskListShouldUpdate(state, newTasks) {
 }
 
 export function refreshTaskList(store) {
-  return TaskResource.fetchCollection({ force: true })
+  return TaskResource.list({ queue: 'content' })
     .then(newTasks => {
       if (_taskListShouldUpdate(store.state, newTasks)) {
         updateTasks(store, newTasks);

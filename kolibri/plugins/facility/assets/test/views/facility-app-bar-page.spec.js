@@ -2,16 +2,16 @@ import { mount } from '@vue/test-utils';
 import Vuex from 'vuex';
 import FacilityAppBarPage from '../../src/views/FacilityAppBarPage';
 
-function makeWrapper({ propsData = {}, vuexData = {} }) {
-  const store = new Vuex.Store(vuexData);
+function makeWrapper({ propsData = {}, getters = {} }) {
+  const store = new Vuex.Store(getters);
   store.getters = {
-    facilityPageLinks: () => {},
-    ...store.getters,
+    getUserKind: jest.fn(),
+    ...getters,
   };
   return mount(FacilityAppBarPage, {
     propsData,
     store,
-    stubs: ['Navbar', 'NavbarLink'],
+    stubs: ['FacilityTopNav'],
   });
 }
 
@@ -29,11 +29,10 @@ describe('FacilityAppBarPage', function() {
     describe('the user is an admin of multiple facilities, and a current facility name is defined', () => {
       it("should return the string 'Facility – ' with the current facility name", () => {
         const wrapper = makeWrapper({
-          vuexData: {
-            getters: {
-              userIsMultiFacilityAdmin: jest.fn(() => true),
-              currentFacilityName: () => 'currentFacilityName',
-            },
+          propsData: { appBarTitle: null },
+          getters: {
+            userIsMultiFacilityAdmin: true,
+            currentFacilityName: 'currentFacilityName',
           },
         });
         const expectedTitle = 'Facility – currentFacilityName';
@@ -44,11 +43,9 @@ describe('FacilityAppBarPage', function() {
   describe('the user is not an admin of multiple facilities', () => {
     it('should return the value of appBarTitle prop when provided', () => {
       const wrapper = makeWrapper({
-        vuexData: {
-          getters: {
-            userIsMultiFacilityAdmin: jest.fn(() => false),
-            currentFacilityName: () => 'currentFacilityName',
-          },
+        getters: {
+          userIsMultiFacilityAdmin: false,
+          currentFacilityName: 'currentFacilityName',
         },
       });
       expect(wrapper.vm.title).toBe('Facility');

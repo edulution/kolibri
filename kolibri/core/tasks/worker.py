@@ -1,13 +1,35 @@
 import logging
 from concurrent.futures import CancelledError
 
+from django.db import connection as django_connection
+
 from kolibri.core.tasks.compat import PoolExecutor
-from kolibri.core.tasks.job import execute_job
 from kolibri.core.tasks.job import Priority
 from kolibri.core.tasks.storage import Storage
+from kolibri.core.tasks.utils import db_connection
 from kolibri.core.tasks.utils import InfiniteLoopThread
 
 logger = logging.getLogger(__name__)
+
+
+def execute_job(job_id):
+    """
+    Call the function stored in the job.func.
+    :return: None
+    """
+
+    connection = db_connection()
+
+    storage = Storage(connection)
+
+    job = storage.get_job(job_id)
+
+    job.execute()
+
+    connection.dispose()
+
+    # Close any django connections opened here
+    django_connection.close()
 
 
 class Worker(object):
@@ -142,18 +164,9 @@ class Worker(object):
         """
         self.storage.mark_job_as_running(job.job_id)
 
-        db_type_lookup = {
-            "sqlite": "sqlite",
-            "postgresql": "postgres",
-        }
-
-        db_type = db_type_lookup[self.storage.engine.dialect.name]
-
         future = self.workers.submit(
             execute_job,
             job_id=job.job_id,
-            db_type=db_type,
-            db_url=self.storage.engine.url,
         )
 
         # assign the futures to a dict, mapping them to a job

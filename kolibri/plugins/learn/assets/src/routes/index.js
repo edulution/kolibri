@@ -12,6 +12,10 @@ import { showLibrary } from '../modules/recommended/handlers';
 import { PageNames, ClassesPageNames } from '../constants';
 import LibraryPage from '../views/LibraryPage';
 import HomePage from '../views/HomePage';
+import TopicsPage from '../views/TopicsPage';
+import TopicsContentPage from '../views/TopicsContentPage';
+import ContentUnavailablePage from '../views/ContentUnavailablePage';
+import BookmarkPage from '../views/BookmarkPage.vue';
 import classesRoutes from './classesRoutes';
 
 const { channels, channelsMap } = useChannels();
@@ -91,6 +95,10 @@ export default [
     name: PageNames.LIBRARY,
     path: '/library',
     handler: to => {
+      if (!get(channels) || !get(channels).length) {
+        router.replace({ name: PageNames.CONTENT_UNAVAILABLE });
+        return;
+      }
       if (unassignedContentGuard()) {
         return unassignedContentGuard();
       }
@@ -106,6 +114,7 @@ export default [
       store.commit('CORE_SET_PAGE_LOADING', false);
       store.commit('CORE_SET_ERROR', null);
     },
+    component: ContentUnavailablePage,
   },
   {
     // Handle historic channel page with redirect
@@ -120,6 +129,7 @@ export default [
         },
       };
     },
+    component: TopicsPage,
   },
   {
     // Handle redirect for links without the /folder appended
@@ -136,6 +146,7 @@ export default [
       }
       showTopicsTopic(store, { id: toRoute.params.id, pageName: toRoute.name });
     },
+    component: TopicsPage,
   },
   // Have to put TOPICS_TOPIC_SEARCH before TOPICS_TOPIC to ensure
   // search gets picked up before being interpreted as a subtopic id.
@@ -153,6 +164,7 @@ export default [
       }
       showTopicsTopic(store, { id: toRoute.params.id, pageName: toRoute.name });
     },
+    component: TopicsPage,
   },
   {
     name: PageNames.TOPICS_TOPIC,
@@ -168,6 +180,7 @@ export default [
       }
       showTopicsTopic(store, { id: toRoute.params.id, pageName: toRoute.name });
     },
+    component: TopicsPage,
   },
   {
     name: PageNames.TOPICS_CONTENT,
@@ -175,6 +188,7 @@ export default [
     handler: toRoute => {
       showTopicsContent(store, toRoute.params.id);
     },
+    component: TopicsContentPage,
   },
   {
     name: PageNames.BOOKMARKS,
@@ -186,6 +200,7 @@ export default [
       store.commit('SET_PAGE_NAME', PageNames.BOOKMARKS);
       store.commit('CORE_SET_PAGE_LOADING', false);
     },
+    component: BookmarkPage,
   },
   {
     path: '*',

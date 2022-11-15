@@ -1,10 +1,10 @@
 import find from 'lodash/find';
 import router from 'kolibri.coreVue.router';
 import { createTranslator } from 'kolibri.utils.i18n';
-import ConditionalPromise from 'kolibri.lib.conditionalPromise';
 import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
+import { TransferTypes } from 'kolibri.utils.syncTaskUtils';
 import { ContentNodeGranularResource, RemoteChannelResource } from 'kolibri.resources';
-import { ContentWizardPages, ContentWizardErrors, TransferTypes } from '../../constants';
+import { ContentWizardPages, ContentWizardErrors } from '../../constants';
 import { manageContentPageLink } from '../../views/ManageContentPage/manageContentLinks';
 import { getAvailableSpaceOnDrive, loadChannelMetadata } from './actions/selectContentActions';
 import {
@@ -120,20 +120,23 @@ export function showAvailableChannelsPage(store, params) {
       return getAvailableChannelsOnPeerServer(store, params.address_id);
     });
   }
-
-  return ConditionalPromise.all([availableChannelsPromise, selectedDrivePromise]).only(
-    samePageCheckGenerator(store),
+  const shouldResolve = samePageCheckGenerator(store);
+  return Promise.all([availableChannelsPromise, selectedDrivePromise]).then(
     function onSuccess([availableChannels, selectedDrive]) {
-      store.commit('manageContent/wizard/HYDRATE_SHOW_AVAILABLE_CHANNELS_PAGE', {
-        availableChannels,
-        selectedDrive,
-        transferType,
-      });
-      store.commit('CORE_SET_PAGE_LOADING', false);
+      if (shouldResolve()) {
+        store.commit('manageContent/wizard/HYDRATE_SHOW_AVAILABLE_CHANNELS_PAGE', {
+          availableChannels,
+          selectedDrive,
+          transferType,
+        });
+        store.commit('CORE_SET_PAGE_LOADING', false);
+      }
     },
     function onFailure(error) {
-      store.commit('CORE_SET_PAGE_LOADING', false);
-      return handleError(store, error);
+      if (shouldResolve()) {
+        store.commit('CORE_SET_PAGE_LOADING', false);
+        return handleError(store, error);
+      }
     }
   );
 }

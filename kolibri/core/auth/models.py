@@ -55,16 +55,14 @@ from .errors import UserDoesNotHaveRoleError
 from .errors import UserIsNotFacilityUser
 from .errors import UserIsNotMemberError
 from .permissions.auth import AllCanReadFacilityDataset
-from .permissions.auth import AnonUserCanReadFacilities
+from .permissions.auth import AnyUserCanReadFacilities
 from .permissions.auth import CoachesCanManageGroupsForTheirClasses
 from .permissions.auth import CoachesCanManageMembershipsForTheirGroups
 from .permissions.auth import CollectionSpecificRoleBasedPermissions
 from .permissions.auth import FacilityAdminCanEditForOwnFacilityDataset
-from .permissions.auth import MembersCanReadMembershipsOfTheirCollections
 from .permissions.base import BasePermissions
 from .permissions.base import RoleBasedPermissions
 from .permissions.general import IsAdminForOwnFacility
-from .permissions.general import IsFromSameFacility
 from .permissions.general import IsOwn
 from .permissions.general import IsSelf
 from kolibri.core.auth.constants.demographics import choices as GENDER_CHOICES
@@ -76,6 +74,8 @@ from kolibri.core.device.utils import get_device_setting
 from kolibri.core.device.utils import set_device_settings
 from kolibri.core.errors import KolibriValidationError
 from kolibri.core.fields import DateTimeTzField
+from kolibri.core.fields import JSONField
+from kolibri.plugins.app.utils import interface
 from kolibri.utils.time_utils import local_now
 
 logger = logging.getLogger(__name__)
@@ -160,6 +160,7 @@ class FacilityDataset(FacilityDataSyncableModel):
     learner_can_delete_account = models.BooleanField(default=True)
     learner_can_login_with_no_password = models.BooleanField(default=False)
     show_download_button_in_learn = models.BooleanField(default=True)
+    extra_fields = JSONField(null=True, blank=True)
     registered = models.BooleanField(default=False)
 
     def __str__(self):
@@ -587,7 +588,7 @@ class FacilityUserModelManager(SyncableModelManager, UserManager):
         """
         if not username:
             raise ValueError("The given username must be set")
-        if "facility" not in extra_fields:
+        if extra_fields.get("facility") is None:
             extra_fields["facility"] = Facility.get_default_facility()
         if self.filter(
             username__iexact=username, facility=extra_fields["facility"]
@@ -595,7 +596,8 @@ class FacilityUserModelManager(SyncableModelManager, UserManager):
             raise ValidationError("An account with that username already exists")
         user = self.model(username=username, password=password, **extra_fields)
         user.full_clean()
-        user.set_password(password)
+        if password != NOT_SPECIFIED:
+            user.set_password(password)
         user.save(using=self._db)
         return user
 
@@ -604,36 +606,63 @@ class FacilityUserModelManager(SyncableModelManager, UserManager):
         # import here to avoid circularity
         from kolibri.core.device.models import DevicePermissions
 
-        # get the default facility
-        if facility is None:
-            facility = Facility.get_default_facility()
-
-        if self.filter(username__iexact=username, facility=facility).exists():
-            raise ValidationError("An account with that username already exists")
-
         # create the new account in that facility
         # gender and birth_year are set to DEFERRED, since superusers do not
         # need to provide this and are not nudged to update profile on Learn page
-        superuser = FacilityUser(
+        superuser = self.create_user(
+            username,
             full_name=full_name or username,
-            username=username,
             password=password,
             facility=facility,
             gender=DEFERRED,
             birth_year=DEFERRED,
         )
-        superuser.full_clean()
-        superuser.set_password(password)
-        superuser.save()
 
         # make the user a facility admin
-        facility.add_role(superuser, role_kinds.ADMIN)
+        superuser.facility.add_role(superuser, role_kinds.ADMIN)
 
         # make the user into a superuser on this device
         DevicePermissions.objects.create(
             user=superuser, is_superuser=True, can_manage_content=True
         )
         return superuser
+
+    def get_or_create_os_user(self, auth_token, facility=None):
+        """
+        Returns a FacilityUser object for the current OS user.
+        If the user does not exist in the database, it is created.
+        """
+        try:
+            os_username, is_superuser = interface.get_os_user(auth_token)
+        except NotImplementedError:
+            return None
+        if not os_username:
+            return None
+        from kolibri.core.device.models import OSUser
+
+        try:
+            os_user = OSUser.objects.get(os_username=os_username)
+            return os_user.user
+        except OSUser.DoesNotExist:
+            user = None
+            method = self.create_superuser if is_superuser else self.create_user
+            for i in range(0, 10):
+                try:
+                    with transaction.atomic():
+                        user = method(
+                            "{}{}".format("_" * i, os_username),
+                            password=NOT_SPECIFIED,
+                            facility=facility,
+                        )
+                        OSUser.objects.create(os_username=os_username, user=user)
+                    break
+                except ValidationError:
+                    pass
+            if not user:
+                raise ValidationError(
+                    "Error creating FacilityUser for OS user: {}".format(os_username)
+                )
+            return user
 
 
 def validate_birth_year(value):
@@ -933,9 +962,8 @@ class Collection(AbstractFacilityDataModel):
     # Furthermore, no FacilityUser can create or delete a Facility. Permission to create a collection is governed
     # by roles in relation to the new collection's parent collection (see CollectionSpecificRoleBasedPermissions).
     permissions = (
-        IsFromSameFacility(read_only=True)
-        | CollectionSpecificRoleBasedPermissions()
-        | AnonUserCanReadFacilities()
+        CollectionSpecificRoleBasedPermissions()
+        | AnyUserCanReadFacilities()
         | CoachesCanManageGroupsForTheirClasses()
     )
 
@@ -1131,9 +1159,7 @@ class Membership(AbstractFacilityDataModel):
     )
     # Membership can be written by coaches under the coaches' group
     membership = CoachesCanManageMembershipsForTheirGroups()
-    # Members can read memberships of collections they are members of
-    own_collections = MembersCanReadMembershipsOfTheirCollections()
-    permissions = own | role | membership | own_collections
+    permissions = own | role | membership
 
     user = models.ForeignKey(
         "FacilityUser", related_name="memberships", blank=False, null=False
@@ -1388,6 +1414,20 @@ class Facility(Collection):
 
     def remove_coach(self, user):
         self.remove_role(user, role_kinds.COACH)
+
+    @property
+    def on_my_own_setup(self):
+        if self.dataset.extra_fields is not None:
+            return self.dataset.extra_fields.get("on_my_own_setup", False)
+        else:
+            return False
+
+    @on_my_own_setup.setter
+    def on_my_own_setup(self, value):
+        if self.dataset.extra_fields is None:
+            self.dataset.extra_fields = {}
+        self.dataset.extra_fields["on_my_own_setup"] = value
+        self.dataset.save()
 
     def __str__(self):
         return self.name

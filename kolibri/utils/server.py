@@ -254,21 +254,14 @@ class ServicesPlugin(SimplePlugin):
 
     def START(self):
         from kolibri.core.tasks.main import initialize_workers
-        from kolibri.core.tasks.main import job_storage
-        from kolibri.core.analytics.utils import DEFAULT_PING_JOB_ID
-        from kolibri.core.deviceadmin.tasks import SCH_VACUUM_JOB_ID
+        from kolibri.core.analytics.tasks import schedule_ping
+        from kolibri.core.deviceadmin.tasks import schedule_vacuum
 
         # schedule the pingback job if not already scheduled
-        if DEFAULT_PING_JOB_ID not in job_storage:
-            from kolibri.core.analytics.utils import schedule_ping
-
-            schedule_ping()
+        schedule_ping()
 
         # schedule the vacuum job if not already scheduled
-        if SCH_VACUUM_JOB_ID not in job_storage:
-            from kolibri.core.deviceadmin.tasks import schedule_vacuum
-
-            schedule_vacuum()
+        schedule_vacuum()
 
         # Initialize the iceqube engine to handle queued tasks
         self.worker = initialize_workers()
@@ -298,6 +291,9 @@ class ZeroConfPlugin(Monitor):
         )
 
     def SERVING(self, port):
+        self.port = port or self.port
+
+    def RUN(self):
         # Register the Kolibri zeroconf service so it will be discoverable on the network
         from kolibri.core.discovery.utils.network.broadcast import (
             build_broadcast_instance,
@@ -309,8 +305,7 @@ class ZeroConfPlugin(Monitor):
             SoUDServerListener,
         )
 
-        self.port = port or self.port
-        instance = build_broadcast_instance(port)
+        instance = build_broadcast_instance(self.port)
 
         if self.broadcast is None:
             self.broadcast = KolibriBroadcast(instance, interfaces=self.interfaces)
@@ -324,7 +319,7 @@ class ZeroConfPlugin(Monitor):
             )
 
     def UPDATE_ZEROCONF(self):
-        self.SERVING(self.port)
+        self.RUN()
 
     def STOP(self):
         super(ZeroConfPlugin, self).STOP()
@@ -764,14 +759,14 @@ def restart():
     Restarts the server.
     """
     if not conf.OPTIONS["Deployment"]["RESTART_HOOKS"]:
-        logging.warn("No registered RESTART_HOOKS, restarting is not possible")
+        logging.warning("No registered RESTART_HOOKS, restarting is not possible")
         return False
     result = True
     for hook in conf.OPTIONS["Deployment"]["RESTART_HOOKS"]:
         try:
             result = result and hook()
         except Exception as e:
-            logging.warn("Error running restart hook %s: %s" % (hook, e))
+            logging.warning("Error running restart hook %s: %s" % (hook, e))
             result = False
     return result
 
@@ -1037,12 +1032,12 @@ def installation_type(cmd_line=None):  # noqa:C901
     if install_type == "Unknown":
         if on_android():
             install_type = installation_types.APK
+        elif os.environ.get("KOLIBRI_DEVELOPER_MODE", False):
+            install_type = "devserver"
         elif len(cmd_line) > 1 or "uwsgi" in cmd_line:
             launcher = cmd_line[0]
             if launcher.endswith(".pex"):
                 install_type = installation_types.PEX
-            elif "runserver" in cmd_line:
-                install_type = "devserver"
             elif launcher == "/usr/bin/kolibri":
                 install_type = is_debian_package()
             elif launcher == "uwsgi":

@@ -1,7 +1,9 @@
 <template>
 
-  <section
+  <div
     class="pdf-page"
+    role="region"
+    :aria-label="$tr('numPage', { number: pageNum, total: totalPages })"
     :style="{
       height: `${scaledHeight}px`,
       width: `${scaledWidth}px`,
@@ -18,17 +20,33 @@
       :width="scaledWidth"
     >
     </canvas>
-  </section>
+    <div
+      ref="textLayer"
+      class="text-layer"
+      :style="{
+        height: `${scaledHeight}px`,
+        width: `${scaledWidth}px`
+      }"
+    >
+    </div>
+  </div>
 
 </template>
 
 
 <script>
 
+  import TextLayerBuilder from '../utils/text_layer_builder';
+  import StrucTreeLayerBuilder from '../utils/struct_tree_layer_builder';
+
   export default {
     name: 'PdfPage',
     props: {
       pageNum: {
+        type: Number,
+        required: true,
+      },
+      totalPages: {
         type: Number,
         required: true,
       },
@@ -50,6 +68,10 @@
       },
       firstPageWidth: {
         type: Number,
+        required: true,
+      },
+      eventBus: {
+        type: Object,
         required: true,
       },
     },
@@ -103,7 +125,7 @@
     methods: {
       getViewport() {
         // Get viewport, which contains directions to be passed into render function
-        return this.pdfPage.getViewport(this.pageScale);
+        return this.pdfPage.getViewport({ scale: this.pageScale });
       },
       renderPage(newVal, oldVal) {
         if (typeof newVal === 'number' && typeof oldVal === 'number' && newVal !== oldVal) {
@@ -111,6 +133,8 @@
           this.cancelRender();
         }
         if (this.pdfPage && this.pageReady && !this.renderTask && !this.rendered) {
+          this.createTextLayer();
+          this.createStructTreeLayer();
           const canvasContext = this.$refs.canvas.getContext('2d');
           const viewport = this.getViewport();
 
@@ -118,9 +142,16 @@
             canvasContext,
             viewport,
           });
-          this.renderTask.then(
+          this.renderTask.promise.then(
             () => {
               delete this.renderTask;
+              if (this.textLayer) {
+                const readableStream = this.pdfPage.streamTextContent({
+                  includeMarkedContent: true,
+                });
+                this.textLayer.setTextContentStream(readableStream);
+                this.textLayer.render();
+              }
               this.rendered = true;
             },
             () => {
@@ -128,6 +159,7 @@
               this.rendered = false;
             }
           );
+          this.eventBus.on('textlayerrendered', this.onTextLayerRendered);
         } else if (!this.pdfPage) {
           // No pdfPage, either we are not being asked to render a page yet,
           // or it has been removed so we should tear down any existing page
@@ -136,9 +168,14 @@
         }
       },
       cancelRender() {
+        if (this.textLayer) {
+          this.textLayer.cancel();
+          this.textLayer = null;
+        }
         if (this.renderTask) {
           this.renderTask.cancel();
         }
+        this.eventBus.off('textlayerrendered', this.onTextLayerRendered);
         delete this.renderTask;
         this.rendered = false;
       },
@@ -148,6 +185,43 @@
         canvasContext.clearRect(0, 0, this.scaledHeight, this.scaledWidth);
         this.rendered = false;
       },
+      createTextLayer() {
+        this.textLayer = new TextLayerBuilder({
+          textLayerDiv: this.$refs.textLayer,
+          viewport: this.getViewport(),
+          pageIndex: this.pageNum - 1,
+          enhanceTextSelection: true,
+          eventBus: this.eventBus,
+        });
+      },
+      createStructTreeLayer() {
+        this.structTreeLayer = new StrucTreeLayerBuilder(this.$refs.textLayer);
+      },
+      onTextLayerRendered(event) {
+        if (event.pageNumber !== this.pageNum) {
+          return;
+        }
+        this.eventBus.off('textlayerrendered', this.onTextLayerRendered);
+        if (!this.$refs.canvas) {
+          return; // The canvas was removed, prevent errors below.
+        }
+        // The structure tree must be generated after the text layer for the
+        // aria-owns to work.
+        this.pdfPage.getStructTree().then(tree => {
+          if (!tree) {
+            return;
+          }
+          if (!this.$refs.canvas) {
+            return;
+          }
+          const treeDom = this.structTreeLayer.render(tree);
+          treeDom.classList.add('structTree');
+          this.$refs.canvas.appendChild(treeDom);
+        });
+      },
+    },
+    $trs: {
+      numPage: 'Page {number} of {total}',
     },
   };
 
@@ -158,6 +232,8 @@
 
   // Also defined in index.vue
   $page-margin: 8px;
+
+  @import url('../utils/text_layer_builder.scss');
 
   .pdf-page {
     position: relative;

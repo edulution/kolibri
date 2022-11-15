@@ -4,9 +4,9 @@ import re
 
 from django.conf import settings
 from django.utils.http import urlencode
-from six.moves.urllib.parse import urljoin
 
 from kolibri.core.content.errors import InvalidStorageFilenameError
+from kolibri.core.utils.urls import join_url
 from kolibri.utils import conf
 from kolibri.utils.server import get_zip_port
 
@@ -202,15 +202,15 @@ def get_content_url(baseurl=None):
 
 
 def get_content_database_url(baseurl=None):
-    return urljoin(get_content_url(baseurl), "databases/")
+    return join_url(get_content_url(baseurl), "databases/")
 
 
 def get_content_database_file_url(channel_id, baseurl=None):
-    return urljoin(get_content_database_url(baseurl), "{}.sqlite3".format(channel_id))
+    return join_url(get_content_database_url(baseurl), "{}.sqlite3".format(channel_id))
 
 
 def get_content_storage_url(baseurl=None):
-    return urljoin(get_content_url(baseurl), "storage/")
+    return join_url(get_content_url(baseurl), "storage/")
 
 
 def get_content_storage_remote_url(filename, baseurl=None):
@@ -222,17 +222,17 @@ def get_content_storage_remote_url(filename, baseurl=None):
 def get_content_server_url(path, baseurl=None):
     if not baseurl:
         baseurl = conf.OPTIONS["Urls"]["CENTRAL_CONTENT_BASE_URL"]
-    return urljoin(baseurl, path)
+    return join_url(baseurl, path)
 
 
 def get_info_url(baseurl=None):
-    return get_content_server_url("/api/public/info", baseurl=baseurl)
+    return get_content_server_url("api/public/info", baseurl=baseurl)
 
 
 def get_channel_lookup_url(
     version="1", identifier=None, baseurl=None, keyword=None, language=None
 ):
-    content_server_path = "/api/public/v{}/channels".format(version)
+    content_server_path = "api/public/v{}/channels".format(version)
     if identifier:
         content_server_path += "/lookup/{}".format(identifier)
     content_server_path += "?"
@@ -249,7 +249,7 @@ def get_channel_lookup_url(
 def get_file_checksums_url(channel_id, baseurl, version="1"):
     # This endpoint does not exist on Studio, so a baseurl is required.
     return get_content_server_url(
-        "/api/public/v{version}/file_checksums/{channel_id}".format(
+        "api/public/v{version}/file_checksums/{channel_id}".format(
             version=version, channel_id=channel_id
         ),
         baseurl=baseurl,
@@ -305,7 +305,7 @@ def get_hashi_html_filename():
 
 
 def zip_content_static_root():
-    return urljoin(get_content_url(zip_content_path_prefix()), "static/")
+    return join_url(get_content_url(zip_content_path_prefix()), "static/")
 
 
 def get_hashi_path():

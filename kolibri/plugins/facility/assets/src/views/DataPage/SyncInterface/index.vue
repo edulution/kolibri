@@ -121,11 +121,11 @@
     SyncFacilityModalGroup,
   } from 'kolibri.coreVue.componentSets.sync';
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import { FacilityTaskResource, FacilityResource } from 'kolibri.resources';
+  import { TaskResource, FacilityResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
   import CoreMenuOption from 'kolibri.coreVue.components.CoreMenuOption';
-  import { TaskStatuses } from '../../../constants';
+  import { TaskStatuses } from 'kolibri.utils.syncTaskUtils';
   import PrivacyModal from './PrivacyModal';
 
   const Modals = Object.freeze({
@@ -182,11 +182,11 @@
       },
       pollSyncTask() {
         // Like facilityTaskQueue, just keep polling until component is destroyed
-        FacilityTaskResource.fetchModel({ id: this.syncTaskId, force: true }).then(task => {
+        TaskResource.get(this.syncTaskId).then(task => {
           if (task.clearable) {
             this.isSyncing = false;
             this.syncTaskId = '';
-            FacilityTaskResource.deleteFinishedTask(this.syncTaskId);
+            TaskResource.clear(this.syncTaskId);
             if (task.status === TaskStatuses.FAILED) {
               this.syncHasFailed = true;
             } else if (task.status === TaskStatuses.COMPLETED) {

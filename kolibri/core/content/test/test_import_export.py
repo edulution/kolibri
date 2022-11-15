@@ -1,10 +1,15 @@
+import itertools
+import json
 import os
 import sys
 import tempfile
 import uuid
 
 from django.core.management import call_command
+from django.core.management import CommandError
+from django.db.models import Q
 from django.test import TestCase
+from django.utils import six
 from le_utils.constants import content_kinds
 from mock import call
 from mock import MagicMock
@@ -18,15 +23,19 @@ from requests.exceptions import ReadTimeout
 from requests.exceptions import SSLError
 
 from kolibri.core.content.errors import InsufficientStorageSpaceError
+from kolibri.core.content.management.commands.importcontent import FileCorrupted
 from kolibri.core.content.models import ContentNode
 from kolibri.core.content.models import File
 from kolibri.core.content.models import LocalFile
+from kolibri.core.content.utils import paths
 from kolibri.core.content.utils.content_types_tools import (
     renderable_contentnodes_q_filter,
 )
+from kolibri.core.content.utils.import_export_content import get_content_nodes_data
 from kolibri.core.content.utils.import_export_content import get_import_export_data
-from kolibri.core.content.utils.transfer import Transfer
-from kolibri.core.content.utils.transfer import TransferCanceled
+from kolibri.core.content.utils.import_export_content import get_import_export_nodes
+from kolibri.utils.file_transfer import Transfer
+from kolibri.utils.file_transfer import TransferCanceled
 from kolibri.utils.tests.helpers import override_option
 
 # helper class for mocking that is equal to anything
@@ -50,6 +59,274 @@ class FalseThenTrue(object):
         if self.count > self.times:
             return True
         return False
+
+
+@override_option("Paths", "CONTENT_DIR", tempfile.mkdtemp())
+class GetImportExportDataTestCase(TestCase):
+    """
+    Test case for utils.import_export_content.get_import_export_data
+    """
+
+    the_channel_id = "6199dde695db4ee4ab392222d5af1e5c"
+
+    @patch("kolibri.core.content.utils.import_export_content.get_import_export_nodes")
+    @patch("kolibri.core.content.utils.import_export_content.get_content_nodes_data")
+    def test_default_arguments(
+        self,
+        get_content_nodes_data_mock,
+        get_import_export_nodes_mock,
+    ):
+        get_import_export_data(self.the_channel_id)
+        get_content_nodes_data_mock.assert_called_with(
+            self.the_channel_id,
+            get_import_export_nodes_mock.return_value,
+            available=None,
+            topic_thumbnails=True,
+        )
+
+
+@override_option("Paths", "CONTENT_DIR", tempfile.mkdtemp())
+class GetImportExportNodesTestCase(TestCase):
+    """
+    Test case for utils.import_export_content.get_import_export_nodes
+    """
+
+    fixtures = ["content_test.json"]
+    the_channel_id = "6199dde695db4ee4ab392222d5af1e5c"
+
+    c1_node_id = "32a941fb77c2576e8f6b294cde4c3b0c"
+    c2_node_id = "2e8bac07947855369fe2d77642dfc870"
+    c2c1_node_id = "2b6926ed22025518a8b9da91745b51d3"
+    c2c2_node_id = "4d0c890de9b65d6880ccfa527800e0f4"
+    c2c3_node_id = "b391bfeec8a458f89f013cf1ca9cf33a"
+
+    def test_default_arguments(self):
+        expected_content_nodes = list(
+            ContentNode.objects.filter(channel_id=self.the_channel_id)
+            .filter(renderable_contentnodes_q_filter)
+            .exclude(kind=content_kinds.TOPIC)
+        )
+
+        matched_nodes_queries_list = get_import_export_nodes(self.the_channel_id)
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    def test_available_only(self):
+        expected_content_nodes = list(
+            ContentNode.objects.filter(
+                channel_id=self.the_channel_id, available=True
+            ).exclude(kind=content_kinds.TOPIC)
+        )
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id, renderable_only=False, available=True
+        )
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    def test_with_node_ids(self):
+        expected_content_nodes = list(
+            ContentNode.objects.filter(
+                channel_id=self.the_channel_id,
+                available=True,
+            )
+            .filter(Q(parent=self.c2_node_id) | Q(pk=self.c1_node_id))
+            .exclude(kind=content_kinds.TOPIC)
+        )
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id,
+            renderable_only=False,
+            node_ids={
+                self.c2_node_id,
+                self.c1_node_id,
+            },
+        )
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    def test_with_node_ids_and_exclude_node_ids(self):
+        expected_content_nodes = list(
+            ContentNode.objects.filter(
+                channel_id=self.the_channel_id,
+                available=True,
+            )
+            .filter(Q(parent=self.c2_node_id) | Q(pk=self.c1_node_id))
+            .exclude(pk=self.c2c3_node_id)
+            .exclude(kind=content_kinds.TOPIC)
+        )
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id,
+            renderable_only=False,
+            node_ids={
+                self.c2_node_id,
+                self.c1_node_id,
+            },
+            exclude_node_ids={self.c2c3_node_id},
+        )
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    def test_with_node_ids_equals_exclude_node_ids(self):
+        expected_content_nodes = []
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id,
+            renderable_only=False,
+            node_ids={self.c1_node_id},
+            exclude_node_ids={self.c1_node_id},
+        )
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    def test_with_node_ids_none(self):
+        expected_content_nodes = list(
+            ContentNode.objects.filter(
+                channel_id=self.the_channel_id,
+                available=True,
+            ).exclude(kind=content_kinds.TOPIC)
+        )
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id,
+            renderable_only=False,
+            node_ids=None,
+            exclude_node_ids=None,
+        )
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    def test_with_node_ids_empty(self):
+        expected_content_nodes = []
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id,
+            renderable_only=False,
+            node_ids=set(),
+            exclude_node_ids=None,
+        )
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+    @patch(
+        "kolibri.core.content.utils.import_export_content.get_channel_stats_from_disk"
+    )
+    def test_with_drive_id(self, get_channel_stats_from_disk_mock):
+        content_nodes_on_drive_1 = [
+            self.c2c1_node_id,
+            self.c2c2_node_id,
+        ]
+
+        # get_import_export_nodes calls filter_by_file_availability, which
+        # uses get_channel_stats_from_disk to get a list of content nodes
+        # present on a device.
+        get_channel_stats_from_disk_mock.return_value = {
+            key: {} for key in content_nodes_on_drive_1
+        }
+
+        expected_content_nodes = list(
+            ContentNode.objects.filter(
+                channel_id=self.the_channel_id,
+                available=True,
+                pk__in=content_nodes_on_drive_1,
+            ).exclude(kind=content_kinds.TOPIC)
+        )
+
+        matched_nodes_queries_list = get_import_export_nodes(
+            self.the_channel_id, renderable_only=False, drive_id="1"
+        )
+
+        get_channel_stats_from_disk_mock.assert_called_with(self.the_channel_id, "1")
+
+        self.assertCountEqual(
+            itertools.chain.from_iterable(matched_nodes_queries_list),
+            expected_content_nodes,
+        )
+
+
+@override_option("Paths", "CONTENT_DIR", tempfile.mkdtemp())
+class GetContentNodesDataTestCase(TestCase):
+    """
+    Test case for utils.import_export_content.get_content_nodes_data
+    """
+
+    fixtures = ["content_test.json"]
+    the_channel_id = "6199dde695db4ee4ab392222d5af1e5c"
+
+    c1_node_id = "32a941fb77c2576e8f6b294cde4c3b0c"
+    c2c1_node_id = "2b6926ed22025518a8b9da91745b51d3"
+
+    def test_default_arguments(self):
+        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+            self.the_channel_id, [], available=True
+        )
+
+        self.assertEqual(total_resource_count, 0)
+        self.assertCountEqual(files, [])
+        self.assertEqual(total_bytes_to_transfer, 0)
+
+    def test_with_content_nodes_selected(self):
+        include_node_ids = [
+            self.c1_node_id,
+            self.c2c1_node_id,
+        ]
+
+        expected_files_list = [
+            {
+                "id": "4c30dc7619f74f97ae2ccd4fffd09bf2",
+                "file_size": None,
+                "extension": "mp3",
+            },
+            {
+                "id": "8ad3fffedf144cba9492e16daec1e39a",
+                "file_size": None,
+                "extension": "vtt",
+            },
+            {
+                "id": "6bdfea4a01830fdd4a585181c0b8068c",
+                "file_size": None,
+                "extension": "mp4",
+            },
+            {
+                "id": "211523265f53825b82f70ba19218a02e",
+                "file_size": None,
+                "extension": "mp4",
+            },
+        ]
+
+        selected_content_nodes = ContentNode.objects.filter(
+            channel_id=self.the_channel_id, pk__in=include_node_ids
+        ).exclude(kind=content_kinds.TOPIC)
+
+        (total_resource_count, files, total_bytes_to_transfer) = get_content_nodes_data(
+            self.the_channel_id, [selected_content_nodes], available=True
+        )
+
+        self.assertEqual(total_resource_count, 2)
+        self.assertCountEqual(files, expected_files_list)
+        self.assertEqual(total_bytes_to_transfer, 0)
 
 
 @patch(
@@ -171,15 +448,13 @@ class ImportChannelTestCase(TestCase):
                     "decryption failed or bad record mac",
                 ]
             )
-        with patch(
-            "kolibri.core.content.utils.transfer.Transfer.next", side_effect=SSLERROR
-        ):
+        with patch("kolibri.utils.file_transfer.Transfer.next", side_effect=SSLERROR):
             call_command("importchannel", "network", "197934f144305350b5820c7c4dd8e194")
             cancel_mock.assert_called_with()
             import_channel_mock.assert_not_called()
 
     @patch(
-        "kolibri.core.content.utils.transfer.Transfer.next",
+        "kolibri.utils.file_transfer.Transfer.next",
         side_effect=ReadTimeout("Read timed out."),
     )
     @patch("kolibri.core.content.management.commands.importchannel.AsyncCommand.cancel")
@@ -209,7 +484,9 @@ class ImportChannelTestCase(TestCase):
         call_command("importchannel", "network", "197934f144305350b5820c7c4dd8e194")
         is_cancelled_mock.assert_called()
         import_channel_mock.assert_called_with(
-            "197934f144305350b5820c7c4dd8e194", cancel_check=is_cancelled_mock
+            "197934f144305350b5820c7c4dd8e194",
+            cancel_check=is_cancelled_mock,
+            contentfolder=paths.get_content_dir_path(),
         )
 
     @patch(
@@ -255,6 +532,11 @@ class ImportContentTestCase(TestCase):
 
     fixtures = ["content_test.json"]
     the_channel_id = "6199dde695db4ee4ab392222d5af1e5c"
+    the_channel_version = 0
+
+    c1_node_id = "32a941fb77c2576e8f6b294cde4c3b0c"
+    c2c1_node_id = "2b6926ed22025518a8b9da91745b51d3"
+    c2c2_node_id = "4d0c890de9b65d6880ccfa527800e0f4"
 
     def setUp(self):
         LocalFile.objects.update(available=False)
@@ -471,7 +753,7 @@ class ImportContentTestCase(TestCase):
         annotation_mock.set_content_visibility.assert_called()
 
     @patch(
-        "kolibri.core.content.utils.transfer.Transfer.next",
+        "kolibri.utils.file_transfer.Transfer.next",
         side_effect=ConnectionError("connection error"),
     )
     @patch("kolibri.core.content.management.commands.importcontent.AsyncCommand.cancel")
@@ -510,7 +792,7 @@ class ImportContentTestCase(TestCase):
             "importcontent",
             "network",
             self.the_channel_id,
-            node_ids=["32a941fb77c2576e8f6b294cde4c3b0c"],
+            node_ids=[self.c1_node_id],
         )
         cancel_mock.assert_called_with()
         annotation_mock.set_content_visibility.assert_called()
@@ -538,28 +820,25 @@ class ImportContentTestCase(TestCase):
             local_dest_path_2,
             local_dest_path_3,
         ]
-        ContentNode.objects.filter(pk="2b6926ed22025518a8b9da91745b51d3").update(
-            available=False
+        ContentNode.objects.filter(pk=self.c2c1_node_id).update(available=False)
+        LocalFile.objects.filter(files__contentnode__pk=self.c2c1_node_id).update(
+            file_size=1, available=False
         )
-        LocalFile.objects.filter(
-            files__contentnode__pk="2b6926ed22025518a8b9da91745b51d3"
-        ).update(file_size=1, available=False)
         get_import_export_mock.return_value = (
             1,
             list(
                 LocalFile.objects.filter(
-                    files__contentnode__pk="2b6926ed22025518a8b9da91745b51d3"
+                    files__contentnode__pk=self.c2c1_node_id
                 ).values("id", "file_size", "extension")
             ),
             10,
         )
 
-        node_id = ["2b6926ed22025518a8b9da91745b51d3"]
         call_command(
             "importcontent",
             "network",
             self.the_channel_id,
-            node_ids=node_id,
+            node_ids=[self.c2c1_node_id],
             renderable_only=False,
         )
         logger_mock.assert_called_once()
@@ -567,7 +846,7 @@ class ImportContentTestCase(TestCase):
         annotation_mock.set_content_visibility.assert_called_with(
             self.the_channel_id,
             [],
-            node_ids=node_id,
+            node_ids={self.c2c1_node_id},
             exclude_node_ids=None,
             public=False,
         )
@@ -610,7 +889,7 @@ class ImportContentTestCase(TestCase):
         sleep_mock.assert_called()
         annotation_mock.set_content_visibility.assert_called()
 
-    @patch("kolibri.core.content.utils.transfer.requests.Session.get")
+    @patch("kolibri.utils.file_transfer.requests.Session.get")
     @patch(
         "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_file_path",
         return_value="test/test",
@@ -740,9 +1019,9 @@ class ImportContentTestCase(TestCase):
             self.the_channel_id, [], exclude_node_ids=None, node_ids=None, public=False
         )
 
-    @patch("kolibri.core.content.utils.transfer.sleep")
+    @patch("kolibri.utils.file_transfer.sleep")
     @patch(
-        "kolibri.core.content.utils.transfer.Transfer.next",
+        "kolibri.utils.file_transfer.Transfer.next",
         side_effect=ChunkedEncodingError("Chunked Encoding Error"),
     )
     @patch("kolibri.core.content.management.commands.importcontent.AsyncCommand.cancel")
@@ -782,7 +1061,7 @@ class ImportContentTestCase(TestCase):
             "importcontent",
             "network",
             self.the_channel_id,
-            node_ids=["32a941fb77c2576e8f6b294cde4c3b0c"],
+            node_ids=[self.c1_node_id],
         )
         cancel_mock.assert_called_with()
         annotation_mock.set_content_visibility.assert_called()
@@ -822,7 +1101,7 @@ class ImportContentTestCase(TestCase):
         annotation_mock.set_content_visibility.assert_called()
 
     @patch("kolibri.core.content.management.commands.importcontent.logger.error")
-    @patch("kolibri.core.content.utils.transfer.os.path.getsize")
+    @patch("kolibri.utils.file_transfer.os.path.getsize")
     @patch(
         "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_file_path"
     )
@@ -870,16 +1149,12 @@ class ImportContentTestCase(TestCase):
         fd2, local_src_path = tempfile.mkstemp()
         os.close(fd1)
         os.close(fd2)
-        LocalFile.objects.filter(
-            files__contentnode="32a941fb77c2576e8f6b294cde4c3b0c"
-        ).update(file_size=1)
+        LocalFile.objects.filter(files__contentnode=self.c1_node_id).update(file_size=1)
         path_mock.side_effect = [local_dest_path, local_src_path]
         get_import_export_mock.return_value = (
             1,
             [
-                LocalFile.objects.filter(
-                    files__contentnode="32a941fb77c2576e8f6b294cde4c3b0c"
-                )
+                LocalFile.objects.filter(files__contentnode=self.c1_node_id)
                 .values("id", "file_size", "extension")
                 .first()
             ],
@@ -890,7 +1165,7 @@ class ImportContentTestCase(TestCase):
             "disk",
             self.the_channel_id,
             "destination",
-            node_ids=["32a941fb77c2576e8f6b294cde4c3b0c"],
+            node_ids=[self.c1_node_id],
         )
         remove_mock.assert_any_call(local_dest_path)
 
@@ -932,20 +1207,18 @@ class ImportContentTestCase(TestCase):
         os.close(fd)
         os.remove(local_dest_path)
         # Delete all but one file associated with ContentNode to reduce need for mocking
-        files = ContentNode.objects.get(
-            id="32a941fb77c2576e8f6b294cde4c3b0c"
-        ).files.all()
+        files = ContentNode.objects.get(id=self.c1_node_id).files.all()
         first_file = files.first()
         files.exclude(id=first_file.id).delete()
-        LocalFile.objects.filter(
-            files__contentnode="32a941fb77c2576e8f6b294cde4c3b0c"
-        ).update(file_size=expected_file_size)
+        LocalFile.objects.filter(files__contentnode=self.c1_node_id).update(
+            file_size=expected_file_size
+        )
         get_import_export_mock.return_value = (
             1,
             list(
-                LocalFile.objects.filter(
-                    files__contentnode="32a941fb77c2576e8f6b294cde4c3b0c"
-                ).values("id", "file_size", "extension")
+                LocalFile.objects.filter(files__contentnode=self.c1_node_id).values(
+                    "id", "file_size", "extension"
+                )
             ),
             10,
         )
@@ -960,7 +1233,7 @@ class ImportContentTestCase(TestCase):
                 "disk",
                 self.the_channel_id,
                 "destination",
-                node_ids=["32a941fb77c2576e8f6b294cde4c3b0c"],
+                node_ids=[self.c1_node_id],
             )
 
             mock_overall_progress.assert_any_call(expected_file_size)
@@ -1011,13 +1284,13 @@ class ImportContentTestCase(TestCase):
             "importcontent",
             "network",
             self.the_channel_id,
-            node_ids=["32a941fb77c2576e8f6b294cde4c3b0c"],
+            node_ids=[self.c1_node_id],
         )
         annotation_mock.set_content_visibility.assert_called_with(
             self.the_channel_id,
             [],
             exclude_node_ids=None,
-            node_ids=["32a941fb77c2576e8f6b294cde4c3b0c"],
+            node_ids={self.c1_node_id},
             public=False,
         )
 
@@ -1068,6 +1341,446 @@ class ImportContentTestCase(TestCase):
             self.the_channel_id, [], exclude_node_ids=None, node_ids=None, public=False
         )
 
+    def test_local_import_with_detected_manifest_file(
+        self,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+        os.mkdir(os.path.join(import_source_dir, "content"))
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        with open(
+            os.path.join(import_source_dir, "content", "manifest.json"), "w"
+        ) as manifest_file:
+            json.dump(
+                {
+                    "channels": [
+                        {
+                            "id": self.the_channel_id,
+                            "version": self.the_channel_version,
+                            "include_node_ids": [self.c2c1_node_id],
+                        }
+                    ]
+                },
+                manifest_file,
+            )
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+        )
+
+        # If a manifest file is present in the source directory and no node_ids are
+        # provided, importcontent should call get_import_export using node_ids
+        # according to channel_id in the detected manifest file.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            {six.text_type(self.c2c1_node_id)},
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+    def test_local_import_with_detected_manifest_file_and_unlisted_channel(
+        self,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+        os.mkdir(os.path.join(import_source_dir, "content"))
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        with open(
+            os.path.join(import_source_dir, "content", "manifest.json"), "w"
+        ) as manifest_file:
+            json.dump({"channels": []}, manifest_file)
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+        )
+
+        # If a manifest file is present in the source directory and no node_ids are
+        # provided, but the user specifies a channel_id which is not present in the
+        # manifest file, importcontent should call get_import_export with an empty list
+        # of node_ids.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            set(),
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+    def test_local_import_with_local_manifest_file_and_node_ids(
+        self,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        manifest_file = six.StringIO(
+            json.dumps(
+                {
+                    "channels": [
+                        {
+                            "id": self.the_channel_id,
+                            "version": self.the_channel_version,
+                            "include_node_ids": [self.c2c1_node_id, self.c2c2_node_id],
+                        }
+                    ]
+                }
+            )
+        )
+
+        with self.assertRaises(CommandError):
+            # If the user provides a manifest file as well as node_ids, the
+            # importcontent command should exit with an error.
+            call_command(
+                "importcontent",
+                "disk",
+                self.the_channel_id,
+                import_source_dir,
+                node_ids=[self.c2c2_node_id],
+                manifest=manifest_file,
+            )
+
+        with self.assertRaises(CommandError):
+            # If the user provides a manifest file as well as exclude_node_ids, the
+            # importcontent command should exit with an error.
+            call_command(
+                "importcontent",
+                "disk",
+                self.the_channel_id,
+                import_source_dir,
+                exclude_node_ids=[self.c2c2_node_id],
+                manifest=manifest_file,
+            )
+
+        with self.assertRaises(CommandError):
+            # If the user provides a manifest file as well as an empty (falsey) list of
+            # node_ids, the importcontent command should exit with an error.
+            call_command(
+                "importcontent",
+                "disk",
+                self.the_channel_id,
+                import_source_dir,
+                node_ids=[],
+                manifest=manifest_file,
+            )
+
+    @patch("kolibri.core.content.management.commands.importcontent.logger.warning")
+    def test_local_import_with_local_manifest_file_with_multiple_versions(
+        self,
+        warning_logger_mock,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+            manifest=six.StringIO(
+                json.dumps(
+                    {
+                        "channels": [
+                            {
+                                "id": self.the_channel_id,
+                                "version": self.the_channel_version - 1,
+                                "include_node_ids": [self.c2c1_node_id],
+                            },
+                            {
+                                "id": self.the_channel_id,
+                                "version": self.the_channel_version,
+                                "include_node_ids": [self.c2c2_node_id],
+                            },
+                        ]
+                    }
+                )
+            ),
+        )
+
+        warning_logger_mock.assert_called_once()
+        # If a provided manifest file specifies versions of a channel which do not
+        # match the channel version in the local database, importcontent should log a
+        # warning message explaining the mismatch.
+        warning_logger_mock.assert_called_with(
+            "Manifest entry for {channel_id} has a different version ({manifest_version}) than the installed channel ({local_version})".format(
+                channel_id=self.the_channel_id,
+                manifest_version=self.the_channel_version - 1,
+                local_version=self.the_channel_version,
+            )
+        )
+
+        # Regardless, importcontent should continue to call get_import_export with a
+        # list of node_ids built from all versions of the channel_id channel.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            {six.text_type(self.c2c1_node_id), six.text_type(self.c2c2_node_id)},
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+    def test_local_import_with_detected_manifest_file_and_node_ids(
+        self,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+        os.mkdir(os.path.join(import_source_dir, "content"))
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        with open(
+            os.path.join(import_source_dir, "content", "manifest.json"), "w"
+        ) as manifest_file:
+            json.dump(
+                {
+                    "channels": [
+                        {
+                            "id": self.the_channel_id,
+                            "version": self.the_channel_version,
+                            "include_node_ids": [self.c2c1_node_id],
+                        }
+                    ]
+                },
+                manifest_file,
+            )
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+            node_ids=[self.c2c2_node_id],
+        )
+
+        # If a manifest file is present in the source directory but node_ids are
+        # provided, importcontent should call get_import_export with the provided list
+        # of node_ids, ignoring the detected manifest file.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            {six.text_type(self.c2c2_node_id)},
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+        get_import_export_mock.reset_mock()
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+            node_ids=[],
+        )
+
+        # If a manifest file is present in the source directory but node_ids is set to
+        # an empty (falsey) list, importcontent should call get_import_export with that
+        # empty list of node_ids, ignoring the detected manifest file.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            set(),
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+    def test_local_import_with_detected_manifest_file_and_manifest_file(
+        self,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+        os.mkdir(os.path.join(import_source_dir, "content"))
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        with open(
+            os.path.join(import_source_dir, "content", "manifest.json"), "w"
+        ) as manifest_file:
+            json.dump(
+                {
+                    "channels": [
+                        {
+                            "id": self.the_channel_id,
+                            "version": self.the_channel_version,
+                            "include_node_ids": [self.c2c1_node_id],
+                        }
+                    ]
+                },
+                manifest_file,
+            )
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+            manifest=six.StringIO(
+                json.dumps(
+                    {
+                        "channels": [
+                            {
+                                "id": self.the_channel_id,
+                                "version": self.the_channel_version,
+                                "include_node_ids": [self.c2c2_node_id],
+                            }
+                        ]
+                    }
+                )
+            ),
+        )
+
+        # If a manifest file is present in the source directory but another manifest
+        # has been provided via the manifest argument, importcontent should ignore the
+        # detected manifest file and instead call get_import_export with the list of
+        # node_ids according to channel_id in the provided manifest file.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            {six.text_type(self.c2c2_node_id)},
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+    def test_local_import_with_no_detect_manifest(
+        self,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        import_source_dir = tempfile.mkdtemp()
+        os.mkdir(os.path.join(import_source_dir, "content"))
+
+        get_import_export_mock.return_value = (0, [], 0)
+
+        with open(
+            os.path.join(import_source_dir, "content", "manifest.json"), "w"
+        ) as manifest_file:
+            json.dump(
+                {
+                    "channels": [
+                        {
+                            "id": self.the_channel_id,
+                            "version": self.the_channel_version,
+                            "include_node_ids": [self.c2c1_node_id],
+                        }
+                    ]
+                },
+                manifest_file,
+            )
+
+        call_command(
+            "importcontent",
+            "disk",
+            self.the_channel_id,
+            import_source_dir,
+            detect_manifest=False,
+        )
+
+        # If a manifest file is present in the source directory but the detect_manifest
+        # argument is set to False, importcontent should ignore the detected manifest
+        # file. If no node_ids are provided, it should call get_import_export with
+        # node_ids set to None.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            None,
+            None,
+            False,
+            renderable_only=True,
+            drive_id="",
+            peer_id=None,
+        )
+
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.transfer.FileDownload"
+    )
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.compare_checksums",
+        return_value=True,
+    )
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.AsyncCommand.is_cancelled",
+        return_value=False,
+    )
+    def test_remote_import_with_local_manifest_file(
+        self,
+        is_cancelled_mock,
+        compare_checksums_mock,
+        file_download_mock,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        get_import_export_mock.return_value = (0, [], 0)
+
+        call_command(
+            "importcontent",
+            "network",
+            self.the_channel_id,
+            manifest=six.StringIO(
+                json.dumps(
+                    {
+                        "channels": [
+                            {
+                                "id": self.the_channel_id,
+                                "version": self.the_channel_version,
+                                "include_node_ids": [self.c2c1_node_id],
+                            }
+                        ]
+                    }
+                )
+            ),
+        )
+
+        # If a manifest file is provided when importing from a remote source,
+        # importcontent should call get_import_export with node_ids set according to
+        # channel_id in the provided manifest file.
+        get_import_export_mock.assert_called_once_with(
+            self.the_channel_id,
+            {six.text_type(self.c2c1_node_id)},
+            None,
+            False,
+            renderable_only=True,
+            drive_id=None,
+            peer_id="",
+        )
+
     @patch("kolibri.core.content.management.commands.importcontent.transfer.sleep")
     @patch(
         "kolibri.core.content.management.commands.importcontent.transfer.requests.Session.get"
@@ -1109,7 +1822,7 @@ class ImportContentTestCase(TestCase):
         )
 
         m = mock_open()
-        with patch("kolibri.core.content.utils.transfer.open", m) as open_mock:
+        with patch("kolibri.utils.file_transfer.open", m) as open_mock:
             try:
                 call_command("importcontent", "network", self.the_channel_id)
             except Exception:
@@ -1130,7 +1843,42 @@ class ImportContentTestCase(TestCase):
     @patch(
         "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_file_path"
     )
-    def test_remote_import_fail_on_error(
+    def test_local_import_fail_on_error_missing(
+        self,
+        path_mock,
+        logger_mock,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        fd, dest_path = tempfile.mkstemp()
+        os.close(fd)
+        path_mock.side_effect = [dest_path, "/test/dne"]
+        LocalFile.objects.filter(
+            files__contentnode__channel_id=self.the_channel_id
+        ).update(file_size=1)
+        get_import_export_mock.return_value = (
+            1,
+            [LocalFile.objects.values("id", "file_size", "extension").first()],
+            10,
+        )
+
+        with self.assertRaises(OSError) as err:
+            call_command(
+                "importcontent",
+                "disk",
+                self.the_channel_id,
+                "destination",
+                fail_on_error=True,
+            )
+        self.assertEqual(err.exception.errno, 2)
+        annotation_mock.set_content_visibility.assert_called()
+
+    @patch("kolibri.core.content.management.commands.importcontent.logger.warning")
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_file_path"
+    )
+    def test_remote_import_fail_on_error_missing(
         self,
         path_mock,
         logger_mock,
@@ -1149,39 +1897,109 @@ class ImportContentTestCase(TestCase):
             local_dest_path_2,
             local_dest_path_3,
         ]
-        ContentNode.objects.filter(pk="2b6926ed22025518a8b9da91745b51d3").update(
-            available=False
+        ContentNode.objects.filter(pk=self.c2c1_node_id).update(available=False)
+        LocalFile.objects.filter(files__contentnode__pk=self.c2c1_node_id).update(
+            file_size=1, available=False
         )
-        LocalFile.objects.filter(
-            files__contentnode__pk="2b6926ed22025518a8b9da91745b51d3"
-        ).update(file_size=1, available=False)
         get_import_export_mock.return_value = (
             1,
             list(
                 LocalFile.objects.filter(
-                    files__contentnode__pk="2b6926ed22025518a8b9da91745b51d3"
+                    files__contentnode__pk=self.c2c1_node_id
                 ).values("id", "file_size", "extension")
             ),
             10,
         )
 
-        node_id = ["2b6926ed22025518a8b9da91745b51d3"]
         with self.assertRaises(HTTPError):
             call_command(
                 "importcontent",
                 "network",
                 self.the_channel_id,
-                node_ids=node_id,
+                node_ids=[self.c2c1_node_id],
                 renderable_only=False,
                 fail_on_error=True,
             )
         annotation_mock.set_content_visibility.assert_called_with(
             self.the_channel_id,
             [],
-            node_ids=node_id,
+            node_ids={self.c2c1_node_id},
             exclude_node_ids=None,
             public=False,
         )
+
+    @patch("kolibri.core.content.management.commands.importcontent.logger.warning")
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_file_path"
+    )
+    def test_local_import_fail_on_error_corrupted(
+        self,
+        path_mock,
+        logger_mock,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        fd1, dest_path = tempfile.mkstemp()
+        fd2, src_path = tempfile.mkstemp()
+        os.close(fd1)
+        os.close(fd2)
+        path_mock.side_effect = [dest_path, src_path]
+        LocalFile.objects.filter(
+            files__contentnode__channel_id=self.the_channel_id
+        ).update(file_size=1)
+        get_import_export_mock.return_value = (
+            1,
+            [LocalFile.objects.values("id", "file_size", "extension").first()],
+            10,
+        )
+
+        with self.assertRaises(FileCorrupted):
+            call_command(
+                "importcontent",
+                "disk",
+                self.the_channel_id,
+                "destination",
+                fail_on_error=True,
+            )
+        annotation_mock.set_content_visibility.assert_called()
+
+    @patch("kolibri.core.content.management.commands.importcontent.logger.warning")
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.transfer.FileDownload.finalize"
+    )
+    @patch(
+        "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_file_path"
+    )
+    def test_remote_import_fail_on_error_corrupted(
+        self,
+        path_mock,
+        finalize_dest_mock,
+        logger_mock,
+        annotation_mock,
+        get_import_export_mock,
+        channel_list_status_mock,
+    ):
+        fd, dest_path = tempfile.mkstemp()
+        os.close(fd)
+        path_mock.side_effect = [dest_path]
+        LocalFile.objects.filter(
+            files__contentnode__channel_id=self.the_channel_id
+        ).update(file_size=1)
+        get_import_export_mock.return_value = (
+            1,
+            [LocalFile.objects.values("id", "file_size", "extension").first()],
+            10,
+        )
+
+        with self.assertRaises(FileCorrupted):
+            call_command(
+                "importcontent",
+                "network",
+                self.the_channel_id,
+                fail_on_error=True,
+            )
+        annotation_mock.set_content_visibility.assert_called()
 
     @patch(
         "kolibri.core.content.management.commands.importcontent.paths.get_content_storage_remote_url"
@@ -1274,7 +2092,9 @@ class ExportChannelTestCase(TestCase):
 
 
 @override_option("Paths", "CONTENT_DIR", tempfile.mkdtemp())
-@patch("kolibri.core.content.management.commands.exportcontent.get_import_export_data")
+@patch("kolibri.core.content.management.commands.exportcontent.get_import_export_nodes")
+@patch("kolibri.core.content.management.commands.exportcontent.get_content_nodes_data")
+@patch("kolibri.core.content.management.commands.exportcontent.ContentManifest")
 class ExportContentTestCase(TestCase):
     """
     Test case for the exportcontent management command.
@@ -1294,11 +2114,13 @@ class ExportContentTestCase(TestCase):
         is_cancelled_mock,
         cancel_mock,
         FileCopyMock,
-        get_import_export_mock,
+        ContentManifestMock,
+        get_content_nodes_data_mock,
+        get_import_export_nodes_mock,
     ):
         # If cancel comes in before we do anything, make sure nothing happens!
         FileCopyMock.return_value.__iter__.side_effect = TransferCanceled()
-        get_import_export_mock.return_value = (
+        get_content_nodes_data_mock.return_value = (
             1,
             [LocalFile.objects.values("id", "file_size", "extension").first()],
             10,
@@ -1327,7 +2149,9 @@ class ExportContentTestCase(TestCase):
         FileCopyMock,
         local_path_mock,
         start_progress_mock,
-        get_import_export_mock,
+        ContentManifestMock,
+        get_content_nodes_data_mock,
+        get_import_export_nodes_mock,
     ):
         # Make sure we cancel during transfer
         fd1, local_dest_path = tempfile.mkstemp()
@@ -1336,7 +2160,7 @@ class ExportContentTestCase(TestCase):
         os.close(fd2)
         local_path_mock.side_effect = [local_src_path, local_dest_path]
         FileCopyMock.return_value.__iter__.side_effect = TransferCanceled()
-        get_import_export_mock.return_value = (
+        get_content_nodes_data_mock.return_value = (
             1,
             [LocalFile.objects.values("id", "file_size", "extension").first()],
             10,
@@ -1408,7 +2232,7 @@ class TestFilesToTransfer(TestCase):
         }
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=True, drive_id="1"
+            self.the_channel_id, None, None, False, renderable_only=True, drive_id="1"
         )
         self.assertEqual(
             len(files_to_transfer),
@@ -1431,7 +2255,7 @@ class TestFilesToTransfer(TestCase):
         }
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=False, drive_id="1"
+            self.the_channel_id, None, None, False, renderable_only=False, drive_id="1"
         )
         self.assertEqual(
             len(files_to_transfer), LocalFile.objects.filter(available=False).count()
@@ -1447,7 +2271,7 @@ class TestFilesToTransfer(TestCase):
         stats = {obj.id: {}}
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=False, drive_id="1"
+            self.the_channel_id, None, None, False, renderable_only=False, drive_id="1"
         )
         self.assertEqual(len(files_to_transfer), obj.files.count())
 
@@ -1464,7 +2288,7 @@ class TestFilesToTransfer(TestCase):
         _, files_to_transfer, _ = get_import_export_data(
             self.the_channel_id,
             [parent.id],
-            [],
+            None,
             False,
             renderable_only=False,
             drive_id="1",
@@ -1480,7 +2304,7 @@ class TestFilesToTransfer(TestCase):
         stats = {}
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=False, drive_id="1"
+            self.the_channel_id, None, None, False, renderable_only=False, drive_id="1"
         )
         self.assertEqual(len(files_to_transfer), 0)
 
@@ -1495,7 +2319,7 @@ class TestFilesToTransfer(TestCase):
         }
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=False, peer_id="1"
+            self.the_channel_id, None, None, False, renderable_only=False, peer_id="1"
         )
         self.assertEqual(
             len(files_to_transfer), LocalFile.objects.filter(available=False).count()
@@ -1511,7 +2335,7 @@ class TestFilesToTransfer(TestCase):
         stats = {obj.id: {}}
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=False, peer_id="1"
+            self.the_channel_id, None, None, False, renderable_only=False, peer_id="1"
         )
         self.assertEqual(len(files_to_transfer), obj.files.count())
 
@@ -1524,7 +2348,7 @@ class TestFilesToTransfer(TestCase):
         stats = {}
         channel_stats_mock.return_value = stats
         _, files_to_transfer, _ = get_import_export_data(
-            self.the_channel_id, [], [], False, renderable_only=False, peer_id="1"
+            self.the_channel_id, None, None, False, renderable_only=False, peer_id="1"
         )
         self.assertEqual(len(files_to_transfer), 0)
 

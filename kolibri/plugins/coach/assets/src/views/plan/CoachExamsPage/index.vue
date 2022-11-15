@@ -27,14 +27,20 @@
         -->
         <div>&nbsp;</div>
         <KButtonGroup v-if="practiceQuizzesExist">
-          <KDropdownMenu
+          <KButton
+            primary
+            hasDropdown
             appearance="raised-button"
-            :primary="true"
             :text="coachString('newQuizAction')"
-            :options="dropdownOptions"
-            class="options-btn"
-            @select="handleSelect"
-          />
+          >
+            <template #menu>
+              <KDropdownMenu
+                :options="dropdownOptions"
+                class="options-btn"
+                @select="handleSelect"
+              />
+            </template>
+          </KButton>
         </KButtonGroup>
         <KRouterLink
           v-else
@@ -149,10 +155,10 @@
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { ExamResource } from 'kolibri.resources';
+  import plugin_data from 'plugin_data';
   import { PageNames } from '../../../constants';
   import commonCoach from '../../common';
   import PlanHeader from '../../plan/PlanHeader';
-  import plugin_data from 'plugin_data';
 
   export default {
     name: 'CoachExamsPage',

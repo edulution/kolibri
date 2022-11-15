@@ -1,5 +1,6 @@
 import { shallowMount, mount, createLocalVue } from '@vue/test-utils';
 import VueRouter from 'vue-router';
+import Vuex from 'vuex';
 
 import { ClassesPageNames } from '../../../constants';
 import HomePage from '../index';
@@ -29,7 +30,15 @@ jest.mock('kolibri.utils.coreStrings', () => {
 });
 
 const localVue = createLocalVue();
+localVue.use(Vuex);
 localVue.use(VueRouter);
+const mockStore = new Vuex.Store({
+  state: { core: { loading: false } },
+  getters: {
+    isUserLoggedIn: jest.fn(),
+    isLearner: jest.fn(),
+  },
+});
 
 function makeWrapper() {
   const router = new VueRouter({
@@ -49,6 +58,8 @@ function makeWrapper() {
   return mount(HomePage, {
     localVue,
     router,
+    stubs: ['SideNav', 'LearnTopNav'],
+    store: mockStore,
   });
 }
 
@@ -86,7 +97,9 @@ describe(`HomePage`, () => {
   });
 
   it(`smoke test`, () => {
-    const wrapper = shallowMount(HomePage);
+    const wrapper = shallowMount(HomePage, {
+      store: mockStore,
+    });
     expect(wrapper.exists()).toBe(true);
   });
 

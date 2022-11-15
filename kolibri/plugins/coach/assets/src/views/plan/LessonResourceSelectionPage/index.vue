@@ -98,7 +98,7 @@
 
     <BottomAppBar>
       <KRouterLink
-        :text="inSearchMode ? $tr('exitSearchButtonLabel') : coreString('closeAction')"
+        :text="bottomBarButtonText"
         :primary="true"
         appearance="raised-button"
         :to="exitButtonRoute"
@@ -114,6 +114,7 @@
 
   import { mapState, mapActions, mapGetters, mapMutations } from 'vuex';
   import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
+  import { BookmarksResource } from 'kolibri.resources';
   import debounce from 'lodash/debounce';
   import every from 'lodash/every';
   import pickBy from 'lodash/pickBy';
@@ -122,7 +123,6 @@
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonCoach from '../../common';
   import { LessonsPageNames } from '../../../constants/lessonsConstants';
-  import { BookmarksResource } from '../../../../../../../../kolibri/core/assets/src/api-resources/index.js';
   import LessonsSearchBox from './SearchTools/LessonsSearchBox';
   import LessonsSearchFilters from './SearchTools/LessonsSearchFilters';
   import ResourceSelectionBreadcrumbs from './SearchTools/ResourceSelectionBreadcrumbs';
@@ -179,6 +179,15 @@
           return this.$router.getRoute(this.$route.query.last);
         }
         return this.$store.state.toolbarRoute;
+      },
+      bottomBarButtonText() {
+        if (this.inSearchMode) {
+          return this.$tr('exitSearchButtonLabel');
+        } else if (this.resourcesChanged && this.workingResources.length > 0) {
+          return this.coreString('saveChangesAction');
+        } else {
+          return this.coreString('closeAction');
+        }
       },
       pageTitle() {
         return this.$tr('documentTitle', { lessonName: this.currentLesson.title });

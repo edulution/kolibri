@@ -17,11 +17,11 @@ import vuex from 'vuex';
 import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
 import responsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
 import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
+import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
 import scriptLoader from 'kolibri-design-system/lib/utils/scriptLoader';
 import UiIconButton from 'kolibri-design-system/lib/keen/UiIconButton'; // temp hack
 import * as vueCompositionApi from '@vue/composition-api';
 import logging from '../logging';
-import conditionalPromise from '../conditionalPromise';
 import * as apiResource from '../api-resource';
 import * as constants from '../constants';
 import * as getters from '../state/modules/core/getters';
@@ -34,12 +34,15 @@ import ContentIcon from '../views/ContentIcon';
 import ProgressIcon from '../views/ProgressIcon';
 import PermissionsIcon from '../views/PermissionsIcon';
 import CoreBase from '../views/CoreBase';
-import AppBarCorePage from '../views/AppBarCorePage';
+import AppBarPage from '../views/CorePage/AppBarPage';
+import AppBar from '../views/AppBar';
+import ImmersivePage from '../views/CorePage/ImmersivePage';
 import ScrollingHeader from '../views/CoreBase/ScrollingHeader';
 import SidePanelModal from '../views/SidePanelModal';
 import SideNav from '../views/SideNav';
 import Navbar from '../views/Navbar';
 import NavbarLink from '../views/Navbar/NavbarLink';
+import HorizontalNavBarWithOverflowMenu from '../views/HorizontalNavBarWithOverflowMenu';
 import CoreLogo from '../views/CoreLogo';
 import LanguageSwitcherList from '../views/language-switcher/LanguageSwitcherList';
 import LanguageSwitcherModal from '../views/language-switcher/LanguageSwitcherModal';
@@ -52,6 +55,7 @@ import commonCoreStrings from '../mixins/commonCoreStrings'; // eslint-disable-l
 import { coreStrings } from '../mixins/commonCoreStrings'; // eslint-disable-line import/no-duplicates
 import commonTaskStrings from '../mixins/taskStrings';
 import commonSyncElements from '../mixins/commonSyncElements';
+import translatedUserKinds from '../mixins/userKinds';
 import CoreFullscreen from '../views/CoreFullscreen';
 import * as exams from '../exams/utils';
 import * as validators from '../validators';
@@ -64,9 +68,8 @@ import redirectBrowser from '../utils/redirectBrowser';
 import * as licenseTranslations from '../utils/licenseTranslations';
 import bytesForHumans from '../utils/bytesForHumans';
 import UserType from '../utils/UserType';
+import * as syncTaskUtils from '../utils/syncTaskUtils';
 import samePageCheckGenerator from '../utils/samePageCheckGenerator';
-import AppBar from '../views/AppBar';
-import ImmersiveToolbar from '../views/ImmersiveToolbar';
 import Backdrop from '../views/Backdrop';
 import CoreSnackbar from '../views/CoreSnackbar';
 import CoreMenu from '../views/CoreMenu';
@@ -74,6 +77,7 @@ import CoreMenuDivider from '../views/CoreMenu/CoreMenuDivider';
 import CoreMenuOption from '../views/CoreMenu/CoreMenuOption';
 import heartbeat from '../heartbeat';
 import CoreTable from '../views/CoreTable';
+import UserTable from '../views/UserTable';
 import CoachContentLabel from '../views/CoachContentLabel';
 import PrivacyInfoModal from '../views/PrivacyInfoModal';
 import UserTypeDisplay from '../views/UserTypeDisplay';
@@ -121,7 +125,7 @@ import coreBannerContent from '../utils/coreBannerContent';
 import CatchErrors from '../utils/CatchErrors';
 import UiToolbar from '../views/KeenUiToolbar.vue';
 import shuffled from '../utils/shuffled';
-import appCapabilities from '../utils/appCapabilities';
+import * as appCapabilities from '../utils/appCapabilities';
 import * as client from './client';
 import clientFactory from './baseClient';
 
@@ -135,7 +139,6 @@ export default {
     vue,
     vuex,
     vueCompositionApi,
-    conditionalPromise,
     apiResource,
   },
   coreVue: {
@@ -155,25 +158,27 @@ export default {
       ContentIcon,
       ProgressIcon,
       PermissionsIcon,
-      AppBarCorePage,
+      AppBar,
+      AppBarPage,
+      ImmersivePage,
       CoreBase,
       SidePanelModal,
       SideNav,
       Navbar,
       NavbarLink,
+      HorizontalNavBarWithOverflowMenu,
       LanguageSwitcherModal,
       LanguageSwitcherList,
       ElapsedTime,
       PointsIcon,
       AuthMessage,
       FilterTextbox,
-      AppBar,
-      ImmersiveToolbar,
       CoreSnackbar,
       CoreMenu,
       CoreMenuDivider,
       CoreMenuOption,
       CoreTable,
+      UserTable,
       CoreInfoIcon,
       InteractionList,
       ExamReport,
@@ -222,6 +227,10 @@ export default {
       commonCoreStrings,
       commonTaskStrings,
       commonSyncElements,
+      translatedUserKinds,
+    },
+    composables: {
+      useKResponsiveWindow,
     },
   },
   resources,
@@ -247,6 +256,7 @@ export default {
     serverClock,
     shuffled,
     sortLanguages,
+    syncTaskUtils,
     UserType,
     validators,
     coreStrings,

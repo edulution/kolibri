@@ -7,6 +7,7 @@ GET_FILES_TO_DELETE = "getFilesToDelete"
 DO_ROLLOVER = "doRollover"
 
 NO_FILE_BASED_LOGGING = os.environ.get("KOLIBRI_NO_FILE_BASED_LOGGING", False)
+DISABLE_REQUEST_LOGGING = os.environ.get("KOLIBRI_DISABLE_REQUEST_LOGGING", False)
 
 LOG_COLORS = {
     "DEBUG": "blue",
@@ -15,6 +16,39 @@ LOG_COLORS = {
     "ERROR": "red",
     "CRITICAL": "bold_red",
 }
+
+
+class EncodingStreamHandler(logging.StreamHandler):
+    """
+    A custom stream handler that encodes the log message to the specified encoding.
+    """
+
+    terminator = "\n"
+
+    def __init__(self, stream=None, encoding="utf-8"):
+        super(EncodingStreamHandler, self).__init__(stream)
+        self.encoding = encoding
+
+    def emit(self, record):
+        """
+        Vendored and modified from:
+        https://github.com/python/cpython/blob/main/Lib/logging/__init__.py#L1098
+        """
+        try:
+            msg = self.format(record)
+            stream = self.stream
+            # issue 35046: merged two stream.writes into one.
+            text = msg + self.terminator
+            if self.encoding and hasattr(stream, "buffer"):
+                bytes_to_write = text.encode(self.encoding)
+                stream.buffer.write(bytes_to_write)
+            else:
+                stream.write(text)
+            self.flush()
+        except RuntimeError:  # See issue 36272
+            raise
+        except Exception:
+            self.handleError(record)
 
 
 class KolibriTimedRotatingFileHandler(TimedRotatingFileHandler):
@@ -161,25 +195,24 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
             "verbose": {
                 "format": "%(levelname)s %(asctime)s %(name)s %(process)d %(thread)d %(message)s"
             },
-            "simple": {"format": "%(levelname)s %(message)s"},
             "simple_date": {"format": "%(levelname)s %(asctime)s %(name)s %(message)s"},
             "color": {
                 "()": "colorlog.ColoredFormatter",
-                "format": "%(log_color)s%(levelname)-8s %(message)s",
+                "format": "%(log_color)s%(levelname)-8s %(asctime)s %(message)s",
                 "log_colors": LOG_COLORS,
             },
         },
         "handlers": {
             "console-error": {
                 "level": "ERROR",
-                "class": "logging.StreamHandler",
+                "class": "kolibri.utils.logger.EncodingStreamHandler",
                 "formatter": "color",
                 "stream": "ext://sys.stderr",
             },
             "console": {
                 "level": DEFAULT_LEVEL,
                 "filters": ["no_exceptions"],
-                "class": "logging.StreamHandler",
+                "class": "kolibri.utils.logger.EncodingStreamHandler",
                 "formatter": "color",
                 "stream": "ext://sys.stdout",
             },
@@ -191,6 +224,7 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
                 "formatter": "simple_date",
                 "when": "midnight",
                 "backupCount": 30,
+                "encoding": "utf-8",
             },
             "file_debug": {
                 "level": "DEBUG",
@@ -198,6 +232,7 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
                 "class": "logging.FileHandler",
                 "filename": os.path.join(LOG_ROOT, "debug.txt"),
                 "formatter": "simple_date",
+                "encoding": "utf-8",
             },
         },
         "loggers": {
@@ -207,6 +242,11 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
             },
             "kolibri": {
                 "handlers": DEFAULT_HANDLERS,
+                "level": DEFAULT_LEVEL,
+                "propagate": False,
+            },
+            "cherrypy.access": {
+                "handlers": [] if DISABLE_REQUEST_LOGGING else DEFAULT_HANDLERS,
                 "level": DEFAULT_LEVEL,
                 "propagate": False,
             },

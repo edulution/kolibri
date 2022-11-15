@@ -4,11 +4,21 @@
     <div v-if="currentChannelIsCustom">
       <CustomContentRenderer :topic="topic" />
     </div>
-
-    <div v-else class="page">
+    <!-- appearanceOverrides overrides the default page styling -->
+    <!-- by replacing it with an empty object -->
+    <ImmersivePage
+      v-else-if="!loading"
+      :loading="loading"
+      :route="libraryPageLink"
+      :appBarTitle="topic.title || ''"
+      :appearanceOverrides="{}"
+      class="page"
+    >
       <!-- Header with thumbail and tagline -->
       <TopicsHeader
         v-if="!windowIsSmall"
+        ref="header"
+        role="complementary"
         data-test="header-breadcrumbs"
         :topics="topics"
         :topic="topic"
@@ -26,6 +36,7 @@
           v-if="breadcrumbs.length && windowIsSmall"
           data-test="mobile-breadcrumbs"
           :items="breadcrumbs"
+          :ariaLabel="learnString('channelAndFoldersLabel')"
         />
 
         <div class="card-grid">
@@ -69,16 +80,25 @@
             <!----
               TODO - is this necessary at all? how is this different than the search results below?
             -->
-            <HybridLearningCardGrid
+            <LibraryAndChannelBrowserMainContent
               v-if="resources.length"
+              :gridType="2"
               data-test="search-results"
-              :contents="resources"
+              :contents="resourcesDisplayed"
               :numCols="numCols"
               :genContentLink="genContentLink"
-              cardViewStyle="card"
+              currentCardViewStyle="card"
               @toggleInfoPanel="toggleInfoPanel"
             />
-            <div v-if="topicMore" class="end-button-block">
+            <KButton
+              v-if="moreResources"
+              class="more-after-grid"
+              appearance="basic-link"
+              @click="handleShowMoreResources"
+            >
+              {{ $tr('showMore') }}
+            </KButton>
+            <div v-else-if="topicMore" class="end-button-block">
               <KButton
                 v-if="!topicMoreLoading"
                 :text="coreString('viewMoreAction')"
@@ -131,8 +151,15 @@
       />
 
       <!-- Embedded Side panel is on larger views, and exists next to content -->
+      <ToggleHeaderTabs
+        v-if="!!windowIsLarge"
+        :topic="topic"
+        :topics="topics"
+        :style="tabPosition"
+      />
       <SearchFiltersPanel
         v-if="!!windowIsLarge"
+        ref="sidePanel"
         v-model="searchTerms"
         :topicsListDisplayed="!desktopSearchActive"
         class="side-panel"
@@ -196,43 +223,43 @@
         @input="handleCategory"
       />
 
-    </div>
 
-    <!-- Side panel for showing the information of selected content with a link to view it -->
-    <SidePanelModal
-      v-if="metadataSidePanelContent"
-      alignment="right"
-      :closeButtonIconType="closeButtonIcon"
-      @closePanel="metadataSidePanelContent = null"
-      @shouldFocusFirstEl="findFirstEl()"
-    >
-      <template #header>
-        <!-- Flex styles tested in ie11 and look good. Ensures good spacing between
+      <!-- Side panel for showing the information of selected content with a link to view it -->
+      <SidePanelModal
+        v-if="metadataSidePanelContent"
+        alignment="right"
+        :closeButtonIconType="closeButtonIcon"
+        @closePanel="metadataSidePanelContent = null"
+        @shouldFocusFirstEl="findFirstEl()"
+      >
+        <template #header>
+          <!-- Flex styles tested in ie11 and look good. Ensures good spacing between
             multiple chips - not a common thing but just in case -->
-        <div
-          v-for="activity in metadataSidePanelContent.learning_activities"
-          :key="activity"
-          class="side-panel-chips"
-          :class="$computedClass({ '::after': {
-            content: '',
-            flex: 'auto'
-          } })"
-        >
-          <LearningActivityChip
-            class="chip"
-            style="margin-left: 8px; margin-bottom: 8px;"
-            :kind="activity"
-          />
-        </div>
-      </template>
+          <div
+            v-for="activity in metadataSidePanelContent.learning_activities"
+            :key="activity"
+            class="side-panel-chips"
+            :class="$computedClass({ '::after': {
+              content: '',
+              flex: 'auto'
+            } })"
+          >
+            <LearningActivityChip
+              class="chip"
+              style="margin-left: 8px; margin-bottom: 8px;"
+              :kind="activity"
+            />
+          </div>
+        </template>
 
-      <BrowseResourceMetadata
-        ref="resourcePanel"
-        :content="metadataSidePanelContent"
-        :showLocationsInChannel="true"
-      />
-    </SidePanelModal>
+        <BrowseResourceMetadata
+          ref="resourcePanel"
+          :content="metadataSidePanelContent"
+          :showLocationsInChannel="true"
+        />
+      </SidePanelModal>
 
+    </ImmersivePage>
   </div>
 
 </template>
@@ -250,11 +277,12 @@
   import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import SidePanelModal from 'kolibri.coreVue.components.SidePanelModal';
   import { throttle } from 'frame-throttle';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import { PageNames } from '../../constants';
   import { normalizeContentNode } from '../../modules/coreLearn/utils.js';
   import useSearch from '../../composables/useSearch';
   import genContentLink from '../../utils/genContentLink';
-  import HybridLearningCardGrid from '../HybridLearningCardGrid';
+  import LibraryAndChannelBrowserMainContent from '../LibraryAndChannelBrowserMainContent';
   import SearchFiltersPanel from '../SearchFiltersPanel';
   import BrowseResourceMetadata from '../BrowseResourceMetadata';
   import LearningActivityChip from '../LearningActivityChip';
@@ -263,9 +291,11 @@
   import SearchResultsGrid from '../SearchResultsGrid';
   import LibraryPage from '../LibraryPage';
   import TopicsHeader from './TopicsHeader';
+  import ToggleHeaderTabs from './ToggleHeaderTabs';
   import TopicsMobileHeader from './TopicsMobileHeader';
   import TopicSubsection from './TopicSubsection';
   import SearchPanelModal from './SearchPanelModal';
+  import commonLearnStrings from './../commonLearnStrings';
   import plugin_data from 'plugin_data';
 
   export default {
@@ -287,7 +317,8 @@
     components: {
       KBreadcrumbs,
       TopicsHeader,
-      HybridLearningCardGrid,
+      ToggleHeaderTabs,
+      LibraryAndChannelBrowserMainContent,
       CustomContentRenderer,
       CategorySearchModal,
       SearchFiltersPanel,
@@ -298,8 +329,9 @@
       TopicsMobileHeader,
       TopicSubsection,
       SearchPanelModal,
+      ImmersivePage,
     },
-    mixins: [responsiveWindowMixin, commonCoreStrings],
+    mixins: [responsiveWindowMixin, commonCoreStrings, commonLearnStrings],
     setup() {
       const {
         searchTerms,
@@ -332,11 +364,19 @@
         setSearchWithinDescendant,
       };
     },
+    props: {
+      loading: {
+        type: Boolean,
+        default: null,
+      },
+    },
     data: function() {
       return {
         sidePanelStyleOverrides: {},
+        tabPosition: {},
         currentCategory: null,
         showSearchModal: false,
+        showMoreResources: false,
         sidePanelIsOpen: false,
         metadataSidePanelContent: null,
         expandedTopics: {},
@@ -380,6 +420,11 @@
         }
         return {};
       },
+      libraryPageLink() {
+        return {
+          name: PageNames.LIBRARY,
+        };
+      },
       desktopSearchActive() {
         return this.$route.name === PageNames.TOPICS_TOPIC_SEARCH;
       },
@@ -394,12 +439,18 @@
         }
       },
       resources() {
-        const resources = this.contents.filter(content => content.kind !== ContentNodeKinds.TOPIC);
-        // If there are no topics, then just display all resources we have loaded.
-        if (!this.topics.length) {
-          return resources;
+        return this.contents.filter(content => content.kind !== ContentNodeKinds.TOPIC);
+      },
+      resourcesDisplayed() {
+        // if no folders are shown at this level, show more resources to fill the space
+        // or if the user has explicitly requested to show more resources
+        if (!this.topics.length || this.showMoreResources) {
+          return this.resources;
         }
-        return resources.slice(0, this.childrenToDisplay);
+        return this.resources.slice(0, this.childrenToDisplay);
+      },
+      moreResources() {
+        return this.resourcesDisplayed.length < this.resources.length;
       },
       topics() {
         return this.contents.filter(content => content.kind === ContentNodeKinds.TOPIC);
@@ -493,7 +544,8 @@
       },
       // calls handleScroll no more than every 17ms
       throttledHandleScroll() {
-        return throttle(this.stickyCalculation);
+        throttle(this.stickyCalculation);
+        return throttle(this.tabPositionCalculation);
       },
       activeActivityButtons() {
         if (this.searchTerms) {
@@ -537,6 +589,7 @@
       },
       metadataSidePanelContent() {
         if (this.metadataSidePanelContent) {
+          // Ensure the content underneath isn't scrolled - unset this when destroyed
           document.documentElement.style.position = 'fixed';
           return;
         }
@@ -545,6 +598,9 @@
     },
     beforeDestroy() {
       window.removeEventListener('scroll', this.throttledHandleScroll);
+      // Unsetting possible change in metadataSidePanelContent watcher
+      // to avoid leaving `fixed` position
+      document.documentElement.style.position = '';
     },
     created() {
       this.translator = crossComponentTranslator(LibraryPage);
@@ -580,6 +636,19 @@
           this.currentCategory = null;
         }
         this.toggleFolderSearchSidePanel();
+      },
+      tabPositionCalculation() {
+        const tabBottom = this.$refs.sidePanel
+          ? this.$refs.sidePanel.$el.getBoundingClientRect().top
+          : 0;
+        if (tabBottom > 0) {
+          this.tabPosition = {
+            position: 'fixed',
+            top: `${tabBottom - 70}px`,
+          };
+        } else {
+          this.tabPosition = {};
+        }
       },
       // Stick the side panel to top. That can be on the very top of the viewport
       // or right under the 'Browse channel' toolbar, depending on whether the toolbar
@@ -620,6 +689,9 @@
           this.topicMoreLoading = false;
         });
       },
+      handleShowMoreResources() {
+        this.showMoreResources = true;
+      },
       findFirstEl() {
         if (this.$refs.embeddedPanel) {
           this.$refs.embeddedPanel.focusFirstEl();
@@ -638,6 +710,10 @@
         message: '{ topicTitle } - { channelTitle }',
         context: 'DO NOT TRANSLATE\nCopy the source string.',
       },
+      showMore: {
+        message: 'Show more',
+        context: 'Clickable link which allows to load more resources.',
+      },
     },
   };
 
@@ -648,6 +724,7 @@
 
   $header-height: 324px;
   $toolbar-height: 70px;
+  $total-height: 394px;
 
   .page {
     position: relative;
@@ -657,13 +734,13 @@
 
   .side-panel {
     position: absolute;
-    top: $header-height;
-    height: calc(100% - #{$header-height});
+    top: $total-height;
     padding-top: 16px;
   }
 
   .main-content-grid {
     position: relative;
+    top: $toolbar-height;
     margin: 24px;
   }
 

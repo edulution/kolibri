@@ -1,6 +1,6 @@
 <template>
 
-  <ImmersivePageRoot
+  <ImmersivePage
     :appBarTitle="className"
     :route="$store.getters.facilityPageLinks.ClassEditPage($route.params.id)"
   >
@@ -9,17 +9,14 @@
       <p>{{ $tr('pageSubheader') }}</p>
       <ClassEnrollForm
         :facilityUsers="facilityUsers"
-        :classUsers="classUsers"
         :disabled="formIsDisabled"
-        :classId="classId"
         :totalPageNumber="totalPageNumber"
         :totalUsers="totalLearners"
-        :isBackendPaginated="true"
         pageType="learners"
         @submit="enrollLearners"
       />
     </KPageContainer>
-  </ImmersivePageRoot>
+  </ImmersivePage>
 
 </template>
 
@@ -28,8 +25,8 @@
 
   import { mapState, mapActions } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import ClassEnrollForm from './ClassEnrollForm';
-  import ImmersivePageRoot from './ImmersivePageRoot';
 
   export default {
     name: 'LearnerClassEnrollmentPage',
@@ -40,7 +37,7 @@
     },
     components: {
       ClassEnrollForm,
-      ImmersivePageRoot,
+      ImmersivePage,
     },
     mixins: [commonCoreStrings],
     data() {
@@ -52,15 +49,11 @@
       ...mapState('classAssignMembers', [
         'class',
         'facilityUsers',
-        'classUsers',
-        'totalPageNumber',
         'totalLearners',
+        'totalPageNumber',
       ]),
       className() {
         return this.class.name;
-      },
-      classId() {
-        return this.class.id;
       },
     },
     methods: {

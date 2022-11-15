@@ -1,3 +1,4 @@
+import argparse
 import concurrent.futures
 import logging
 import os
@@ -8,11 +9,11 @@ from le_utils.constants import content_kinds
 
 from ...utils import annotation
 from ...utils import paths
-from ...utils import transfer
 from kolibri.core.content.errors import InsufficientStorageSpaceError
 from kolibri.core.content.errors import InvalidStorageFilenameError
 from kolibri.core.content.models import ChannelMetadata
 from kolibri.core.content.models import ContentNode
+from kolibri.core.content.utils.content_manifest import ContentManifest
 from kolibri.core.content.utils.file_availability import LocationError
 from kolibri.core.content.utils.import_export_content import compare_checksums
 from kolibri.core.content.utils.import_export_content import get_import_export_data
@@ -22,6 +23,7 @@ from kolibri.core.content.utils.upgrade import get_import_data_for_update
 from kolibri.core.tasks.management.commands.base import AsyncCommand
 from kolibri.core.tasks.utils import get_current_job
 from kolibri.utils import conf
+from kolibri.utils import file_transfer as transfer
 from kolibri.utils.options import FD_PER_THREAD
 from kolibri.utils.system import get_fd_limit
 from kolibri.utils.system import get_free_space
@@ -32,8 +34,13 @@ COPY_METHOD = "copy"
 
 logger = logging.getLogger(__name__)
 
-FILE_TRANSFERRED = 0
-FILE_SKIPPED = 1
+
+class FileCorrupted(Exception):
+    """
+    Transferred file does not match the expected checksum
+    """
+
+    pass
 
 
 def lookup_channel_listing_status(channel_id, baseurl=None):
@@ -61,6 +68,23 @@ class Command(AsyncCommand):
         # command to be given, where we'll expect a channel.
 
         # However, some optional arguments apply to both groups. Add them here!
+
+        manifest_help_text = """
+        Specify a path to a manifest file. Content specified in this manifest file will be imported.
+
+        e.g.
+
+        kolibri manage importcontent --manifest /path/to/KOLIBRI_DATA/content/manifest.json disk
+        """
+        parser.add_argument(
+            "--manifest",
+            type=argparse.FileType("r"),
+            default=None,
+            required=False,
+            dest="manifest",
+            help=manifest_help_text,
+        )
+
         node_ids_help_text = """
         Specify one or more node IDs to import. Only the files associated to those node IDs will be imported.
 
@@ -72,7 +96,7 @@ class Command(AsyncCommand):
             "--node_ids",
             "-n",
             # Split the comma separated string we get, into a list of strings
-            type=lambda x: x.split(","),
+            type=lambda x: x.split(",") if x else [],
             default=None,
             required=False,
             dest="node_ids",
@@ -88,8 +112,8 @@ class Command(AsyncCommand):
         """
         parser.add_argument(
             "--exclude_node_ids",
-            # Split the comma separated string we get, into a list of string
-            type=lambda x: x.split(","),
+            # Split the comma separated string we get, into a list of strings
+            type=lambda x: x.split(",") if x else [],
             default=None,
             required=False,
             dest="exclude_node_ids",
@@ -159,17 +183,36 @@ class Command(AsyncCommand):
             dest="timeout",
             help="Specify network timeout in seconds (default: %(default)d)",
         )
+        network_subparser.add_argument(
+            "--content_dir",
+            type=str,
+            default=paths.get_content_dir_path(),
+            help="Download the content to the given content dir.",
+        )
 
         disk_subparser = subparsers.add_parser(
             name="disk", cmd=self, help="Copy the content from the given folder."
         )
         disk_subparser.add_argument("channel_id", type=str)
-        disk_subparser.add_argument("directory", type=str)
+        disk_subparser.add_argument("directory", type=str, nargs="?")
         disk_subparser.add_argument("--drive_id", type=str, dest="drive_id", default="")
+        disk_subparser.add_argument(
+            "--content_dir",
+            type=str,
+            default=paths.get_content_dir_path(),
+            help="Copy the content to the given content dir.",
+        )
+        disk_subparser.add_argument(
+            "--no_detect_manifest",
+            dest="detect_manifest",
+            action="store_false",
+            default=True,
+        )
 
     def download_content(
         self,
         channel_id,
+        manifest_file=None,
         node_ids=None,
         exclude_node_ids=None,
         baseurl=None,
@@ -178,10 +221,12 @@ class Command(AsyncCommand):
         import_updates=False,
         fail_on_error=False,
         timeout=transfer.Transfer.DEFAULT_TIMEOUT,
+        content_dir=None,
     ):
         self._transfer(
             DOWNLOAD_METHOD,
             channel_id,
+            manifest_file=manifest_file,
             node_ids=node_ids,
             exclude_node_ids=exclude_node_ids,
             baseurl=baseurl,
@@ -190,35 +235,44 @@ class Command(AsyncCommand):
             import_updates=import_updates,
             fail_on_error=fail_on_error,
             timeout=timeout,
+            content_dir=content_dir,
         )
 
     def copy_content(
         self,
         channel_id,
         path,
+        manifest_file=None,
         drive_id=None,
+        detect_manifest=True,
         node_ids=None,
         exclude_node_ids=None,
         renderable_only=True,
         import_updates=False,
         fail_on_error=False,
+        content_dir=None,
     ):
         self._transfer(
             COPY_METHOD,
             channel_id,
             path=path,
+            manifest_file=manifest_file,
+            detect_manifest=detect_manifest,
             drive_id=drive_id,
             node_ids=node_ids,
             exclude_node_ids=exclude_node_ids,
             renderable_only=renderable_only,
             import_updates=import_updates,
             fail_on_error=fail_on_error,
+            content_dir=content_dir,
         )
 
     def _transfer(  # noqa: max-complexity=16
         self,
         method,
         channel_id,
+        manifest_file=None,
+        detect_manifest=None,
         path=None,
         drive_id=None,
         node_ids=None,
@@ -229,7 +283,38 @@ class Command(AsyncCommand):
         import_updates=False,
         fail_on_error=False,
         timeout=transfer.Transfer.DEFAULT_TIMEOUT,
+        content_dir=None,
     ):
+        if node_ids is not None:
+            node_ids = set(node_ids)
+
+        if exclude_node_ids is not None:
+            exclude_node_ids = set(exclude_node_ids)
+
+        if manifest_file and not path:
+            # If manifest_file is stdin, its name will be "<stdin>" and path
+            # will become "". This feels clumsy, but the resulting behaviour
+            # is reasonable.
+            manifest_file_name = getattr(manifest_file, "name", "")
+            manifest_dir = os.path.dirname(manifest_file_name)
+            path = os.path.dirname(manifest_dir)
+
+        content_manifest = ContentManifest()
+        use_content_manifest = False
+
+        if manifest_file:
+            content_manifest.read_file(manifest_file)
+            use_content_manifest = True
+        elif path and detect_manifest and node_ids is None and exclude_node_ids is None:
+            manifest_path = os.path.join(path, "content", "manifest.json")
+            if content_manifest.read(manifest_path):
+                use_content_manifest = True
+                logging.info("Using node_ids from {}".format(manifest_path))
+
+        if use_content_manifest:
+            node_ids = _node_ids_from_content_manifest(content_manifest, channel_id)
+            exclude_node_ids = None
+
         try:
             if not import_updates:
                 (
@@ -274,8 +359,11 @@ class Command(AsyncCommand):
                 )
             raise
 
+        if not content_dir:
+            content_dir = conf.OPTIONS["Paths"]["CONTENT_DIR"]
+
         if not paths.using_remote_storage():
-            free_space = get_free_space(conf.OPTIONS["Paths"]["CONTENT_DIR"])
+            free_space = get_free_space(content_dir)
 
             if free_space <= total_bytes_to_transfer:
                 raise InsufficientStorageSpaceError(
@@ -326,15 +414,20 @@ class Command(AsyncCommand):
             if method == DOWNLOAD_METHOD:
                 session = requests.Session()
 
+            # We should be deferring to conf.OPTIONS["Tasks"]["USE_WORKER_MULTIPROCESSING"]
+            # for this value, but unfortunately, the current way that the import logic
+            # is setup relies on shared memory that can only be used with threads.
+            use_multiprocessing = False
+
             executor = (
                 concurrent.futures.ProcessPoolExecutor
-                if conf.OPTIONS["Tasks"]["USE_WORKER_MULTIPROCESSING"]
+                if use_multiprocessing
                 else concurrent.futures.ThreadPoolExecutor
             )
 
             max_workers = 10
 
-            if not conf.OPTIONS["Tasks"]["USE_WORKER_MULTIPROCESSING"]:
+            if not use_multiprocessing:
                 # If we're not using multiprocessing for workers, we may need
                 # to limit the number of workers depending on the number of allowed
                 # file descriptors.
@@ -377,7 +470,9 @@ class Command(AsyncCommand):
                             f = files_to_download.pop()
                             filename = get_content_file_name(f)
                             try:
-                                dest = paths.get_content_storage_file_path(filename)
+                                dest = paths.get_content_storage_file_path(
+                                    filename, contentfolder=content_dir
+                                )
                             except InvalidStorageFilenameError:
                                 # If the destination file name is malformed, just stop now.
                                 overall_progress_update(f["file_size"])
@@ -427,20 +522,25 @@ class Command(AsyncCommand):
                     ):
                         f, filetransfer = future_file_transfers[future]
                         try:
-                            status, data_transferred = future.result()
+                            error, data_transferred = future.result()
                             overall_progress_update(data_transferred)
                             if self.is_cancelled():
                                 break
 
-                            if status == FILE_SKIPPED:
+                            if error:
+                                if fail_on_error:
+                                    raise error
+                                logger.error(
+                                    "An error occurred during content import: {}".format(
+                                        error
+                                    )
+                                )
                                 number_of_skipped_files += 1
                             else:
                                 file_checksums_to_annotate.append(f["id"])
                                 transferred_file_size += f["file_size"]
                             remaining_bytes_to_transfer -= f["file_size"]
-                            remaining_free_space = get_free_space(
-                                conf.OPTIONS["Paths"]["CONTENT_DIR"]
-                            )
+                            remaining_free_space = get_free_space(content_dir)
                             if remaining_free_space <= remaining_bytes_to_transfer:
                                 raise InsufficientStorageSpaceError(
                                     "Kolibri ran out of storage space while importing content"
@@ -452,11 +552,12 @@ class Command(AsyncCommand):
                                 "An error occurred during content import: {}".format(e)
                             )
 
-                            if (
-                                not fail_on_error
-                                and isinstance(e, requests.exceptions.HTTPError)
+                            is_file_missing_error = (
+                                isinstance(e, requests.exceptions.HTTPError)
                                 and e.response.status_code == 404
-                            ) or (isinstance(e, OSError) and e.errno == 2):
+                            ) or (isinstance(e, OSError) and e.errno == 2)
+
+                            if is_file_missing_error and not fail_on_error:
                                 # Continue file import when the current file is not found from the source and is skipped.
                                 overall_progress_update(f["file_size"])
                                 number_of_skipped_files += 1
@@ -508,9 +609,10 @@ class Command(AsyncCommand):
     def _start_file_transfer(self, f, filetransfer):
         """
         Start to transfer the file from network/disk to the destination.
-        Return value:
-            * FILE_TRANSFERRED - successfully transfer the file.
-            * FILE_SKIPPED - the file does not exist so it is skipped.
+
+        Returns a tuple containing an error that occurred and the amount
+        of data transferred. The error value will be None if no error
+        occurred.
         """
         data_transferred = 0
 
@@ -534,17 +636,23 @@ class Command(AsyncCommand):
             except (IOError, OSError):
                 checksum_correctness = False
             if not checksum_correctness:
-                e = "File {} is corrupted.".format(filetransfer.source)
-                logger.error("An error occurred during content import: {}".format(e))
+                e = FileCorrupted("File {} is corrupted.".format(filetransfer.source))
                 try:
                     os.remove(filetransfer.dest)
                 except OSError:
                     pass
-                return FILE_SKIPPED, data_transferred
+                return e, data_transferred
 
-        return FILE_TRANSFERRED, data_transferred
+        return None, data_transferred
 
     def handle_async(self, *args, **options):
+        if options["manifest"] and (
+            options["node_ids"] is not None or options["exclude_node_ids"] is not None
+        ):
+            raise CommandError(
+                "The --manifest option must not be combined with --node_ids or --exclude_node_ids."
+            )
+
         try:
             ChannelMetadata.objects.get(id=options["channel_id"])
         except ValueError:
@@ -555,9 +663,11 @@ class Command(AsyncCommand):
             raise CommandError(
                 "Must import a channel with importchannel before importing content."
             )
+
         if options["command"] == "network":
             self.download_content(
                 options["channel_id"],
+                manifest_file=options["manifest"],
                 node_ids=options["node_ids"],
                 exclude_node_ids=options["exclude_node_ids"],
                 baseurl=options["baseurl"],
@@ -566,17 +676,26 @@ class Command(AsyncCommand):
                 import_updates=options["import_updates"],
                 fail_on_error=options["fail_on_error"],
                 timeout=options["timeout"],
+                content_dir=options["content_dir"],
             )
         elif options["command"] == "disk":
+            if not options["directory"] and not options["manifest"]:
+                raise CommandError(
+                    "Either a directory or a manifest file must be provided."
+                )
+
             self.copy_content(
                 options["channel_id"],
                 options["directory"],
+                manifest_file=options["manifest"],
+                detect_manifest=options["detect_manifest"],
                 drive_id=options["drive_id"],
                 node_ids=options["node_ids"],
                 exclude_node_ids=options["exclude_node_ids"],
                 renderable_only=options["renderable_only"],
                 import_updates=options["import_updates"],
                 fail_on_error=options["fail_on_error"],
+                content_dir=options["content_dir"],
             )
         else:
             self._parser.print_help()
@@ -585,3 +704,24 @@ class Command(AsyncCommand):
                     options["command"]
                 )
             )
+
+
+def _node_ids_from_content_manifest(content_manifest, channel_id):
+    node_ids = set()
+
+    channel_metadata = ChannelMetadata.objects.get(id=channel_id)
+
+    for channel_version in content_manifest.get_channel_versions(channel_id):
+        if channel_version != channel_metadata.version:
+            logger.warning(
+                "Manifest entry for {channel_id} has a different version ({manifest_version}) than the installed channel ({local_version})".format(
+                    channel_id=channel_id,
+                    manifest_version=channel_version,
+                    local_version=channel_metadata.version,
+                )
+            )
+        node_ids.update(
+            content_manifest.get_include_node_ids(channel_id, channel_version)
+        )
+
+    return node_ids

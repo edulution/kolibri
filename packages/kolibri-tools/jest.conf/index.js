@@ -19,6 +19,7 @@ module.exports = {
     __kolibriModuleName: 'testmodule',
     __version: 'testversion',
     __copyrightYear: '2018',
+    __webpack_public_path__: 'webpack_public_path',
     'vue-jest': {
       babelConfig,
     },
@@ -26,7 +27,10 @@ module.exports = {
   rootDir: path.resolve(process.cwd()),
   moduleFileExtensions: ['js', 'json', 'vue'],
   moduleNameMapper,
-  testURL: 'http://kolibri.time',
+  testEnvironment: 'jsdom',
+  testEnvironmentOptions: {
+    url: 'http://kolibri.time',
+  },
   transform: {
     '^.+\\.js$': 'babel-jest',
     '^.+\\.vue$': 'vue-jest',

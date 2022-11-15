@@ -1,6 +1,8 @@
 <template>
 
-  <div
+  <section
+    role="region"
+    :aria-label="learnString('filterAndSearchLabel')"
     :style="{
       color: $themeTokens.text,
       backgroundColor: $themeTokens.surface,
@@ -44,20 +46,6 @@
           {{ $tr('categories') }}
         </h2>
         <!-- list of category metadata - clicking prompts a filter modal -->
-        <div
-          span="4"
-          class="category-list-item"
-        >
-          <KButton
-            :text="$tr('allCategories')"
-            appearance="flat-button"
-            :appearanceOverrides="isKeyActive('all_categories')
-              ? { ...categoryListItemStyles, ...categoryListItemActiveStyles }
-              : categoryListItemStyles"
-            @click="allCategories"
-          />
-        </div>
-
         <div
           v-for="(category, key) in libraryCategoriesList"
           :key="category"
@@ -126,7 +114,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </section>
 
 </template>
 
@@ -136,7 +124,6 @@
   import pick from 'lodash/pick';
   import uniq from 'lodash/uniq';
   import {
-    AllCategories,
     CategoriesLookup,
     NoCategories,
     ResourcesNeededTypes,
@@ -316,17 +303,11 @@
       isKeyActive(key) {
         return !!this.activeKeys.filter(k => k.includes(key)).length;
       },
-      allCategories() {
-        this.$emit('input', { ...this.value, categories: { [AllCategories]: true } });
-      },
       noCategories() {
         this.$emit('input', { ...this.value, categories: { [NoCategories]: true } });
       },
       handleActivity(activity) {
-        if (activity === null) {
-          const learning_activities = {};
-          this.$emit('input', { ...this.value, learning_activities });
-        } else if (activity && !this.value.learning_activities[activity]) {
+        if (activity && !this.value.learning_activities[activity]) {
           const learning_activities = {
             [activity]: true,
             ...this.value.learning_activities,
@@ -376,10 +357,6 @@
         message: 'Categories',
         context: 'Section header label in the Library page sidebar.',
       },
-      allCategories: {
-        message: 'All categories',
-        context: 'Option in the Library page sidebar.',
-      },
     },
   };
 
@@ -390,11 +367,10 @@
 
   .side-panel {
     position: fixed;
-    top: 0;
+    top: 60px;
     left: 0;
     height: 100%;
     padding: 24px;
-    padding-top: 140px;
     overflow-y: scroll;
     font-size: 14px;
     box-shadow: 0 3px 3px 0 #00000040;

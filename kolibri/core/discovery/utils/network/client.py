@@ -1,11 +1,11 @@
 import logging
 
 import requests
-from six.moves.urllib.parse import urljoin
 from six.moves.urllib.parse import urlparse
 
 from . import errors
 from .urls import get_normalized_url_variations
+from kolibri.core.utils.urls import join_url
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class NetworkClient(object):
             try:
                 logger.info("Attempting connection to: {}".format(url))
                 response = self.get(
-                    "/api/public/info/",
+                    "api/public/info/",
                     base_url=url,
                     timeout=self.timeout,
                     allow_redirects=True,
@@ -67,7 +67,11 @@ class NetworkClient(object):
                         )
                     logger.info("Success! We connected to: {}".format(response.url))
 
-                    return "{}://{}".format(parsed_url.scheme, parsed_url.netloc)
+                    return "{}://{}{}".format(
+                        parsed_url.scheme,
+                        parsed_url.netloc,
+                        parsed_url.path.rstrip("/").replace("api/public/info", ""),
+                    )
             except (requests.RequestException) as e:
                 logger.info("Unable to connect: {}".format(e))
             except ValueError:
@@ -86,7 +90,7 @@ class NetworkClient(object):
 
     def request(self, method, path, base_url=None, **kwargs):
         base_url = base_url or self.base_url
-        url = urljoin(base_url, path)
+        url = join_url(base_url, path)
         response = getattr(self.session, method)(url, **kwargs)
         response.raise_for_status()
         return response

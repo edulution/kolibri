@@ -4,7 +4,6 @@ import ntpath
 import os
 from collections import OrderedDict
 from functools import partial
-from tempfile import mkstemp
 
 from django.conf import settings
 from django.core.management.base import CommandError
@@ -28,6 +27,7 @@ from kolibri.core.query import GroupConcatSubquery
 from kolibri.core.tasks.management.commands.base import AsyncCommand
 from kolibri.core.tasks.utils import get_current_job
 from kolibri.core.utils.csv import open_csv_for_writing
+from kolibri.core.utils.csv import output_mapper
 from kolibri.utils import conf
 
 try:
@@ -36,6 +36,9 @@ except NameError:
     FileNotFoundError = IOError
 
 logger = logging.getLogger(__name__)
+
+CSV_EXPORT_FILENAMES = {"user": "{}_{}_users.csv"}
+
 
 # TODO: decide whether these should be internationalized
 labels = OrderedDict(
@@ -108,19 +111,14 @@ output_mappings = {
 }
 
 
-def map_output(obj):
-    mapped_obj = {}
-    for header, label in labels.items():
-        if header in output_mappings and header in obj:
-            mapped_obj[label] = output_mappings[header](obj)
-        elif header in obj:
-            mapped_obj[label] = obj[header]
-    return mapped_obj
+def map_output(item):
+    return partial(
+        output_mapper, labels=translate_labels(), output_mappings=output_mappings
+    )(item)
 
 
 def translate_labels():
-    global labels
-    labels = OrderedDict(
+    return OrderedDict(
         (
             ("id", _("Database ID ({})").format("UUID")),
             ("username", _("Username ({})").format("USERNAME")),
@@ -159,7 +157,7 @@ def csv_file_generator(facility, filepath, overwrite=True):
         raise ValueError("{} already exists".format(filepath))
     queryset = FacilityUser.objects.filter(facility=facility)
 
-    header_labels = labels.values()
+    header_labels = translate_labels().values()
 
     csv_file = open_csv_for_writing(filepath)
 
@@ -250,12 +248,15 @@ class Command(AsyncCommand):
 
         return default_facility
 
-    def get_filepath(self, options):
+    def get_filepath(self, options, facility):
         if options["output_file"] is None:
-            temp_dir = os.path.join(conf.KOLIBRI_HOME, "temp")
-            if not os.path.isdir(temp_dir):
-                os.mkdir(temp_dir)
-            filepath = mkstemp(suffix=".download", dir=temp_dir)[1]
+            export_dir = os.path.join(conf.KOLIBRI_HOME, "log_export")
+            if not os.path.isdir(export_dir):
+                os.mkdir(export_dir)
+            filepath = os.path.join(
+                export_dir,
+                CSV_EXPORT_FILENAMES["user"].format(facility.name, facility.id[:4]),
+            )
         else:
             filepath = os.path.join(os.getcwd(), options["output_file"])
         return filepath
@@ -264,11 +265,10 @@ class Command(AsyncCommand):
         # set language for the translation of the messages
         locale = settings.LANGUAGE_CODE if not options["locale"] else options["locale"]
         translation.activate(locale)
-        translate_labels()
 
         self.overall_error = []
-        filepath = self.get_filepath(options)
         facility = self.get_facility(options)
+        filepath = self.get_filepath(options, facility)
         job = get_current_job()
         total_rows = FacilityUser.objects.filter(facility=facility).count()
 

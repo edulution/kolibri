@@ -1,58 +1,65 @@
 <template>
 
-  <UiToolbar
-    :title="appBarTitle"
-    textColor="white"
-    type="clear"
-    :showIcon="showIcon"
-    :style="{
-      height: topBarHeight + 'px',
-      position: 'fixed',
-      top: 0,
-      right: 0,
-      left: 0,
-      backgroundColor: isFullscreen ? $themeTokens.appBar : $themeTokens.appBarFullscreen,
-    }"
-    @nav-icon-click="$emit('navIconClick')"
-  >
-    <template #icon>
-      <router-link
-        v-if="hasRoute"
-        :to="route"
-        class="link"
-        :class="$computedClass(linkStyle)"
-      >
-        <!-- TODO add aria label? -->
-        <KIconButton
-          v-if="icon === 'close'"
-          icon="close"
-          :color="$themeTokens.textInverted"
-          tabindex="-1"
-        />
-        <KIconButton
-          v-else
-          icon="back"
-          :color="$themeTokens.textInverted"
-        />
-      </router-link>
+  <header>
+    <UiToolbar
+      :title="appBarTitle"
+      textColor="white"
+      type="clear"
+      :showIcon="showIcon"
+      :style="{
+        height: topBarHeight + 'px',
+        position: 'fixed',
+        zIndex: 4,
+        top: 0,
+        right: 0,
+        left: 0,
+        backgroundColor: isFullscreen ? $themeTokens.appBar : $themeTokens.appBarFullscreen,
+      }"
+      @nav-icon-click="$emit('navIconClick')"
+    >
+      <template #icon>
+        <router-link
+          v-if="hasRoute"
+          :to="route"
+          class="link"
+          :class="$computedClass(linkStyle)"
+        >
+          <!-- TODO add aria label? -->
+          <KIconButton
+            v-if="icon === 'close'"
+            :ariaLabel="coreString('closeAction')"
+            icon="close"
+            :color="$themeTokens.textInverted"
+            tabindex="-1"
+          />
+          <KIconButton
+            v-else
+            icon="back"
+            :ariaLabel="coreString('goBackAction')"
+            :color="$themeTokens.textInverted"
+          />
+        </router-link>
 
-      <span v-else>
-        <KIconButton
-          v-if="icon === 'close'"
-          icon="close"
-          :color="$themeTokens.textInverted"
-          tabindex="-1"
-          @click="$emit('navIconClick')"
-        />
-        <KIconButton
-          v-else
-          icon="back"
-          :color="$themeTokens.textInverted"
-          @click="$emit('navIconClick')"
-        />
-      </span>
-    </template>
-  </UiToolbar>
+        <span v-else>
+          <KIconButton
+            v-if="icon === 'close'"
+            :ariaLabel="coreString('closeAction')"
+            icon="close"
+            :color="$themeTokens.textInverted"
+            tabindex="-1"
+            @click="$emit('navIconClick')"
+          />
+          <KIconButton
+            v-else
+            icon="back"
+            :ariaLabel="coreString('goBackAction')"
+            :color="$themeTokens.textInverted"
+            @click="$emit('navIconClick')"
+          />
+        </span>
+      </template>
+    </UiToolbar>
+  </header>
 
 </template>
 
@@ -61,6 +68,7 @@
 
   import UiToolbar from 'kolibri.coreVue.components.UiToolbar';
   import { validateLinkObject } from 'kolibri.utils.validators';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import navComponentsMixin from '../mixins/nav-components';
 
   export default {
@@ -68,7 +76,7 @@
     components: {
       UiToolbar,
     },
-    mixins: [navComponentsMixin],
+    mixins: [commonCoreStrings, navComponentsMixin],
     props: {
       appBarTitle: {
         type: String,

@@ -33,6 +33,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
 from django_filters.rest_framework import ModelChoiceFilter
 from morango.api.permissions import BasicMultiArgumentAuthentication
+from morango.constants import transfer_stages
+from morango.constants import transfer_statuses
 from morango.models import TransferSession
 from rest_framework import decorators
 from rest_framework import filters
@@ -98,13 +100,8 @@ class KolibriAuthPermissionsFilter(filters.BaseFilterBackend):
     """
 
     def filter_queryset(self, request, queryset, view):
-        # if the url name ends with "-list" or the endpoint is explicitly declared a list endpoint
-        # with .detail=False
-        is_list = request.resolver_match.url_name.endswith("-list") or not getattr(
-            request.resolver_match.func, "detail", True
-        )
-        if request.method == "GET" and is_list:
-            # only filter down the queryset in the case of the list view being requested
+        if request.method == "GET":
+            # If a 'GET' method only return readable items to filter down the queryset.
             return request.user.filter_readable(queryset)
         # otherwise, return the full queryset, as permission checks will happen object-by-object
         # (and filtering here then leads to 404's instead of the more correct 403's)
@@ -216,6 +213,9 @@ class FacilityUserFilter(FilterSet):
     exclude_member_of = ModelChoiceFilter(
         method="filter_exclude_member_of", queryset=Collection.objects.all()
     )
+    exclude_coach_for = ModelChoiceFilter(
+        method="filter_exclude_coach_for", queryset=Collection.objects.all()
+    )
     exclude_user_type = ChoiceFilter(
         choices=USER_TYPE_CHOICES,
         method="filter_exclude_user_type",
@@ -233,6 +233,11 @@ class FacilityUserFilter(FilterSet):
 
     def filter_exclude_member_of(self, queryset, name, value):
         return queryset.exclude(Q(memberships__collection=value) | Q(facility=value))
+
+    def filter_exclude_coach_for(self, queryset, name, value):
+        return queryset.exclude(
+            Q(roles__in=Role.objects.filter(kind=role_kinds.COACH, collection=value))
+        )
 
     def filter_exclude_user_type(self, queryset, name, value):
         if value == "learner":
@@ -257,6 +262,9 @@ class PublicFacilityUserViewSet(ReadOnlyValuesViewset):
         "facility",
         "roles__kind",
         "devicepermissions__is_superuser",
+        "id_number",
+        "gender",
+        "birth_year",
     )
     field_map = {
         "is_superuser": lambda x: bool(x.pop("devicepermissions__is_superuser")),
@@ -270,7 +278,7 @@ class PublicFacilityUserViewSet(ReadOnlyValuesViewset):
         # if user has admin rights for the facility returns the list of users
         queryset = self.queryset.filter(facility_id=facility_id)
         # otherwise, the endpoint returns only the user information
-        if not self.request.user.is_superuser or not _user_is_admin_for_own_facility(
+        if not self.request.user.is_superuser and not _user_is_admin_for_own_facility(
             self.request.user
         ):
             queryset = queryset.filter(id=self.request.user.id)
@@ -299,6 +307,8 @@ class FacilityUserViewSet(ValuesViewset):
         DjangoFilterBackend,
         filters.SearchFilter,
     )
+    order_by_field = "username"
+
     queryset = FacilityUser.objects.all()
     serializer_class = FacilityUserSerializer
     filter_class = FacilityUserFilter
@@ -339,6 +349,7 @@ class FacilityUserViewSet(ValuesViewset):
                     roles.append(role)
             item["roles"] = roles
             output.append(item)
+        output = sorted(output, key=lambda x: x[self.order_by_field])
         return output
 
     def perform_update(self, serializer):
@@ -465,13 +476,28 @@ class FacilityViewSet(ValuesViewset):
     queryset = Facility.objects.all()
     serializer_class = FacilitySerializer
 
-    facility_values = ["id", "name", "num_classrooms", "num_users", "last_synced"]
+    facility_values = [
+        "id",
+        "name",
+        "num_classrooms",
+        "num_users",
+        "last_successful_sync",
+        "last_failed_sync",
+    ]
 
     values = tuple(facility_values + dataset_keys)
 
     field_map = {"dataset": _map_dataset}
 
     def annotate_queryset(self, queryset):
+        transfer_session_dataset_filter = Func(
+            Cast(OuterRef("dataset"), TextField()),
+            Value("-"),
+            Value(""),
+            function="replace",
+            output_field=TextField(),
+        )
+
         return (
             queryset.annotate(
                 num_users=SQCount(
@@ -484,15 +510,27 @@ class FacilityViewSet(ValuesViewset):
                 )
             )
             .annotate(
-                last_synced=Subquery(
+                last_successful_sync=Subquery(
+                    # the sync command does a pull, then a push, so if the push succeeded,
+                    # the pull likely did too, which means this should represent when the
+                    # facility was last fully and successfully synced
                     TransferSession.objects.filter(
-                        filter=Func(
-                            Cast(OuterRef("dataset"), TextField()),
-                            Value("-"),
-                            Value(""),
-                            function="replace",
-                            output_field=TextField(),
-                        )
+                        push=True,
+                        active=False,
+                        transfer_stage=transfer_stages.CLEANUP,
+                        transfer_stage_status=transfer_statuses.COMPLETED,
+                        filter=transfer_session_dataset_filter,
+                    )
+                    .order_by("-last_activity_timestamp")
+                    .values("last_activity_timestamp")[:1]
+                )
+            )
+            .annotate(
+                last_failed_sync=Subquery(
+                    # Here we simply look for if any transfer session has errored
+                    TransferSession.objects.filter(
+                        transfer_stage_status=transfer_statuses.ERRORED,
+                        filter=transfer_session_dataset_filter,
                     )
                     .order_by("-last_activity_timestamp")
                     .values("last_activity_timestamp")[:1]
@@ -516,7 +554,7 @@ class ClassroomFilter(FilterSet):
         if requesting_user.is_superuser:
             return queryset
 
-        if requesting_user.is_anonymous():
+        if requesting_user.is_anonymous:
             return queryset.none()
 
         # filter queryset by admin role and coach role

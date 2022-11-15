@@ -18,17 +18,19 @@
       <transition name="slide">
         <div
           v-if="showControls"
-          class="fullscreen-header"
+          class="fullscreen-header pdf-controls-container"
           :style="{ backgroundColor: this.$themePalette.grey.v_100 }"
         >
           <KIconButton
             class="button-zoom-in controls"
+            :ariaLabel="coreString('zoomIn')"
             aria-controls="pdf-container"
             icon="add"
             @click="zoomIn"
           />
           <KIconButton
             class="button-zoom-out controls"
+            :ariaLabel="coreString('zoomOut')"
             aria-controls="pdf-container"
             icon="remove"
             @click="zoomOut"
@@ -63,6 +65,8 @@
             :firstPageHeight="firstPageHeight || 0"
             :firstPageWidth="firstPageWidth || 0"
             :scale="scale || 1"
+            :totalPages="pdfPages.length"
+            :eventBus="eventBus"
           />
         </template>
       </RecycleList>
@@ -74,7 +78,7 @@
 
 <script>
 
-  import PDFJSLib from 'pdfjs-dist';
+  import * as PDFJSLib from 'pdfjs-dist/legacy/build/pdf';
   import Hammer from 'hammerjs';
   import throttle from 'lodash/throttle';
   import debounce from 'lodash/debounce';
@@ -82,15 +86,17 @@
   import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
   // polyfill necessary for recycle list
   import 'intersection-observer';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import CoreFullscreen from 'kolibri.coreVue.components.CoreFullscreen';
-  import urls from 'kolibri.urls';
+  import { EventBus } from '../utils/event_utils';
   import PdfPage from './PdfPage';
+
   // Source from which PDFJS loads its service worker, this is based on the __publicPath
   // global that is defined in the Kolibri webpack pipeline, and the additional entry in the PDF
   // renderer's own webpack config
-  PDFJSLib.PDFJS.workerSrc = urls.static(`${__kolibriModuleName}/pdfJSWorker-${__version}.js`);
+  PDFJSLib.GlobalWorkerOptions.workerSrc = __webpack_public_path__ + `pdfJSWorker-${__version}.js`;
   // How often should we respond to changes in scrolling to render new pages?
   const renderDebounceTime = 300;
   const scaleIncrement = 0.25;
@@ -102,7 +108,7 @@
       RecycleList,
       CoreFullscreen,
     },
-    mixins: [responsiveWindowMixin, responsiveElementMixin],
+    mixins: [responsiveWindowMixin, responsiveElementMixin, commonCoreStrings],
     data: () => ({
       progress: null,
       scale: null,
@@ -117,6 +123,7 @@
       updateContentStateInterval: null,
       showControls: true,
       visitedPages: {},
+      eventBus: null,
     }),
     computed: {
       // Returns whether or not the current device is iOS.
@@ -216,12 +223,13 @@
 
       this.currentLocation = this.savedLocation;
       this.showControls = true; // Ensures it shows on load even if we're scrolled
-      const loadPdfPromise = PDFJSLib.getDocument(this.defaultFile.storage_url);
+      const loadingPdf = PDFJSLib.getDocument(this.defaultFile.storage_url);
       // pass callback to update loading bar
-      loadPdfPromise.onProgress = loadingProgress => {
+      loadingPdf.onProgress = loadingProgress => {
         this.progress = loadingProgress.loaded / loadingProgress.total;
       };
-      this.prepComponentData = loadPdfPromise.then(pdfDocument => {
+      this.eventBus = new EventBus();
+      this.prepComponentData = loadingPdf.promise.then(pdfDocument => {
         // Get initial info from the loaded pdf document
         this.pdfDocument = pdfDocument;
         this.totalPages = this.pdfDocument.numPages;
@@ -428,6 +436,11 @@
     position: relative;
     height: calc(100vh - #{$top-bar-height} - #{$controls-height} + 16px);
     overflow-y: hidden;
+  }
+
+  .pdf-container {
+    position: relative;
+    top: $controls-height;
   }
 
   .controls {

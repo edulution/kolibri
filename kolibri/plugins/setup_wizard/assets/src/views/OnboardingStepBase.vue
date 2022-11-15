@@ -4,6 +4,7 @@
   <div
     :class="{ 'base-container': true, 'windowIsSmall': windowIsSmall }"
     :style="{ 'background-color': windowIsSmall ? $themeTokens.surface : '' }"
+    @keyup.enter="handleEnterKey"
   >
 
     <div class="logo-lang-container">
@@ -20,7 +21,7 @@
         v-else-if="!noBackAction"
         class="back-icon-button"
         icon="back"
-        @click="$emit('back')"
+        @click="wizardService.send('BACK')"
       />
 
       <!-- Language switcher visible regardless of screen size -->
@@ -41,6 +42,12 @@
       :noPadding="true"
     >
       <div class="content">
+        <h1 class="title">
+          {{ title }}
+        </h1>
+        <p v-if="description" class="description">
+          {{ description }}
+        </p>
         <slot></slot>
       </div>
 
@@ -57,28 +64,39 @@
           <slot name="footer"></slot>
         </div>
 
+
         <!-- Footer for medium+ screens -->
         <KButtonGroup v-if="!windowIsSmall" class="footer-actions footer-section">
+          <!-- Allow direct override of the buttons in the footer -->
+          <slot name="buttons"></slot>
+          <!-- Default buttons, hidden when the slot is used -->
           <KButton
-            v-if="!noBackAction"
+            v-if="!noBackAction && !$slots.buttons"
             :text="coreString('goBackAction')"
             appearance="flat-button"
             :primary="false"
-            @click="$emit('back')"
+            :disabled="navDisabled"
+            @click="wizardService.send('BACK')"
           />
           <KButton
+            v-if="!$slots.buttons"
             :text="coreString('continueAction')"
             :primary="true"
+            :disabled="navDisabled"
             @click="$emit('continue')"
           />
         </KButtonGroup>
 
         <!-- Simpler to do a big button for the small screen separately -->
         <div v-if="windowIsSmall" class="mobile-footer">
+          <!-- Allow direct override of the buttons in the footer -->
+          <slot name="buttons"></slot>
           <KButton
+            v-if="!$slots.buttons"
             class="mobile-continue-button"
             :text="coreString('continueAction')"
             :primary="true"
+            :disabled="navDisabled"
             @click="$emit('continue')"
           />
         </div>
@@ -107,11 +125,24 @@
   export default {
     name: 'OnboardingStepBase',
     components: { CoreLogo, LanguageSwitcherModal },
+    inject: ['wizardService'],
     mixins: [commonCoreStrings, responsiveWindowMixin],
     props: {
       noBackAction: {
         type: Boolean,
         default: false,
+      },
+      navDisabled: {
+        type: Boolean,
+        default: false,
+      },
+      title: {
+        type: String,
+        default: null,
+      },
+      description: {
+        type: String,
+        default: null,
       },
     },
     data() {
@@ -124,6 +155,15 @@
         return availableLanguages[currentLanguage];
       },
     },
+    methods: {
+      /* If the user is focused on a form element and hits enter, continue */
+      handleEnterKey(e) {
+        e.preventDefault();
+        if (!this.navDisabled & (e.target.tagName === 'INPUT')) {
+          this.$emit('continue');
+        }
+      },
+    },
   };
 
 </script>
@@ -131,9 +171,12 @@
 
 <style lang="scss" scoped>
 
+  @import '../../../../../core/assets/src/styles/definitions';
+
   .base-container {
-    max-width: 700px;
-    margin: 10% auto 0;
+    max-width: $page-container-max-width;
+    padding-bottom: 5em;
+    margin: 5em auto 0;
 
     &.windowIsSmall {
       width: 100vw;
@@ -146,6 +189,15 @@
     position: relative;
     width: 100%;
     height: 32px;
+  }
+
+  .title {
+    font-size: 1.5em;
+  }
+
+  .description {
+    padding-bottom: 8px;
+    font-size: 0.875em;
   }
 
   .windowIsSmall .logo-lang-container {
@@ -234,6 +286,13 @@
 
   .ta-l {
     text-align: left;
+  }
+
+  /deep/ .truncate-text {
+    /* Override KRadioButton default behavior of eliding text with ellipsis to ensure word wrap */
+
+    /* This will effect the entire onboarding experience */
+    white-space: normal;
   }
 
 </style>

@@ -677,6 +677,21 @@ base_option_spec = {
                 The number of workers to spin up for high priority asynchronous tasks.
             """,
         },
+        "JOB_STORAGE_FILEPATH": {
+            "type": "path",
+            "default": "job_storage.sqlite3",
+            "description": """
+                The file to use for the job storage database. This is only used in the case that the database backend being used is SQLite.
+            """,
+        },
+        "SCHEDULE_HOOKS": {
+            "type": "lazy_import_callback_list",
+            "description": """
+                A lsit of module paths for function callbacks that will be called when a job is scheduled in the storage class.
+                This is intended to allow an external task runner to be used to execute Kolibri tasks. The default is empty,
+                as the internal handling is sufficient for Kolibri's task running.
+            """,
+        },
     },
 }
 
@@ -732,7 +747,7 @@ def _get_option_spec():
             if default_envvar not in envvars:
                 envvars.add(default_envvar)
             else:
-                logging.warn(
+                logging.warning(
                     "Duplicate environment variable for options {}".format(
                         default_envvar
                     )
@@ -760,6 +775,8 @@ def get_configspec():
         lines.append("[{section}]".format(section=section))
         for name, attrs in opts.items():
             default = attrs.get("default", "")
+            if isinstance(default, list) and not default:
+                raise RuntimeError("For an empty list don't specify a default")
             the_type = attrs["type"]
             args = ["%r" % op for op in attrs.get("options", [])] + [
                 "default=list('{default_list}')".format(
@@ -793,7 +810,7 @@ def _set_from_envvars(conf):
                 if envvar in os.environ:
                     deprecated_envvars = attrs.get("deprecated_envvars", ())
                     if envvar in deprecated_envvars:
-                        logger.warn(
+                        logger.warning(
                             deprecation_warning.format(
                                 optname=optname,
                                 section=section,
@@ -812,7 +829,7 @@ def _set_from_envvars(conf):
                             )
                         )
                     if attrs.get("deprecated", False):
-                        logger.warn(
+                        logger.warning(
                             "Option {optname} in section [{section}] is deprecated, please remove it from your options.ini file".format(
                                 optname=optname, section=section
                             )
@@ -838,7 +855,7 @@ def _set_from_deprecated_aliases(conf):
         for optname, attrs in opts.items():
             for alias in attrs.get("deprecated_aliases", ()):
                 if alias in conf[section]:
-                    logger.warn(
+                    logger.warning(
                         deprecation_warning.format(
                             optname=optname,
                             section=section,
@@ -870,7 +887,7 @@ def read_options_file(ini_filename="options.ini"):
                 and section in conf
                 and optname in conf[section]
             ):
-                logger.warn(
+                logger.warning(
                     "Option {optname} in section [{section}] is deprecated, please remove it from your options.ini file".format(
                         optname=optname, section=section
                     )
@@ -929,7 +946,7 @@ def read_options_file(ini_filename="options.ini"):
         # determine whether the extra item is a section (dict) or value
         kind = "section" if isinstance(the_value, dict) else "option"
 
-        logger.warn(
+        logger.warning(
             "Ignoring unknown {kind} in options file {file} under {section}: {name}.".format(
                 kind=kind,
                 file=ini_path,

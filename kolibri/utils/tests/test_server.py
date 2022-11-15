@@ -25,15 +25,7 @@ class TestServerInstallation(object):
         assert install_type == installation_types.PEX
 
     def test_dev(self):
-        sys_args = [
-            "kolibri",
-            "--debug",
-            "manage",
-            "runserver",
-            "--settings=kolibri.deployment.default.settings.dev",
-            '"0.0.0.0:8000"',
-        ]
-        with mock.patch("sys.argv", sys_args):
+        with mock.patch("os.environ", {"KOLIBRI_DEVELOPER_MODE": "True"}):
             install_type = server.installation_type()
             assert install_type == "devserver"
 
@@ -102,7 +94,7 @@ def job_storage():
 
 class TestServerServices(object):
     @mock.patch("kolibri.core.deviceadmin.tasks.schedule_vacuum")
-    @mock.patch("kolibri.core.analytics.utils.schedule_ping")
+    @mock.patch("kolibri.core.analytics.tasks.schedule_ping")
     @mock.patch("kolibri.core.tasks.main.initialize_workers")
     @mock.patch("kolibri.core.discovery.utils.network.broadcast.KolibriBroadcast")
     def test_required_services_initiate_on_start(
@@ -145,7 +137,7 @@ class TestServerServices(object):
 
             # Currently, we must have exactly four scheduled jobs
             # two userdefined and two server defined (pingback and vacuum)
-            from kolibri.core.analytics.utils import DEFAULT_PING_JOB_ID
+            from kolibri.core.analytics.tasks import DEFAULT_PING_JOB_ID
             from kolibri.core.deviceadmin.tasks import SCH_VACUUM_JOB_ID
 
             assert len(job_storage) == 4
@@ -205,6 +197,7 @@ class TestZeroConfPlugin(object):
         mock_kolibri_broadcast.assert_not_called()
 
         zeroconf_plugin.SERVING(1234)
+        zeroconf_plugin.RUN()
 
         # Do we register ourselves on zeroconf?
         mock_kolibri_broadcast.assert_called()

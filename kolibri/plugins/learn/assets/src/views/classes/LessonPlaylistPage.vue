@@ -1,44 +1,48 @@
 <template>
 
-  <div>
-    <KBreadcrumbs :items="breadcrumbs" />
-    <section class="lesson-details">
-      <div>
-        <ContentIcon
-          kind="lesson"
-          class="lesson-icon"
-        />
-        <h1 dir="auto" class="title">
-          {{ currentLesson.title }}
-          <ProgressIcon
-            v-if="lessonHasResources"
-            class="progress-icon"
-            :progress="lessonProgress"
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+  >
+    <div id="main" role="main">
+      <KBreadcrumbs :items="breadcrumbs" :ariaLabel="learnString('classesAndAssignmentsLabel')" />
+      <section class="lesson-details">
+        <div>
+          <ContentIcon
+            kind="lesson"
+            class="lesson-icon"
           />
-        </h1>
-      </div>
-      <div v-if="currentLesson.description !== ''">
-        <h3>{{ $tr('teacherNote') }}</h3>
-        <p dir="auto">
-          {{ currentLesson.description }}
-        </p>
-      </div>
-    </section>
+          <h1 dir="auto" class="title">
+            {{ currentLesson.title }}
+            <ProgressIcon
+              v-if="lessonHasResources"
+              class="progress-icon"
+              :progress="lessonProgress"
+            />
+          </h1>
+        </div>
+        <div v-if="currentLesson.description !== ''">
+          <h3>{{ $tr('teacherNote') }}</h3>
+          <p dir="auto">
+            {{ currentLesson.description }}
+          </p>
+        </div>
+      </section>
 
-    <section v-if="contentNodes && contentNodes.length" class="content-cards">
-      <HybridLearningLessonCard
-        v-for="content in contentNodes"
-        :key="content.id"
-        :content="content"
-        class="content-card"
-        :isMobile="windowIsSmall"
-        :link="genContentLink(content)"
-      />
-      <p v-if="!lessonHasResources" class="no-resources-message">
-        {{ $tr('noResourcesInLesson') }}
-      </p>
-    </section>
-  </div>
+      <section v-if="contentNodes && contentNodes.length" class="content-cards">
+        <HybridLearningLessonCard
+          v-for="content in contentNodes"
+          :key="content.id"
+          :content="content"
+          class="content-card"
+          :isMobile="windowIsSmall"
+          :link="genContentLink(content)"
+        />
+        <p v-if="!lessonHasResources" class="no-resources-message">
+          {{ $tr('noResourcesInLesson') }}
+        </p>
+      </section>
+    </div>
+  </LearnAppBarPage>
 
 </template>
 
@@ -54,6 +58,8 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import genContentLink from '../../utils/genContentLink';
   import { PageNames, ClassesPageNames } from '../../constants';
+  import commonLearnStrings from './../commonLearnStrings';
+  import LearnAppBarPage from './../LearnAppBarPage';
   import HybridLearningLessonCard from './../HybridLearningLessonCard';
 
   export default {
@@ -68,8 +74,9 @@
       HybridLearningLessonCard,
       ContentIcon,
       ProgressIcon,
+      LearnAppBarPage,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings, commonLearnStrings, responsiveWindowMixin],
     computed: {
       ...mapState('lessonPlaylist', ['contentNodes', 'currentLesson']),
       lessonHasResources() {
@@ -89,26 +96,28 @@
         return undefined;
       },
       breadcrumbs() {
-        return [
-          {
-            text: this.coreString('homeLabel'),
-            link: { name: PageNames.HOME },
-          },
-          {
-            text: this.coreString('classesLabel'),
-            link: { name: ClassesPageNames.ALL_CLASSES },
-          },
-          {
-            text: this.currentLesson.classroom.name,
-            link: {
-              name: ClassesPageNames.CLASS_ASSIGNMENTS,
-              params: { classId: this.currentLesson.classroom.id },
-            },
-          },
-          {
-            text: this.currentLesson.title,
-          },
-        ];
+        return this.currentLesson && this.currentLesson.classroom
+          ? [
+              {
+                text: this.coreString('homeLabel'),
+                link: { name: PageNames.HOME },
+              },
+              {
+                text: this.coreString('classesLabel'),
+                link: { name: ClassesPageNames.ALL_CLASSES },
+              },
+              {
+                text: this.currentLesson.classroom.name,
+                link: {
+                  name: ClassesPageNames.CLASS_ASSIGNMENTS,
+                  params: { classId: this.currentLesson.classroom.id },
+                },
+              },
+              {
+                text: this.currentLesson.title,
+              },
+            ]
+          : [];
       },
       backRoute() {
         return this.$route.name;

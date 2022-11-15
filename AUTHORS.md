@@ -5,7 +5,7 @@ Kolibri is copyrighted by Learning Equality under the MIT License.
 If you have contributed to Kolibri, feel free to add your name and Github account to this list:
 
 | Name | Github user |
-|------|-------------|
+|--|-------------|
 | Eli Dai | 66eli77 |
 | Adam Stasiw | AdamStasiw |
 | Akshay Mahajan | akshaymahajans |
@@ -49,6 +49,7 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Jessica Aceret | jtamiace |
 | Julián Duque | julianduque |
 | Karla Avila | k2avila |
+| Maxime Brunet | maxbrunet |
 | Mrinal Kumar | kmrinal19 |
 | Kevin Ollivier | kollivier |
 | Paul Luna | luna215 |
@@ -85,3 +86,6 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Carol Willing | willingc |
 | Yash Jipkate | YashJipkate |
 | Yixuan Liu | yil039 |
+| Jaideep Sharma | camperjett |
+| Allan Otodi | AllanOXDi |
+| Liana Harris | LianaHarris360 |

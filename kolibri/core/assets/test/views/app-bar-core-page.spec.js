@@ -1,6 +1,6 @@
 import { createLocalVue, mount } from '@vue/test-utils';
 import Vuex from 'vuex';
-import AppBarCorePage from '../../src/views/AppBarCorePage';
+import AppBarPage from '../../src/views/CorePage/AppBarPage';
 
 const localVue = createLocalVue();
 localVue.use(Vuex);
@@ -10,8 +10,12 @@ const store = new Vuex.Store({
   },
 });
 
+store.state.core = {
+  loading: false,
+};
+
 function createWrapper({ propsData = {}, slots = {} } = {}) {
-  return mount(AppBarCorePage, {
+  return mount(AppBarPage, {
     propsData,
     slots,
     stubs: ['CoreMenu'],
@@ -20,7 +24,7 @@ function createWrapper({ propsData = {}, slots = {} } = {}) {
   });
 }
 
-describe('AppBarCorePage', () => {
+describe('AppBarPage', () => {
   describe('AppBar & optional sub-nav slot display', () => {
     it('should render the AppBar component with the given title prop', () => {
       const wrapper = createWrapper({ propsData: { title: 'Test Title' } });

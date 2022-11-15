@@ -1,6 +1,7 @@
 import client from 'kolibri.client';
 import urls from 'kolibri.urls';
 import { currentLanguage, createTranslator } from 'kolibri.utils.i18n';
+import redirectBrowser from 'kolibri.utils.redirectBrowser';
 import { Presets, permissionPresets } from '../constants';
 import { FacilityImportResource } from '../api';
 
@@ -13,6 +14,7 @@ const SetupStrings = createTranslator('SetupStrings', {
 });
 
 export default {
+  namespace: 'SetupWizard',
   state() {
     return {
       started: false,
@@ -71,9 +73,6 @@ export default {
     provisionDevice(store) {
       const onboardingData = store.state.onboardingData;
 
-      // Make a copy so data is available when 'kolibriLogin' is called
-      const superuser = { ...onboardingData.superuser };
-
       // Strip out onboarding data so serializer can apply defaults
       if (onboardingData.preset === Presets.PERSONAL) {
         onboardingData.settings = {};
@@ -90,9 +89,8 @@ export default {
         data: onboardingData,
         method: 'post',
       }).then(
-        response => {
-          superuser.facility = response.data.facility.id;
-          store.dispatch('kolibriLogin', superuser);
+        () => {
+          redirectBrowser();
         },
         error => {
           store.commit('SET_ERROR', true);

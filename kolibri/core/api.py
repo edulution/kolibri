@@ -6,7 +6,6 @@ from django.http.request import QueryDict
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter
-from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import CreateModelMixin as BaseCreateModelMixin
 from rest_framework.mixins import DestroyModelMixin
 from rest_framework.mixins import UpdateModelMixin as BaseUpdateModelMixin
@@ -18,10 +17,10 @@ from rest_framework.serializers import UUIDField
 from rest_framework.serializers import ValidationError
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.status import HTTP_503_SERVICE_UNAVAILABLE
-from six.moves.urllib.parse import urljoin
 
 from .utils.portal import registerfacility
 from kolibri.core.auth.models import Facility
+from kolibri.core.utils.urls import join_url
 from kolibri.utils import conf
 
 
@@ -41,7 +40,7 @@ class KolibriDataPortalViewSet(viewsets.ViewSet):
         try:
             # token is in query params
             response = requests.get(
-                urljoin(
+                join_url(
                     PORTAL_URL, "portal/api/public/v1/registerfacility/validate_token"
                 ),
                 params=request.query_params,
@@ -214,27 +213,6 @@ class BaseValuesViewset(viewsets.GenericViewSet):
 
         return {self.lookup_field: self.kwargs[lookup_url_kwarg]}
 
-    def _get_object_from_queryset(self, queryset):
-        """
-        Returns the object the view is displaying.
-        We override this to remove the DRF default behaviour
-        of filtering the queryset.
-        (rtibbles) There doesn't seem to be a use case for
-        querying a detail endpoint and also filtering by query
-        parameters that might result in a 404.
-        """
-        # Perform the lookup filtering.
-        filter_kwargs = self._get_lookup_filter()
-        obj = get_object_or_404(queryset, **filter_kwargs)
-
-        # May raise a permission denied
-        self.check_object_permissions(self.request, obj)
-
-        return obj
-
-    def get_object(self):
-        return self._get_object_from_queryset(self.get_queryset())
-
     def annotate_queryset(self, queryset):
         return queryset
 
@@ -259,10 +237,10 @@ class BaseValuesViewset(viewsets.GenericViewSet):
         )
 
     def serialize_object(self, **filter_kwargs):
-        queryset = self.get_queryset()
         try:
             filter_kwargs = filter_kwargs or self._get_lookup_filter()
-            return self.serialize(queryset.filter(**filter_kwargs))[0]
+            queryset = self.get_queryset().filter(**filter_kwargs)
+            return self.serialize(self.filter_queryset(queryset))[0]
         except (IndexError, ValueError, TypeError):
             raise Http404(
                 "No %s matches the given query." % queryset.model._meta.object_name

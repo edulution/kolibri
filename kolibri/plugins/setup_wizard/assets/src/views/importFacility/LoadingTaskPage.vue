@@ -1,7 +1,9 @@
 <template>
 
-  <OnboardingForm
-    :header="header"
+  <OnboardingStepBase
+    :title="header"
+    :navDisabled="!['COMPLETED', 'FAILED'].includes(loadingTask.status)"
+    @continue="$emit('click_next')"
   >
     <FacilityTaskPanel
       v-if="loadingTask.status"
@@ -16,47 +18,40 @@
         @click="handleClickContinue"
       />
       <template v-else-if="loadingTask.status === 'FAILED'">
-        <KButtonGroup>
-          <KButton
-            primary
-            :text="coreString('retryAction')"
-            @click="retryImport"
-          />
-          <KButton
-            :text="coreString('startOverAction')"
-            appearance="flat-button"
-            @click="startOver"
-          />
-        </KButtonGroup>
+        <KButton
+          :text="coreString('startOverAction')"
+          appearance="flat-button"
+          @click="startOver"
+        />
+        <KButton
+          primary
+          :text="coreString('retryAction')"
+          @click="retryImport"
+        />
       </template>
       <span v-else></span>
     </template>
-  </OnboardingForm>
+  </OnboardingStepBase>
 
 </template>
 
 
 <script>
 
+  import { FacilityTaskPanel } from 'kolibri.coreVue.componentSets.sync';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import FacilityTaskPanel from '../../../../../device/assets/src/views/FacilitiesPage/FacilityTaskPanel.vue';
-  import OnboardingForm from '../onboarding-forms/OnboardingForm';
-  import { SetupTasksResource } from '../../api';
+  import { TaskResource } from 'kolibri.resources';
+  import OnboardingStepBase from '../OnboardingStepBase';
 
   export default {
     name: 'LoadingTaskPage',
     components: {
       FacilityTaskPanel,
-      OnboardingForm,
+      OnboardingStepBase,
     },
-    mixins: [commonCoreStrings, commonSyncElements],
+    mixins: [commonCoreStrings],
     props: {
       facility: {
-        type: Object,
-        required: true,
-      },
-      device: {
         type: Object,
         required: true,
       },
@@ -69,7 +64,7 @@
     },
     computed: {
       header() {
-        return this.$tr('loadingFacilityTitle', { facility: this.facilityName });
+        return this.$tr('importFacilityTitle');
       },
       facilityName() {
         return this.facility.name;
@@ -81,10 +76,12 @@
     },
     methods: {
       pollTask() {
-        SetupTasksResource.fetchCollection({ force: true }).then(tasks => {
+        TaskResource.list({ queue: 'facility_task' }).then(tasks => {
           this.loadingTask = {
             ...tasks[0],
-            facility_name: this.facilityName,
+            extra_metadata: {
+              facility_name: this.facilityName,
+            },
           };
         });
         if (this.isPolling) {
@@ -94,34 +91,21 @@
         }
       },
       retryImport() {
-        this.clearTasks()
-          .then(() => {
-            return this.startPeerImportTask({
-              facility_name: this.facilityName,
-              facility: this.facility.id,
-              baseurl: this.device.baseurl,
-              username: this.facility.username,
-              password: this.facility.password,
-            });
-          })
-          .catch(error => {
-            this.$store.dispatch('handleApiError', error);
-          });
+        TaskResource.restart(this.loadingTask.id).catch(error => {
+          this.$store.dispatch('handleApiError', error);
+        });
       },
       cancelTask() {
-        return SetupTasksResource.canceltask(this.loadingTask.id);
+        return TaskResource.cancel(this.loadingTask.id);
       },
       startOver() {
         this.isPolling = false;
         this.clearTasks().then(() => {
-          this.goToRootUrl();
+          this.$emit('start_over');
         });
       },
-      goToRootUrl() {
-        this.$router.replace('/');
-      },
       clearTasks() {
-        return SetupTasksResource.cleartasks();
+        return TaskResource.clearAll();
       },
       handleClickContinue() {
         this.isPolling = false;
@@ -130,9 +114,10 @@
       },
     },
     $trs: {
-      loadingFacilityTitle: {
-        message: "Loading '{facility}'",
-        context: 'Page title indicating that the facility is loading.',
+      importFacilityTitle: {
+        message: 'Import learning facility',
+        context:
+          'Title of a page where user will sign in to a remote facility to begin the syncing process',
       },
     },
   };

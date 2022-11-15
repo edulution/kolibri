@@ -1,44 +1,49 @@
 <template>
 
-  <div>
-    <p class="instructions">
-      {{ $tr('instructions') }}
-    </p>
+  <ImmersivePage
+    :appBarTitle="$tr('editChannelOrderTitle')"
+    :route="backRoute"
+  >
+    <KPageContainer class="device-container">
+      <p class="instructions">
+        {{ $tr('instructions') }}
+      </p>
 
-    <p v-if="!loading && channels.length === 0">
-      {{ $tr('noChannels') }}
-    </p>
+      <p v-if="!loading && channels.length === 0">
+        {{ $tr('noChannels') }}
+      </p>
 
-    <template v-else>
-      <DragContainer class="container" :items="channels" @sort="handleOrderChange">
-        <transition-group tag="div" name="list" class="wrapper">
-          <Draggable v-for="(channel, index) in channels" :key="channel.id">
-            <DragHandle>
-              <div
-                :class="$computedClass(itemClass)"
-                class="item"
-                :style="{ backgroundColor: $themeTokens.surface }"
-              >
-                <DragSortWidget
-                  class="sort-widget"
-                  :moveUpText="$tr('upLabel', { name: channel.name })"
-                  :moveDownText="$tr('downLabel', { name: channel.name })"
-                  :isFirst="index === 0"
-                  :isLast="index === channels.length - 1"
-                  @moveUp="shiftOne(index, -1)"
-                  @moveDown="shiftOne(index, +1)"
-                />
-                <div class="title">
-                  {{ channel.name }}
+      <template v-else>
+        <DragContainer class="container" :items="channels" @sort="handleOrderChange">
+          <transition-group tag="div" name="list" class="wrapper">
+            <Draggable v-for="(channel, index) in channels" :key="channel.id">
+              <DragHandle>
+                <div
+                  :class="$computedClass(itemClass)"
+                  class="item"
+                  :style="{ backgroundColor: $themeTokens.surface }"
+                >
+                  <DragSortWidget
+                    class="sort-widget"
+                    :moveUpText="$tr('upLabel', { name: channel.name })"
+                    :moveDownText="$tr('downLabel', { name: channel.name })"
+                    :isFirst="index === 0"
+                    :isLast="index === channels.length - 1"
+                    @moveUp="shiftOne(index, -1)"
+                    @moveDown="shiftOne(index, +1)"
+                  />
+                  <div class="title">
+                    {{ channel.name }}
+                  </div>
                 </div>
-              </div>
-            </DragHandle>
-          </Draggable>
-        </transition-group>
-      </DragContainer>
-    </template>
+              </DragHandle>
+            </Draggable>
+          </transition-group>
+        </DragContainer>
+      </template>
 
-  </div>
+    </KPageContainer>
+  </ImmersivePage>
 
 </template>
 
@@ -51,13 +56,16 @@
   import Draggable from 'kolibri.coreVue.components.Draggable';
   import client from 'kolibri.client';
   import urls from 'kolibri.urls';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import DeviceChannelResource from '../apiResources/deviceChannel';
+  import useContentTasks from '../composables/useContentTasks';
+  import { PageNames } from '../constants';
 
   export default {
     name: 'RearrangeChannelsPage',
     metaInfo() {
       return {
-        title: this.$tr('title'),
+        title: this.$tr('editChannelOrderTitle'),
       };
     },
     components: {
@@ -65,6 +73,10 @@
       DragContainer,
       DragHandle,
       Draggable,
+      ImmersivePage,
+    },
+    setup() {
+      useContentTasks();
     },
     data() {
       return {
@@ -73,6 +85,9 @@
       };
     },
     computed: {
+      backRoute() {
+        return { name: PageNames.MANAGE_CONTENT_PAGE };
+      },
       itemClass() {
         return {
           ':hover': {
@@ -94,7 +109,7 @@
           this.$store.disptch('CORE_SET_ERROR', error);
         });
 
-      this.$store.commit('coreBase/SET_APP_BAR_TITLE', this.$tr('title'));
+      this.$store.commit('coreBase/SET_APP_BAR_TITLE', this.$tr('editChannelOrderTitle'));
     },
     methods: {
       postNewOrder(channelIds) {
@@ -166,7 +181,7 @@
         message: 'Move {name} down one',
         context: 'Label to rearrange channel order. Not seen on UI.',
       },
-      title: {
+      editChannelOrderTitle: {
         message: 'Edit channel order',
         context:
           "Title of the 'Edit channel order' page where users can rearrange the order in which channels will be displayed to learners and coaches.",
@@ -180,6 +195,11 @@
 <style lang="scss" scoped>
 
   @import '~kolibri-design-system/lib/styles/definitions';
+  @import '../styles/definitions';
+
+  .device-container {
+    @include device-kpagecontainer;
+  }
 
   .instructions {
     margin-bottom: 32px;

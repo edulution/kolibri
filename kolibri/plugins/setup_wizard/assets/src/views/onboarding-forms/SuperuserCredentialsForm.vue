@@ -1,10 +1,10 @@
 <template>
 
-  <OnboardingForm
-    :header="$attrs.header || $tr('adminAccountCreationHeader')"
+  <OnboardingStepBase
+    dir="auto"
+    :title="$attrs.header || $tr('adminAccountCreationHeader')"
     :description="$attrs.description || $tr('adminAccountCreationDescription')"
-    :submitText="submitText"
-    @submit="handleSubmit"
+    @continue="handleContinue"
   >
     <slot name="aboveform"></slot>
 
@@ -50,11 +50,11 @@
           <KIcon icon="warning" />
         </div>
         <p class="text">
-          {{ $tr('rememberThisAccountInformation') }}
+          {{ coreString('rememberThisAccountInformation') }}
         </p>
       </div>
     </slot>
-  </OnboardingForm>
+  </OnboardingStepBase>
 
 </template>
 
@@ -62,28 +62,27 @@
 <script>
 
   import every from 'lodash/every';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import FullNameTextbox from 'kolibri.coreVue.components.FullNameTextbox';
   import UsernameTextbox from 'kolibri.coreVue.components.UsernameTextbox';
   import PasswordTextbox from 'kolibri.coreVue.components.PasswordTextbox';
   import PrivacyLinkAndModal from 'kolibri.coreVue.components.PrivacyLinkAndModal';
-  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import OnboardingForm from './OnboardingForm';
+  import OnboardingStepBase from '../OnboardingStepBase';
+  import { UsePresets } from '../../constants';
+  import { FacilityImportResource } from '../../api';
 
   export default {
     name: 'SuperuserCredentialsForm',
     components: {
-      OnboardingForm,
+      OnboardingStepBase,
       FullNameTextbox,
       UsernameTextbox,
       PasswordTextbox,
       PrivacyLinkAndModal,
     },
     mixins: [commonCoreStrings],
+    inject: ['wizardService'],
     props: {
-      isFinalStep: {
-        type: Boolean,
-        default: false,
-      },
       uniqueUsernameValidator: {
         type: Function,
         default: null,
@@ -109,35 +108,46 @@
       formIsValid() {
         return every([this.usernameValid, this.fullNameValid, this.passwordValid]);
       },
-      submitText() {
-        return this.isFinalStep
-          ? this.coreString('finishAction')
-          : this.coreString('continueAction');
-      },
     },
     methods: {
-      handleSubmit() {
-        if (!this.$refs.fullNameTextbox) {
-          return this.$emit('click_next');
+      isOnMyOwnSetup() {
+        return this.wizardService.state.context.onMyOwnOrGroup == UsePresets.ON_MY_OWN;
+      },
+      handleContinue() {
+        /**
+         * Partially provision the device
+         * Create SuperUser
+         * Continue
+         * TODO: Not sure "Facility" and "Device" are the best default names here -- will need to
+         * get the OS user's info I think.
+         */
+        const facilityUserData = {
+          fullName: this.fullName,
+          username: this.username,
+          password: this.password,
+          facility_name: this.$store.state.onboardingData.facility.name,
+          extra_fields: {
+            on_my_own_setup: this.isOnMyOwnSetup(),
+          },
+        };
+        if (this.formIsValid) {
+          return FacilityImportResource.createsuperuser(facilityUserData)
+            .then(() => {
+              const deviceProvisioningData = {
+                device_name: this.wizardService.state.context.deviceName,
+                language_id: this.$store.state.onboardingData.language_id,
+                is_provisioned: true,
+              };
+              FacilityImportResource.provisiondevice(deviceProvisioningData).then(() =>
+                this.wizardService.send('CONTINUE')
+              );
+            })
+            .catch(e => {
+              throw new Error(`Error creating superuser: ${e}`);
+            });
+        } else {
+          this.focusOnInvalidField();
         }
-        this.formSubmitted = true;
-        // Have to wait a tick to let inputs react to this.formSubmitted
-        this.$nextTick().then(() => {
-          if (this.formIsValid) {
-            this.$store.commit('SET_SUPERUSER_CREDENTIALS', {
-              full_name: this.fullName,
-              username: this.username,
-              password: this.password,
-            });
-            this.$emit('click_next', {
-              full_name: this.fullName,
-              username: this.username,
-              password: this.password,
-            });
-          } else {
-            this.focusOnInvalidField();
-          }
-        });
       },
       focusOnInvalidField() {
         this.$nextTick().then(() => {
@@ -153,7 +163,7 @@
     },
     $trs: {
       adminAccountCreationHeader: {
-        message: 'Create super admin account',
+        message: 'Create super admin',
         context:
           "The title of the 'Create a super admin account' section. A super admin can manage all the content and all other Kolibri users on the device.",
       },
@@ -161,11 +171,6 @@
         message:
           'This account allows you to manage the facility, resources, and user accounts on this device',
         context: "Description of the 'Create super admin account' page.",
-      },
-      rememberThisAccountInformation: {
-        message: 'Important: please remember this account information. Write it down if needed',
-        context:
-          'Helper/information text to remind admin to take note of their account information.',
       },
     },
   };

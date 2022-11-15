@@ -13,7 +13,6 @@ import Vuex from 'vuex';
 import { i18nSetup } from 'kolibri.utils.i18n';
 import KThemePlugin from 'kolibri-design-system/lib/KThemePlugin';
 import KContentPlugin from 'kolibri-design-system/lib/content/KContentPlugin';
-import KSelect from '../../../kolibri/core/assets/src/views/KSelect';
 
 global.beforeEach(() => {
   return new Promise(resolve => {
@@ -38,7 +37,6 @@ Vue.use(VueMeta);
 Vue.use(KThemePlugin);
 Vue.use(KContentPlugin);
 Vue.use(VueCompositionApi);
-Vue.component('KSelect', KSelect);
 
 Vue.config.silent = true;
 Vue.config.devtools = false;
@@ -60,9 +58,11 @@ process.on('unhandledRejection', (reason, p) => {
   console.log(reason.stack);
 });
 
+const scheduler = typeof setImmediate === 'function' ? setImmediate : setTimeout;
+
 // Copied from https://github.com/kentor/flush-promises/blob/f33ac564190c784019f1f689dd544187f4b77eb2/index.js
 global.flushPromises = function flushPromises() {
   return new Promise(function(resolve) {
-    setImmediate(resolve);
+    scheduler(resolve);
   });
 };

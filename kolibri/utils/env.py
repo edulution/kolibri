@@ -10,13 +10,12 @@ try:
     # TODO: Move version tools to build tools, so we don't have to do this
     from colorlog import ColoredFormatter
     from colorlog import getLogger
-    from colorlog import StreamHandler
 except ImportError:
-    StreamHandler = None
     getLogger = None
     ColoredFormatter = None
 
 from .logger import LOG_COLORS
+from .logger import EncodingStreamHandler as StreamHandler
 from kolibri.utils.compat import monkey_patch_collections
 
 
@@ -66,6 +65,12 @@ ENVIRONMENT_VARIABLES = {
         "description": """
             The PID of the process to listen for signals from -
             used to detect whether running under socket activation under Debian.
+        """,
+    },
+    "KOLIBRI_DISABLE_REQUEST_LOGGING": {
+        "description": """
+            Disable request logging. Set the variable to True/False to turn off/on
+            cherrypy.access logs.
         """,
     },
 }

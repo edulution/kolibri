@@ -3,6 +3,17 @@ import redirectBrowser from 'kolibri.utils.redirectBrowser';
 import ProfilePage from './views/ProfilePage';
 import ProfileEditPage from './views/ProfileEditPage';
 import ChangeFacility from './views/ChangeFacility';
+import ConfirmMerge from './views/ChangeFacility/ConfirmMerge';
+import SelectFacility from './views/ChangeFacility/SelectFacility';
+import ConfirmAccountUsername from './views/ChangeFacility/ConfirmAccountUsername';
+import ConfirmChangeFacility from './views/ChangeFacility/ConfirmChangeFacility';
+import MergeAccountDialog from './views/ChangeFacility/MergeAccountDialog';
+import ConfirmAccountDetails from './views/ChangeFacility/MergeAccountDialog/ConfirmAccountDetails';
+import CreateAccount from './views/ChangeFacility/CreateAccount';
+import ChooseAdmin from './views/ChangeFacility/ChooseAdmin';
+import MergeFacility from './views/ChangeFacility/MergeFacility';
+import UsernameExists from './views/ChangeFacility/UsernameExists';
+import MergeDifferentAccounts from './views/ChangeFacility/MergeDifferentAccounts';
 
 function preload(next) {
   store.commit('CORE_SET_PAGE_LOADING', true);
@@ -40,7 +51,7 @@ export default [
 
   {
     path: '/change_facility',
-    name: 'SELECT_FACILITY',
+    name: 'CHANGE_FACILITY',
     component: ChangeFacility,
     beforeEnter(to, from, next) {
       if (!store.getters.isUserLoggedIn) {
@@ -52,68 +63,64 @@ export default [
     children: [
       {
         path: 'change',
-        name: 'CHANGE_FACILITY',
-        component: ChangeFacility,
+        name: 'SELECT_FACILITY',
+        component: SelectFacility,
       },
       {
+        path: 'confirm_change',
+        name: 'CONFIRM_CHANGE_FACILITY',
+        component: ConfirmChangeFacility,
+      },
+
+      {
         path: 'confirm_account',
-        name: 'CONFIRM_ACCOUNT',
-        component: ChangeFacility,
+        name: 'CONFIRM_ACCOUNT_USERNAME',
+        component: ConfirmAccountUsername,
       },
       {
         path: 'choose_admin',
         name: 'CHOOSE_ADMIN',
-        component: ChangeFacility,
+        component: ChooseAdmin,
       },
       {
         path: 'confirm_merge',
         name: 'CONFIRM_MERGE',
-        component: ChangeFacility,
+        component: ConfirmMerge,
       },
       {
         path: 'syncing_change_facility',
         name: 'SYNCING_CHANGE_FACILITY',
-        component: ChangeFacility,
+        component: MergeFacility,
       },
       {
         path: 'create_account',
         name: 'CREATE_ACCOUNT',
-        component: ChangeFacility,
+        component: CreateAccount,
       },
       {
         path: 'username_exists',
         name: 'USERNAME_EXISTS',
-        component: ChangeFacility,
+        component: UsernameExists,
       },
       {
         path: 'require_account_credentials',
         name: 'REQUIRE_ACCOUNT_CREDENTIALS',
-        component: ChangeFacility,
+        component: MergeAccountDialog,
       },
       {
         path: 'admin_password',
         name: 'ADMIN_PASSWORD',
-        component: ChangeFacility,
-      },
-      {
-        path: 'show_accounts',
-        name: 'SHOW_ACCOUNTS',
-        component: ChangeFacility,
+        component: MergeAccountDialog,
       },
       {
         path: 'show_accounts',
         name: 'CONFIRM_DETAILS',
-        component: ChangeFacility,
-      },
-      {
-        path: 'show_accounts',
-        name: 'EDIT_DETAILS',
-        component: ChangeFacility,
+        component: ConfirmAccountDetails,
       },
       {
         path: 'merge_accounts',
         name: 'MERGE_ACCOUNTS',
-        component: ChangeFacility,
+        component: MergeDifferentAccounts,
       },
     ],
   },

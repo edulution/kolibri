@@ -1,77 +1,132 @@
-import { assign, createMachine, interpret } from 'xstate';
+import { assign, createMachine } from 'xstate';
+import reduce from 'lodash/reduce';
+import { checkCapability } from 'kolibri.utils.appCapabilities';
+import { UsePresets } from '../constants';
 
-const isIndividualSetup = context => {
-  return context.individualOrGroup === 'individual';
+const isOnMyOwnOrGroup = context => {
+  return context.onMyOwnOrGroup === UsePresets.ON_MY_OWN;
 };
 
 const isGroupSetup = context => {
-  return context.individualOrGroup === 'group';
+  return context.onMyOwnOrGroup === UsePresets.GROUP;
 };
 
-const isAppContext = context => {
-  return context.appContext;
+const canGetOsUser = context => {
+  return context.canGetOsUser;
 };
 
 const isNewFacility = context => {
-  return context.facilityNewOrImport === 'new';
+  return context.facilityNewOrImport === 'NEW';
 };
 
 const isImportFacility = context => {
-  return context.facilityNewOrImport === 'import';
+  return context.facilityNewOrImport === 'IMPORT';
 };
 
 const isLodSetup = context => {
-  return context.setupType === 'lod';
+  return context.fullOrLOD === 'LOD';
 };
 
 const isFullSetup = context => {
-  return context.setupType === 'full';
+  return context.fullOrLOD === 'FULL';
 };
 
-const setIndividualOrGroup = assign({
-  individualOrGroup: (_, event) => event.value,
+const setOnMyOwnOrGroup = assign({
+  onMyOwnOrGroup: (_, event) => event.value,
 });
 
-const setSetupType = assign({
-  setupType: (_, event) => event.value,
+const setDeviceName = assign({
+  deviceName: (_, event) => event.value,
 });
 
-const setAppContext = assign({
-  isAppContext: (_, event) => event.value,
+const setFullOrLOD = assign({
+  fullOrLOD: (_, event) => event.value,
+});
+
+const setCanGetOsUser = assign({
+  canGetOsUser: (_, event) => event.value,
 });
 
 const setFacilityNewOrImport = assign({
   facilityNewOrImport: (_, event) => event.value,
 });
 
+const setFormalOrNonformal = assign({
+  formalOrNonformal: (_, event) => event.value,
+});
+
+const setGuestAccess = assign({
+  guestAccess: (_, event) => event.value,
+});
+
+const setCreateLearnerAccount = assign({
+  createLearnerAccount: (_, event) => event.value,
+});
+
+const setRequirePassword = assign({
+  requirePassword: (_, event) => event.value,
+});
+
+const initialContext = {
+  onMyOwnOrGroup: null,
+  canGetOsUser: checkCapability('get_os_user'),
+  facilityNewOrImport: null,
+  fullOrLOD: null,
+  deviceName: 'default-device-name',
+  formalOrNonformal: null,
+  guestAccess: null,
+  createLearnerAccount: null,
+  requirePassword: null,
+};
+
+/**
+ * Assigns the machine to have the initial context again while maintaining the value of
+ * canGetOsUser.
+ *
+ * This effectively resets the machine's state
+ */
+const resetContext = assign({
+  ...reduce(
+    initialContext,
+    (result, value, key) => {
+      if (key === 'canGetOsUser') {
+        // This won't change because of starting over
+        result[key] = context => context.canGetOsUser;
+      } else {
+        result[key] = () => value;
+      }
+      return result;
+    },
+    {}
+  ),
+});
+
 export const wizardMachine = createMachine({
   id: 'wizard',
   initial: 'initializeContext',
-  context: {
-    individualOrGroup: null,
-    isAppContext: false, // Must be set in the component where the machine is used
-    facilityNewOrImport: null,
-    setupType: null,
+  context: initialContext,
+  on: {
+    START_OVER: { target: 'howAreYouUsingKolibri', action: resetContext },
   },
   states: {
-    // This state will be the start so the machine won't progress until the isAppContext is set
+    // This state will be the start so the machine won't progress until the canGetOsUser is set
     initializeContext: {
       on: {
-        CONTINUE: { target: 'howAreYouUsingKolibri', actions: setAppContext },
+        CONTINUE: { target: 'howAreYouUsingKolibri', actions: setCanGetOsUser },
       },
     },
-    // Initial step where user selects between "On my own" (individual) or "Group learning" (group)
+    // Initial step where user selects between "On my own" or "Group learning"
     howAreYouUsingKolibri: {
-      meta: { route: 'HOW_ARE_YOU_USING_KOLIBRI', path: '/' },
+      meta: { route: { name: 'HOW_ARE_YOU_USING_KOLIBRI', path: '/' } },
       on: {
-        CONTINUE: { target: 'individualOrGroupSetup', actions: setIndividualOrGroup },
+        CONTINUE: { target: 'onMyOwnOrGroupSetup', actions: setOnMyOwnOrGroup },
       },
     },
-    // A passthrough step depending on the value of context.individualOrGroup
-    individualOrGroupSetup: {
+    // A passthrough step depending on the value of context.onMyOwnOrGroup
+    onMyOwnOrGroupSetup: {
       always: [
         {
-          cond: isIndividualSetup,
+          cond: isOnMyOwnOrGroup,
           target: 'defaultLanguage',
         },
         {
@@ -81,30 +136,29 @@ export const wizardMachine = createMachine({
       ],
     },
 
-    // The Individual path
+    // The On My Own path
     defaultLanguage: {
-      meta: { route: 'DEFAULT_LANGUAGE' },
+      meta: { route: { name: 'DEFAULT_LANGUAGE', path: 'default-language' } },
       on: {
         CONTINUE: 'createAccountOrFinalizeSetup',
         BACK: 'howAreYouUsingKolibri',
       },
     },
-    // A passthrough step depending on the value of context.isAppContext
+    // A passthrough step depending on the value of context.canGetOsUser
     createAccountOrFinalizeSetup: {
       always: [
         {
-          // FIXME: The app needs to create a user account from the OS user in this case - to be
-          // handled on the backend most likely, but just bear this in mind for now to be sure
-          cond: isAppContext,
+          cond: canGetOsUser,
           target: 'finalizeSetup',
         },
         {
-          target: 'createIndividualAccount',
+          target: 'createOnMyOwnAccount',
         },
       ],
     },
-    createIndividualAccount: {
-      meta: { route: 'CREATE_INDIVIDUAL_ACCOUNT' },
+
+    createOnMyOwnAccount: {
+      meta: { route: { name: 'CREATE_SUPERUSER_AND_FACILITY', path: 'create-account' } },
       on: {
         CONTINUE: 'finalizeSetup',
         BACK: 'defaultLanguage',
@@ -113,21 +167,21 @@ export const wizardMachine = createMachine({
 
     // The Group path
     deviceName: {
-      meta: { route: 'DEVICE_NAME', path: '/' },
+      meta: { route: { name: 'DEVICE_NAME', path: 'device-name' } },
       on: {
-        CONTINUE: { target: 'fullOrLearnOnlyDevice', actions: setIndividualOrGroup },
+        CONTINUE: { target: 'fullOrLearnOnlyDevice', actions: setDeviceName },
         BACK: 'howAreYouUsingKolibri',
       },
     },
     fullOrLearnOnlyDevice: {
-      meta: { route: 'FULL_OR_LOD' },
+      meta: { route: { name: 'FULL_OR_LOD', path: 'full-or-lod' } },
       on: {
-        CONTINUE: { target: 'fullOrLodSetup', actions: setSetupType },
+        CONTINUE: { target: 'fullOrLodSetup', actions: setFullOrLOD },
         BACK: 'deviceName',
       },
     },
 
-    // A passthrough step depending on the value of context.setupType
+    // A passthrough step depending on the value of context.fullOrLOD
     // that either continues along with full device setup, or into the Lod setup
     fullOrLodSetup: {
       always: [
@@ -144,7 +198,7 @@ export const wizardMachine = createMachine({
 
     // Full Device Path
     fullDeviceNewOrImportFacility: {
-      meta: { route: 'FULL_NEW_OR_IMPORT_FACILITY' },
+      meta: { route: { name: 'FULL_NEW_OR_IMPORT_FACILITY' } },
       on: {
         // FIXME: The component for this step needs to send a value to the machine when making
         // this transition that is 'new' or 'import'
@@ -158,7 +212,7 @@ export const wizardMachine = createMachine({
       always: [
         {
           cond: isNewFacility,
-          target: 'createFacility',
+          target: 'setFacilityPermissions',
         },
         {
           cond: isImportFacility,
@@ -166,15 +220,68 @@ export const wizardMachine = createMachine({
         },
       ],
     },
-    createFacility: {
-      meta: { route: 'CREATE_FACILITY/1' },
-      CONTINUE: 'quickOrAdvanced',
+
+    // Facility Creation Path
+    setFacilityPermissions: {
+      meta: { route: { name: 'FACILITY_PERMISSIONS' } },
       on: {
+        CONTINUE: { target: 'guestAccess', actions: setFormalOrNonformal },
         BACK: 'fullDeviceNewOrImportFacility',
       },
     },
+    guestAccess: {
+      meta: { route: { name: 'GUEST_ACCESS' } },
+      on: {
+        CONTINUE: { target: 'createLearnerAccount', actions: setGuestAccess },
+        BACK: 'setFacilityPermissions',
+      },
+    },
+    createLearnerAccount: {
+      meta: { route: { name: 'CREATE_LEARNER_ACCOUNT' } },
+      on: {
+        CONTINUE: { target: 'requirePassword', action: setCreateLearnerAccount },
+        BACK: 'guestAccess',
+      },
+    },
+    requirePassword: {
+      meta: { route: { name: 'REQUIRE_PASSWORD' } },
+      on: {
+        CONTINUE: { target: 'personalDataConsent', action: setRequirePassword },
+        BACK: 'createLearnerAccount',
+      },
+    },
+    personalDataConsent: {
+      meta: { route: { name: 'PERSONAL_DATA_CONSENT' } },
+      on: {
+        CONTINUE: 'createSuperuserAndFacility',
+        BACK: 'requirePassword',
+      },
+    },
+    // A passthrough step depending on the value of context.canGetOsUser -- the finalizeSetup state
+    // will provision the device with the OS user and create the default facility
+    createSuperuserAndFacility: {
+      always: [
+        {
+          cond: canGetOsUser,
+          target: 'finalizeSetup',
+        },
+        {
+          target: 'createSuperuserAndFacilityForm',
+        },
+      ],
+    },
+
+    // If we're not able to get an OS user, the user creates their account
+    createSuperuserAndFacilityForm: {
+      meta: { route: { name: 'CREATE_SUPERUSER_AND_FACILITY', path: 'create-account' } },
+      on: {
+        CONTINUE: 'finalizeSetup',
+        BACK: 'personalDataConsent',
+      },
+    },
+
     importFacility: {
-      meta: { route: 'IMPORT_FACILITY' },
+      meta: { route: { name: 'IMPORT_FACILITY' } },
       on: {
         BACK: 'fullDeviceNewOrImportFacility',
       },
@@ -183,7 +290,7 @@ export const wizardMachine = createMachine({
     // Lod Path - the lodMachine is imported, interpreted and managed in the Lod Setup component
     // This means that
     importLodUsers: {
-      meta: { route: 'IMPORT_LOD' },
+      meta: { route: { name: 'IMPORT_LOD' } },
       on: {
         BACK: 'fullOrLearnOnlyDevice',
       },
@@ -191,20 +298,7 @@ export const wizardMachine = createMachine({
 
     // This is a dead-end where the router will send the user where they need to go
     finalizeSetup: {
-      meta: { route: 'FINALIZE_SETUP' },
+      meta: { route: { name: 'FINALIZE_SETUP' } },
     },
   },
 });
-
-// Dump the machine to console in dev mode (for now anyway)
-if (process.env.NODE_ENV === 'development') {
-  console.log('=== wizardMachine ===');
-  console.log(
-    'Save the following function as an object, call it and pass an object with initial context ala',
-    ' { isAppContext: Boolean } - the rest of the context should be set through events.\n',
-    'Usage (assuming you saved to `temp1`):\n',
-    'let machine = temp1({ isAppContext: true });\n',
-    "machine.send({ type: 'CONTINUE', value: 'individual'});\n"
-  );
-  console.log((context = {}) => interpret(wizardMachine.withContext(context)).start());
-}

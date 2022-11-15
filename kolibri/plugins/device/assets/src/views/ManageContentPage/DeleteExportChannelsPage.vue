@@ -1,45 +1,50 @@
 <template>
 
-  <div v-if="!loading">
-    <FilteredChannelListContainer
-      :channels="allChannels"
-      :selectedChannels.sync="selectedChannels"
-      :selectAllCheckbox="true"
-    >
-      <template #header>
-        <h1>{{ $tr('channelsOnDevice') }}</h1>
-      </template>
+  <ImmersivePage
+    :appBarTitle="appBarTitle"
+    :route="backRoute"
+  >
+    <KPageContainer class="device-container">
+      <FilteredChannelListContainer
+        :channels="allChannels"
+        :selectedChannels.sync="selectedChannels"
+        :selectAllCheckbox="true"
+      >
+        <template #header>
+          <h1>{{ $tr('channelsOnDevice') }}</h1>
+        </template>
 
-      <template #default="{ showItem, handleChange, itemIsSelected }">
-        <ChannelPanel
-          v-for="channel in allChannels"
-          v-show="showItem(channel)"
-          :key="channel.id"
-          :channel="channel"
-          :selectedMessage="channelSelectedMessage(channel)"
-          :checked="itemIsSelected(channel)"
-          @checkboxchange="handleChange"
-        />
-      </template>
-    </FilteredChannelListContainer>
+        <template #default="{ showItem, handleChange, itemIsSelected }">
+          <ChannelPanel
+            v-for="channel in allChannels"
+            v-show="showItem(channel)"
+            :key="channel.id"
+            :channel="channel"
+            :selectedMessage="channelSelectedMessage(channel)"
+            :checked="itemIsSelected(channel)"
+            @checkboxchange="handleChange"
+          />
+        </template>
+      </FilteredChannelListContainer>
 
-    <component
-      :is="exportMode ? 'SelectDriveModal' : 'DeleteChannelModal'"
-      v-if="showModal"
-      v-bind="modalProps"
-      @cancel="showModal = false"
-      @submit="handleClickModalSubmit"
-    />
+      <component
+        :is="exportMode ? 'SelectDriveModal' : 'DeleteChannelModal'"
+        v-if="showModal"
+        v-bind="modalProps"
+        @cancel="showModal = false"
+        @submit="handleClickModalSubmit"
+      />
 
-    <SelectionBottomBar
-      objectType="channel"
-      :disabled="selectedChannels.length === 0"
-      :actionType="actionType"
-      :selectedObjects="selectedChannels"
-      :fileSize.sync="fileSize"
-      @clickconfirm="handleClickConfirm"
-    />
-  </div>
+      <SelectionBottomBar
+        objectType="channel"
+        :disabled="selectedChannels.length === 0"
+        :actionType="actionType"
+        :selectedObjects="selectedChannels"
+        :fileSize.sync="fileSize"
+        @clickconfirm="handleClickConfirm"
+      />
+    </KPageContainer>
+  </ImmersivePage>
 
 </template>
 
@@ -48,10 +53,14 @@
 
   import { mapGetters } from 'vuex';
   import find from 'lodash/find';
-  import bytesForHumans from 'kolibri.utils.bytesForHumans';
-  import { TaskResource } from 'kolibri.resources';
   import KResponsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
+  import bytesForHumans from 'kolibri.utils.bytesForHumans';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
+  import { TaskResource } from 'kolibri.resources';
+  import { TaskTypes } from 'kolibri.utils.syncTaskUtils';
+  import { PageNames } from '../../constants';
   import DeviceChannelResource from '../../apiResources/deviceChannel';
+  import useContentTasks from '../../composables/useContentTasks';
   import taskNotificationMixin from '../taskNotificationMixin';
   import SelectionBottomBar from './SelectionBottomBar';
   import DeleteChannelModal from './DeleteChannelModal';
@@ -70,11 +79,15 @@
     components: {
       ChannelPanel,
       FilteredChannelListContainer,
+      ImmersivePage,
       SelectionBottomBar,
       DeleteChannelModal,
       SelectDriveModal,
     },
     mixins: [KResponsiveWindowMixin, taskNotificationMixin],
+    setup() {
+      useContentTasks();
+    },
     props: {
       actionType: {
         type: String,
@@ -95,6 +108,12 @@
     },
     computed: {
       ...mapGetters('manageContent', ['channelIsBeingDeleted']),
+      appBarTitle() {
+        return this.exportMode ? this.$tr('exportAppBarTitle') : this.$tr('deleteAppBarTitle');
+      },
+      backRoute() {
+        return { name: PageNames.MANAGE_CONTENT_PAGE };
+      },
       exportMode() {
         return this.actionType === 'export';
       },
@@ -138,11 +157,15 @@
       deleteChannels() {
         const selectedCopy = [...this.selectedChannels];
         this.allChannels = this.allChannels.filter(c => !find(this.selectedChannels, { id: c.id }));
-        return TaskResource.deleteBulkChannels({
-          channelIds: this.selectedChannels.map(x => x.id),
-        })
-          .then(task => {
-            this.notifyAndWatchTask(task);
+        return TaskResource.startTasks(
+          this.selectedChannels.map(x => ({
+            type: TaskTypes.DELETECHANNEL,
+            channel_id: x.id,
+            channel_name: x.name,
+          }))
+        )
+          .then(tasks => {
+            this.notifyAndWatchTask(tasks);
             this.selectedChannels = [];
           })
           .catch(() => {
@@ -153,14 +176,16 @@
           });
       },
       exportChannels(params) {
-        return TaskResource.startDiskBulkExport(
-          this.selectedChannels.map(({ id }) => ({
+        return TaskResource.startTasks(
+          this.selectedChannels.map(({ id, name }) => ({
+            type: TaskTypes.DISKEXPORT,
             channel_id: id,
+            channel_name: name,
             drive_id: params.driveId,
           }))
         )
-          .then(task => {
-            this.notifyAndWatchTask(task);
+          .then(tasks => {
+            this.notifyAndWatchTask(tasks);
           })
           .catch(() => {
             this.createTaskFailedSnackbar();
@@ -214,4 +239,12 @@
 </script>
 
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+
+  @import '../../styles/definitions';
+
+  .device-container {
+    @include device-kpagecontainer;
+  }
+
+</style>

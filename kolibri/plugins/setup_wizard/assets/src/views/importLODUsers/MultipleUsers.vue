@@ -9,7 +9,7 @@
     </p>
     <PaginatedListContainer
       :items="learners"
-      :filterPlaceholder="$tr('searchForUser')"
+      :filterPlaceholder="coreString('searchForUser')"
     >
       <template #default="{ items }">
         <UserTable
@@ -44,13 +44,14 @@
 
 <script>
 
+  import { TaskResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
   import PaginatedListContainer from 'kolibri.coreVue.components.PaginatedListContainer';
-  import UserTable from '../../../../../facility/assets/src/views/UserTable.vue';
+  import { TaskStatuses } from 'kolibri.utils.syncTaskUtils';
+  import UserTable from 'kolibri.coreVue.components.UserTable';
   import OnboardingForm from '../onboarding-forms/OnboardingForm';
-  import { SetupSoUDTasksResource } from '../../api';
-  import { TaskStatuses, TaskTypes } from '../../../../../device/assets/src/constants.js';
+  import { SoudQueue } from '../../constants';
 
   export default {
     name: 'MultipleUsers',
@@ -101,14 +102,14 @@
       confirmImport(learner) {
         const task_name = 'kolibri.plugins.setup_wizard.tasks.startprovisionsoud';
         const params = {
-          baseurl: this.device.baseurl,
+          type: task_name,
           username: this.facility.adminUser,
           password: this.facility.adminPassword,
           user_id: learner.id,
           facility_id: this.facility.id,
-          device_name: this.device.name,
+          device_id: this.device.id,
         };
-        SetupSoUDTasksResource.createTask(task_name, params)
+        TaskResource.startTask(params)
           .then(task => {
             task['device_id'] = this.device.id;
             task['facility_name'] = this.facility.name;
@@ -118,7 +119,7 @@
                 username: learner.username,
                 full_name: learner.full_name,
                 id: learner.id,
-                task: task,
+                type: task,
               },
             });
           })
@@ -132,8 +133,7 @@
       },
 
       pollAdminSyncTask() {
-        SetupSoUDTasksResource.fetchCollection({ force: true }).then(tasks => {
-          const soudTasks = tasks.filter(t => t.type === TaskTypes.SYNCLOD);
+        TaskResource.list({ queue: SoudQueue }).then(soudTasks => {
           if (soudTasks.length > 0) {
             this.loadingTask = {
               ...soudTasks[0],
@@ -149,7 +149,7 @@
                 .then(() => {
                   this.isPolling = false;
                   this.lodService.send('CONTINUE');
-                  SetupSoUDTasksResource.cleartasks();
+                  TaskResource.clearAll(SoudQueue);
                 });
             }
           }
@@ -169,10 +169,6 @@
       imported: {
         message: 'Imported',
         context: 'Label indicating that a learner user account has already been imported.',
-      },
-      searchForUser: {
-        message: 'Search for a user',
-        context: 'Descriptive text which appears in the search field on the Facility > Users page.',
       },
       selectAUser: {
         message: 'Select a user',
