@@ -57,6 +57,7 @@
       :name="selectedUser.full_name"
       :username="selectedUser.username"
       :kind="selectedUser.kind"
+      :initialSoftDelete="selectedUser.deleted"
     />
 
     <ResetUserPasswordModal
@@ -72,7 +73,7 @@
       :name="selectedUser.full_name"
       :username="selectedUser.username"
     />
-
+    
   </div>
 
 </template>
@@ -213,6 +214,7 @@
       deleteUser: 'Delete',
       userActions: 'User management actions',
       userPageTitle: 'Users',
+      activateUser: 'Activate',
     },
   };
 

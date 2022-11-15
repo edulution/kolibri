@@ -29,6 +29,7 @@
             </span>
           </th>
           <th>{{ $tr('username') }}</th>
+          <th>{{ $tr('activeStatus') }}</th>
           <th v-if="$scopedSlots.action" class="user-action-button">
             <span class="visuallyhidden">
               {{ $tr('userActionsColumnHeader') }}
@@ -80,6 +81,10 @@
               {{ user.username }}
             </span>
           </td>
+          <td>
+            <span dir="auto">
+            <SoftDeletedDisplayText :deleted="user.deleted" /></span>
+          </td>
           <td v-if="$scopedSlots.action" class="core-table-button-col">
             <slot name="action" :user="user"></slot>
           </td>
@@ -108,6 +113,7 @@
   import KLabeledIcon from 'kolibri.coreVue.components.KLabeledIcon';
   import KIcon from 'kolibri.coreVue.components.KIcon';
   import difference from 'lodash/difference';
+  import SoftDeletedDisplayText from 'kolibri.coreVue.components.SoftDeletedDisplayText';
 
   export default {
     name: 'UserTable',
@@ -117,6 +123,7 @@
       UserTypeDisplay,
       KLabeledIcon,
       KIcon,
+      SoftDeletedDisplayText,
     },
     mixins: [themeMixin],
     props: {
@@ -182,6 +189,7 @@
       learnerTableTitle: 'Learners',
       fullName: 'Full name',
       username: 'Username',
+      activeStatus: 'Active status',
       role: 'Role',
       userIconColumnHeader: 'User icon',
       userActionsColumnHeader: 'Actions',

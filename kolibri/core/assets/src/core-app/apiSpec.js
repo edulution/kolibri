@@ -16,6 +16,8 @@ import vuex from 'vuex';
 import UiAlert from 'keen-ui/src/UiAlert';
 import tetherDrop from 'tether-drop';
 import tetherTooltip from 'tether-tooltip';
+import responsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
+import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
 import logging from '../logging';
 import conditionalPromise from '../conditionalPromise';
 import * as apiResource from '../api-resource';
@@ -88,6 +90,12 @@ import KPageContainer from '../views/KPageContainer';
 import KIcon from '../views/icons/KIcon';
 import KLabeledIcon from '../views/icons/KLabeledIcon';
 import KBasicContentIcon from '../views/icons/KBasicContentIcon';
+// import GenderSelect from '../views/GenderSelect';
+// import BirthYearSelect from '../views/BirthYearSelect';
+// import GenderDisplayText from '../views/GenderDisplayText';
+// import BirthYearDisplayText from '../views/BirthYearDisplayText';
+import SoftDeletedDisplayText from '../views/SoftDeletedDisplayText';
+import commonCoreStrings from '../mixins/commonCoreStrings';
 
 // webpack optimization
 import CoreInfoIcon from '../views/CoreInfoIcon';
@@ -192,6 +200,11 @@ export default {
       KIcon,
       KLabeledIcon,
       KBasicContentIcon,
+      // GenderSelect,
+      // GenderDisplayText,
+      // BirthYearSelect,
+      // BirthYearDisplayText,
+      SoftDeletedDisplayText,
     },
     router,
     mixins: {
@@ -199,6 +212,9 @@ export default {
       responsiveElement,
       contentRendererMixin,
       themeMixin,
+      commonCoreStrings,
+      responsiveWindowMixin,
+      responsiveElementMixin,
     },
   },
   resources,

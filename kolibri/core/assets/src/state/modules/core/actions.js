@@ -206,25 +206,6 @@ export function setSession(store, { session, clientNow }) {
 }
 
 /**
- * Makes the program pause/delay.
- *
- * @param {int} the time to pause in milliseconds.
- */
-
-function sleep(milliseconds) {
-  const date = Date.now();
-  let currentDate = null;
-  do {
-    currentDate = Date.now();
-  } while (currentDate - date < milliseconds);
-}
-
-/*Url to post user data in fetch*/
-const lan_bl_url = 'http://192.168.8.200:8888/api/kolibri_login';
-const local_bl_url = 'http://localhost:8888/api/kolibri_login';
-
-const sleep_time = 3000;
-/**
  * Signs in user.
  *
  * @param {object} store The store.
@@ -235,55 +216,23 @@ export function kolibriLogin(store, sessionPayload) {
   Lockr.set(UPDATE_MODAL_DISMISSED, false);
   return SessionResource.saveModel({ data: sessionPayload })
     .then(() => {
-      /*Post the data of the logged in user to the bl_url*/
-      fetch(lan_bl_url, {
-        method: 'POST',
-        body: JSON.stringify(sessionPayload),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Access-Control-Allow-Origin': '*',
-        },
-        mode: 'cors',
-        cache: 'no-cache',
-        referrerPolicy: 'no-referrer',
-        credentials: 'same-origin',
-      });
-
-      /*Post to the local url if the lan url fails*/
-      fetch(local_bl_url, {
-        method: 'POST',
-        body: JSON.stringify(sessionPayload),
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Access-Control-Allow-Origin': '*',
-        },
-        mode: 'cors',
-        cache: 'no-cache',
-        referrerPolicy: 'no-referrer',
-        credentials: 'same-origin',
-      })
-        .then(() => {
-          /*Pause the script for a few seconds*/
-          sleep(sleep_time);
-          // Redirect the user
-          redirectBrowser();
-        })
-        .catch(error => {
-          /*If an error is caught, redirect as though nothing happened*/
-          redirectBrowser();
-        });
+      // Redirect on login
+      redirectBrowser();
     })
     .catch(error => {
       store.commit('CORE_SET_SIGN_IN_BUSY', false);
       const errorsCaught = CatchErrors(error, [
         ERROR_CONSTANTS.INVALID_CREDENTIALS,
         ERROR_CONSTANTS.MISSING_PASSWORD,
+        ERROR_CONSTANTS.INACTIVE_USER,
       ]);
       if (errorsCaught) {
         if (errorsCaught.includes(ERROR_CONSTANTS.INVALID_CREDENTIALS)) {
           store.commit('CORE_SET_LOGIN_ERROR', LoginErrors.INVALID_CREDENTIALS);
         } else if (errorsCaught.includes(ERROR_CONSTANTS.MISSING_PASSWORD)) {
           store.commit('CORE_SET_LOGIN_ERROR', LoginErrors.PASSWORD_MISSING);
+        } else if (errorsCaught.includes(ERROR_CONSTANTS.INACTIVE_USER)) {
+          store.commit('CORE_SET_LOGIN_ERROR', LoginErrors.INACTIVE_USER);
         }
       } else {
         store.dispatch('handleApiError', error);

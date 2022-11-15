@@ -16,5 +16,6 @@ export function _userState(facilityUser) {
     kind: UserType(facilityUser),
     is_superuser: facilityUser.is_superuser,
     roles: facilityUser.roles,
+    deleted: facilityUser.deleted,
   };
 }

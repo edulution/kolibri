@@ -26,6 +26,13 @@
               >
                 {{ $tr('signInError') }}
               </UiAlert>
+              <UiAlert
+                v-else-if="inactiveUser"
+                type="error"
+                :dismissible="false"
+              >
+                {{ $tr('userIsDeactivated') }}
+              </UiAlert>
               <transition name="textbox">
                 <KTextbox
                   id="username"
@@ -155,6 +162,7 @@
       usernameNotAlphaNumUnderscore: 'Username can only contain letters, numbers, and underscores',
       documentTitle: 'User Sign In',
       privacyLink: 'Usage and privacy',
+      userIsDeactivated: 'This user has been deactivated',
     },
     metaInfo() {
       return {
@@ -197,6 +205,7 @@
       ...mapState({
         passwordMissing: state => state.core.loginError === LoginErrors.PASSWORD_MISSING,
         invalidCredentials: state => state.core.loginError === LoginErrors.INVALID_CREDENTIALS,
+        inactiveUser: state => state.core.loginError === LoginErrors.INACTIVE_USER,
         busy: state => state.core.signInBusy,
       }),
       simpleSignIn() {
@@ -254,7 +263,7 @@
         return this.$tr('poweredBy', { version: __version });
       },
       hasServerError() {
-        return Boolean(this.passwordMissing || this.invalidCredentials);
+        return Boolean(this.passwordMissing || this.invalidCredentials || this.inactiveUser);
       },
       needPasswordField() {
         return !this.simpleSignIn || this.hasServerError;
@@ -277,7 +286,7 @@
       },
       getImagePath() {
         var today = new Date().getDate();
-        let numOfPhotos = (today % 5) + 1;
+        let numOfPhotos = (today % 17) + 1;
         return require('./background' + numOfPhotos + '.jpg');
       },
       backgroundImageStyle() {
