@@ -60,7 +60,7 @@ export function createUser(store, stateUserData) {
  * Do a PATCH to update existing user
  * @param {object} store
  * @param {string} userId
- * @param {object} updates Optional Changes: full_name, username, password, and kind(role)
+ * @param {object} updates Optional Changes: full_name, username, deleted, password, and kind(role)
  */
 export function updateUser(store, { userId, updates }) {
   setError(store, null);
@@ -104,13 +104,10 @@ export function setError(store, error) {
 }
 
 // Update fields on the FacilityUser model
-// updates :: { full_name, username, password }
+// updates :: { full_name, username, deleted, password }
 export function updateFacilityUser(store, { userId, updates }) {
   const origUserState = store.state.facilityUsers.find(user => user.id === userId);
-  const changedValues = pickBy(
-    updates,
-    (value, key) => updates[key] && updates[key] !== origUserState[key]
-  );
+  const changedValues = pickBy(updates, (value, key) => updates[key] !== origUserState[key]);
   const facilityUserHasChanged = Object.keys(changedValues).length > 0;
   if (facilityUserHasChanged) {
     return FacilityUserResource.saveModel({ id: userId, data: changedValues });

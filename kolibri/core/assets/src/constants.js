@@ -150,6 +150,11 @@ const FacilityUserGender = {
   ...DemographicConstants,
 };
 
+const FacilityUserSoftDeleted = {
+  TRUE: true,
+  FALSE: false,
+};
+
 export {
   UserKinds,
   ContentNodeKinds,
@@ -169,4 +174,5 @@ export {
   DemographicConstants,
   FacilityUserGender,
   NoCategories,
+  FacilityUserSoftDeleted,
 };
