@@ -52,6 +52,7 @@ class FacilityUserSerializer(serializers.ModelSerializer):
             "gender",
             "birth_year",
             "exam_number",
+            "deleted",
         )
 
     def validate(self, attrs):
