@@ -101,6 +101,14 @@
           return localeCompare(a[sortByKey], b[sortByKey]);
         });
       },
+      groupAndAdHocLearnerNames(groups, assignments) {
+        const adHocGroup = this.adHocGroups.find(group => assignments.includes(group.id));
+        let adHocLearners = [];
+        if (adHocGroup) {
+          adHocLearners = adHocGroup.member_ids.map(learnerId => this.learnerMap[learnerId].name);
+        }
+        return groups.concat(adHocLearners);
+      },
     },
   };
 

@@ -22,6 +22,7 @@ const UserKinds = {
 const CollectionKinds = {
   CLASSROOM: 'classroom',
   LEARNERGROUP: 'learnergroup',
+  ADHOCLEARNERSGROUP: 'adhoclearnersgroup',
 };
 
 const ContentNodeKinds = {

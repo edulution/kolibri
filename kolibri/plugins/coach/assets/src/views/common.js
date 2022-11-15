@@ -157,6 +157,7 @@ export default {
     ...mapGetters(['isAdmin', 'isCoach', 'isSuperuser']),
     ...mapState('classSummary', { classId: 'id', className: 'name' }),
     ...mapState('classSummary', [
+      'adHocGroupsMap',
       'coachMap',
       'learnerMap',
       'groupMap',
@@ -181,6 +182,7 @@ export default {
       'examStatuses',
       'content',
       'contentStatuses',
+      'adHocGroups',
       'lessons',
       'lessonStatuses',
       'lessonLearnerStatusMap',

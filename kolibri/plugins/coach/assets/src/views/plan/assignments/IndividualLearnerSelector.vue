@@ -46,7 +46,7 @@
                 {{ coreString('usernameLabel') }}
               </th>
               <th class="table-header">
-                {{ coachString('groupsLabel') }}
+                {{ $tr('groupsLabel') }}
               </th>
             </template>
 
@@ -262,6 +262,7 @@
       individualLearnersLabel: 'Individual learners',
       searchPlaceholder: 'Search for a user…',
       noUsersMatch: 'No users match',
+      groupsLabel: 'Groups',
     },
   };
 

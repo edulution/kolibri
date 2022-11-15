@@ -96,8 +96,11 @@
       };
     },
     computed: {
+      // entireClassIsSelected() {
+      //   return isEqual(this.value, [this.classId]) || !this.value.length;
+      // },
       entireClassIsSelected() {
-        return isEqual(this.value, [this.classId]) || !this.value.length;
+        return this.selectedLearnerIds.length === 0 && this.selectedGroupIds.length === 0;
       },
       currentCollectionIds() {
         if (this.entireClassIsSelected) {

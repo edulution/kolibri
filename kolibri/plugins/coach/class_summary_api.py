@@ -14,6 +14,7 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 
 from kolibri.core.auth import models as auth_models
+from kolibri.core.auth.models import AdHocGroup
 from kolibri.core.auth.models import Classroom
 from kolibri.core.content.models import ContentNode
 from kolibri.core.exams.models import Exam
@@ -23,6 +24,8 @@ from kolibri.core.logger.models import UserSessionLog
 from kolibri.core.notifications.models import LearnerProgressNotification
 from kolibri.core.notifications.models import NotificationEventType
 from kolibri.deployment.default.settings import base
+from kolibri.core.query import annotate_array_aggregate
+
 
 # Intended to match  NotificationEventType
 NOT_STARTED = "NotStarted"
@@ -239,6 +242,10 @@ def get_active_learners(classroom):
 
     return active_learners, learners_info
 
+def serialize_groups(queryset):
+    queryset = annotate_array_aggregate(queryset, member_ids="membership__user__id")
+    return list(queryset.values("id", "name", "member_ids"))
+
 
 class ClassSummaryViewSet(viewsets.ViewSet):
 
@@ -259,13 +266,17 @@ class ClassSummaryViewSet(viewsets.ViewSet):
         lesson_data = data(LessonSerializer, query_lesson)
         exam_data = data(ExamSerializer, query_exams)
 
+        individual_learners_group_ids = AdHocGroup.objects.filter(
+            parent=classroom
+        ).values_list("id", flat=True)
+
         # filter classes out of exam assignments
         for exam in exam_data:
-            exam["groups"] = [g for g in exam["groups"] if g != pk]
+            exam["groups"] = [g for g in exam["groups"] if g != pk and g not in individual_learners_group_ids]
 
         # filter classes out of lesson assignments
         for lesson in lesson_data:
-            lesson["groups"] = [g for g in lesson["groups"] if g != pk]
+            lesson["groups"] = [g for g in lesson["groups"] if g != pk and g not in individual_learners_group_ids]
 
         all_node_ids = set()
         for lesson in lesson_data:
@@ -302,6 +313,9 @@ class ClassSummaryViewSet(viewsets.ViewSet):
             "coaches": data(UserSerializer, classroom.get_coaches()),
             "learners": learners_data,
             "groups": data(GroupSerializer, classroom.get_learner_groups()),
+            "adhoclearners": serialize_groups(
+                classroom.get_individual_learners_group()
+            ),
             "exams": exam_data,
             "exam_learner_status": data(ExamStatusSerializer, query_exam_logs),
             "content": data(ContentSerializer, query_content),

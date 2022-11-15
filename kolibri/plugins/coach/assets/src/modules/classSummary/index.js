@@ -43,6 +43,15 @@ function defaultState() {
          *   }
          * }
          */
+    adHocGroupsMap: {},
+    /*
+     * adHocLearners := {
+     *  [collection_id]: {
+     *    id,
+     *    member_ids: [user_id, ...]
+     *  },
+     * }
+     */
     examMap: {},
     /*
          * examLearnerStatusMap := {
@@ -182,6 +191,15 @@ export default {
     learners(state) {
       return Object.values(state.learnerMap);
     },
+    /*
+     * adHocGroups := [
+     *   { id, member_ids: [id, ...] }, ...
+     * ]
+     ]
+     */
+    adHocGroups(state) {
+      return Object.values(state.adHocGroupsMap);
+    },
     activeLearners(state) {
       return Object.values(state.activeLearnersArray);
     },
@@ -297,6 +315,7 @@ export default {
     // whenever this module's state changes.
     notificationModuleData(state) {
       return {
+        adHocGroupsMap: state.adHocGroupsMap,
         activeLearners: state.activeLearnersArray,
         learnersInfo: state.learnersInfo,
         learners: state.learnerMap,
@@ -327,6 +346,7 @@ export default {
         coachMap: _itemMap(summary.coaches, 'id'),
         learnerMap: _itemMap(summary.learners, 'id'),
         groupMap: _itemMap(summary.groups, 'id'),
+        adHocGroupsMap: _itemMap(summary.adhoclearners, 'id'),
         examMap,
         examLearnerStatusMap: _statusMap(summary.exam_learner_status, 'exam_id'),
         contentMap: _itemMap(summary.content, 'content_id'),

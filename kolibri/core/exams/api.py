@@ -6,8 +6,11 @@ from rest_framework import viewsets
 
 from kolibri.core.auth.api import KolibriAuthPermissions
 from kolibri.core.auth.api import KolibriAuthPermissionsFilter
+from kolibri.core.auth.constants.collection_kinds import ADHOCLEARNERSGROUP
 from kolibri.core.exams import models
 from kolibri.core.exams import serializers
+from kolibri.core.query import annotate_array_aggregate
+
 
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
@@ -54,6 +57,34 @@ class ExamViewset(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return models.Exam.objects.all()
+
+    def consolidate(self, items, queryset):
+        if items:
+            exam_ids = [e["id"] for e in items]
+            adhoc_assignments = models.ExamAssignment.objects.filter(
+                exam_id__in=exam_ids, collection__kind=ADHOCLEARNERSGROUP
+            )
+            adhoc_assignments = annotate_array_aggregate(
+                adhoc_assignments, learner_ids="collection__membership__user_id"
+            )
+            adhoc_assignments = {
+                a["exam"]: a
+                for a in adhoc_assignments.values("collection", "exam", "learner_ids")
+            }
+            for item in items:
+                if item["id"] in adhoc_assignments:
+                    adhoc_assignment = adhoc_assignments[item["id"]]
+                    item["learner_ids"] = adhoc_assignments[item["id"]]["learner_ids"]
+                    item["assignments"] = [
+                        i
+                        for i in item["assignments"]
+                        if i != adhoc_assignment["collection"]
+                    ]
+                else:
+                    item["learner_ids"] = []
+
+        return items
+
 
     def perform_update(self, serializer):
         was_active = serializer.instance.active

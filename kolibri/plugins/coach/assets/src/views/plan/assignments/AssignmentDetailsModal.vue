@@ -58,6 +58,7 @@
         @updateLearners="learners => adHocLearners = learners"
       />
     </fieldset>
+    <slot name="resourceTable"></slot>
   </KModal>
 
 </template>

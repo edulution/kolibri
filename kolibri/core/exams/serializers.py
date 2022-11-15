@@ -8,6 +8,10 @@ from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.exams.models import Exam
 from kolibri.core.exams.models import ExamAssignment
+from kolibri.core.auth.models import Membership
+from kolibri.core.auth.constants.collection_kinds import ADHOCLEARNERSGROUP
+from kolibri.core.auth.utils import create_adhoc_group_for_learners
+
 
 
 class NestedCollectionSerializer(serializers.ModelSerializer):
@@ -166,3 +170,48 @@ class ExamSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+    def _update_learner_ids(self, instance, learners):
+        try:
+            adhoc_group_assignment = ExamAssignment.objects.select_related(
+                "collection"
+            ).get(exam=instance, collection__kind=ADHOCLEARNERSGROUP)
+        except ExamAssignment.DoesNotExist:
+            adhoc_group_assignment = None
+        if not learners:
+            # Setting learner_ids to empty, so only need to do something
+            # if there is already an adhoc_group_assignment defined
+            if adhoc_group_assignment is not None:
+                # Adhoc group already exists delete it and the assignment
+                # cascade deletion should also delete the adhoc_group_assignment
+                adhoc_group_assignment.collection.delete()
+        else:
+            if adhoc_group_assignment is None:
+                # There is no adhoc group right now, so just make a new one
+                adhoc_group = create_adhoc_group_for_learners(
+                    instance.collection, learners
+                )
+                self._create_exam_assignment(exam=instance, collection=adhoc_group)
+            else:
+                # There is an adhoc group, so we need to potentially update its membership
+                original_learner_ids = Membership.objects.filter(
+                    collection=adhoc_group_assignment.collection
+                ).values_list("user_id", flat=True)
+                original_learner_ids_set = set(original_learner_ids)
+                learner_ids_set = set(learner.id for learner in learners)
+                if original_learner_ids_set != learner_ids_set:
+                    # Only bother to do anything if these are different
+                    new_learner_ids = learner_ids_set - original_learner_ids_set
+                    deleted_learner_ids = original_learner_ids_set - learner_ids_set
+
+                    if deleted_learner_ids:
+                        Membership.objects.filter(
+                            collection=adhoc_group_assignment.collection,
+                            user_id__in=deleted_learner_ids,
+                        ).delete()
+
+                    for new_learner_id in new_learner_ids:
+                        Membership.objects.create(
+                            user_id=new_learner_id,
+                            collection=adhoc_group_assignment.collection,
+                        )
