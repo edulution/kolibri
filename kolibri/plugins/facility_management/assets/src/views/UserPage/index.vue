@@ -60,6 +60,7 @@
       :examNumber="selectedUser.exam_number"
       :gender="selectedUser.gender"
       :birthYear="selectedUser.birth_year"
+      :initialSoftDelete="selectedUser.deleted"
     />
 
     <ResetUserPasswordModal
