@@ -1,15 +1,10 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
 
     <KGrid gutter="16">
       <KGridItem>
@@ -29,14 +24,19 @@
         </QuizLessonDetailsHeader>
       </KGridItem>
       <KGridItem :layout12="{ span: $isPrint ? 12 : 4 }">
+        <h2 class="visuallyhidden">
+          {{ coachString('generalInformationLabel') }}
+        </h2>
         <LessonStatus
-          activeKey="active"
           :className="className"
           :lesson="lesson"
           :groupNames="getRecipientNamesForExam(lesson)"
         />
       </KGridItem>
       <KGridItem :layout12="{ span: $isPrint ? 12 : 8 }">
+        <h2 class="visuallyhidden">
+          {{ coachString('detailsLabel') }}
+        </h2>
         <KPageContainer :topMargin="$isPrint ? 0 : 24">
           <ReportsControls @export="exportCSV" />
           <HeaderTabs :enablePrint="true">
@@ -53,14 +53,19 @@
                 classRoute('ReportsLessonLearnerListPage')"
             />
           </HeaderTabs>
-          <ReportsLessonResourcesList v-if="showResources" :entries="contentTable" />
-          <ReportsLessonLearnersList v-else-if="showLearners" :entries="learnerTable" />
+          <ReportsLessonResourcesList
+            v-if="showResources"
+            :entries="contentTable"
+          />
+          <ReportsLessonLearnersList
+            v-else-if="showLearners"
+            :entries="learnerTable"
+          />
         </KPageContainer>
       </KGridItem>
     </KGrid>
 
-
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -70,6 +75,7 @@
   import sortBy from 'lodash/sortBy';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
+  import CoachAppBarPage from '../CoachAppBarPage';
   import CSVExporter from '../../csv/exporter';
   import * as csvFields from '../../csv/fields';
   import LessonOptionsDropdownMenu from '../plan/LessonSummaryPage/LessonOptionsDropdownMenu';
@@ -80,6 +86,7 @@
   export default {
     name: 'ReportsLessonBase',
     components: {
+      CoachAppBarPage,
       ReportsControls,
       LessonOptionsDropdownMenu,
       ReportsLessonLearnersList,
@@ -110,7 +117,10 @@
       },
       contentTable() {
         const contentArray = this.lesson.node_ids.map(node_id => this.contentNodeMap[node_id]);
-        return contentArray.map(content => {
+        return contentArray.map((content, index) => {
+          if (!content) {
+            return this.missingResourceObj(index);
+          }
           const tally = this.getContentStatusTally(content.content_id, this.recipients);
           const tableRow = {
             avgTimeSpent: this.getContentAvgTimeSpent(content.content_id, this.recipients),

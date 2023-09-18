@@ -42,18 +42,34 @@ from kolibri.core.public.constants.user_sync_statuses import QUEUED
 from kolibri.core.public.constants.user_sync_statuses import SYNC
 from kolibri.core.serializers import HexOnlyUUIDField
 from kolibri.core.tasks.decorators import register_task
+from kolibri.core.tasks.exceptions import JobNotFound
+from kolibri.core.tasks.exceptions import UserCancelledError
+from kolibri.core.tasks.job import JobStatus
 from kolibri.core.tasks.job import State
 from kolibri.core.tasks.main import job_storage
 from kolibri.core.tasks.permissions import IsAdminForJob
 from kolibri.core.tasks.permissions import IsSuperAdmin
 from kolibri.core.tasks.permissions import NotProvisioned
+from kolibri.core.tasks.utils import get_current_job
 from kolibri.core.tasks.validation import JobValidator
 from kolibri.core.utils.urls import reverse_remote
 from kolibri.utils.conf import KOLIBRI_HOME
 from kolibri.utils.conf import OPTIONS
+from kolibri.utils.filesystem import mkdirp
+from kolibri.utils.translation import ugettext as _
 
 
 logger = logging.getLogger(__name__)
+
+
+def status_fn(job):
+    # Translators: A notification title shown to users when their Kolibri device is syncing data to another Kolibri instance
+    data_syncing_in_progress = _("Data syncing in progress")
+
+    # Translators: Notification text shown to users when their Kolibri device is syncing data to another Kolibri instance
+    # to encourage them to stay connected to their network to ensure a successful sync.
+    do_not_disconnect = _("Do not disconnect your device from the network.")
+    return JobStatus(data_syncing_in_progress, do_not_disconnect)
 
 
 class LocaleChoiceField(serializers.ChoiceField):
@@ -129,7 +145,7 @@ class ImportUsersFromCSVValidator(JobValidator):
         else:
             raise serializers.ValidationError("Facility must be specified")
         temp_dir = os.path.join(KOLIBRI_HOME, "temp")
-        os.makedirs(temp_dir, exist_ok=True)
+        mkdirp(temp_dir, exist_ok=True)
         if "csvfile" in data:
             tmpfile = data["csvfile"].temporary_file_path()
             filename = ntpath.basename(tmpfile)
@@ -227,6 +243,7 @@ def exportuserstocsv(facility=None, locale=None):
 
 class SyncJobValidator(JobValidator):
     facility = serializers.PrimaryKeyRelatedField(queryset=Facility.objects.all())
+    facility_name = serializers.CharField(required=False)
     command = serializers.ChoiceField(choices=["sync", "resumesync"], default="sync")
     sync_session_id = HexOnlyUUIDField(format="hex", required=False, allow_null=True)
 
@@ -241,7 +258,7 @@ class SyncJobValidator(JobValidator):
             facility_name = facility.name
         else:
             facility_id = facility
-            facility_name = ""
+            facility_name = data["facility_name"]
         return {
             "extra_metadata": dict(
                 facility_id=facility_id,
@@ -270,6 +287,8 @@ facility_task_queue = "facility_task"
     track_progress=True,
     cancellable=False,
     queue=facility_task_queue,
+    long_running=True,
+    status_fn=status_fn,
 )
 def dataportalsync(command, **kwargs):
     """
@@ -302,8 +321,7 @@ class PeerSyncJobValidator(SyncJobValidator):
             except NetworkLocation.DoesNotExist:
                 pass
         try:
-            address = data["baseurl"]
-            baseurl = NetworkClient(address=address).base_url
+            baseurl = NetworkClient.build_for_address(data["baseurl"]).base_url
         except NetworkLocationNotFound:
             raise ResourceGoneError()
 
@@ -343,6 +361,8 @@ class PeerFacilitySyncJobValidator(PeerSyncJobValidator):
     track_progress=True,
     cancellable=False,
     queue=facility_task_queue,
+    long_running=True,
+    status_fn=status_fn,
 )
 def peerfacilitysync(command, **kwargs):
     """
@@ -353,6 +373,7 @@ def peerfacilitysync(command, **kwargs):
 
 class PeerFacilityImportJobValidator(PeerFacilitySyncJobValidator):
     facility = HexOnlyUUIDField()
+    facility_name = serializers.CharField(default="")
     username = serializers.CharField()
     password = serializers.CharField(default=NOT_SPECIFIED, required=False)
 
@@ -373,6 +394,8 @@ class PeerFacilityImportJobValidator(PeerFacilitySyncJobValidator):
     track_progress=True,
     cancellable=False,
     queue=facility_task_queue,
+    long_running=True,
+    status_fn=status_fn,
 )
 def peerfacilityimport(command, **kwargs):
     """
@@ -428,6 +451,7 @@ soud_sync_queue = "soud_sync"
 @register_task(
     validator=PeerRepeatingSingleSyncJobValidator,
     queue=soud_sync_queue,
+    status_fn=status_fn,
 )
 def peerusersync(command, **kwargs):
     cleanup = False
@@ -445,6 +469,9 @@ def peerusersync(command, **kwargs):
                     kwargs["user"], kwargs["baseurl"]
                 )
             )
+        elif isinstance(e, UserCancelledError):
+            # In this instance we are cancelling the task, and we should not reschedule
+            resync_interval = None
         else:
             logger.error(
                 "Error syncing user {} to server {}".format(
@@ -457,6 +484,10 @@ def peerusersync(command, **kwargs):
         if cleanup and command == "resumesync":
             # for resume we should have sync_session_id kwarg
             queue_soud_sync_cleanup(kwargs["sync_session_id"])
+        job = get_current_job()
+        if job and job.storage.check_job_canceled(job.job_id):
+            # If the job is canceled, then do not attempt to resync
+            resync_interval = None
         if resync_interval:
             # schedule a new sync
             schedule_new_sync(
@@ -477,7 +508,7 @@ def startpeerusersync(
     # attempt to resume an existing session
     sync_session = find_soud_sync_session_for_resume(user, server)
 
-    job = peerusersync.validate_job_data(
+    job, enqueue_args = peerusersync.validate_job_data(
         user,
         {
             "baseurl": server,
@@ -506,8 +537,12 @@ def stoppeerusersync(server, user_id):
 
     # clear jobs with matching ID
     job_id = hashlib.md5("{}::{}".format(server, user_id).encode()).hexdigest()
-    job_storage.clear(job_id=job_id)
-    job_storage.cancel(job_id)
+    try:
+        job_storage.cancel(job_id)
+        job_storage.clear(job_id=job_id)
+    except JobNotFound:
+        # No job to clean up, we're done!
+        pass
 
     # skip if we couldn't find one for resume
     if sync_session is None:
@@ -672,7 +707,6 @@ def handle_server_sync_response(response, server, user):
     # In either case, we set the sync status for this user as queued
     # Once the sync starts, then this should get cleared and the SyncSession
     # set on the status, so that more info can be garnered.
-    JOB_ID = hashlib.md5("{}::{}".format(server, user).encode()).hexdigest()
     server_response = response.json()
 
     UserSyncStatus.objects.update_or_create(user_id=user, defaults={"queued": True})
@@ -692,14 +726,18 @@ def handle_server_sync_response(response, server, user):
         pk = server_response["id"]
         time_alive = server_response["keep_alive"]
         dt = datetime.timedelta(seconds=int(time_alive))
-        request_soud_sync.enqueue_in(
-            dt, args=(server, user, pk, time_alive), job_id=JOB_ID
-        )
-        logger.info(
-            "Server {} busy for user {}, will try again in {} seconds with pk={}".format(
-                server, user, time_alive, pk
+        current_job = get_current_job()
+        if current_job:
+            current_job.retry_in(dt, args=(server, user, pk, time_alive))
+            logger.info(
+                "Server {} busy for user {}, will try again in {} seconds with pk={}".format(
+                    server, user, time_alive, pk
+                )
             )
-        )
+        else:
+            logger.warning(
+                "Tried to retry current job but not running in a task context"
+            )
 
 
 def schedule_new_sync(server, user, interval=OPTIONS["Deployment"]["SYNC_INTERVAL"]):
@@ -710,8 +748,12 @@ def schedule_new_sync(server, user, interval=OPTIONS["Deployment"]["SYNC_INTERVA
         )
     )
     dt = datetime.timedelta(seconds=interval)
-    JOB_ID = hashlib.md5("{}:{}".format(server, user).encode()).hexdigest()
-    request_soud_sync.enqueue_in(dt, args=(server, user), job_id=JOB_ID)
+    current_job = get_current_job()
+    if current_job:
+        current_job.retry_in(dt)
+    else:
+        JOB_ID = hashlib.md5("{}:{}".format(server, user).encode()).hexdigest()
+        request_soud_sync.enqueue_in(dt, args=(server, user), job_id=JOB_ID)
 
 
 @register_task(
@@ -740,13 +782,15 @@ def queue_soud_sync_cleanup(*sync_session_ids):
     return soud_sync_cleanup.enqueue(kwargs=dict(pk__in=sync_session_ids))
 
 
-def queue_soud_server_sync_cleanup(client_ip):
+def queue_soud_server_sync_cleanup(client_instance_id):
     """
     A server oriented cleanup of active SoUD sessions
 
-    :param client_ip: The IP address of the client
+    :param client_instance_id: The Kolibri instance ID of the client
     """
-    return soud_sync_cleanup.enqueue(kwargs=dict(client_ip=client_ip, is_server=True))
+    return soud_sync_cleanup.enqueue(
+        kwargs=dict(client_instance_id=client_instance_id, is_server=True)
+    )
 
 
 class PeerImportSingleSyncJobValidator(PeerSyncJobValidator):
@@ -755,6 +799,7 @@ class PeerImportSingleSyncJobValidator(PeerSyncJobValidator):
     user_id = HexOnlyUUIDField(required=False)
     facility = HexOnlyUUIDField()
     using_admin = serializers.BooleanField(default=False, required=False)
+    force_non_learner_import = serializers.BooleanField(default=False, required=False)
 
     def validate(self, data):
         """
@@ -764,6 +809,7 @@ class PeerImportSingleSyncJobValidator(PeerSyncJobValidator):
         job_data = super(PeerImportSingleSyncJobValidator, self).validate(data)
         user_id = data.get("user_id", None)
         using_admin = data.get("using_admin", False)
+        force_non_learner_import = data.get("force_non_learner_import", False)
         # Use pre-validated base URL
         baseurl = job_data["kwargs"]["baseurl"]
         facility_id = data["facility"]
@@ -781,35 +827,47 @@ class PeerImportSingleSyncJobValidator(PeerSyncJobValidator):
         full_name = user_info["full_name"]
         roles = user_info["roles"]
 
-        # only learners can by synced:
-        not_syncable = (SUPERUSER, COACH, ASSIGNABLE_COACH, ADMIN)
-        if any(role in roles for role in not_syncable):
-            raise ValidationError(
-                detail={
-                    "id": DEVICE_LIMITATIONS,
-                    "full_name": full_name,
-                    "roles": ", ".join(roles),
-                }
-            )
+        # only learners can be synced unless user has confirmed intention to sync a non-learner:
+        if not force_non_learner_import:
+            not_syncable = (SUPERUSER, COACH, ASSIGNABLE_COACH, ADMIN)
+            if any(role in roles for role in not_syncable):
+                raise ValidationError(
+                    detail={
+                        "id": DEVICE_LIMITATIONS,
+                        "full_name": full_name,
+                        "roles": ", ".join(roles),
+                    }
+                )
+
         user_id = user_info["id"]
 
         validate_and_create_sync_credentials(
             baseurl, facility_id, username, password, user_id=user_id
         )
+        job_data["extra_metadata"]["user_id"] = user_id
+        job_data["extra_metadata"]["username"] = user_info["username"]
+
         job_data["kwargs"]["user"] = user_id
 
+        job_data["kwargs"].update(
+            dict(
+                no_push=True,
+                no_provision=True,
+            )
+        )
         return job_data
 
 
 @register_task(
     validator=PeerImportSingleSyncJobValidator,
-    cancellable=True,
+    cancellable=False,
     track_progress=True,
     queue=soud_sync_queue,
     permission_classes=[IsSuperAdmin() | NotProvisioned()],
+    status_fn=status_fn,
 )
-def peeruserimport(**kwargs):
-    call_command("sync", **kwargs)
+def peeruserimport(command, **kwargs):
+    call_command(command, **kwargs)
 
 
 @register_task(

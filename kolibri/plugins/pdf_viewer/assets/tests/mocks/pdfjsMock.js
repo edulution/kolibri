@@ -12,6 +12,7 @@ export const PdfPage = {
     cancel: jest.fn(),
   })),
   streamTextContent: jest.fn(() => ({})),
+  getAnnotations: jest.fn(() => Promise.resolve([])),
 };
 
 export const PdfDocument = {
@@ -19,6 +20,9 @@ export const PdfDocument = {
   getPage: jest.fn(() => Promise.resolve(PdfPage)),
   cleanup: jest.fn(),
   destroy: jest.fn(),
+  getOutline: jest.fn(() => Promise.resolve([])),
+  getPageIndex: jest.fn(() => Promise.resolve(1)),
+  getDestination: jest.fn(() => Promise.resolve([])),
 };
 
 export const loadingDocument = {
@@ -33,5 +37,15 @@ export const renderTextLayer = jest.fn(() => ({
   expandTextDivs: jest.fn(),
   cancel: jest.fn(),
 }));
+
+export const AnnotationMode = {
+  ENABLE_FORMS: 'ENABLE_FORMS',
+};
+
+export class PDFWorker {
+  constructor() {
+    this.promise = Promise.resolve();
+  }
+}
 
 /* eslint-enable */

@@ -6,12 +6,17 @@
       :class="$computedClass(tabStyles)"
       :style="windowIsSmall ? smallScreenOverrides : {}"
       :to="link"
+      :activeClass="activeClasses"
     >
       <div class="dimmable tab-icon">
         <slot></slot>
       </div>
 
-      <div class="dimmable tab-title" tabindex="-1">
+      <div
+        class="dimmable tab-title"
+        tabindex="-1"
+        :title="title"
+      >
         {{ title }}
       </div>
     </router-link>
@@ -23,14 +28,19 @@
 <script>
 
   import { validateLinkObject } from 'kolibri.utils.validators';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
 
   /**
-   Links for use inside the Navbar
-   */
+     Links for use inside the Navbar
+     */
   export default {
     name: 'NavbarLink',
-    mixins: [responsiveWindowMixin],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsSmall,
+      };
+    },
     props: {
       /**
        * The text
@@ -67,6 +77,12 @@
           fontSize: '14px',
           borderBottomWidth: '2px',
         };
+      },
+      activeClasses() {
+        // return both fixed and dynamic classes
+        return `router-link-active ${this.$computedClass({
+          color: this.$themeTokens.textInverted,
+        })}`;
       },
     },
   };
@@ -116,8 +132,6 @@
   //  3. Somehow refactor the tab styling to not require nested active classes
   .router-link-active {
     font-weight: bold;
-    color: white;
-    border-bottom-color: white;
     border-bottom-style: solid;
     border-bottom-width: 4px;
 
@@ -144,6 +158,17 @@
   .tab-title {
     display: inline-block;
     text-overflow: ellipsis;
+  }
+
+  div.dimmable.tab-title::before {
+    display: block;
+    height: 0;
+    overflow: hidden;
+    font-weight: bold;
+    pointer-events: none;
+    visibility: hidden;
+    content: attr(title);
+    user-select: none;
   }
 
 </style>

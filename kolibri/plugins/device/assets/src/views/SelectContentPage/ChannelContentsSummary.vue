@@ -55,21 +55,21 @@
       </tr>
       <tr>
         <th>{{ $tr('totalSizeRow') }}</th>
-        <td>{{ $tr('resourceCount', { count: channel.total_resources || 0 }) }}</td>
+        <td>{{ $formatNumber(channel.total_resources || 0, { useGrouping: true }) }}</td>
         <td>{{ bytesForHumans(channel.total_file_size || 0) }}</td>
       </tr>
       <tr>
         <th>{{ $tr('onDeviceRow') }}</th>
-        <td>{{ $tr('resourceCount', { count: channel.on_device_resources || 0 }) }}</td>
+        <td>{{ $formatNumber(channel.on_device_resources || 0, { useGrouping: true }) }}</td>
         <td>{{ bytesForHumans(channel.on_device_file_size || 0) }}</td>
       </tr>
       <tr v-if="channel.new_resource_count !== null">
         <th>{{ $tr('newOrUpdatedLabel') }}</th>
-        <td>{{ $tr('resourceCount', { count: channel.new_resource_count || 0 }) }}</td>
+        <td>{{ $formatNumber(channel.new_resource_count || 0, { useGrouping: true }) }}</td>
         <td>{{ bytesForHumans(channel.new_resource_total_size || 0) }}</td>
       </tr>
       <tr v-if="!remoteContentEnabled && freeSpace !== null">
-        <th>{{ deviceInfo.$tr('freeDisk') }}</th>
+        <th>{{ $tr('freeDisk') }}</th>
         <td></td>
         <td>{{ bytesForHumans(freeSpace || 0) }}</td>
       </tr>
@@ -84,9 +84,7 @@
   import bytesForHumans from 'kolibri.utils.bytesForHumans';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import KResponsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
-  import DeviceInfoPage from '../DeviceInfoPage.vue';
   import plugin_data from 'plugin_data';
 
   export default {
@@ -122,9 +120,6 @@
         return plugin_data.isRemoteContent;
       },
     },
-    created() {
-      this.deviceInfo = crossComponentTranslator(DeviceInfoPage);
-    },
     methods: {
       bytesForHumans,
     },
@@ -132,10 +127,6 @@
       onDeviceRow: {
         message: 'On your device',
         context: "Indicates resources that are on the user's device.",
-      },
-      resourceCount: {
-        message: '{count, number, useGrouping}',
-        context: 'DO NOT TRANSLATE\nCopy the source string.',
       },
       sizeCol: {
         message: 'Size',
@@ -161,6 +152,11 @@
         message: 'New or updated',
         context:
           'Table header for the number and size of resources that will be added to a channel after upgrading',
+      },
+      freeDisk: {
+        message: 'Free disk space',
+        context:
+          "In the 'Advanced' section this indicates how much disk space is free on the Device.",
       },
     },
   };

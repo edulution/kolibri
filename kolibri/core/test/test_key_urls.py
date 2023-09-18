@@ -155,23 +155,9 @@ class AllUrlsTest(APITransactionTestCase):
         with patch(
             "kolibri.core.webpack.hooks.WebpackBundleHook.bundle", return_value=[]
         ), patch("kolibri.core.webpack.hooks.WebpackBundleHook.get_by_unique_id"):
-            # A slight hack to accommodate the SoUD tests ensuring that Coach and Facility plugins are not
-            # available to the frontend. If for any reason you decide to use get_device_setting in the
-            # kolibri_plugin of either Coach or Facility.
-            # This ensures that the subsequent import of urlpatterns doesn't try to touch the database and
-            # we touch the database in these two places.
-            with patch(
-                "kolibri.plugins.coach.kolibri_plugin.get_device_setting",
-                return_value=False,
-            ), patch(
-                "kolibri.plugins.facility.kolibri_plugin.get_device_setting",
-                return_value=False,
-            ), patch(
-                "kolibri.core.tasks.api.job_storage"
-            ):
-                from kolibri.deployment.default.urls import urlpatterns
+            from kolibri.deployment.default.urls import urlpatterns
 
-                check_urls(urlpatterns)
+            check_urls(urlpatterns)
 
     def test_anonymous_responses(self):
         self.check_responses()
@@ -216,13 +202,13 @@ class LogoutLanguagePersistenceTest(APITestCase):
         for lang_code in [lang[0] for lang in settings.LANGUAGES]:
             self.client.login(**self.credentials)
             response = self.client.post("/{}/logout".format(lang_code))
-            self.assertTrue(lang_code in response.url)
+            self.assertIn(lang_code, response.url)
 
     def test_default_language_without_namespaced_logout(self):
         # Test /logout without any in-path language code. Expect default language setting.
         self.client.login(**self.credentials)
         response = self.client.get("/logout")
-        self.assertTrue(get_settings_language() in response.url)
+        self.assertIn(get_settings_language(), response.url)
 
     def test_persistent_session_language_setting_on_logout(self):
         # Test when set on a session.
@@ -234,4 +220,4 @@ class LogoutLanguagePersistenceTest(APITestCase):
         session[LANGUAGE_SESSION_KEY] = test_lang
         session.save()
         response = self.client.post("/logout")
-        self.assertTrue(test_lang in response.url)
+        self.assertIn(test_lang, response.url)

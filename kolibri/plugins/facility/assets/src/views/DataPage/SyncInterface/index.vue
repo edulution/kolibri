@@ -1,6 +1,8 @@
 <template>
 
-  <KPageContainer>
+  <KPageContainer
+    :style="containerStyle"
+  >
 
     <h1>{{ $tr('syncData') }}</h1>
     <p>
@@ -17,26 +19,24 @@
       </template>
       <template #tbody>
         <tbody>
-          <tr v-if="theFacility">
+          <tr v-if="facility">
             <td>
               <FacilityNameAndSyncStatus
-                :facility="theFacility"
+                :facility="facility"
                 :isSyncing="isSyncing"
                 :syncHasFailed="syncHasFailed"
+                :goToRoute="manageSyncRoute"
               />
             </td>
-            <td class="button-col">
-              <KButtonGroup style="margin-top: 8px; overflow: visible">
+            <td
+              :style="tableCellStyle"
+              class="button-col"
+            >
+              <KButtonGroup style="margin-top: 12px; overflow: visible">
                 <KButton
-                  v-if="!theFacility.dataset.registered"
-                  appearance="raised-button"
-                  :text="$tr('register')"
-                  @click="displayModal(Modals.REGISTER_FACILITY)"
-                />
-                <KButton
-                  v-else-if="!Boolean(syncTaskId)"
                   appearance="raised-button"
                   :text="$tr('sync')"
+                  :disabled="isSyncing"
                   @click="displayModal(Modals.SYNC_FACILITY)"
                 />
                 <KIconButton
@@ -45,6 +45,7 @@
                   icon="optionsHorizontal"
                   :tooltip="coreString('optionsLabel')"
                   :ariaLabel="coreString('optionsLabel')"
+                  :disabled="isSyncing"
                   @click="toggleMenu"
                 />
                 <CoreMenu
@@ -59,16 +60,14 @@
                 >
                   <template #options>
                     <CoreMenuOption
-                      v-if="theFacility.dataset.registered"
                       :style="{ 'cursor': 'pointer', textAlign: 'left' }"
-                      :label="$tr('register')"
-                      @select="displayModal(Modals.REGISTER_FACILITY)"
+                      :label="coreString('manageSyncAction')"
+                      @select="manageSyncAction()"
                     />
                     <CoreMenuOption
-                      v-else
                       :style="{ 'cursor': 'pointer', textAlign: 'left' }"
-                      :label="$tr('sync')"
-                      @select="displayModal(Modals.SYNC_FACILITY)"
+                      :label="$tr('register')"
+                      @select="handleRegister()"
                     />
                   </template>
                 </CoreMenu>
@@ -78,7 +77,6 @@
         </tbody>
       </template>
     </CoreTable>
-
     <PrivacyModal
       v-if="modalShown === Modals.PRIVACY"
       @cancel="closeModal"
@@ -86,12 +84,14 @@
 
     <RegisterFacilityModal
       v-if="modalShown === Modals.REGISTER_FACILITY"
+      :displaySkipOption="false"
       @success="handleValidateSuccess"
       @cancel="closeModal"
+      @skip="handleKDPSync"
     />
     <ConfirmationRegisterModal
       v-if="modalShown === Modals.CONFIRMATION_REGISTER"
-      :targetFacility="theFacility"
+      :targetFacility="facility"
       :projectName="kdpProject.name"
       :token="kdpProject.token"
       @success="handleConfirmationSuccess"
@@ -100,10 +100,10 @@
 
     <SyncFacilityModalGroup
       v-if="modalShown === Modals.SYNC_FACILITY"
-      :facilityForSync="theFacility"
+      :facilityForSync="facility"
       @close="closeModal"
-      @success="handleSyncFacilitySuccess"
-      @failure="handleSyncFacilityFailure"
+      @syncKDP="handleKDPSync"
+      @syncPeer="handlePeerSync"
     />
 
   </KPageContainer>
@@ -121,11 +121,13 @@
     SyncFacilityModalGroup,
   } from 'kolibri.coreVue.componentSets.sync';
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
+  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
   import { TaskResource, FacilityResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
   import CoreMenuOption from 'kolibri.coreVue.components.CoreMenuOption';
   import { TaskStatuses } from 'kolibri.utils.syncTaskUtils';
+  import { SyncPageNames } from 'kolibri-common/components/SyncSchedule/constants';
   import PrivacyModal from './PrivacyModal';
 
   const Modals = Object.freeze({
@@ -148,9 +150,17 @@
       CoreMenuOption,
     },
     mixins: [commonSyncElements, commonCoreStrings],
+    setup() {
+      const { windowIsLarge, windowIsMedium, windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsLarge,
+        windowIsMedium,
+        windowIsSmall,
+      };
+    },
     data() {
       return {
-        theFacility: null,
+        facility: null,
         kdpProject: null, // { name, token }
         modalShown: null,
         syncTaskId: '',
@@ -160,6 +170,40 @@
         isMenuOpen: false,
       };
     },
+    computed: {
+      manageSyncRoute() {
+        return {
+          name: SyncPageNames.MANAGE_SYNC_SCHEDULE,
+          params: {
+            facility_id: this.facility.id,
+          },
+        };
+      },
+      containerStyle() {
+        if (this.windowIsMedium || this.windowIsLarge) {
+          return {
+            height: '300px',
+            overflow: 'visible',
+            marginBottom: '24px',
+          };
+        }
+        return {
+          marginBottom: '24px',
+        };
+      },
+      tableCellStyle() {
+        if (this.windowIsSmall || this.windowIsMedium) {
+          return {
+            padding: '8px 4px 4px',
+            maxWidth: '180px',
+          };
+        } else {
+          return {
+            maxWidth: '100px',
+          };
+        }
+      },
+    },
     beforeMount() {
       this.fetchFacility();
     },
@@ -167,10 +211,13 @@
       this.syncTaskId = '';
     },
     methods: {
+      manageSyncAction() {
+        this.$router.push(this.manageSyncRoute);
+      },
       fetchFacility() {
         FacilityResource.fetchModel({ id: this.$store.getters.activeFacilityId, force: true }).then(
           facility => {
-            this.theFacility = { ...facility };
+            this.facility = { ...facility };
           }
         );
       },
@@ -205,18 +252,43 @@
       },
       handleConfirmationSuccess(payload) {
         this.$store.commit('manageCSV/SET_REGISTERED', payload);
-        this.theFacility.dataset.registered = true;
+        this.facility.dataset.registered = true;
         this.closeModal();
       },
       handleSyncFacilitySuccess(taskId) {
         this.isSyncing = true;
         this.syncTaskId = taskId;
         this.pollSyncTask();
-        this.closeModal();
       },
       handleSyncFacilityFailure() {
         this.syncHasFailed = true;
+      },
+      handleRegister() {
+        this.closeMenu();
+        this.displayModal(Modals.REGISTER_FACILITY);
+      },
+      handleKDPSync() {
         this.closeModal();
+        this.startKdpSyncTask(this.facility.id)
+          .then(task => {
+            this.handleSyncFacilitySuccess(task.id);
+          })
+          .catch(() => {
+            this.handleSyncFacilityFailure();
+          });
+      },
+      handlePeerSync(peerData) {
+        this.closeModal();
+        this.startPeerSyncTask({
+          facility: this.facility.id,
+          device_id: peerData.id,
+        })
+          .then(task => {
+            this.handleSyncFacilitySuccess(task.id);
+          })
+          .catch(() => {
+            this.handleSyncFacilityFailure();
+          });
       },
       closeMenu({ focusMoreOptionsButton = true } = {}) {
         this.isMenuOpen = false;
@@ -276,8 +348,6 @@
 
   /* derived from .core-table-button-col */
   .button-col {
-    padding: 4px;
-    padding-top: 8px;
     text-align: right;
   }
 
@@ -290,6 +360,11 @@
     top: 3px;
     display: inline-block;
     margin-right: 8px;
+  }
+
+  /deep/ .button-group-item {
+    height: max-content;
+    margin-bottom: 8px;
   }
 
 </style>

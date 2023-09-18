@@ -2,6 +2,17 @@
 
   <FacilityAppBarPage>
     <KPageContainer>
+      <p>
+        <KRouterLink
+          v-if="userIsMultiFacilityAdmin"
+          :to="{
+            name: facilityPageLinks.AllFacilitiesPage.name,
+            params: { subtopicName: 'UserPage' }
+          }"
+          icon="back"
+          :text="coreString('changeLearningFacility')"
+        />
+      </p>
       <KGrid>
         <KGridItem
           :layout8="{ span: 4 }"
@@ -50,6 +61,7 @@
           <UserTable
             class="move-down user-roster"
             :users="facilityUsers"
+            :dataLoading="dataLoading"
             :emptyMessage="emptyMessageForItems(facilityUsers, search)"
             :showDemographicInfo="true"
           >
@@ -103,7 +115,7 @@
   import FilterTextbox from 'kolibri.coreVue.components.FilterTextbox';
   import UserTable from 'kolibri.coreVue.components.UserTable';
   import cloneDeep from 'lodash/cloneDeep';
-  import PaginatedListContainerWithBackend from '../PaginatedListContainerWithBackend';
+  import PaginatedListContainerWithBackend from 'kolibri-common/components/PaginatedListContainerWithBackend';
   import { Modals } from '../../constants';
   import FacilityAppBarPage from '../FacilityAppBarPage';
   import ResetUserPasswordModal from './ResetUserPasswordModal';
@@ -134,8 +146,13 @@
       };
     },
     computed: {
-      ...mapGetters(['currentUserId', 'isSuperuser']),
-      ...mapState('userManagement', ['facilityUsers', 'totalPages', 'usersCount']),
+      ...mapGetters([
+        'currentUserId',
+        'isSuperuser',
+        'userIsMultiFacilityAdmin',
+        'facilityPageLinks',
+      ]),
+      ...mapState('userManagement', ['facilityUsers', 'totalPages', 'usersCount', 'dataLoading']),
       Modals: () => Modals,
       userKinds() {
         return [

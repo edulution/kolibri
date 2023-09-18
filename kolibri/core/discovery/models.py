@@ -1,12 +1,16 @@
 import uuid
-from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from .utils.network.connections import check_connection_info
+from kolibri.core.auth.models import FacilityUser
+from kolibri.core.auth.permissions.general import IsOwn
+from kolibri.core.upgrade import matches_version
 from kolibri.deployment.default.sqlite_db_names import NETWORK_LOCATION
+from kolibri.utils.data import ChoicesEnum
+from kolibri.utils.time_utils import local_now
+from kolibri.utils.version import truncate_version
 
 
 def _filter_out_unsupported_fields(fields):
@@ -14,7 +18,32 @@ def _filter_out_unsupported_fields(fields):
 
 
 def _uuid_string():
-    return str(uuid.uuid4())
+    return str(uuid.uuid4().hex)
+
+
+class ConnectionStatus(ChoicesEnum):
+    Unknown = "Unknown"
+    # Connection failed at the lowest level, unable to establish socket connection
+    ConnectionFailure = "ConnectionFailure"
+    # Connection was established but timed out waiting for response
+    ResponseTimeout = "ResponseTimeout"
+    # Connection was established but the response is a server error (5xx)
+    ResponseFailure = "ResponseFailure"
+    # Connection was established but the response isn't right and isn't a server error
+    InvalidResponse = "InvalidResponse"
+    # Connection was established but the response didn't match information stored on our end
+    Conflict = "Conflict"
+    # A reachable Kolibri instance
+    Okay = "Okay"
+
+
+class LocationTypes(ChoicesEnum):
+    # reserved locations like Studio and KDP
+    Reserved = "reserved"
+    # static locations added by the user
+    Static = "static"
+    # dynamic locations discovered by the Kolibri instance
+    Dynamic = "dynamic"
 
 
 class NetworkLocation(models.Model):
@@ -22,8 +51,6 @@ class NetworkLocation(models.Model):
     ``NetworkLocation`` stores information about a network address through which an instance of Kolibri can be accessed,
     which can be used to sync content or data.
     """
-
-    NEVER = datetime(1000, 4, 1, 0, 0, 0, 0, tzinfo=timezone.utc)
 
     class Meta:
         ordering = ["added"]
@@ -33,10 +60,29 @@ class NetworkLocation(models.Model):
     id = models.CharField(
         primary_key=True, max_length=36, default=_uuid_string, editable=False
     )
-    dynamic = models.BooleanField(default=False)
+    location_type = models.CharField(
+        max_length=8,
+        blank=False,
+        choices=LocationTypes.choices(),
+        default=LocationTypes.Static,
+    )
 
     base_url = models.CharField(max_length=100)
     nickname = models.CharField(max_length=100, blank=True)
+    # the last known IP when we successfully connected to the instance, specifically for static
+    # locations, so we have information on whether it's local or on the internet
+    last_known_ip = models.GenericIPAddressField(null=True, blank=True)
+    # field to associate instances with a unique ID corresponding to a network that they were added
+    broadcast_id = models.CharField(max_length=36, blank=True, null=True)
+
+    # fields to track if the instance was contactable and the # of attempts or issues encountered
+    connection_status = models.CharField(
+        max_length=32,
+        blank=False,
+        choices=ConnectionStatus.choices(),
+        default=ConnectionStatus.Unknown,
+    )
+    connection_faults = models.IntegerField(null=False, default=0)
 
     # these properties strictly mirror the info given by the device
     application = models.CharField(max_length=32, blank=True)
@@ -45,21 +91,46 @@ class NetworkLocation(models.Model):
     device_name = models.CharField(max_length=100, blank=True)
     operating_system = models.CharField(max_length=32, blank=True)
     subset_of_users_device = models.BooleanField(default=False)
+    min_content_schema_version = models.CharField(max_length=32, blank=True, null=True)
 
     # dates and times
     added = models.DateTimeField(auto_now_add=True, db_index=True)
     last_accessed = models.DateTimeField(auto_now=True)
 
+    # Determines whether device is local or on the internet
+    is_local = models.BooleanField(default=False)
+
+    @property
+    def since_last_accessed(self):
+        """
+        :return: The number of seconds since the location was last accessed
+        """
+        return (local_now() - self.last_accessed).seconds
+
     @property
     def available(self):
         """
-        If this connection was checked recently, report that result,
-        otherwise do a fresh check.
+        If this connection was checked recently, report that result
         """
         if not self.base_url:
             return False
-        connection_info = check_connection_info(self.base_url)
-        return bool(connection_info)
+
+        return self.connection_status == ConnectionStatus.Okay
+
+    @property
+    def dynamic(self):
+        return self.location_type == LocationTypes.Dynamic
+
+    @dynamic.setter
+    def dynamic(self, value):
+        """
+        TODO: remove this setter once we've migrated to the new location_type field
+        """
+        self.location_type = LocationTypes.Dynamic if value else LocationTypes.Static
+
+    @property
+    def reserved(self):
+        return self.location_type == LocationTypes.Reserved
 
     @classmethod
     def has_field(cls, field):
@@ -69,11 +140,21 @@ class NetworkLocation(models.Model):
         except models.FieldDoesNotExist:
             return False
 
+    def matches_version(self, version):
+        """
+        Truncates the kolibri version to the patch level (0.16.0a1 -> 0.16.0) and compares it with
+        version range, which can use operators `>` or `<` for comparing below or above a specified
+        version
+        :param version: the version filter with operators
+        :return: a bool
+        """
+        return matches_version(truncate_version(self.kolibri_version), version)
+
 
 class StaticNetworkLocationManager(models.Manager):
     def get_queryset(self):
         queryset = super(StaticNetworkLocationManager, self).get_queryset()
-        return queryset.filter(dynamic=False).all()
+        return queryset.filter(location_type=LocationTypes.Static).all()
 
 
 class StaticNetworkLocation(NetworkLocation):
@@ -83,14 +164,14 @@ class StaticNetworkLocation(NetworkLocation):
         proxy = True
 
     def save(self, *args, **kwargs):
-        self.dynamic = False
+        self.location_type = LocationTypes.Static
         return super(StaticNetworkLocation, self).save(*args, **kwargs)
 
 
 class DynamicNetworkLocationManager(models.Manager):
     def get_queryset(self):
         queryset = super(DynamicNetworkLocationManager, self).get_queryset()
-        return queryset.filter(dynamic=True).all()
+        return queryset.filter(location_type=LocationTypes.Dynamic).all()
 
     def create(self, *args, **kwargs):
         kwargs = _filter_out_unsupported_fields(kwargs)
@@ -111,7 +192,8 @@ class DynamicNetworkLocation(NetworkLocation):
         proxy = True
 
     def save(self, *args, **kwargs):
-        self.dynamic = True
+        self.location_type = LocationTypes.Dynamic
+        self.is_local = True
 
         if self.id and self.instance_id and self.id != self.instance_id:
             raise ValidationError(
@@ -173,3 +255,21 @@ class NetworkLocationRouter(object):
             return False
         # No opinion for all other scenarios
         return None
+
+
+class PinnedDevice(models.Model):
+
+    id = models.UUIDField(primary_key=True, max_length=36, default=_uuid_string)
+    instance_id = models.UUIDField(blank=False)
+    user = models.ForeignKey(FacilityUser, blank=False)
+    created = models.DateTimeField(default=timezone.now, db_index=True)
+
+    permissions = IsOwn()
+
+    class Meta:
+        # Ensures that we do not save duplicates, otherwise raises a
+        # django.db.utils.IntegrityError
+        unique_together = (
+            "user",
+            "instance_id",
+        )

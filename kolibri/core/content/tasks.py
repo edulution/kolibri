@@ -1,26 +1,61 @@
 import requests
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from rest_framework import serializers
 from six import with_metaclass
+from six.moves.urllib.parse import urljoin
 
+from kolibri.core.auth.models import FacilityDataset
+from kolibri.core.content.models import ChannelMetadata
+from kolibri.core.content.utils.channel_import import import_channel_from_data
 from kolibri.core.content.utils.channels import get_mounted_drive_by_id
 from kolibri.core.content.utils.channels import read_channel_metadata_from_db_file
+from kolibri.core.content.utils.content_request import process_content_requests
+from kolibri.core.content.utils.content_request import synchronize_content_requests
 from kolibri.core.content.utils.paths import get_channel_lookup_url
 from kolibri.core.content.utils.paths import get_content_database_file_path
+from kolibri.core.content.utils.resource_import import DiskChannelResourceImportManager
+from kolibri.core.content.utils.resource_import import DiskChannelUpdateManager
+from kolibri.core.content.utils.resource_import import (
+    RemoteChannelResourceImportManager,
+)
+from kolibri.core.content.utils.resource_import import RemoteChannelUpdateManager
+from kolibri.core.content.utils.settings import automatic_download_enabled
 from kolibri.core.content.utils.upgrade import diff_stats
 from kolibri.core.discovery.models import NetworkLocation
 from kolibri.core.discovery.utils.network.client import NetworkClient
+from kolibri.core.discovery.utils.network.errors import IncompatibleVersionError
 from kolibri.core.discovery.utils.network.errors import NetworkLocationNotFound
 from kolibri.core.discovery.utils.network.errors import ResourceGoneError
 from kolibri.core.serializers import HexOnlyUUIDField
 from kolibri.core.tasks.decorators import register_task
+from kolibri.core.tasks.job import default_status_text
+from kolibri.core.tasks.job import JobStatus
 from kolibri.core.tasks.job import Priority
+from kolibri.core.tasks.job import State
 from kolibri.core.tasks.permissions import CanManageContent
+from kolibri.core.tasks.utils import get_current_job
 from kolibri.core.tasks.validation import JobValidator
+from kolibri.core.utils.urls import reverse_remote
 from kolibri.utils import conf
-
+from kolibri.utils.translation import ugettext as _
+from kolibri.utils.version import version_matches_range
 
 QUEUE = "content"
+
+
+def get_status(job):
+    # Translators: Message shown to an App user when the device's library is being updated
+    # either with new resources, or unwanted resources being deleted.
+    title = _("Updating your library")
+    if job.state == State.COMPLETED:
+        # Translators: Message shown to an App user when an update to the library has been successful.
+        title = _("Library updated")
+    elif job.state == State.FAILED or job.state == State.CANCELED:
+        # Translators: Message shown to an App user when an update to the library has failed.
+        title = _("Library update failed")
+    text = default_status_text(job)
+    return JobStatus(title, text)
 
 
 class ChannelValidator(JobValidator):
@@ -58,13 +93,17 @@ class ChannelResourcesValidator(ChannelValidator):
 
 class ChannelResourcesImportValidator(ChannelResourcesValidator):
     update = serializers.BooleanField(default=False)
+    fail_on_error = serializers.BooleanField(default=False)
     new_version = serializers.IntegerField(required=False)
+    all_thumbnails = serializers.BooleanField(default=False)
 
     def validate(self, data):
         job_data = super(ChannelResourcesImportValidator, self).validate(data)
         job_data["kwargs"].update(
             {
                 "update": data.get("update"),
+                "fail_on_error": data.get("fail_on_error"),
+                "all_thumbnails": data.get("all_thumbnails"),
             }
         )
         if data.get("new_version"):
@@ -104,21 +143,31 @@ class LocalChannelImportResourcesValidator(LocalMixin, ChannelResourcesImportVal
     permission_classes=[CanManageContent],
     queue=QUEUE,
     long_running=True,
+    status_fn=get_status,
 )
 def diskcontentimport(
-    channel_id, drive_id, update=False, node_ids=None, exclude_node_ids=None
+    channel_id,
+    drive_id,
+    update=False,
+    node_ids=None,
+    exclude_node_ids=None,
+    fail_on_error=False,
+    all_thumbnails=False,
 ):
+    manager_class = (
+        DiskChannelUpdateManager if update else DiskChannelResourceImportManager
+    )
     drive = get_mounted_drive_by_id(drive_id)
-    call_command(
-        "importcontent",
-        "disk",
+    manager = manager_class(
         channel_id,
-        drive.datafolder,
+        path=drive.datafolder,
         drive_id=drive_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
-        import_updates=update,
+        fail_on_error=fail_on_error,
+        all_thumbnails=all_thumbnails,
     )
+    manager.run()
 
 
 class RemoteImportMixin(with_metaclass(serializers.SerializerMetaclass)):
@@ -136,7 +185,7 @@ class RemoteImportMixin(with_metaclass(serializers.SerializerMetaclass)):
             },
         )
         try:
-            baseurl = NetworkClient(address=peer["base_url"]).base_url
+            baseurl = NetworkClient.build_for_address(peer["base_url"]).base_url
             peer["base_url"] = baseurl
         except NetworkLocationNotFound:
             raise ResourceGoneError()
@@ -152,10 +201,12 @@ class RemoteChannelImportValidator(RemoteImportMixin, ChannelValidator):
 
 @register_task(
     validator=RemoteChannelImportValidator,
+    track_progress=True,
     cancellable=True,
     permission_classes=[CanManageContent],
     priority=Priority.HIGH,
     queue=QUEUE,
+    status_fn=get_status,
 )
 def remotechannelimport(channel_id, baseurl=None, peer_id=None):
     call_command(
@@ -180,6 +231,7 @@ class RemoteChannelResourcesImportValidator(
     permission_classes=[CanManageContent],
     queue=QUEUE,
     long_running=True,
+    status_fn=get_status,
 )
 def remotecontentimport(
     channel_id,
@@ -188,17 +240,159 @@ def remotecontentimport(
     node_ids=None,
     exclude_node_ids=None,
     update=False,
+    fail_on_error=False,
+    all_thumbnails=False,
 ):
-    call_command(
-        "importcontent",
-        "network",
+    manager_class = (
+        RemoteChannelUpdateManager if update else RemoteChannelResourceImportManager
+    )
+    manager = manager_class(
         channel_id,
         baseurl=baseurl,
         peer_id=peer_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
-        import_updates=update,
+        fail_on_error=fail_on_error,
+        all_thumbnails=all_thumbnails,
     )
+    manager.run()
+
+
+class ResourceNodeValidator(JobValidator):
+    node_id = HexOnlyUUIDField()
+    node_name = serializers.CharField()
+
+    def validate(self, data):
+        job_data = super(ResourceNodeValidator, self).validate(data)
+        job_data.update(
+            {
+                "kwargs": {},
+                "args": [data["node_id"]],
+                "extra_metadata": dict(
+                    resource_name=data["node_name"], node_id=data["node_id"]
+                ),
+            }
+        )
+        return job_data
+
+
+MIN_RESOURCE_IMPORT_VERSION = ">0.15"
+
+
+class RemoteResourceImportValidator(ResourceNodeValidator):
+    peer = serializers.PrimaryKeyRelatedField(
+        required=False, queryset=NetworkLocation.objects.all().values("base_url", "id")
+    )
+
+    def validate(self, data):
+        job_data = super(RemoteResourceImportValidator, self).validate(data)
+        peer = data.get(
+            "peer",
+            {
+                "base_url": conf.OPTIONS["Urls"]["CENTRAL_CONTENT_BASE_URL"],
+                "id": None,
+            },
+        )
+        try:
+            client = NetworkClient.build_for_address(peer["base_url"])
+            if client.device_info[
+                "application"
+            ] == "kolibri" and not version_matches_range(
+                client.device_info["kolibri_version"], MIN_RESOURCE_IMPORT_VERSION
+            ):
+                raise IncompatibleVersionError(
+                    "Remote Kolibri instance must be 0.16.0 or higher"
+                )
+            peer["base_url"] = client.base_url
+        except NetworkLocationNotFound:
+            raise ResourceGoneError()
+        job_data["extra_metadata"].update(dict(peer_id=peer["id"]))
+        job_data["kwargs"]["baseurl"] = peer["base_url"]
+        job_data["kwargs"]["peer_id"] = peer["id"]
+        return job_data
+
+
+@register_task(
+    validator=RemoteResourceImportValidator,
+    track_progress=True,
+    cancellable=True,
+    permission_classes=[CanManageContent],
+    queue=QUEUE,
+    long_running=False,
+    status_fn=get_status,
+)
+def remoteresourceimport(
+    node_id,
+    baseurl=None,
+    peer_id=None,
+):
+    current_job = get_current_job()
+    metadata_url = urljoin(
+        baseurl,
+        reverse_remote(
+            baseurl, "kolibri:core:importmetadata-detail", kwargs={"pk": node_id}
+        ),
+    )
+    response = requests.get(metadata_url)
+    response.raise_for_status()
+    import_metadata = response.json()
+    cancel_check = None if not current_job else current_job.check_for_cancel
+    import_channel_from_data(import_metadata, cancel_check, partial=True)
+    channel_id = import_metadata[ChannelMetadata._meta.db_table][0]["id"]
+    import_manager = RemoteChannelResourceImportManager(
+        channel_id, peer_id=peer_id, baseurl=baseurl, node_ids=[node_id]
+    )
+    import_manager.run()
+
+
+class AutomaticDownloadValidator(JobValidator):
+    def validate(self, data):
+        job_data = super(AutomaticDownloadValidator, self).validate(data)
+        if not automatic_download_enabled():
+            raise ValidationError("Automatic download is not enabled")
+        return job_data
+
+
+@register_task(
+    validator=AutomaticDownloadValidator,
+    queue=QUEUE,
+    long_running=True,
+    status_fn=get_status,
+)
+def automatic_resource_import():
+    """
+    Processes content download and removal requests
+    """
+    if not automatic_download_enabled():
+        return
+    process_content_requests()
+
+
+@register_task(
+    long_running=True,
+    status_fn=get_status,
+)
+def automatic_synchronize_content_requests_and_import():
+    """
+    Task that synchronizes content requests for all facilities/datasets on the device and enqueues the automatic_resource_import task afterwards.
+    - Calls synchronize_content_requests for all facilities/datasets on the device.
+    - Enqueues the automatic_resource_import task after synchronizing content requests.
+    """
+    # A safety check to see if the device settings are changed already?
+    if not automatic_download_enabled():
+        return
+
+    dataset_ids = FacilityDataset.objects.values_list("id", flat=True)
+
+    # Synchronize content requests for each dataset
+    for dataset_id in dataset_ids:
+        # in case it takes a long time to synchronize content requests for a dataset, we want to
+        # check if the device settings are changed
+        if not automatic_download_enabled():
+            return
+        synchronize_content_requests(dataset_id, None)
+
+    automatic_resource_import.enqueue_if_not()
 
 
 class ExportChannelResourcesValidator(LocalMixin, ChannelResourcesValidator):
@@ -212,6 +406,7 @@ class ExportChannelResourcesValidator(LocalMixin, ChannelResourcesValidator):
     permission_classes=[CanManageContent],
     queue=QUEUE,
     long_running=True,
+    status_fn=get_status,
 )
 def diskexport(
     channel_id,
@@ -250,6 +445,7 @@ class DeleteChannelValidator(ChannelResourcesValidator):
     permission_classes=[CanManageContent],
     queue=QUEUE,
     long_running=True,
+    status_fn=get_status,
 )
 def deletechannel(
     channel_id=None,
@@ -276,6 +472,7 @@ def deletechannel(
     permission_classes=[CanManageContent],
     queue=QUEUE,
     long_running=True,
+    status_fn=get_status,
 )
 def remoteimport(
     channel_id,
@@ -284,6 +481,8 @@ def remoteimport(
     node_ids=None,
     exclude_node_ids=None,
     update=False,
+    fail_on_error=False,
+    all_thumbnails=False,
 ):
     call_command(
         "importchannel",
@@ -293,16 +492,23 @@ def remoteimport(
         update_progress=None,
     )
 
-    call_command(
-        "importcontent",
-        "network",
+    if update:
+        current_job = get_current_job()
+        current_job.update_metadata(database_ready=True)
+
+    manager_class = (
+        RemoteChannelUpdateManager if update else RemoteChannelResourceImportManager
+    )
+    manager = manager_class(
         channel_id,
         baseurl=baseurl,
         peer_id=peer_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
-        import_updates=update,
+        fail_on_error=fail_on_error,
+        all_thumbnails=all_thumbnails,
     )
+    manager.run()
 
 
 @register_task(
@@ -312,9 +518,16 @@ def remoteimport(
     permission_classes=[CanManageContent],
     queue=QUEUE,
     long_running=True,
+    status_fn=get_status,
 )
 def diskimport(
-    channel_id, drive_id, update=False, node_ids=None, exclude_node_ids=None
+    channel_id,
+    drive_id,
+    update=False,
+    node_ids=None,
+    exclude_node_ids=None,
+    fail_on_error=False,
+    all_thumbnails=False,
 ):
     drive = get_mounted_drive_by_id(drive_id)
     directory = drive.datafolder
@@ -326,16 +539,24 @@ def diskimport(
         directory,
     )
 
-    call_command(
-        "importcontent",
-        "disk",
+    if update:
+        current_job = get_current_job()
+        current_job.update_metadata(database_ready=True)
+
+    manager_class = (
+        DiskChannelUpdateManager if update else DiskChannelResourceImportManager
+    )
+    drive = get_mounted_drive_by_id(drive_id)
+    manager = manager_class(
         channel_id,
-        directory,
+        path=drive.datafolder,
         drive_id=drive_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
-        import_updates=update,
+        fail_on_error=fail_on_error,
+        all_thumbnails=all_thumbnails,
     )
+    manager.run()
 
 
 class LocalChannelImportValidator(LocalMixin, ChannelValidator):
@@ -344,10 +565,12 @@ class LocalChannelImportValidator(LocalMixin, ChannelValidator):
 
 @register_task(
     validator=LocalChannelImportValidator,
+    track_progress=True,
     cancellable=True,
     permission_classes=[CanManageContent],
     priority=Priority.HIGH,
     queue=QUEUE,
+    status_fn=get_status,
 )
 def diskchannelimport(
     channel_id,

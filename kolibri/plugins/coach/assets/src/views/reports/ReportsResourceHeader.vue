@@ -23,6 +23,7 @@
           />
         </template>
       </HeaderWithOptions>
+      <MissingResourceAlert v-if="!$isPrint && !resource.available" :multiple="false" />
       <h1>
         <KLabeledIcon :icon="resource.kind" :label="resource.title" />
       </h1>
@@ -54,7 +55,7 @@
         </template>
       </HeaderTableRow>
       <HeaderTableRow
-        :keyText="$tr('suggestedTimeToCompleteHeader')"
+        :keyText="coreString('suggestedTime')"
       >
         <template #value>
           {{ resource.duration || 'Not available' }}
@@ -129,6 +130,7 @@
   import InfoIcon from 'kolibri.coreVue.components.CoreInfoIcon';
   import SlotTruncator from 'kolibri.coreVue.components.SlotTruncator';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
   import {
     licenseLongName,
     licenseDescriptionForConsumer,
@@ -140,6 +142,7 @@
   export default {
     name: 'ReportsResourceHeader',
     components: {
+      MissingResourceAlert,
       HeaderWithOptions,
       InfoIcon,
       SlotTruncator,
@@ -193,11 +196,6 @@
       totalQuestionsHeader: {
         message: 'Total questions',
         context: 'Refers to the total number of questions in a quiz.',
-      },
-      suggestedTimeToCompleteHeader: {
-        message: 'Suggested time',
-        context:
-          'Refers to the recommended time it takes to complete a quiz.\n\nDuration is set by whoever made the quiz originally.',
       },
     },
   };

@@ -2,14 +2,16 @@ import VueRouter from 'vue-router';
 
 import { createLocalVue, shallowMount, mount } from '@vue/test-utils';
 import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+import { useDevicesWithFacility } from 'kolibri.coreVue.componentSets.sync';
+import plugin_data from 'plugin_data';
 import makeStore from '../makeStore';
 import CustomContentRenderer from '../../src/views/ChannelRenderer/CustomContentRenderer';
 import { PageNames } from '../../src/constants';
 import TopicsPage from '../../src/views/TopicsPage';
 // eslint-disable-next-line import/named
 import useSearch, { useSearchMock } from '../../src/composables/useSearch';
-import plugin_data from 'plugin_data';
 
+jest.mock('kolibri.coreVue.componentSets.sync');
 jest.mock('plugin_data', () => {
   return {
     __esModule: true,
@@ -23,6 +25,7 @@ jest.mock('plugin_data', () => {
   };
 });
 
+jest.mock('../../src/composables/useContentLink');
 jest.mock('../../src/composables/useSearch');
 // Needed to test anything using mount() where children use this composable
 jest.mock('../../src/composables/useLearningActivities');
@@ -35,7 +38,6 @@ useSearch.mockImplementation(() => ({
   searchQuery: '',
   searchLoading: false,
   searchError: null,
-  setSearchWithinDescendant: jest.fn(),
 }));
 
 const localVue = createLocalVue();
@@ -64,17 +66,21 @@ describe('TopicsPage', () => {
       ...store.state.core,
       loading: false,
     };
+    useDevicesWithFacility.mockReturnValue({
+      devices: [
+        {
+          id: '1',
+          available: true,
+        },
+      ],
+    });
   });
 
   describe('When current topic modality is CUSTOM_NAVIGATION and custom channel nav is enabled', () => {
     it('renders a CustomContentRenderer', async () => {
       plugin_data.enableCustomChannelNav.mockImplementation(() => true);
 
-      useSearch.mockImplementation(() =>
-        useSearchMock({
-          setSearchWithinDescendant: jest.fn(),
-        })
-      );
+      useSearch.mockImplementation(() => useSearchMock());
 
       store.state.topicsTree.topic = {
         ...store.state.topicsTree.topic,
@@ -142,7 +148,28 @@ describe('TopicsPage', () => {
   describe('showing cards', () => {
     let wrapper;
     beforeEach(() => {
-      store.state.topicsTree.contents = [{ kind: ContentNodeKinds.TOPIC }];
+      store.state.topicsTree.contents = [
+        {
+          kind: ContentNodeKinds.TOPIC,
+          is_leaf: false,
+          children: {
+            results: [
+              { kind: ContentNodeKinds.VIDEO, is_leaf: true },
+              { kind: ContentNodeKinds.VIDEO, is_leaf: true },
+            ],
+          },
+        },
+        {
+          kind: ContentNodeKinds.TOPIC,
+          is_leaf: false,
+          children: {
+            results: [
+              { kind: ContentNodeKinds.VIDEO, is_leaf: true },
+              { kind: ContentNodeKinds.VIDEO, is_leaf: true },
+            ],
+          },
+        },
+      ];
       wrapper = shallowMount(TopicsPage, {
         store: store,
         localVue,
@@ -201,7 +228,6 @@ describe('TopicsPage', () => {
           searchQuery: '',
           searchLoading: false,
           searchError: null,
-          setSearchWithinDescendant: jest.fn(),
         }));
 
         wrapper = mount(TopicsPage, {
@@ -233,7 +259,6 @@ describe('TopicsPage', () => {
           searchQuery: '',
           searchLoading: false,
           searchError: null,
-          setSearchWithinDescendant: jest.fn(),
         }));
         wrapper = mount(TopicsPage, {
           store: store,

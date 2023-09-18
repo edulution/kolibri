@@ -22,29 +22,36 @@ jobs:
         uses: fkirc/skip-duplicate-actions@master
         with:
           github_token: ${{ github.token }}
-          paths: '["requirements/*.txt", "package.json", "**/package.json", "yarn.lock", "test/conditional/test_licenses.sh"]'
+          paths: '["requirements/*.txt", "package.json", "**/package.json", "yarn.lock", "test/conditional/test_licenses.sh", ".github/workflows/check_licenses.yml"]'
   licenses:
     name: Licenses check
     needs: pre_job
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Use Node.js
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v3
       with:
         node-version: '16.x'
     - name: Cache Node.js modules
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: '**/node_modules'
         key: ${{ runner.OS }}-node-${{ hashFiles('**/yarn.lock') }}
         restore-keys: |
           ${{ runner.OS }}-node-
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
     - name: Install dependencies
       run: |
+        # Use a Python virtual environment to ensure
+        # our license check is only for packages
+        # explicitly installed for Kolibri
+        python -m venv ./virtualenv_dir
+        source ./virtualenv_dir/bin/activate
         python -m pip install --upgrade pip
+        # Actually install all our requirements before doing a license check
+        pip install -r requirements.txt
         yarn --frozen-lockfile
         npm rebuild node-sass
     - name: Check Licenses

@@ -18,10 +18,6 @@ export function getChannelObject(state) {
   };
 }
 
-export function totalProgress(state) {
-  return state.totalProgress;
-}
-
 export function totalPoints(state) {
   return state.totalProgress * MaxPointsPerContent;
 }
@@ -32,4 +28,8 @@ export function pageSessionId(state) {
 
 export function allowAccess(state, getters, rootState, rootGetters) {
   return state.allowRemoteAccess || rootGetters.isAppContext;
+}
+
+export function isPageLoading(state) {
+  return state.loading;
 }

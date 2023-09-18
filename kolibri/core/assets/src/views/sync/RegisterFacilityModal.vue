@@ -1,12 +1,7 @@
 <template>
 
   <KModal
-    :title="$tr('registerFacility')"
-    :submitText="coreString('continueAction')"
-    :cancelText="coreString('cancelAction')"
-    :submitDisabled="submitting"
-    @submit="validateToken"
-    @cancel="closeModal"
+    :title="registerFacility.$tr('registerFacility')"
   >
     <p>{{ $tr('enterToken') }}</p>
     <KTextbox
@@ -18,6 +13,29 @@
       :invalidText="$tr('invalidToken')"
       @input="invalid = false"
     />
+    <template #actions>
+      <KButton
+        :text="coreString('cancelAction')"
+        appearance="flat-button"
+        class="kbuttons"
+        @click="closeModal"
+      />
+      <KButton
+        v-if="displaySkipOption"
+        :text="skip.$tr('skipAction')"
+        appearance="raised-button"
+        class="kbuttons"
+        @click="skipRegister"
+      />
+      <KButton
+        :text="coreString('continueAction')"
+        appearance="raised-button"
+        primary
+        :disabled="submitting || !token"
+        @click="validateToken"
+      />
+
+    </template>
   </KModal>
 
 </template>
@@ -29,20 +47,40 @@
   import CatchErrors from 'kolibri.utils.CatchErrors';
   import { ERROR_CONSTANTS } from 'kolibri.coreVue.vuex.constants';
   import { PortalResource } from 'kolibri.resources';
+  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import GettingStartedFormAlt from '../../../../../plugins/setup_wizard/assets/src/views/onboarding-forms/GettingStartedFormAlt.vue';
+  import ConfirmationRegisterModal from './ConfirmationRegisterModal';
 
   export default {
     name: 'RegisterFacilityModal',
     mixins: [commonCoreStrings],
+    props: {
+      displaySkipOption: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+      facility: {
+        type: Object,
+        required: false,
+        default: () => ({}),
+      },
+    },
     data() {
       return {
         submitting: false,
         token: null,
         invalid: false,
+        registerFacility: crossComponentTranslator(ConfirmationRegisterModal),
+        skip: crossComponentTranslator(GettingStartedFormAlt),
       };
     },
     methods: {
       closeModal() {
         this.$emit('cancel');
+      },
+      skipRegister() {
+        this.$emit('skip', this.facility);
       },
       validateToken() {
         // TODO synchronously handle empty strings
@@ -70,10 +108,6 @@
       },
     },
     $trs: {
-      registerFacility: {
-        message: 'Register facility',
-        context: "An action that describes 'registering' a facility to the Kolibri Data Portal.",
-      },
       enterToken: {
         message: 'Enter a project token from Kolibri Data Portal',
         context:
@@ -98,5 +132,9 @@
 <style lang="scss" scoped>
 
   @import '~kolibri-design-system/lib/styles/definitions';
+
+  .kbuttons {
+    margin-right: 10px;
+  }
 
 </style>

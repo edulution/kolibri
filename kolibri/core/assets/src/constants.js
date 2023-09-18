@@ -100,6 +100,10 @@ export const SIGNED_OUT_DUE_TO_INACTIVITY = 'SIGNED_OUT_DUE_TO_INACTIVITY';
 
 export const UPDATE_MODAL_DISMISSED = 'UPDATE_MODAL_DISMISSED';
 
+export const LESSON_VISIBILITY_MODAL_DISMISSED = 'LESSON_VISIBILITY_MODAL_DISMISSED';
+
+export const QUIZ_REPORT_VISIBILITY_MODAL_DISMISSED = 'QUIZ_REPORT_VISIBILITY_MODAL_DISMISSED';
+
 export const NavComponentSections = {
   ACCOUNT: 'account',
 };
@@ -111,7 +115,24 @@ export const SyncStatus = {
   UNABLE_TO_SYNC: 'UNABLE_TO_SYNC',
   NOT_RECENTLY_SYNCED: 'NOT_RECENTLY_SYNCED',
   UNABLE_OR_NOT_SYNCED: 'UNABLE_OR_NOT_SYNCED',
+  INSUFFICIENT_STORAGE: 'INSUFFICIENT_STORAGE',
   NOT_CONNECTED: 'NOT_CONNECTED',
+};
+
+export const LearnerDeviceStatus = {
+  INSUFFICIENT_STORAGE: 'InsufficientStorage',
+};
+
+export const DownloadRequestStatus = {
+  QUEUED: 'QUEUED',
+  DOWNLOADED: 'DOWNLOADED',
+  FAILED: 'FAILED',
+};
+
+export const DownloadRequestReason = {
+  USER_INITIATED: 'USER_INITIATED',
+  DOWNLOADED_BY_ADMIN: 'DOWNLOADED_BY_ADMIN',
+  AUTO_SYNCED: 'AUTO_SYNCED',
 };
 
 export const ERROR_CONSTANTS = {
@@ -140,6 +161,12 @@ export const ERROR_CONSTANTS = {
   DEVICE_LIMITATIONS: 'DEVICE_LIMITATIONS',
 };
 
+export const ContentErrorConstants = {
+  // These are constants that can be used to define the type of error that a
+  // content renderer has encountered.
+  LOADING_ERROR: 'LOADING_ERROR',
+};
+
 export const DemographicConstants = {
   NOT_SPECIFIED: 'NOT_SPECIFIED',
   DEFERRED: 'DEFERRED',
@@ -150,4 +177,12 @@ export const FacilityUserGender = {
   MALE: 'MALE',
   FEMALE: 'FEMALE',
   ...DemographicConstants,
+};
+
+export const IsPinAuthenticated = 'is_pin_authenticated';
+
+// maps to possible network applications that we import/export content from
+export const ApplicationTypes = {
+  KOLIBRI: 'kolibri',
+  STUDIO: 'studio',
 };

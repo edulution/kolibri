@@ -98,6 +98,7 @@ class ValidateContentTaskTestCase(TestCase):
             validator.validated_data,
             {
                 "args": [self.channel_id],
+                "enqueue_args": {},
                 "kwargs": {
                     "exclude_node_ids": [exclude_id],
                     "node_ids": [include_id],
@@ -144,9 +145,9 @@ class ValidateRemoteImportTaskTestCase(TestCase):
             }
         )
 
-        network_client_mock.return_value.base_url = conf.OPTIONS["Urls"][
-            "CENTRAL_CONTENT_BASE_URL"
-        ]
+        network_client_mock.build_for_address.return_value.base_url = conf.OPTIONS[
+            "Urls"
+        ]["CENTRAL_CONTENT_BASE_URL"]
 
         validator.is_valid(raise_exception=True)
 
@@ -154,6 +155,7 @@ class ValidateRemoteImportTaskTestCase(TestCase):
             validator.validated_data,
             {
                 "args": [channel_id],
+                "enqueue_args": {},
                 "extra_metadata": {
                     "channel_id": channel_id,
                     "channel_name": "test",
@@ -177,7 +179,9 @@ class ValidateRemoteImportTaskTestCase(TestCase):
                 "peer": self.network_location.id,
             }
         )
-        network_client_mock.return_value.base_url = self.network_location.base_url
+        network_client_mock.build_for_address.return_value.base_url = (
+            self.network_location.base_url
+        )
 
         validator.is_valid(raise_exception=True)
 
@@ -185,6 +189,7 @@ class ValidateRemoteImportTaskTestCase(TestCase):
             validator.validated_data,
             {
                 "args": [channel_id],
+                "enqueue_args": {},
                 "extra_metadata": {
                     "channel_id": channel_id,
                     "channel_name": "test",
@@ -244,6 +249,7 @@ class ValidateLocalImportTaskTestCase(TestCase):
             validator.validated_data,
             {
                 "args": [channel_id, drive_id],
+                "enqueue_args": {},
                 "extra_metadata": {
                     "channel_id": channel_id,
                     "channel_name": "test",

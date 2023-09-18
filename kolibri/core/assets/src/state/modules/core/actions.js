@@ -172,6 +172,7 @@ export function kolibriLogin(store, sessionPayload) {
         ERROR_CONSTANTS.INVALID_CREDENTIALS,
         ERROR_CONSTANTS.MISSING_PASSWORD,
         ERROR_CONSTANTS.PASSWORD_NOT_SPECIFIED,
+        ERROR_CONSTANTS.NOT_FOUND,
       ]);
       if (errorsCaught) {
         if (errorsCaught.includes(ERROR_CONSTANTS.INVALID_CREDENTIALS)) {
@@ -180,6 +181,8 @@ export function kolibriLogin(store, sessionPayload) {
           return LoginErrors.PASSWORD_MISSING;
         } else if (errorsCaught.includes(ERROR_CONSTANTS.PASSWORD_NOT_SPECIFIED)) {
           return LoginErrors.PASSWORD_NOT_SPECIFIED;
+        } else if (errorsCaught.includes(ERROR_CONSTANTS.NOT_FOUND)) {
+          return LoginErrors.USER_NOT_FOUND;
         }
       } else {
         store.dispatch('handleApiError', error);
@@ -235,8 +238,8 @@ export function getFacilities(store) {
 }
 
 export function getFacilityConfig(store, facilityId) {
-  const { currentFacilityId, selectedFacility } = store.getters;
-  let facId = facilityId || currentFacilityId;
+  const { userFacilityId, selectedFacility } = store.getters;
+  const facId = facilityId || userFacilityId;
   if (!facId) {
     // No facility Id, so nothing good is going to happen here.
     // Redirect and let Kolibri sort it out.
@@ -278,8 +281,8 @@ export function setChannelInfo(store) {
 }
 
 export function fetchPoints(store) {
-  const { isUserLoggedIn, currentUserId, totalProgress } = store.getters;
-  if (isUserLoggedIn && totalProgress === null) {
+  const { isUserLoggedIn, currentUserId } = store.getters;
+  if (isUserLoggedIn && store.state.totalProgress === null) {
     UserProgressResource.fetchModel({ id: currentUserId }).then(progress => {
       store.commit('SET_TOTAL_PROGRESS', progress.progress);
     });

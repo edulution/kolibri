@@ -1,18 +1,18 @@
 const fs = require('fs');
 const path = require('path');
-const mkdirp = require('mkdirp');
 const sortBy = require('lodash/sortBy');
 const del = require('del');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const logging = require('../logging');
 const { getAllMessagesFromFilePath } = require('./astUtils');
+const { checkForDuplicateIds, forEachPathInfo } = require('./utils');
 
 // This function will clear the way for new CSV files to avoid any conflicts
 function clearCsvPath(csvPath) {
   logging.info(`Removing existing messages files from ${csvPath}`);
 
   try {
-    const removedFiles = del.sync(path.join(csvPath, '*.csv'));
+    const removedFiles = del.sync(path.join(csvPath, '*.csv'), { force: true });
     logging.info(`Successfully cleared path for CSVs by removing: ${removedFiles.join('\n')}`);
   } catch (e) {
     logging.error('Failed to clear CSV path. Error message to follow...');
@@ -73,7 +73,7 @@ function toCSV(csvPath, namespace, messages) {
   // Here is the path to where we will write our CSVs
   // Let's be sure the path exists in the first place
   if (!fs.existsSync(csvPath)) {
-    mkdirp.sync(csvPath);
+    fs.mkdirSync(csvPath, { recursive: true });
   }
 
   const filePath = `${csvPath}/${namespace}-messages.csv`;
@@ -109,12 +109,23 @@ function toCSV(csvPath, namespace, messages) {
   return csvWriter.writeRecords(sortBy(csvData, 'identifier'));
 }
 
-module.exports = function(pathInfo, ignore, localeDataFolder) {
+module.exports = function(pathInfo, ignore, localeDataFolder, verbose) {
   // An object for storing our messages.
   const extractedMessages = {};
-  pathInfo.forEach(pathData => {
-    const namespace = pathData.name;
-    extractedMessages[namespace] = getAllMessagesFromFilePath(pathData.moduleFilePath, ignore);
+  forEachPathInfo(pathInfo, pathData => {
+    const namespace = pathData.namespace;
+    if (!extractedMessages[namespace]) {
+      const filePathMessages = getAllMessagesFromFilePath(pathData.moduleFilePath, ignore, verbose);
+      for (const otherNamespace in extractedMessages) {
+        const nameSpaceMessages = extractedMessages[otherNamespace];
+        if (checkForDuplicateIds(nameSpaceMessages, filePathMessages)) {
+          logging.error(
+            `Duplicate message ids across namespaces ${namespace} and ${otherNamespace}`
+          );
+        }
+      }
+      extractedMessages[namespace] = filePathMessages;
+    }
   });
 
   const csvPath = path.join(localeDataFolder, 'en', 'LC_MESSAGES');

@@ -1,7 +1,13 @@
 const fs = require('fs');
+const path = require('path');
 
 
 const file_manifest = {
+  "apk": {
+    "extension": "apk",
+    "description": "Android Package (APK)",
+    "content_type": "application/vnd.android.package-archive",
+  },
   "deb": {
     "extension": "deb",
     "description": "Debian Package",
@@ -29,7 +35,7 @@ const file_manifest = {
   },
   "gz": {
       "extension": "gz",
-      "description": "Source Tarball",
+      "description": "TAR file",
       "content_type": "application/gzip",
   },
   "zip": {
@@ -45,6 +51,7 @@ const file_order = [
   "exe",
   "deb",
   "dmg",
+  "apk",
   "zip",
   "gz",
 ]
@@ -128,8 +135,9 @@ async function findComment(github, context, issue_number) {
   }
 }
 
-async function uploadReleaseAsset(github, context, name, release_id) {
-  const extension = name.split('.').pop()
+async function uploadReleaseAsset(github, context, filePath, release_id) {
+  const name = path.basename(filePath);
+  const extension = path.extname(name)
   const label = (file_manifest[extension] || {}).description || name
   await github.rest.repos.uploadReleaseAsset({
     owner: context.repo.owner,
@@ -137,7 +145,7 @@ async function uploadReleaseAsset(github, context, name, release_id) {
     release_id,
     name,
     label,
-    data: fs.readFileSync(name),
+    data: fs.readFileSync(filePath),
   });
 }
 

@@ -18,7 +18,8 @@ from whitenoise.responders import Response
 from whitenoise.responders import StaticFile
 from whitenoise.string_utils import decode_path_info
 
-from kolibri.utils.file_transfer import FileDownload
+from kolibri.utils.file_transfer import RemoteFile
+from kolibri.utils.urls import validator
 
 
 compressed_file_extensions = ("gz",)
@@ -89,43 +90,6 @@ class FileFinder(finders.FileSystemFinder):
             return path
 
 
-class RemoteFile(BufferedIOBase):
-    """
-    A file like wrapper to handle downloading a file from a remote location.
-    """
-
-    def __init__(self, filepath, remote_url, callback=None):
-        self.transfer = FileDownload(
-            remote_url, filepath, remove_existing_temp_file=True
-        )
-        self.callback = callback
-        self.transfer.start()
-        self._previously_read = b""
-
-    def read(self, size=-1):
-        data = self._previously_read
-        while size == -1 or len(data) < size:
-            try:
-                data += next(self.transfer)
-            except StopIteration:
-                if self.callback:
-                    self.callback()
-                break
-        if size != -1:
-            self._previously_read = data[size:]
-            data = data[:size]
-        return data
-
-    def close(self):
-        # Finish the download and close the file
-        self.read()
-        self.transfer.close()
-
-    def seek(self, offset, whence=0):
-        # Just read from the response until the offset is reached
-        self.read(size=offset)
-
-
 class SlicedFile(BufferedIOBase):
     """
     A file like wrapper to handle seeking to the start byte of a range request
@@ -174,34 +138,42 @@ class EndRangeStaticFile(StaticFile):
 
 
 class StreamingStaticFile(EndRangeStaticFile):
-    def __init__(self, path, headers, remote_url):
+    def __init__(self, path, headers, remote_url, encodings=None, stat_cache=None):
         self.path = path
         self.remote_url = remote_url
-        self.headers = headers
+        super(StreamingStaticFile, self).__init__(path, headers, encodings, stat_cache)
 
-    def complete_transfer(self):
-        super(StreamingStaticFile, self).__init__(self.path, self.headers.items())
+    @staticmethod
+    def get_file_stats(path, encodings, stat_cache):
+        # Override this method to avoid statting the file
+        return {}
+
+    def get_headers(self, headers_list, files):
+        headers = Headers(headers_list)
+        self.headers = headers
+        # Override this method to avoid statting the file
+        return headers
+
+    @staticmethod
+    def get_alternatives(base_headers, files):
+        # Override this method to avoid statting the file
+        return []
 
     def get_response(self, method, request_headers):
         """
         Returns a streaming response for a request.
         Vendored and modified from Whitenoise.
         """
-        if os.path.exists(self.path):
-            return super(StreamingStaticFile, self).get_response(
-                method, request_headers
-            )
         if method not in ("GET", "HEAD"):
             return NOT_ALLOWED_RESPONSE
         if method != "HEAD":
             try:
+                validator(self.remote_url)
                 file_handle = RemoteFile(
-                    self.path, self.remote_url, callback=self.complete_transfer
+                    self.path,
+                    self.remote_url,
                 )
-                if file_handle.transfer.total_size:
-                    self.headers["Content-Length"] = str(
-                        file_handle.transfer.total_size
-                    )
+                self.headers["Content-Length"] = str(file_handle.get_file_size())
             except Exception:
                 return NOT_FOUND.get_response(method, request_headers)
         else:
@@ -220,6 +192,10 @@ class StreamingStaticFile(EndRangeStaticFile):
         return Response(HTTPStatus.OK, self.headers.items(), file_handle)
 
 
+def add_headers_function(headers, path, url):
+    headers["Accept-Ranges"] = "bytes"
+
+
 class DynamicWhiteNoise(WhiteNoise):
     index_file = "index.html"
 
@@ -229,6 +205,7 @@ class DynamicWhiteNoise(WhiteNoise):
         dynamic_locations=None,
         static_prefix=None,
         writable_locations=(0,),
+        app_paths=None,
         **kwargs
     ):
         whitenoise_settings = {
@@ -239,6 +216,7 @@ class DynamicWhiteNoise(WhiteNoise):
             # these files will be cached indefinitely
             "immutable_file_test": r"((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)|[a-f0-9]{32})",
             "autorefresh": os.environ.get("KOLIBRI_DEVELOPER_MODE", False),
+            "add_headers_function": add_headers_function,
         }
         kwargs.update(whitenoise_settings)
         super(DynamicWhiteNoise, self).__init__(application, **kwargs)
@@ -263,6 +241,9 @@ class DynamicWhiteNoise(WhiteNoise):
             if self.writable_locations
             else None
         )
+        self.app_path_check = (
+            re.compile("^({})".format("|".join(app_paths))) if app_paths else None
+        )
         if static_prefix is not None and not static_prefix.endswith("/"):
             raise ValueError("Static prefix must end in '/'")
         self.static_prefix = static_prefix
@@ -276,7 +257,9 @@ class DynamicWhiteNoise(WhiteNoise):
             static_file = self.find_file(path)
         else:
             static_file = self.files.get(path)
-        if static_file is None:
+        if static_file is None and (
+            self.app_path_check is None or not self.app_path_check.match(path)
+        ):
             static_file = self.find_and_cache_dynamic_file(path, remote_baseurl)
         if static_file is None:
             return self.application(environ, start_response)
@@ -349,7 +332,7 @@ class DynamicWhiteNoise(WhiteNoise):
     def get_streaming_static_file(self, url, remote_baseurl):
         """
         Vendor this function from source to substitute in our
-        own StaticFile class that can properly handle ranges.
+        own StaticFile class that can handle remote files.
         """
         headers = Headers([])
         prefix, local_dir = next(
@@ -367,6 +350,6 @@ class DynamicWhiteNoise(WhiteNoise):
         headers["Content-Encoding"] = ""
         return StreamingStaticFile(
             os.path.join(local_dir, path),
-            headers,
+            headers.items(),
             urljoin(remote_baseurl, url.lstrip("/")),
         )

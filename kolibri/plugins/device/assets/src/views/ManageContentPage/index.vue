@@ -1,10 +1,6 @@
 <template>
 
-  <AppBarPage :title="pageTitle">
-
-    <template #subNav>
-      <DeviceTopNav />
-    </template>
+  <DeviceAppBarPage :title="pageTitle">
 
     <KPageContainer class="device-container">
 
@@ -45,20 +41,23 @@
           @clearall="handleClickClearAll"
         />
 
-        <p v-if="!channelsAreInstalled">
+        <p v-if="!channelsAreInstalled && !channelListLoading">
           {{ $tr('emptyChannelListMessage') }}
         </p>
 
         <div class="channels-list">
-          <ChannelPanel
-            v-for="channel in sortedChannels"
-            :key="channel.id"
-            :channel="channel"
-            :disabled="channelIsBeingDeleted(channel.id)"
-            :showNewLabel="showNewLabel(channel.id)"
-            @select_delete="deleteChannelId = channel.id"
-            @select_manage="handleSelectManage(channel.id)"
-          />
+          <KCircularLoader v-if="channelListLoading" />
+          <div v-else>
+            <ChannelPanel
+              v-for="channel in sortedChannels"
+              :key="channel.id"
+              :channel="channel"
+              :disabled="channelIsBeingDeleted(channel.id)"
+              :showNewLabel="showNewLabel(channel.id)"
+              @select_delete="deleteChannelId = channel.id"
+              @select_manage="handleSelectManage(channel.id)"
+            />
+          </div>
         </div>
 
         <SelectTransferSourceModal :pageName="pageName" />
@@ -74,7 +73,7 @@
 
     </KPageContainer>
 
-  </AppBarPage>
+  </DeviceAppBarPage>
 
 </template>
 
@@ -87,14 +86,13 @@
   import sortBy from 'lodash/sortBy';
   import { mapState, mapGetters, mapActions } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
   import { TaskResource } from 'kolibri.resources';
   import { TaskStatuses, TaskTypes } from 'kolibri.utils.syncTaskUtils';
+  import DeviceAppBarPage from '../DeviceAppBarPage';
   import taskNotificationMixin from '../taskNotificationMixin';
   import useContentTasks from '../../composables/useContentTasks';
   import { PageNames } from '../../constants';
   import HeaderWithOptions from '../HeaderWithOptions';
-  import DeviceTopNav from '../DeviceTopNav';
   import { deviceString } from '../commonDeviceStrings';
   import SelectTransferSourceModal from './SelectTransferSourceModal';
   import ChannelPanel from './ChannelPanel/WithSizeAndOptions';
@@ -109,10 +107,9 @@
       };
     },
     components: {
-      AppBarPage,
+      DeviceAppBarPage,
       ChannelPanel,
       DeleteChannelModal,
-      DeviceTopNav,
       HeaderWithOptions,
       SelectTransferSourceModal,
       TasksBar,
@@ -134,6 +131,7 @@
         'managedTasks',
       ]),
       ...mapState('manageContent/wizard', ['pageName']),
+      ...mapState('manageContent', ['channelListLoading']),
       pageTitle() {
         return deviceString('deviceManagementTitle');
       },

@@ -1,10 +1,6 @@
 <template>
 
-  <AppBarPage :title="pageTitle">
-
-    <template #subNav>
-      <DeviceTopNav />
-    </template>
+  <DeviceAppBarPage :title="pageTitle">
 
     <KPageContainer class="device-container">
       <div class="description">
@@ -15,6 +11,7 @@
       </div>
 
       <PaginatedListContainer
+        :dataLoading="loadingFacilityUsers"
         :items="usersFilteredByDropdown"
         :filterPlaceholder="$tr('searchPlaceholder')"
       >
@@ -44,6 +41,7 @@
         </template>
         <template #default="{ items, filterInput }">
           <UserGrid
+            :dataLoading="loadingFacilityUsers"
             :searchFilter="searchFilterText"
             :facilityUsers="items"
             :userPermissions="userPermissions"
@@ -53,7 +51,7 @@
       </PaginatedListContainer>
 
     </KPageContainer>
-  </AppBarPage>
+  </DeviceAppBarPage>
 
 </template>
 
@@ -65,8 +63,7 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import PaginatedListContainer from 'kolibri.coreVue.components.PaginatedListContainer';
   import { PermissionTypes, UserKinds } from 'kolibri.coreVue.vuex.constants';
-  import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
-  import DeviceTopNav from '../DeviceTopNav';
+  import DeviceAppBarPage from '../DeviceAppBarPage';
   import { deviceString } from '../commonDeviceStrings';
   import UserGrid from './UserGrid';
 
@@ -80,8 +77,7 @@
       };
     },
     components: {
-      AppBarPage,
-      DeviceTopNav,
+      DeviceAppBarPage,
       PaginatedListContainer,
       UserGrid,
     },
@@ -98,8 +94,9 @@
       ...mapState('managePermissions', {
         facilityUsers: state => state.facilityUsers,
         userPermissions: state => userid => state.permissions[userid],
+        loadingFacilityUsers: state => state.loadingFacilityUsers,
       }),
-      ...mapState('coreBase', {
+      ...mapState({
         query: state => state.query,
       }),
       ...mapGetters(['facilities']),
@@ -135,7 +132,7 @@
         return [
           { label: this.$tr('allPermissionsFilterLabel'), value: ALL_FILTER },
           { label: this.$tr('canManageContentLabel'), value: PermissionTypes.LIMITED_PERMISSIONS },
-          { label: this.$tr('superAdminLabel'), value: PermissionTypes.SUPERUSER },
+          { label: this.coreString('superAdminLabel'), value: PermissionTypes.SUPERUSER },
           {
             label: this.$tr('noDevicePermissionsLabel'),
             value: PermissionTypes.NO_DEVICE_PERMISSIONS,
@@ -218,28 +215,28 @@
       },
     },
     watch: {
-      // These watchers update the coreBase/query when the dropdown
+      // These watchers update the query when the dropdown
       // selections are changed. This lets us persist the values across
       // routes within Device.
       permissionsFilter(value) {
         const query = this.query;
         query.permissionsFilter = value;
-        this.$store.commit('coreBase/SET_QUERY', query);
+        this.$store.commit('SET_QUERY', query);
       },
       userTypeFilter(value) {
         const query = this.query;
         query.userTypeFilter = value;
-        this.$store.commit('coreBase/SET_QUERY', query);
+        this.$store.commit('SET_QUERY', query);
       },
       facilityFilter(value) {
         const query = this.query;
         query.facilityFilter = value;
-        this.$store.commit('coreBase/SET_QUERY', query);
+        this.$store.commit('SET_QUERY', query);
       },
     },
     beforeMount() {
       // Set all filters initial values here. If the value exists in
-      // coreBase/query, then we use it, otherwise, we default to ALL.
+      // query, then we use it, otherwise, we default to ALL.
       this.facilityFilter = this.query.facilityFilter || this.facilityOptions[0];
       this.permissionsFilter = this.query.permissionsFilter || this.permissionsOptions[0];
       this.userTypeFilter = this.query.userTypeFilter || this.userTypeOptions[0];
@@ -269,10 +266,6 @@
         message: 'Can manage resources',
         context:
           "One of the options in the 'Permissions' filter on the Device permissions page. Type of permission that allows users to import, export and manage channels and resources in Kolibri.",
-      },
-      superAdminLabel: {
-        message: 'Super admin',
-        context: 'Type of permission that can be given to a user.\n',
       },
       noDevicePermissionsLabel: {
         message: 'No device permissions',

@@ -12,7 +12,7 @@
         }"
         data-test="beginners-chip"
       >
-        {{ coreString("ForBeginners") }}
+        {{ coreString('forBeginners') }}
       </span>
     </div>
 
@@ -43,18 +43,9 @@
       @click="toggleShowMoreOrLess"
     />
 
-    <div v-if="content.level" class="section">
-      <span class="label">
-        {{ metadataStrings.$tr('level') }}:
-      </span>
-      <span>
-        {{ content.level }}
-      </span>
-    </div>
-
     <div v-if="content.duration" class="section" data-test="estimated-time">
       <span class="label">
-        {{ metadataStrings.$tr('estimatedTime') }}:
+        {{ learnString('estimatedTime') }}:
       </span>
       <span>
         <TimeDuration :seconds="content.duration" />
@@ -67,16 +58,16 @@
       data-test="grade-levels"
     >
       <span class="label">
-        {{ metadataStrings.$tr('level') }}:
+        {{ coreString('levelLabel') }}:
       </span>
       <span>
-        {{ content.grade_levels.join(", ") }}
+        {{ levels(content.grade_levels) }}
       </span>
     </div>
 
     <div v-if="content.lang" class="section" data-test="lang">
       <span class="label">
-        {{ metadataStrings.$tr('language') }}:
+        {{ coreString('languageLabel') }}:
       </span>
       <span>
         {{ content.lang.lang_name }}
@@ -85,7 +76,7 @@
 
     <div v-if="content.author" class="section" data-test="author">
       <span class="label">
-        {{ metadataStrings.$tr('author') }}:
+        {{ learnString('author') }}:
       </span>
       <span>
         {{ content.author }}
@@ -94,7 +85,7 @@
 
     <div v-if="content.license_owner" class="section" data-test="license-owner">
       <span class="label">
-        {{ metadataStrings.$tr('copyrightHolder') }}:
+        {{ learnString('copyrightHolder') }}:
       </span>
       <span>
         {{ content.license_owner }}
@@ -103,13 +94,13 @@
 
     <div v-if="licenseDescription" class="section" data-test="license-desc">
       <span class="label">
-        {{ metadataStrings.$tr('license') }}:
+        {{ learnString('license') }}:
       </span>
       <span>
         {{ licenseShortName || '' }}
         <KIconButton
           :icon="licenseDescriptionIsVisible ? 'chevronUp' : 'chevronDown'"
-          :ariaLabel="metadataStrings.$tr('toggleLicenseDescription')"
+          :ariaLabel="learnString('toggleLicenseDescription')"
           size="small"
           type="secondary"
           class="license-toggle"
@@ -125,8 +116,8 @@
     </div>
 
     <DownloadButton
-      v-if="canDownload"
-      :files="downloadableFiles"
+      v-if="canDownloadExternally"
+      :files="content.files"
       :nodeTitle="content.title"
       class="download-button"
       data-test="download-button"
@@ -139,8 +130,9 @@
 
 <script>
 
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
-  import { isEmbeddedWebView } from 'kolibri.utils.browserInfo';
+  import { ContentLevels } from 'kolibri.coreVue.vuex.constants';
+  import camelCase from 'lodash/camelCase';
+
   import LearnerNeeds from 'kolibri-constants/labels/Needs';
   import DownloadButton from 'kolibri.coreVue.components.DownloadButton';
   import TimeDuration from 'kolibri.coreVue.components.TimeDuration';
@@ -151,9 +143,8 @@
     licenseLongName,
     licenseDescriptionForConsumer,
   } from 'kolibri.utils.licenseTranslations';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
+  import commonLearnStrings from './commonLearnStrings';
   import ContentNodeThumbnail from './thumbnails/ContentNodeThumbnail';
-  import SidePanelResourceMetadata from './SidePanelResourceMetadata';
 
   export default {
     name: 'CurrentlyViewedResourceMetadata',
@@ -162,9 +153,9 @@
       ContentNodeThumbnail,
       TimeDuration,
     },
-    mixins: [commonCoreStrings],
+    mixins: [commonCoreStrings, commonLearnStrings],
     props: {
-      canDownloadContent: {
+      canDownloadExternally: {
         type: Boolean,
         required: false,
         default: false,
@@ -180,7 +171,6 @@
         showMoreOrLess: 'Show More',
         truncate: 'truncate-description',
         descriptionOverflow: false,
-        metadataStrings: { $tr: () => null },
       };
     },
     computed: {
@@ -199,22 +189,8 @@
           get(this, 'content.license_description', null)
         );
       },
-      downloadableFiles() {
-        return this.content.files.filter(file => !file.preset.endsWith('thumbnail'));
-      },
-      canDownload() {
-        if (this.canDownloadContent) {
-          return (
-            this.downloadableFiles.length &&
-            this.content.kind !== ContentNodeKinds.EXERCISE &&
-            !isEmbeddedWebView
-          );
-        }
-        return false;
-      },
     },
     mounted() {
-      this.metadataStrings = crossComponentTranslator(SidePanelResourceMetadata);
       this.calculateDescriptionOverflow();
     },
     methods: {
@@ -223,17 +199,43 @@
           this.showMoreOrLess = 'Show Less';
           this.truncate = 'show-description';
           /* eslint-disable kolibri/vue-no-undefined-string-uses */
-          return this.metadataStrings.$tr('showLess');
+          return this.learnString('showLess');
         } else {
           this.showMoreOrLess = 'Show More';
           this.truncate = 'truncate-description';
-          return this.metadataStrings.$tr('showMore');
+          return this.learnString('showMore');
           /* eslint-enable kolibri/vue-no-undefined-string-uses */
         }
       },
       calculateDescriptionOverflow() {
         if (this.$refs.description && this.$refs.description.scrollHeight > 175) {
           this.descriptionOverflow = true;
+        }
+      },
+
+      levels(levels) {
+        const matches = Object.keys(ContentLevels)
+          .sort()
+          .filter(k => levels.includes(ContentLevels[k]));
+        if (matches && matches.length > 0) {
+          let adjustedMatches = [];
+          matches.map(key => {
+            let translationKey;
+            if (key === 'PROFESSIONAL') {
+              translationKey = 'specializedProfessionalTraining';
+            } else if (key === 'WORK_SKILLS') {
+              translationKey = 'allLevelsWorkSkills';
+            } else if (key === 'BASIC_SKILLS') {
+              translationKey = 'allLevelsBasicSkills';
+            } else {
+              translationKey = camelCase(key);
+            }
+            adjustedMatches.push(translationKey);
+          });
+          adjustedMatches = adjustedMatches.map(m => this.coreString(m)).join(', ');
+          return adjustedMatches;
+        } else {
+          return '-';
         }
       },
     },

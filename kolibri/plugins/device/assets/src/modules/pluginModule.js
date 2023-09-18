@@ -1,26 +1,47 @@
 import { pageNameToModuleMap, PageNames, ContentWizardPages } from '../constants';
+import facilityConfig from '../../../../facility/assets/src/modules/facilityConfig';
 import deviceInfo from './deviceInfo';
 import manageContent from './manageContent';
 import managePermissions from './managePermissions';
 import userPermissions from './userPermissions';
-import coreBase from './coreBase';
 
 export default {
   state() {
     return {
+      authenticateWithPin: false,
       pageName: '',
       welcomeModalVisible: false,
+      query: {},
+      grantPluginAccess: () => {},
     };
   },
+  getters: {
+    name: state => {
+      return state.name;
+    },
+  },
   mutations: {
+    SET_AUTHENTICATE_WITH_PIN(state, authenticate) {
+      state.authenticateWithPin = authenticate;
+    },
+    SET_GRANT_PLUGIN_ACCESS(state, grantAccess) {
+      state.grantPluginAccess = grantAccess;
+    },
     SET_PAGE_NAME(state, name) {
       state.pageName = name;
     },
     SET_WELCOME_MODAL_VISIBLE(state, visibility) {
       state.welcomeModalVisible = visibility;
     },
+    SET_QUERY(state, query) {
+      state.query = query;
+    },
   },
   actions: {
+    displayPinModal(store, grantAccess) {
+      store.commit('SET_AUTHENTICATE_WITH_PIN', true);
+      store.commit('SET_GRANT_PLUGIN_ACCESS', grantAccess);
+    },
     preparePage(store, { name, isAsync = true }) {
       store.commit('CORE_SET_PAGE_LOADING', isAsync);
       store.commit('SET_PAGE_NAME', name);
@@ -49,7 +70,7 @@ export default {
     userPermissions,
     // MANAGE_CONTENT_PAGE + wizards
     manageContent,
-    // CoreBase properties
-    coreBase,
+    //Facility configurations for pin setup
+    facilityConfig,
   },
 };

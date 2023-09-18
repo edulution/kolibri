@@ -1,6 +1,24 @@
 import { Resource } from 'kolibri.lib.apiResource';
-import urls from 'kolibri.urls';
-import redirectBrowser from 'kolibri.utils.redirectBrowser';
+
+/**
+ * The <Module>Resource classes here map directly to the <Module>ViewSet of the same
+ * name in the kolibri.plugins.setup_wizard.api module (note how the definitions of)
+ * the Resource instances below have 'kolibri.plugins.setup_wizard' for their 'namespace'
+ **/
+
+export const SetupWizardResource = new Resource({
+  name: 'setupwizard',
+  namespace: 'kolibri.plugins.setup_wizard',
+
+  createuseronremote({ facility_id, username, password, baseurl }) {
+    return this.postListEndpoint('createuseronremote', {
+      facility_id,
+      username,
+      password,
+      baseurl,
+    });
+  },
+});
 
 export const FacilityImportResource = new Resource({
   name: 'facilityimport',
@@ -15,18 +33,7 @@ export const FacilityImportResource = new Resource({
       password,
       extra_fields,
       facility_name,
-      auth_token: 'ca6830b018e647fc9723561c99b6b3f0',
     });
-  },
-  provisionosuser({ device_name, language_id, is_provisioned }) {
-    return this.postListEndpoint('provisionosuserdevice', {
-      device_name,
-      language_id,
-      is_provisioned,
-    });
-  },
-  provisiondevice({ device_name, language_id, is_provisioned }) {
-    return this.postListEndpoint('provisiondevice', { device_name, language_id, is_provisioned });
   },
   facilityadmins() {
     return this.getListEndpoint('facilityadmins').then(response => {
@@ -37,18 +44,5 @@ export const FacilityImportResource = new Resource({
     return this.postListEndpoint('listfacilitylearners', params).then(response => {
       return response.data;
     });
-  },
-});
-
-export const FinishSoUDSyncingResource = new Resource({
-  name: 'restartzeroconf',
-  namespace: 'kolibri.plugins.setup_wizard',
-  finish() {
-    const welcomeDimissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
-    const device_url = urls['kolibri:kolibri.plugins.device:device_management'];
-    window.sessionStorage.setItem(welcomeDimissalKey, false);
-    this.postListEndpoint('restart');
-    redirectBrowser(device_url ? device_url() : null);
-    return '';
   },
 });

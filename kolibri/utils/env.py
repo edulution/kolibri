@@ -3,38 +3,8 @@ import os
 import platform
 import sys
 
-try:
-    # Do this to allow this to be accessed
-    # during build, when dependencies are not
-    # installed.
-    # TODO: Move version tools to build tools, so we don't have to do this
-    from colorlog import ColoredFormatter
-    from colorlog import getLogger
-except ImportError:
-    getLogger = None
-    ColoredFormatter = None
-
-from .logger import LOG_COLORS
-from .logger import EncodingStreamHandler as StreamHandler
 from kolibri.utils.compat import monkey_patch_collections
-
-
-logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
-logging.StreamHandler(sys.stdout)
-
-if StreamHandler and getLogger and ColoredFormatter:
-    handler = StreamHandler(stream=sys.stdout)
-    handler.setFormatter(
-        ColoredFormatter(
-            fmt="%(log_color)s%(levelname)-8s %(message)s", log_colors=LOG_COLORS
-        )
-    )
-    handler.setLevel(logging.INFO)
-    logger = getLogger("env")
-    logger.addHandler(handler)
-    logger.propagate = False
-else:
-    logger = logging.getLogger("env")
+from kolibri.utils.compat import monkey_patch_translation
 
 
 def settings_module():
@@ -73,6 +43,14 @@ ENVIRONMENT_VARIABLES = {
             cherrypy.access logs.
         """,
     },
+    "NOTIFY_SOCKET": {
+        "description": """
+            Path to a socket provided by systemd for sending it notifications
+            about daemon state, particularly for startup and shutdown. If
+            Kolibri is not running under systemd this should be unset.
+            See the sd_notify(3) man page for more details.
+        """,
+    },
 }
 
 
@@ -104,6 +82,9 @@ def prepend_cext_path(dist_path):
         # add it + the matching noarch (OpenSSL) modules to sys.path
         sys.path = [str(dirname), str(noarch_dir)] + sys.path
     else:
+        logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
+        logging.StreamHandler(sys.stdout)
+        logger = logging.getLogger("env")
         logger.debug("No C extensions are available for this platform")
 
 
@@ -119,6 +100,8 @@ def set_env():
     from kolibri import dist as kolibri_dist  # noqa
 
     monkey_patch_collections()
+
+    monkey_patch_translation()
 
     sys.path = [os.path.realpath(os.path.dirname(kolibri_dist.__file__))] + sys.path
 

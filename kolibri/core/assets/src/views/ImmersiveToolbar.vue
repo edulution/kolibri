@@ -8,11 +8,6 @@
       :showIcon="showIcon"
       :style="{
         height: topBarHeight + 'px',
-        position: 'fixed',
-        zIndex: 4,
-        top: 0,
-        right: 0,
-        left: 0,
         backgroundColor: isFullscreen ? $themeTokens.appBar : $themeTokens.appBarFullscreen,
       }"
       @nav-icon-click="$emit('navIconClick')"
@@ -57,6 +52,9 @@
             @click="$emit('navIconClick')"
           />
         </span>
+      </template>
+      <template #actions>
+        <slot name="actions"></slot>
       </template>
     </UiToolbar>
   </header>
@@ -142,6 +140,19 @@
     display: inline-block;
     border-radius: 50%;
     outline-offset: -4px;
+  }
+
+  /deep/ .ui-toolbar__left {
+    margin-left: 5px;
+    overflow: hidden;
+  }
+
+  /deep/ .ui-toolbar__nav-icon {
+    margin-left: 0;
+  }
+
+  /deep/ .ui-toolbar__title {
+    text-overflow: ellipsis;
   }
 
 </style>

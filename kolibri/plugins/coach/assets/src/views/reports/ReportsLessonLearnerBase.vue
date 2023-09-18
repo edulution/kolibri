@@ -1,15 +1,10 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
 
     <KPageContainer>
       <p>
@@ -20,7 +15,10 @@
         />
       </p>
       <h1>
-        <KLabeledIcon icon="person" :label="learner.name" />
+        <KLabeledIcon
+          icon="person"
+          :label="learner.name"
+        />
       </h1>
 
       <ReportsResourcesStats
@@ -30,6 +28,8 @@
 
       <ReportsControls @export="exportCSV" />
 
+      <MissingResourceAlert v-if="lesson.missing_resource" />
+
       <CoreTable :emptyMessage="coachString('activityListEmptyState')">
         <template #headers>
           <th>{{ coachString('titleLabel') }}</th>
@@ -37,8 +37,14 @@
           <th>{{ coreString('timeSpentLabel') }}</th>
         </template>
         <template #tbody>
-          <transition-group tag="tbody" name="list">
-            <tr v-for="tableRow in table" :key="tableRow.node_id">
+          <transition-group
+            tag="tbody"
+            name="list"
+          >
+            <tr
+              v-for="tableRow in table"
+              :key="tableRow.node_id"
+            >
               <td>
                 <KLabeledIcon :icon="tableRow.kind">
                   <KRouterLink
@@ -52,19 +58,19 @@
                 </KLabeledIcon>
               </td>
               <td>
-                <StatusSimple :status="tableRow.statusObj.status" />
+                <StatusSimple v-if="tableRow.statusObj" :status="tableRow.statusObj.status" />
+                <KEmptyPlaceholder v-else />
               </td>
               <td>
-                <TimeDuration
-                  :seconds="showTimeDuration(tableRow)"
-                />
+                <TimeDuration v-if="tableRow.statusObj" :seconds="showTimeDuration(tableRow)" />
+                <KEmptyPlaceholder v-else />
               </td>
             </tr>
           </transition-group>
         </template>
       </CoreTable>
     </KPageContainer>
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -72,7 +78,9 @@
 <script>
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
   import commonCoach from '../common';
+  import CoachAppBarPage from '../CoachAppBarPage';
   import CSVExporter from '../../csv/exporter';
   import * as csvFields from '../../csv/fields';
   import { PageNames } from './../../constants';
@@ -81,7 +89,12 @@
 
   export default {
     name: 'ReportsLessonLearnerBase',
-    components: { ReportsControls, ReportsResourcesStats },
+    components: {
+      CoachAppBarPage,
+      MissingResourceAlert,
+      ReportsControls,
+      ReportsResourcesStats,
+    },
     mixins: [commonCoach, commonCoreStrings],
     computed: {
       lesson() {
@@ -95,7 +108,10 @@
       },
       table() {
         const contentArray = this.lesson.node_ids.map(node_id => this.contentNodeMap[node_id]);
-        return contentArray.map(content => {
+        return contentArray.map((content, index) => {
+          if (!content) {
+            return this.missingResourceObj(index);
+          }
           const tableRow = {
             statusObj: this.getContentStatusObjForLearner(content.content_id, this.learner.id),
           };

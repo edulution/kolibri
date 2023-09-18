@@ -22,12 +22,14 @@
       </p>
       <div>
         <FacilityTaskPanel
-          v-for="(task, idx) in facilityTasks"
+          v-for="(task, idx) in activeFacilityTasks"
           :key="idx"
           class="task-panel"
           :style="{ borderBottomColor: $themePalette.grey.v_200 }"
           :task="task"
-          @click="handlePanelClick($event, task)"
+          @cancel="cancel(task)"
+          @clear="clear(task)"
+          @retry="retry(task)"
         />
       </div>
     </KPageContainer>
@@ -38,6 +40,7 @@
 
 <script>
 
+  import { TaskResource } from 'kolibri.resources';
   import { FacilityTaskPanel } from 'kolibri.coreVue.componentSets.sync';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonTaskStrings from 'kolibri.coreVue.mixins.commonTaskStrings';
@@ -77,23 +80,27 @@
         return { name: PageNames.FACILITIES_PAGE };
       },
       someClearableTasks() {
-        return Boolean(this.facilityTasks.find(task => task.clearable));
+        return Boolean(this.activeFacilityTasks.find(task => task.clearable));
       },
     },
     methods: {
       handleClickClearAll() {
         this.clearCompletedFacilityTasks();
       },
-      handlePanelClick(action, task) {
-        this.manageFacilityTask(action, task).catch(() => {
-          // handle errors silently
-        });
+      cancel(task) {
+        return TaskResource.cancel(task.id);
+      },
+      clear(task) {
+        return TaskResource.clear(task.id);
+      },
+      retry(task) {
+        return TaskResource.restart(task.id);
       },
     },
     $trs: {
       facilitiesTaskManagerTitle: {
         message: 'Facilities - Task manager',
-        context: 'Title of the page that displays all the tasks in the task manager. ',
+        context: 'Title of the page that displays all the tasks in the task manager.',
       },
     },
   };

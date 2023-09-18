@@ -1,35 +1,25 @@
 <template>
 
-  <section
+  <component
+    :is="windowIsLarge ? 'section' : 'SidePanelModal'"
+    alignment="left"
     role="region"
+    :class="windowIsLarge ? 'side-panel' : ''"
+    :closeButtonIconType="closeButtonIcon"
     :aria-label="learnString('filterAndSearchLabel')"
-    :style="{
+    :ariaLabel="learnString('filterAndSearchLabel')"
+    :style="windowIsLarge ? {
       color: $themeTokens.text,
       backgroundColor: $themeTokens.surface,
       width: width,
-    }"
-    :class="position === 'embedded' ? 'side-panel' : ''"
+    } : {}"
+    @closePanel="currentCategory ? currentCategory = null : $emit('close')"
+    @shouldFocusFirstEl="focusFirstEl()"
   >
-    <div v-if="topics && topics.length && topicsListDisplayed">
-      <div v-for="t in topics" :key="t.id">
-        <KRouterLink
-          ref="folders"
-          :text="t.title"
-          class="side-panel-folder-link"
-          :appearanceOverrides="{ color: $themeTokens.text }"
-          :to="genContentLink(t.id)"
-        />
-      </div>
-      <KButton
-        v-if="more && !topicsLoading"
-        appearance="basic-link"
-        @click="$emit('loadMoreTopics')"
-      >
-        {{ coreString('viewMoreAction') }}
-      </KButton>
-      <KCircularLoader v-if="topicsLoading" />
-    </div>
-    <div v-else>
+    <div
+      v-if="windowIsLarge || !currentCategory"
+      :class="windowIsLarge ? '' : 'drawer-panel'"
+    >
       <!-- search by keyword -->
       <h2 class="title">
         {{ $tr('keywords') }}
@@ -41,27 +31,28 @@
         :value="value.keywords || ''"
         @change="val => $emit('input', { ...value, keywords: val })"
       />
-      <div v-if="Object.keys(libraryCategoriesList).length">
+      <div v-if="Object.keys(availableLibraryCategories).length">
         <h2 class="section title">
           {{ $tr('categories') }}
         </h2>
         <!-- list of category metadata - clicking prompts a filter modal -->
         <div
-          v-for="(category, key) in libraryCategoriesList"
-          :key="category"
+          v-for="(category, key) in availableLibraryCategories"
+          :key="key"
           span="4"
           class="category-list-item"
         >
           <KButton
-            :text="coreString(key)"
+            :text="coreString(category.value)"
             appearance="flat-button"
-            :appearanceOverrides="isKeyActive(key)
+            :appearanceOverrides="isCategoryActive(category.value)
               ? { ...categoryListItemStyles, ...categoryListItemActiveStyles }
               : categoryListItemStyles"
-            :disabled="!availableRootCategories[key] &&
-              !isKeyActive(key)"
-            iconAfter="chevronRight"
-            @click="$emit('currentCategory', category)"
+            :disabled="availableRootCategories &&
+              !availableRootCategories[category.value] &&
+              !isCategoryActive(category.value)"
+            :iconAfter="hasNestedCategories(key) ? 'chevronRight' : null"
+            @click="handleCategory(key)"
           />
         </div>
         <div
@@ -69,9 +60,9 @@
           class="category-list-item"
         >
           <KButton
-            :text="coreString('None of the above')"
+            :text="coreString('uncategorized')"
             appearance="flat-button"
-            :appearanceOverrides="isKeyActive('no_categories')
+            :appearanceOverrides="isCategoryActive('no_categories')
               ? { ...categoryListItemStyles, ...categoryListItemActiveStyles }
               : categoryListItemStyles"
             @click="noCategories"
@@ -79,28 +70,24 @@
         </div>
       </div>
       <ActivityButtonsGroup
-        :availableLabels="availableLabels"
-        :activeButtons="activeActivityButtons"
         class="section"
         @input="handleActivity"
       />
       <!-- Filter results by learning activity, displaying all options -->
       <SelectGroup
         v-model="inputValue"
-        :availableLabels="availableLabels"
         :showChannels="showChannels"
         class="section"
       />
       <div
-        v-if="Object.keys(resourcesNeededList).length"
+        v-if="Object.keys(availableResourcesNeeded).length"
         class="section"
       >
         <h2 class="title">
           {{ coreString('showResources') }}
         </h2>
         <div
-          v-for="(val, activity) in resourcesNeededList"
-
+          v-for="(val, activity) in availableResourcesNeeded"
           :key="activity"
           span="4"
           alignment="center"
@@ -114,52 +101,33 @@
         </div>
       </div>
     </div>
-  </section>
+    <CategorySearchModal
+      v-if="currentCategory"
+      ref="searchModal"
+      :class="windowIsLarge ? '' : 'drawer-panel'"
+      :selectedCategory="currentCategory"
+      @cancel="currentCategory = null"
+      @input="selectCategory"
+    />
+  </component>
 
 </template>
 
 
 <script>
 
-  import pick from 'lodash/pick';
-  import uniq from 'lodash/uniq';
-  import {
-    CategoriesLookup,
-    NoCategories,
-    ResourcesNeededTypes,
-  } from 'kolibri.coreVue.vuex.constants';
+  import { NoCategories } from 'kolibri.coreVue.vuex.constants';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
+  import { ref } from 'kolibri.lib.vueCompositionApi';
   import SearchBox from '../SearchBox';
+  import SidePanelModal from '../SidePanelModal';
   import commonLearnStrings from '../commonLearnStrings';
-  import genContentLink from '../../utils/genContentLink';
+  import useContentLink from '../../composables/useContentLink';
+  import { injectSearch } from '../../composables/useSearch';
   import ActivityButtonsGroup from './ActivityButtonsGroup';
+  import CategorySearchModal from './CategorySearchModal';
   import SelectGroup from './SelectGroup';
-  import plugin_data from 'plugin_data';
-
-  const resourcesNeededShown = ['FOR_BEGINNERS', 'PEOPLE', 'PAPER_PENCIL', 'INTERNET', 'MATERIALS'];
-
-  const resourcesNeeded = {};
-  resourcesNeededShown.map(key => {
-    const value = ResourcesNeededTypes[key];
-    // TODO rtibbles: remove this condition
-    if ((plugin_data.learnerNeeds || []).includes(value) || process.env.NODE_ENV !== 'production') {
-      resourcesNeeded[key] = value;
-    }
-  });
-
-  let availableIds;
-
-  if (process.env.NODE_ENV !== 'production') {
-    // TODO rtibbles: remove this condition
-    availableIds = Object.keys(CategoriesLookup);
-  } else {
-    availableIds = plugin_data.categories;
-  }
-
-  const libraryCategories = pick(
-    CategoriesLookup,
-    uniq(availableIds.map(key => key.split('.')[0]))
-  );
 
   export default {
     name: 'SearchFiltersPanel',
@@ -167,8 +135,30 @@
       SearchBox,
       ActivityButtonsGroup,
       SelectGroup,
+      CategorySearchModal,
+      SidePanelModal,
     },
     mixins: [commonLearnStrings, commonCoreStrings],
+    setup() {
+      const { windowIsLarge } = useKResponsiveWindow();
+      const { genContentLinkBackLinkCurrentPage } = useContentLink();
+      const {
+        availableLibraryCategories,
+        availableResourcesNeeded,
+        searchableLabels,
+        activeSearchTerms,
+      } = injectSearch();
+      const currentCategory = ref(null);
+      return {
+        availableLibraryCategories,
+        availableResourcesNeeded,
+        currentCategory,
+        genContentLinkBackLinkCurrentPage,
+        searchableLabels,
+        activeSearchTerms,
+        windowIsLarge,
+      };
+    },
     props: {
       value: {
         type: Object,
@@ -185,56 +175,20 @@
           return inputKeys.every(k => Object.prototype.hasOwnProperty.call(value, k));
         },
       },
-      availableLabels: {
-        type: Object,
-        required: false,
-        default: null,
-      },
-      topics: {
-        type: Array,
-        default() {
-          return [];
-        },
-      },
-      more: {
-        type: Object,
-        default: null,
-      },
-      topicsLoading: {
-        type: Boolean,
-        default: false,
-      },
       width: {
         type: [Number, String],
-        required: true,
-      },
-      topicsListDisplayed: {
-        type: Boolean,
         required: false,
-      },
-      position: {
-        type: String,
-        required: true,
-        validator(val) {
-          return ['embedded', 'overlay'].includes(val);
-        },
+        default: null,
       },
       showChannels: {
         type: Boolean,
         default: true,
       },
-      activeActivityButtons: {
-        type: Object,
-        required: false,
-        default: null,
-      },
-      activeCategories: {
-        type: Object,
-        required: false,
-        default: null,
-      },
     },
     computed: {
+      closeButtonIcon() {
+        return this.currentCategory ? 'back' : 'close';
+      },
       inputValue: {
         get() {
           return this.value;
@@ -242,12 +196,6 @@
         set(value) {
           this.$emit('input', value);
         },
-      },
-      libraryCategoriesList() {
-        return libraryCategories;
-      },
-      resourcesNeededList() {
-        return resourcesNeeded;
       },
       categoryListItemStyles() {
         return {
@@ -272,20 +220,20 @@
         };
       },
       availableRootCategories() {
-        if (this.availableLabels) {
+        if (this.searchableLabels) {
           const roots = {};
-          for (let key of this.availableLabels.categories) {
+          for (const key of this.searchableLabels.categories) {
             const root = key.split('.')[0];
             roots[root] = true;
           }
           return roots;
         }
-        return {};
+        return null;
       },
       availableNeeds() {
-        if (this.availableLabels) {
+        if (this.searchableLabels) {
           const needs = {};
-          for (let key of this.availableLabels.learner_needs) {
+          for (const key of this.searchableLabels.learner_needs) {
             const root = key.split('.')[0];
             needs[root] = true;
             needs[key] = true;
@@ -294,17 +242,20 @@
         }
         return null;
       },
-      activeKeys() {
-        return Object.keys(this.activeCategories);
+      activeCategories() {
+        return Object.keys((this.activeSearchTerms && this.activeSearchTerms.categories) || {});
       },
     },
     methods: {
-      genContentLink,
-      isKeyActive(key) {
-        return !!this.activeKeys.filter(k => k.includes(key)).length;
+      isCategoryActive(categoryValue) {
+        // Takes the dot separated category value and checks if it is active
+        return this.activeCategories.some(k => k.includes(categoryValue));
       },
       noCategories() {
         this.$emit('input', { ...this.value, categories: { [NoCategories]: true } });
+      },
+      hasNestedCategories(category) {
+        return Object.keys(this.availableLibraryCategories[category].nested).length > 0;
       },
       handleActivity(activity) {
         if (activity && !this.value.learning_activities[activity]) {
@@ -322,7 +273,7 @@
       handleNeed(need) {
         if (this.value.learner_needs[need]) {
           const learner_needs = {};
-          for (let n in this.value.learner_needs) {
+          for (const n in this.value.learner_needs) {
             if (n !== need) {
               learner_needs[n] = true;
             }
@@ -335,6 +286,40 @@
           });
         }
       },
+      setCategory(category) {
+        if (this.value.categories[category]) {
+          const categories = { ...this.value.categories };
+          delete categories[category];
+          this.$emit('input', { ...this.value, categories });
+        } else {
+          const categories = { [category]: true };
+          for (const c in this.value.categories) {
+            // Filter out any subcategories of the selected category
+            if (!c.startsWith(category)) {
+              categories[c] = true;
+            }
+          }
+          this.$emit('input', { ...this.value, categories });
+        }
+      },
+      handleCategory(category) {
+        // for categories with sub-categories, open the modal
+        if (
+          this.availableLibraryCategories[category] &&
+          this.availableLibraryCategories[category].nested &&
+          Object.keys(this.availableLibraryCategories[category].nested).length > 0
+        ) {
+          this.currentCategory = category;
+        }
+        // for valid categories with no subcategories, search directly
+        else if (this.availableLibraryCategories[category]) {
+          this.setCategory(this.availableLibraryCategories[category].value);
+        }
+      },
+      selectCategory(category) {
+        this.setCategory(category);
+        this.currentCategory = null;
+      },
       /**
        * @public
        * Focuses on correct first element for FocusTrap depending on content
@@ -343,8 +328,6 @@
       focusFirstEl() {
         if (this.$refs.searchBox) {
           this.$refs.searchBox.focusSearchBox();
-        } else if (this.$refs.folders && this.$refs.folders.length > 0) {
-          this.$refs.folders[0].$el.focus();
         }
       },
     },
@@ -365,15 +348,28 @@
 
 <style lang="scss" scoped>
 
+  .drawer-panel {
+    padding-bottom: 60px;
+  }
+
   .side-panel {
     position: fixed;
     top: 60px;
     left: 0;
     height: 100%;
-    padding: 24px;
+    padding: 24px 24px 0;
     overflow-y: scroll;
     font-size: 14px;
     box-shadow: 0 3px 3px 0 #00000040;
+  }
+
+  /*
+  * Work around for https://bugzilla.mozilla.org/show_bug.cgi?id=1417667
+  */
+  .side-panel::after {
+    display: block;
+    padding-bottom: 70px;
+    content: '';
   }
 
   .side-panel-folder-link {

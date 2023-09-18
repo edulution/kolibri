@@ -8,7 +8,7 @@
       data-test="syncStatusSpinner"
     />
     <KIcon
-      v-else
+      v-else-if="syncIconDisplayMap"
       :icon="syncIconDisplayMap"
       class="inline-icon"
       data-test="syncStatusIcon"
@@ -21,6 +21,7 @@
 
 <script>
 
+  import { now } from 'kolibri.utils.serverClock';
   import { SyncStatus } from 'kolibri.coreVue.vuex.constants';
 
   export default {
@@ -30,6 +31,10 @@
         type: String,
         default: '',
       },
+      lastSynced: {
+        type: Date,
+        default: null,
+      },
       displaySize: {
         type: String,
         default: '',
@@ -38,15 +43,21 @@
         },
       },
     },
+    data() {
+      return {
+        now: now(),
+      };
+    },
     computed: {
       syncTextDisplayMap() {
         const statusTranslations = {
-          [SyncStatus.RECENTLY_SYNCED]: this.$tr('recentlySynced'),
+          [SyncStatus.RECENTLY_SYNCED]: this.recentlySyncedText,
           [SyncStatus.QUEUED]: this.$tr('queued'),
           [SyncStatus.SYNCING]: this.$tr('syncing'),
           [SyncStatus.UNABLE_TO_SYNC]: this.$tr('unableToSync'),
           [SyncStatus.NOT_RECENTLY_SYNCED]: this.$tr('notRecentlySynced'),
           [SyncStatus.UNABLE_OR_NOT_SYNCED]: this.$tr('unableOrNotSynced'),
+          [SyncStatus.INSUFFICIENT_STORAGE]: this.$tr('insufficientStorage'),
           [SyncStatus.NOT_CONNECTED]: this.$tr('notConnected'),
         };
         return statusTranslations[this.syncStatus] || '';
@@ -57,46 +68,61 @@
           [SyncStatus.UNABLE_TO_SYNC]: 'error',
           [SyncStatus.NOT_RECENTLY_SYNCED]: 'error',
           [SyncStatus.UNABLE_OR_NOT_SYNCED]: 'error',
+          [SyncStatus.INSUFFICIENT_STORAGE]: 'error',
           [SyncStatus.NOT_CONNECTED]: 'disconnected',
         };
         return statusIcons[this.syncStatus] || '';
       },
-      syncInProgress() {
-        if (this.syncStatus === SyncStatus.SYNCING || this.syncStatus === SyncStatus.QUEUED) {
-          return true;
+      recentlySyncedText() {
+        // Keep it simple if just synced
+        if (!this.lastSynced || this.now - this.lastSynced < 10000) {
+          return this.$tr('recentlySynced');
         }
-        return false;
+        const relativeTime = this.$formatRelative(this.lastSynced, { now: this.now });
+        return this.$tr('recentlySyncedRelative', { relativeTime });
+      },
+      syncInProgress() {
+        return this.syncStatus === SyncStatus.SYNCING || this.syncStatus === SyncStatus.QUEUED;
       },
     },
     $trs: {
       recentlySynced: {
         message: 'Synced',
-        context: 'Status label for a device that has been synced.',
+        context: 'Status indicator for a device that has been synced.',
+      },
+      recentlySyncedRelative: {
+        message: 'Synced {relativeTime}',
+        context:
+          "Status indicator for time period since the last successful sync. For example, 'relativeTime' could be '2 minutes ago'",
       },
       syncing: {
         message: 'Syncing...',
-        context: 'Status label for a device where syncing is in progress.',
+        context: 'Status indicator for a device where syncing is in progress.',
       },
       queued: {
         message: 'Waiting to sync...',
-        context: 'Status label for a device awaiting to sync with server.',
+        context: 'Status indicator for a device awaiting to sync with server.',
       },
       unableToSync: {
         message: 'Unable to sync',
-        context: 'Status label for a device not synced with server.',
+        context: 'Status indicator for a device not synced with server.',
       },
       notRecentlySynced: {
         message: 'Not recently synced',
         context:
-          'Status label for a device not synced with server.\n\nThis message appears when a learn-only device has synced with the server at least once before, but its last sync has been over an hour ago.',
+          'Status indicator for a device not synced with server.\n\nThis message appears when a learn-only device has synced with the server at least once before, but its last sync has been over an hour ago.',
       },
       unableOrNotSynced: {
         message: 'Not recently synced or unable to sync',
-        context: 'Status label for a device not synced with server.',
+        context: 'Status indicator for a device not synced with server.',
       },
       notConnected: {
         message: 'Not connected to server',
-        context: 'Status label for a disconnected device.',
+        context: 'Status indicator for a disconnected device.',
+      },
+      insufficientStorage: {
+        message: 'Not enough storage',
+        context: 'Status indicator for a device that does not have enough storage to sync.',
       },
     },
   };

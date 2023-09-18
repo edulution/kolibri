@@ -5,7 +5,7 @@
     :submitText="registerText"
     :cancelText="cancelText"
     @submit="registerFacility"
-    @cancel="$emit('cancel')"
+    @cancel="cancel"
   >
     <template v-if="!alreadyRegistered">
       <p>{{ $tr('registerWith', { name: projectName }) }}</p>
@@ -44,6 +44,15 @@
         type: String,
         required: true,
       },
+      /**
+       * Whether or not the modal should emit a success event
+       * after the facility has been discovered to be already registered.
+       */
+      successOnAlreadyRegistered: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
     },
     data() {
       return {
@@ -57,7 +66,7 @@
           : this.coreString('cancelAction');
       },
       registerText() {
-        return this.alreadyRegistered ? null : this.$tr('register');
+        return this.alreadyRegistered ? null : this.coreString('registerAction');
       },
     },
     methods: {
@@ -90,14 +99,17 @@
             }
           });
       },
+      cancel() {
+        if (this.alreadyRegistered && this.successOnAlreadyRegistered) {
+          this.$emit('success', this.targetFacility);
+        } else {
+          this.$emit('cancel');
+        }
+      },
     },
     $trs: {
       registerFacility: {
         message: 'Register facility',
-        context: "An action that describes 'registering' a facility to the Kolibri Data Portal.",
-      },
-      register: {
-        message: 'Register',
         context: "An action that describes 'registering' a facility to the Kolibri Data Portal.",
       },
       registerWith: {

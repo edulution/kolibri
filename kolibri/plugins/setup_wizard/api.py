@@ -1,3 +1,5 @@
+import requests
+from django.urls import reverse
 from rest_framework import decorators
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import PermissionDenied
@@ -11,7 +13,6 @@ from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.utils.users import get_remote_users_info
 from kolibri.core.device.models import DevicePermissions
-from kolibri.core.device.utils import provision_device
 
 
 # Basic class that makes these endpoints unusable if device is provisioned
@@ -32,6 +33,34 @@ class HasPermissionDuringLODSetup(BasePermission):
         return subset_of_users_device
 
 
+class SetupWizardResource(ViewSet):
+    """
+    Generic endpoints for use during various setup wizard onboarding flows
+    """
+
+    permission_classes = (HasPermissionDuringSetup,)
+
+    @decorators.action(methods=["post"], detail=False)
+    def createuseronremote(self, request):
+        facility_id = request.data.get("facility_id", None)
+        username = request.data.get("username", None)
+        password = request.data.get("password", None)
+        baseurl = request.data.get("baseurl", None)
+
+        api_url = reverse("kolibri:core:publicsignup-list")
+
+        url = "{}{}".format(baseurl, api_url)
+
+        payload = {
+            "facility_id": facility_id,
+            "username": username,
+            "password": password,
+        }
+
+        r = requests.post(url, data=payload)
+        return Response({"status": r.status_code, "data": r.content})
+
+
 class FacilityImportViewSet(ViewSet):
     """
     A group of endpoints that are used by the SetupWizard to import a facility
@@ -46,7 +75,8 @@ class FacilityImportViewSet(ViewSet):
         # users are from the new facility
         queryset = FacilityUser.objects.filter(roles__kind__contains="admin")
         response_data = [
-            {"username": user.username, "id": user.id} for user in queryset
+            {"full_name": user.full_name, "username": user.username, "id": user.id}
+            for user in queryset
         ]
         return Response(response_data)
 
@@ -97,18 +127,6 @@ class FacilityImportViewSet(ViewSet):
                 the_facility.name = facility_name
                 the_facility.save()
 
-        # Here we only expect and accept the on_my_own_setup extra_field and set it directly
-        # using the setter method for `on_my_own_setup` on Facility
-        extra_fields = request.data.get("extra_fields", None)
-        if extra_fields and extra_fields.get("on_my_own_setup"):
-            the_facility.on_my_own_setup = extra_fields.get("on_my_own_setup")
-
-        if extra_fields and extra_fields.get("os_user"):
-            osuser = FacilityUser.objects.get_or_create_os_user(
-                facility=the_facility, auth_token=request.data.get("auth_token")
-            )
-            return Response({"username": osuser.username})
-
         try:
             superuser = FacilityUser.objects.create_superuser(
                 request.data.get("username"),
@@ -122,46 +140,6 @@ class FacilityImportViewSet(ViewSet):
             raise ValidationError(detail="duplicate", code="duplicate_username")
 
     @decorators.action(methods=["post"], detail=False)
-    def provisionosuserdevice(self, request):
-        """
-        When we can get the OS user, this is what we'll call to provision the device
-        TODO FIXME
-        """
-
-        device_name = request.data.get("device_name", "")  # noqa
-        language_id = request.data.get("language_id", "")  # noqa
-        is_provisioned = request.data.get("is_provisioned", False)  # noqa
-
-    @decorators.action(methods=["post"], detail=False)
-    def provisiondevice(self, request):
-        """
-        After creating/importing a Facility and designating/creating a super admins,
-        provision the device using that facility
-        """
-
-        # TODO validate the data
-        device_name = request.data.get("device_name", "")
-        language_id = request.data.get("language_id", "")
-        is_provisioned = request.data.get("is_provisioned", False)
-
-        # Get the imported facility (assuming its the only one at this point)
-        the_facility = Facility.objects.get()
-
-        # Use the facility's preset to determine whether to allow guest access
-        allow_guest_access = the_facility.dataset.preset != "formal"
-
-        # Finally: Call provision_device
-        provision_device(
-            device_name=device_name,
-            language_id=language_id,
-            default_facility=the_facility,
-            allow_guest_access=allow_guest_access,
-            is_provisioned=is_provisioned,
-        )
-
-        return Response({"is_provisioned": is_provisioned})
-
-    @decorators.action(methods=["post"], detail=False)
     def listfacilitylearners(self, request):
         """
         If the request is done by an admin user  it will return a list of the users of the
@@ -173,7 +151,11 @@ class FacilityImportViewSet(ViewSet):
         :param password: Password of the user that's going to authenticate
         :return: List of the learners of the facility.
         """
-        facility_info = get_remote_users_info(request)
+        facility_id = request.data.get("facility_id")
+        baseurl = request.data.get("baseurl")
+        password = request.data.get("password")
+        username = request.data.get("username")
+        facility_info = get_remote_users_info(baseurl, facility_id, username, password)
         user_info = facility_info["user"]
         roles = user_info["roles"]
         admin_roles = (user_kinds.ADMIN, user_kinds.SUPERUSER)
@@ -181,22 +163,3 @@ class FacilityImportViewSet(ViewSet):
             raise PermissionDenied()
         students = [u for u in facility_info["users"] if not u["roles"]]
         return Response({"students": students, "admin": facility_info["user"]})
-
-
-class SetupWizardRestartZeroconf(ViewSet):
-    """
-    An utility endpoint to restart zeroconf after setup is finished
-    in case this is a SoUD
-    """
-
-    permission_classes = [HasPermissionDuringSetup | HasPermissionDuringLODSetup]
-
-    @decorators.action(methods=["post"], detail=False)
-    def restart(self, request):
-        import logging
-        from kolibri.utils.server import update_zeroconf_broadcast
-
-        logger = logging.getLogger(__name__)
-        logger.info("Updating our Kolibri instance on the Zeroconf network now")
-        update_zeroconf_broadcast()
-        return Response({})

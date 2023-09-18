@@ -2,6 +2,7 @@ import importlib
 import logging
 import os
 import shutil
+import sys
 
 from django.apps import AppConfig
 from django.apps import apps
@@ -10,6 +11,15 @@ from django.core.exceptions import AppRegistryNotReady
 from django.core.management import call_command
 from django.urls import reverse
 from semver import VersionInfo
+
+if sys.version_info < (3, 10):
+    from importlib_metadata import entry_points
+    from importlib_metadata import distribution
+    from importlib_metadata import PackageNotFoundError
+else:
+    from importlib.metadata import entry_points
+    from importlib.metadata import distribution
+    from importlib.metadata import PackageNotFoundError
 
 import kolibri
 from kolibri.core.upgrade import matches_version
@@ -139,9 +149,10 @@ def initialize_kolibri_plugin(plugin_name, initialize_hooks=True):
     # This will raise an exception if not
     _import_python_module(plugin_name)
 
+    plugin_module_name = plugin_name + ".kolibri_plugin"
     try:
         # Exceptions are expected to be thrown from here.
-        plugin_module = importlib.import_module(plugin_name + ".kolibri_plugin")
+        plugin_module = importlib.import_module(plugin_module_name)
         if not was_configured and django_settings.configured:
             raise PluginLoadsApp(
                 "Importing plugin module {} caused Django settings to be configured".format(
@@ -177,7 +188,12 @@ def initialize_kolibri_plugin(plugin_name, initialize_hooks=True):
     except ImportError as e:
         # Python 2: message, Python 3: msg
         exc_message = getattr(e, "message", getattr(e, "msg", None))
-        if exc_message.startswith("No module named"):
+        # On Python 3, the message is the full path to the module
+        # On Python 2, the message is the last part of the path
+        if (
+            exc_message == "No module named '{}'".format(plugin_module_name)
+            or exc_message == "No module named kolibri_plugin"
+        ):
             msg = (
                 "Plugin '{}' exists but does not have an importable kolibri_plugin module"
             ).format(plugin_name)
@@ -220,15 +236,10 @@ def disable_plugin(plugin_name, initialize_hooks=False):
 def _get_plugin_version(plugin_name):
     if is_external_plugin(plugin_name):
         top_level_module = plugin_name.split(".")[0]
-        # pkg_resources is very slow to import, so we defer
-        # its import until needed to avoid imports at module scope
-        # c.f. https://github.com/pypa/setuptools/issues/926
-        from pkg_resources import DistributionNotFound
-        from pkg_resources import get_distribution
 
         try:
-            return get_distribution(top_level_module).version
-        except (DistributionNotFound, AttributeError):
+            return distribution(top_level_module).version
+        except (PackageNotFoundError, AttributeError):
             try:
                 module = importlib.import_module(plugin_name)
                 return module.__version__
@@ -467,19 +478,14 @@ def check_plugin_config_file_location(version):
 
 
 def iterate_plugins():
-    # pkg_resources is very slow to import, so we defer
-    # its import until needed to avoid imports at module scope
-    # c.f. https://github.com/pypa/setuptools/issues/926
-    from pkg_resources import iter_entry_points
-
     # Use to dedupe plugins
     plugin_ids = set()
-    for entry_point in iter_entry_points("kolibri.plugins"):
-        name = entry_point.module_name
+    for entry_point in entry_points().get("kolibri.plugins", []):
+        name = entry_point.name
         if name not in plugin_ids:
             plugin_ids.add(name)
             try:
-                plugin = initialize_kolibri_plugin(name)
+                plugin = initialize_kolibri_plugin(name, initialize_hooks=False)
                 yield plugin
             except Exception:
                 pass

@@ -10,12 +10,12 @@ import Subjects from 'kolibri-constants/labels/Subjects';
 import LearningActivities from 'kolibri-constants/labels/LearningActivities';
 import ContentNodeThumbnail from '../../src/views/thumbnails/ContentNodeThumbnail';
 import BrowseResourceMetadata from '../../src/views/BrowseResourceMetadata';
-import genContentLink from '../../src/utils/genContentLink';
 import routes from '../../src/routes/index.js';
 
 const localVue = createLocalVue();
 localVue.use(VueRouter);
 
+jest.mock('../../src/composables/useContentLink');
 jest.mock('plugin_data', () => {
   return {
     __esModule: true,
@@ -78,9 +78,9 @@ function makeContentNode(metadata = {}) {
   return { ...baseContentNode, ...metadata };
 }
 
-function makeWrapper(metadata = {}, options = {}) {
+function makeWrapper(metadata = {}, options = {}, canDownloadExternally = false) {
   const content = makeContentNode(metadata);
-  const propsData = { content };
+  const propsData = { content, canDownloadExternally };
   return shallowMount(BrowseResourceMetadata, {
     localVue,
     propsData,
@@ -105,13 +105,9 @@ describe('BrowseResourceMetadata', () => {
       expect(wrapper.find("[data-test='beginners-chip']").exists()).toBeTruthy();
     });
 
-    it('shows the view resource button-link with genContentLink-generated path', () => {
+    it('shows the view resource button-link', () => {
       const link = wrapper.findComponent(KRouterLink);
       expect(link.exists()).toBeTruthy();
-      const to = link.props().to;
-      expect(to).toEqual(
-        genContentLink(baseContentNode.id, null, baseContentNode.is_leaf, null, {})
-      );
     });
 
     it('displays a ContentNodeThumbnail', () => {
@@ -196,6 +192,16 @@ describe('BrowseResourceMetadata', () => {
 
     it('does not show license description section without the data', () => {
       expect(wrapper.find("[data-test='license-desc']").exists()).toBeFalsy();
+    });
+  });
+  describe('download button gets toggled by prop', () => {
+    it('should display the button when canDownloadExternally is true', () => {
+      const wrapper = makeWrapper({}, {}, true);
+      expect(wrapper.find("[data-test='download']").exists()).toBeTruthy();
+    });
+    it('should not display the button when canDownloadExternally is false', () => {
+      const wrapper = makeWrapper({}, {}, false);
+      expect(wrapper.find("[data-test='download']").exists()).toBeFalsy();
     });
   });
 });

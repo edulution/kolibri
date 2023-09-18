@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from datetime import timedelta
 from itertools import groupby
+from uuid import UUID
 from uuid import uuid4
 
 from django.contrib.auth import authenticate
@@ -23,6 +24,7 @@ from django.db.models import TextField
 from django.db.models import Value
 from django.db.models.functions import Cast
 from django.http import Http404
+from django.http import HttpResponseBadRequest
 from django.utils.decorators import method_decorator
 from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
@@ -32,6 +34,7 @@ from django_filters.rest_framework import ChoiceFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
 from django_filters.rest_framework import ModelChoiceFilter
+from django_filters.rest_framework import UUIDFilter
 from morango.api.permissions import BasicMultiArgumentAuthentication
 from morango.constants import transfer_stages
 from morango.constants import transfer_statuses
@@ -57,6 +60,7 @@ from .models import LearnerGroup
 from .models import Membership
 from .models import Role
 from .serializers import ClassroomSerializer
+from .serializers import ExtraFieldsSerializer
 from .serializers import FacilityDatasetSerializer
 from .serializers import FacilitySerializer
 from .serializers import FacilityUserSerializer
@@ -69,6 +73,7 @@ from kolibri.core.api import ReadOnlyValuesViewset
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.constants.demographics import NOT_SPECIFIED
 from kolibri.core.auth.permissions.general import _user_is_admin_for_own_facility
+from kolibri.core.auth.permissions.general import DenyAll
 from kolibri.core.device.utils import allow_guest_access
 from kolibri.core.device.utils import allow_other_browsers_to_connect
 from kolibri.core.device.utils import valid_app_key_on_request
@@ -152,9 +157,30 @@ class KolibriAuthPermissions(permissions.BasePermission):
         return False
 
 
+class IsPINValidPermissions(DenyAll):
+    def has_permission(self, request, view):
+        return request.user.is_superuser or request.user.can_manage_content
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
+
+
+class FacilityDatasetFilter(FilterSet):
+
+    facility_id = UUIDFilter(field_name="collection")
+
+    class Meta:
+        model = FacilityDataset
+        fields = ["facility_id"]
+
+
 class FacilityDatasetViewSet(ValuesViewset):
     permission_classes = (KolibriAuthPermissions,)
-    filter_backends = (KolibriAuthPermissionsFilter,)
+    filter_backends = (
+        KolibriAuthPermissionsFilter,
+        DjangoFilterBackend,
+    )
+    filter_class = FacilityDatasetFilter
     serializer_class = FacilityDatasetSerializer
 
     values = (
@@ -166,6 +192,7 @@ class FacilityDatasetViewSet(ValuesViewset):
         "learner_can_delete_account",
         "learner_can_login_with_no_password",
         "show_download_button_in_learn",
+        "extra_fields",
         "description",
         "location",
         "registered",
@@ -175,13 +202,9 @@ class FacilityDatasetViewSet(ValuesViewset):
     field_map = {"allow_guest_access": lambda x: allow_guest_access()}
 
     def get_queryset(self):
-        queryset = FacilityDataset.objects.filter(
+        return FacilityDataset.objects.filter(
             collection__kind=collection_kinds.FACILITY
         )
-        facility_id = self.request.query_params.get("facility_id", None)
-        if facility_id is not None:
-            queryset = queryset.filter(collection__id=facility_id)
-        return queryset
 
     @decorators.action(methods=["post"], detail=True)
     def resetsettings(self, request, pk):
@@ -194,6 +217,50 @@ class FacilityDatasetViewSet(ValuesViewset):
             return Response(data)
         except FacilityDataset.DoesNotExist:
             raise Http404("Facility does not exist")
+
+    @decorators.action(methods=["post", "patch"], detail=True, url_path="update-pin")
+    def update_pin(self, request, pk):
+
+        serializer = ExtraFieldsSerializer(data=request.data)
+        if not serializer.is_valid():
+            return HttpResponseBadRequest("Invalid pin input")
+
+        pin_code = serializer.data.get("pin_code")
+        if request.method == "POST" and not pin_code:
+            return HttpResponseBadRequest("Please provide a pin")
+
+        try:
+            dataset = FacilityDataset.objects.get(pk=pk)
+            if dataset.extra_fields is None:
+                dataset.extra_fields = {}
+            dataset.extra_fields["pin_code"] = pin_code
+            dataset.save()
+            return Response(FacilityDatasetSerializer(dataset).data)
+        except FacilityDataset.DoesNotExist:
+            raise Http404("Facility not found")
+
+
+class IsPINValidView(views.APIView):
+    permission_classes = (IsPINValidPermissions,)
+
+    def post(self, request, pk):
+        serializer = ExtraFieldsSerializer(data=request.data)
+        if not serializer.is_valid() or serializer.data.get("pin_code") is None:
+            return HttpResponseBadRequest("Invalid pin input")
+
+        input_pin_code = serializer.data.get("pin_code")
+        if not input_pin_code:
+            return HttpResponseBadRequest("Please provide a pin")
+
+        try:
+            dataset = FacilityDataset.objects.get(pk=pk)
+            data = FacilityDatasetSerializer(dataset).data
+            extra_fields = data.get("extra_fields", {})
+            saved_pin_code = extra_fields.get("pin_code")
+        except FacilityDataset.DoesNotExist:
+            raise Http404("Facility not found")
+
+        return Response({"is_pin_valid": saved_pin_code == input_pin_code})
 
 
 class FacilityUserFilter(FilterSet):
@@ -271,9 +338,13 @@ class PublicFacilityUserViewSet(ReadOnlyValuesViewset):
     }
 
     def get_queryset(self):
-        facility_id = self.request.query_params.get("facility_id", None)
-        if facility_id is None:
-            facility_id = self.request.user.facility_id
+        facility_id = self.request.query_params.get(
+            "facility_id", self.request.user.facility_id
+        )
+        try:
+            facility_id = UUID(facility_id).hex
+        except ValueError:
+            return self.queryset.none()
 
         # if user has admin rights for the facility returns the list of users
         queryset = self.queryset.filter(facility_id=facility_id)
@@ -359,10 +430,10 @@ class FacilityUserViewSet(ValuesViewset):
             update_session_auth_hash(self.request, instance)
 
 
-class ExistingUsernameView(views.APIView):
-    def get(self, request):
-        username = request.GET.get("username")
-        facility_id = request.GET.get("facility")
+class UsernameAvailableView(views.APIView):
+    def post(self, request):
+        username = request.data.get("username")
+        facility_id = request.data.get("facility")
 
         if not username or not facility_id:
             return Response(
@@ -380,9 +451,20 @@ class ExistingUsernameView(views.APIView):
 
         try:
             FacilityUser.objects.get(username__iexact=username, facility=facility_id)
-            return Response({"username_exists": True}, status=status.HTTP_200_OK)
+            return Response(
+                [
+                    {
+                        "id": error_constants.USERNAME_ALREADY_EXISTS,
+                        "metadata": {
+                            "field": "username",
+                            "message": "Username already exists.",
+                        },
+                    }
+                ],
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except ObjectDoesNotExist:
-            return Response({"username_exists": False}, status=status.HTTP_200_OK)
+            return Response(True, status=status.HTTP_200_OK)
 
 
 class FacilityUsernameViewSet(ReadOnlyValuesViewset):
@@ -453,6 +535,7 @@ dataset_keys = [
     "dataset__learner_can_delete_account",
     "dataset__learner_can_login_with_no_password",
     "dataset__show_download_button_in_learn",
+    "dataset__extra_fields",
     "dataset__description",
     "dataset__location",
     "dataset__registered",
@@ -741,7 +824,7 @@ class SetNonSpecifiedPasswordView(views.APIView):
 
         try:
             user = FacilityUser.objects.get(username=username, facility=facility_id)
-        except ObjectDoesNotExist:
+        except (ValueError, ObjectDoesNotExist):
             raise Http404(error_message)
 
         if user.password != NOT_SPECIFIED:
@@ -776,8 +859,19 @@ class SessionViewSet(viewsets.ViewSet):
             unauthenticated_user = FacilityUser.objects.get(
                 username__iexact=username, facility=facility_id
             )
-        except ObjectDoesNotExist:
-            unauthenticated_user = None
+        except (ValueError, ObjectDoesNotExist):
+            return Response(
+                [
+                    {
+                        "id": error_constants.NOT_FOUND,
+                        "metadata": {
+                            "field": "username",
+                            "message": "Username not found.",
+                        },
+                    }
+                ],
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         user = authenticate(username=username, password=password, facility=facility_id)
         if user is not None and user.is_active:
@@ -785,10 +879,7 @@ class SessionViewSet(viewsets.ViewSet):
             login(request, user)
             # Success!
             return self.get_session_response(request)
-        if (
-            unauthenticated_user is not None
-            and unauthenticated_user.password == NOT_SPECIFIED
-        ):
+        if unauthenticated_user.password == NOT_SPECIFIED:
             # Here - we have a Learner whose password is "NOT_SPECIFIED" because they were created
             # while the "Require learners to log in with password" setting was disabled - but now
             # it is enabled again.

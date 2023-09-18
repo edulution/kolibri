@@ -25,13 +25,36 @@
         <KIconButton
           icon="back"
           data-test="backButton"
-          :tooltip="$tr('goBack')"
-          :ariaLabel="$tr('goBack')"
+          :tooltip="coreString('goBackAction')"
+          :ariaLabel="coreString('goBackAction')"
           @click="onBackButtonClick"
         />
       </template>
 
       <template #actions>
+        <Transition name="downloading-loader">
+          <!--
+            wrapping span needed here because
+            (1) tooltip doesn't display when `ref` is on `KCircularLoader`
+            (2) Transition needs a single child
+          -->
+          <span ref="downloadingLoader">
+            <KCircularLoader
+              :show="isDownloading"
+              :minVisibleTime="3000"
+              data-test="downloadingLoader"
+              :size="24"
+              :style="{ margin: '10px 4px 0px 4px' }"
+            />
+            <KTooltip
+              reference="downloadingLoader"
+              :refs="$refs"
+            >
+              {{ downloadingLoaderTooltip }}
+            </KTooltip>
+          </span>
+        </Transition>
+
         <KIconButton
           v-if="isQuiz && !showingReportState"
           ref="timerButton"
@@ -66,17 +89,26 @@
             </div>
           </template>
         </CoreMenu>
-        <KIconButton
-          v-for="action in barActions"
-          :key="action.id"
-          :data-test="`bar_${action.dataTest}`"
-          :icon="action.icon"
-          :color="action.iconColor"
-          :tooltip="action.label"
-          :ariaLabel="action.label"
-          :disabled="action.disabled"
-          @click="onActionClick(action.event)"
+        <DeviceConnectionStatus
+          v-if="deviceId"
+          :deviceId="deviceId"
         />
+
+        <TransitionGroup name="bar-actions">
+          <KIconButton
+            v-for="action in barActions"
+            :key="action.id"
+            :data-test="`bar_${action.dataTest}`"
+            :icon="action.icon"
+            :color="action.iconColor"
+            :tooltip="action.label"
+            :ariaLabel="action.label"
+            :disabled="action.disabled"
+            class="bar-actions-item"
+            :class="action.id === 'next-steps' && nextStepsAnimate ? 'bounce' : ''"
+            @click="onActionClick(action.event)"
+          />
+        </TransitionGroup>
 
         <span class="menu-wrapper">
           <KIconButton
@@ -104,7 +136,9 @@
                 v-for="action in menuActions"
                 :key="action.id"
                 :data-test="`menu_${action.dataTest}`"
+                :disabled="action.disabled"
                 :style="{ 'cursor': 'pointer' }"
+                :icon="action.icon"
                 @select="onActionClick(action.event)"
               >
                 <KLabeledIcon>
@@ -121,11 +155,6 @@
           </CoreMenu>
         </span>
       </template>
-      <MarkAsCompleteModal
-        v-if="showMarkAsCompleteModal && allowMarkComplete"
-        @complete="showMarkAsCompleteModal = false"
-        @cancel="showMarkAsCompleteModal = false"
-      />
     </UiToolbar>
   </nav>
 
@@ -134,7 +163,6 @@
 
 <script>
 
-  import difference from 'lodash/difference';
   import KResponsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
   import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
@@ -147,9 +175,10 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import TimeDuration from 'kolibri.coreVue.components.TimeDuration';
   import SuggestedTime from 'kolibri.coreVue.components.SuggestedTime';
+  import get from 'lodash/get';
   import LearningActivityIcon from './LearningActivityIcon.vue';
-  import MarkAsCompleteModal from './MarkAsCompleteModal';
   import commonLearnStrings from './commonLearnStrings';
+  import DeviceConnectionStatus from './DeviceConnectionStatus.vue';
 
   export default {
     name: 'LearningActivityBar',
@@ -159,11 +188,11 @@
       CoreMenuOption,
       TextTruncatorCss,
       LearningActivityIcon,
-      MarkAsCompleteModal,
       ProgressIcon,
       UiToolbar,
       TimeDuration,
       SuggestedTime,
+      DeviceConnectionStatus,
     },
     mixins: [KResponsiveWindowMixin, commonLearnStrings, commonCoreStrings],
     /**
@@ -174,6 +203,7 @@
      * - `markComplete` on 'Mark resource as finished' click. Only when
      *                  a resource can be marked as complete.
      * - `viewInfo` on 'View information' click
+     * - `download` on 'Download' click
      */
     props: {
       resourceTitle: {
@@ -281,15 +311,49 @@
         required: false,
         default: true,
       },
+      /**
+       * Shows the download button when truthy
+       */
+      showDownloadButton: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+      /**
+       * Shows the downloading loader and disables download action when truthy
+       */
+      isDownloading: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+      /**
+       * Tooltip text for the downloading loader.
+       */
+      downloadingLoaderTooltip: {
+        type: String,
+        required: false,
+        default: '',
+      },
     },
     data() {
       return {
         isMenuOpen: false,
         isTimerOpen: false,
-        showMarkAsCompleteModal: false,
+        nextStepsAnimate: false,
       };
     },
     computed: {
+      deviceId() {
+        return get(this.$route, 'params.deviceId');
+      },
+
+      showMarkComplete() {
+        return this.allowMarkComplete && this.contentProgress < 1;
+      },
+      disableDownloadButton() {
+        return this.isDownloading;
+      },
       allActions() {
         const actions = [
           {
@@ -314,14 +378,33 @@
             dataTest: this.isBookmarked ? 'removeBookmarkButton' : 'addBookmarkButton',
           });
         }
-        if (this.allowMarkComplete) {
+        if (this.showDownloadButton) {
+          actions.push({
+            id: 'download',
+            icon: 'download',
+            iconColor: this.disableDownloadButton ? this.$themeTokens.textDisabled : null,
+            label: this.coreString('downloadAction'),
+            event: 'download',
+            dataTest: 'downloadButton',
+            disabled: this.disableDownloadButton,
+          });
+        }
+        if (this.showMarkComplete) {
           actions.push({
             id: 'mark-complete',
             icon: 'star',
-            iconColor: this.$themePalette.yellow.v_700,
+            iconColor: this.$themeTokens.mastered,
             label: this.learnString('markResourceAsCompleteLabel'),
             event: 'markComplete',
             dataTest: 'markCompleteButton',
+          });
+        }
+        if (this.contentProgress >= 1) {
+          actions.unshift({
+            id: 'next-steps',
+            icon: 'forwardRounded',
+            label: this.learnString('nextStepsLabel'),
+            event: 'completionModal',
           });
         }
         actions.push({
@@ -334,24 +417,24 @@
 
         return actions;
       },
+      numBarActions() {
+        let maxSize = 1;
+        if (this.windowBreakpoint === 1) {
+          maxSize = 2;
+        } else if (this.windowBreakpoint > 1) {
+          // Ensure to hide the mark complete button in the dropdown
+          // to prevent instinctive points grabbing!
+          maxSize = this.showMarkComplete ? 3 : 4;
+        }
+        // If maxSize doesn't handle all of the items, we need to
+        // reserve a space for show options button.
+        return this.allActions.length > maxSize ? maxSize - 1 : maxSize;
+      },
       barActions() {
-        const actions = [];
-        if (this.windowBreakpoint >= 1) {
-          actions.push(this.allActions.find(action => action.id === 'view-resource-list'));
-        }
-        if (this.windowBreakpoint >= 2) {
-          if (this.showBookmark)
-            actions.push(this.allActions.find(action => action.id === 'bookmark'));
-          // if a resource doesn’t have the option for learners to manually mark as complete,
-          // the 'More options' bar icon button changes to the 'View information' bar icon button
-          if (!this.allowMarkComplete) {
-            actions.push(this.allActions.find(action => action.id === 'view-info'));
-          }
-        }
-        return actions;
+        return this.allActions.slice(0, this.numBarActions);
       },
       menuActions() {
-        return difference(this.allActions, this.barActions);
+        return this.allActions.slice(this.numBarActions);
       },
       contentSpecificStyles() {
         // The prime difference is that Exercises won't have shadows under the UiToolbar
@@ -365,7 +448,7 @@
     },
     created() {
       window.addEventListener('click', this.onWindowClick);
-      this.$on('markComplete', () => (this.showMarkAsCompleteModal = true));
+      this.$on('markComplete', () => this.$store.commit('SET_SHOW_COMPLETE_CONTENT_MODAL', true));
     },
     beforeDestroy() {
       window.removeEventListener('click', this.onWindowClick);
@@ -417,16 +500,16 @@
         // close menu on outside click
         if (this.isMenuOpen) {
           if (
-            !this.$refs.menu.$el.contains(event.target) &&
-            !this.$refs.moreOptionsButton.$el.contains(event.target)
+            !this.$refs.menu.$el?.contains(event.target) &&
+            !this.$refs.moreOptionsButton?.$el.contains(event.target)
           ) {
             this.closeMenu({ focusMoreOptionsButton: false });
           }
         }
         if (this.isTimerOpen) {
           if (
-            !this.$refs.timerButton.$el.contains(event.target) &&
-            !this.$refs.timer.$el.contains(event.target)
+            !this.$refs.timerButton?.$el.contains(event.target) &&
+            !this.$refs.timer?.$el.contains(event.target)
           ) {
             this.closeTimer({ focusTimerButton: false });
           }
@@ -437,12 +520,17 @@
           this.$refs.menu.focusFirstEl();
         });
       },
+      /*
+       * @public
+       */
+      animateNextSteps() {
+        this.nextStepsAnimate = true;
+        setTimeout(() => {
+          this.nextStepsAnimate = false;
+        }, 1500);
+      },
     },
     $trs: {
-      goBack: {
-        message: 'Go back',
-        context: 'Link to go back to the previous screen.',
-      },
       moreOptions: {
         message: 'More options',
         context: 'Tooltip text.',
@@ -493,6 +581,19 @@
     min-width: 0;
   }
 
+  /deep/ .ui-toolbar__left {
+    margin-left: 5px;
+    overflow: hidden;
+  }
+
+  /deep/ .ui-toolbar__right {
+    display: flex;
+  }
+
+  /deep/ .ui-toolbar__nav-icon {
+    margin-left: 0; // prevents icon cutoff
+  }
+
   /deep/ .ui-toolbar__body {
     flex-grow: 0; // make sure that the completion icon is right next to the title
     align-items: center;
@@ -511,6 +612,79 @@
   .timer-display {
     padding: 16px;
     font-size: 14px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bounce {
+      transition-delay: 0s;
+      transition-duration: 0s;
+      animation-duration: 1ms;
+      animation-delay: -1ms;
+      animation-iteration-count: 1;
+    }
+  }
+
+  @keyframes bounce {
+    0% {
+      transform: scale(1, 1) translateY(0);
+    }
+
+    10% {
+      transform: scale(1.1, 0.9) translateY(0);
+    }
+
+    30% {
+      transform: scale(0.9, 1.1) translateY(-0.5em);
+    }
+
+    50% {
+      transform: scale(1.05, 0.95) translateY(0);
+    }
+
+    57% {
+      transform: scale(1, 1) translateY(-0.125em);
+    }
+
+    64% {
+      transform: scale(1, 1) translateY(0);
+    }
+
+    100% {
+      transform: scale(1, 1) translateY(0);
+    }
+  }
+
+  .bounce {
+    animation-name: bounce;
+    animation-duration: 1s;
+    animation-timing-function: cubic-bezier(0.28, 0.84, 0.42, 1);
+    animation-delay: 0s;
+    animation-iteration-count: infinite;
+    animation-direction: normal;
+  }
+
+  .downloading-loader-enter-active,
+  .downloading-loader-leave-active {
+    transition: opacity 0.4s ease-in-out;
+  }
+
+  .downloading-loader-enter,
+  .downloading-loader-leave-to {
+    opacity: 0;
+  }
+
+  // https://v2.vuejs.org/v2/guide/transitions.html#List-Move-Transitions
+  .bar-actions-item {
+    transition: all 0.5s ease-in-out;
+  }
+
+  .bar-actions-enter,
+  .bar-actions-leave-to {
+    opacity: 0;
+  }
+
+  .bar-actions-leave-active {
+    position: absolute;
   }
 
 </style>

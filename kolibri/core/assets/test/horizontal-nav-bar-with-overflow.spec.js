@@ -1,8 +1,11 @@
 import HorizontalNavBarWithOverflowMenu from 'kolibri.coreVue.components.HorizontalNavBarWithOverflowMenu';
-import { shallowMount, mount } from '@vue/test-utils';
+import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
+import { shallowMount } from '@vue/test-utils';
+
+jest.mock('kolibri-design-system/lib/useKResponsiveWindow');
 
 function makeWrapper({ propsData } = {}) {
-  return mount(HorizontalNavBarWithOverflowMenu, { propsData });
+  return shallowMount(HorizontalNavBarWithOverflowMenu, { propsData });
 }
 
 const longerNavigationList = [
@@ -39,12 +42,17 @@ const longerNavigationList = [
 ];
 
 describe('HorizontalNavBarWithOverflowMenu', () => {
+  beforeAll(() => {
+    useKResponsiveWindow.mockImplementation(() => ({
+      windowWidth: 0,
+    }));
+  });
   it('smoke test', () => {
-    const wrapper = shallowMount(HorizontalNavBarWithOverflowMenu);
+    const wrapper = makeWrapper();
     expect(wrapper.exists()).toBe(true);
   });
   it('Renders the Navbar component by default', () => {
-    const wrapper = shallowMount(HorizontalNavBarWithOverflowMenu, {
+    const wrapper = makeWrapper({
       propsData: {
         navigationLinks: [
           {
@@ -59,48 +67,14 @@ describe('HorizontalNavBarWithOverflowMenu', () => {
     expect(wrapper.findComponent({ name: 'Navbar' }).element).toBeTruthy();
   });
   describe('the overflow menu', () => {
-    describe('overflow needed', () => {
-      const wrapper = makeWrapper(HorizontalNavBarWithOverflowMenu, {
-        propsData: {
-          navigationLinks: longerNavigationList,
-        },
-        computed: { windowIsLarge: () => false },
-      });
-      it('shows a KIconButton when the number of links does not fit in the given viewport', async () => {
-        await wrapper.setData({
-          numberOfNavigationTabsToDisplay: 2,
-          overflowMenuLinks: [
-            {
-              title: 'Title 3',
-              link: 'url',
-              icon: 'dashboard',
-              color: 'white',
-            },
-            {
-              title: 'Title 4',
-              link: 'url',
-              icon: 'dashboard',
-              color: 'white',
-            },
-            {
-              title: 'Title 5',
-              link: 'url',
-              icon: 'dashboard',
-              color: 'white',
-            },
-          ],
-        });
-        expect(wrapper.findComponent({ name: 'KIconButton' }).element).toBeTruthy();
-      });
-      describe('overflow not needed', () => {
+    describe('overflow not needed', () => {
+      it('does not display a KIconButton with a dropdown menu', () => {
         const wrapper = makeWrapper(HorizontalNavBarWithOverflowMenu, {
           propsData: {
             navigationLinks: longerNavigationList,
           },
         });
-        it('does not display a KIconButton with a dropdown menu', () => {
-          expect(wrapper.findComponent({ name: 'KIconButton' }).element).toBeFalsy();
-        });
+        expect(wrapper.findComponent({ name: 'KIconButton' }).element).toBeFalsy();
       });
     });
   });

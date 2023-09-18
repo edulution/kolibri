@@ -2,7 +2,7 @@
  * Module for REST API client
  */
 
-import axios from 'axios';
+import { CancelToken } from 'axios';
 import qs from 'qs';
 import heartbeat from 'kolibri.heartbeat';
 import logger from 'kolibri.lib.logging';
@@ -19,7 +19,6 @@ baseClient.interceptors.request.use(function(config) {
   if (!store.getters.connected) {
     // If the vuex state records that we are not currently connected then cancel all
     // outgoing requests.
-    const CancelToken = axios.CancelToken;
     const source = CancelToken.source();
     config.cancelToken = source.token;
     source.cancel('Request cancelled as currently disconnected from Kolibri');
@@ -37,7 +36,7 @@ baseClient.interceptors.response.use(
     // client code is still trying to access data that they would be allowed to see
     // if they were logged in.
     if (error.response) {
-      if (error.response.status === 403) {
+      if (error.response.status === 403 || error.response.status === 401) {
         if (!store.state.core.session.id) {
           // Don't have any session information, so assume that this
           // page has just been reopened and the session has expired.
@@ -70,11 +69,6 @@ const client = options => {
       options.params = {};
     } else {
       options.params = Object.assign({}, options.params);
-    }
-    // Cache bust by default, but allow it to be turned off
-    if (options.cacheBust || typeof options.cacheBust === 'undefined') {
-      const cacheBust = new Date().getTime();
-      options.params[cacheBust] = cacheBust;
     }
     if (options.path) {
       // Provide backwards compatibility with the previous Rest JS API.

@@ -37,6 +37,7 @@ from django.db import transaction
 from django.db.models.query import Q
 from django.db.utils import IntegrityError
 from django.utils.encoding import python_2_unicode_compatible
+from django.utils.functional import cached_property
 from morango.models import Certificate
 from morango.models import SyncableModel
 from morango.models import SyncableModelManager
@@ -75,10 +76,29 @@ from kolibri.core.device.utils import set_device_settings
 from kolibri.core.errors import KolibriValidationError
 from kolibri.core.fields import DateTimeTzField
 from kolibri.core.fields import JSONField
+from kolibri.core.utils.validators import JSON_Schema_Validator
 from kolibri.plugins.app.utils import interface
 from kolibri.utils.time_utils import local_now
 
 logger = logging.getLogger(__name__)
+
+# '"optional":True' is obsolete but needed while we keep using an
+# old json_schema_validator version compatible with python 2.7.
+# "additionalProperties": False must be avoided for backwards compatibility
+extra_fields_schema = {
+    "type": "object",
+    "properties": {
+        "facility": {"type": "object", "optional": True},
+        "on_my_own_setup": {"type": "boolean", "optional": True},
+        "pin_code": {"type": ["string", "null"], "optional": True},
+    },
+}
+
+extra_fields_default_values = {
+    "facility": {},
+    "on_my_own_setup": False,
+    "pin_code": "",
+}
 
 
 class DatasetCache(local):
@@ -160,7 +180,12 @@ class FacilityDataset(FacilityDataSyncableModel):
     learner_can_delete_account = models.BooleanField(default=True)
     learner_can_login_with_no_password = models.BooleanField(default=False)
     show_download_button_in_learn = models.BooleanField(default=True)
-    extra_fields = JSONField(null=True, blank=True)
+    extra_fields = JSONField(
+        null=True,
+        blank=True,
+        validators=[JSON_Schema_Validator(extra_fields_schema)],
+        default=extra_fields_default_values,
+    )
     registered = models.BooleanField(default=False)
 
     def __str__(self):
@@ -537,7 +562,13 @@ class KolibriAnonymousUser(AnonymousUser, KolibriAbstractBaseUser):
             "user_id": None,
             "facility_id": getattr(Facility.get_default_facility(), "id", None),
             "kind": [user_kinds.ANONYMOUS],
+            "full_facility_import": self.full_facility_import,
         }
+
+    @property
+    def full_facility_import(self):
+        # Just return True for anonymous users, since they don't have any permissions anyway
+        return True
 
     def is_member_of(self, coll):
         return False
@@ -816,7 +847,28 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
             "kind": roles,
             "can_manage_content": self.can_manage_content,
             "facility_id": self.facility_id,
+            # Is this user a member of a facility that has been fully imported?
+            "full_facility_import": self.full_facility_import,
         }
+
+    @cached_property
+    def full_facility_import(self):
+        """
+        Returns True if this user is a member of a facility that has been fully imported.
+        """
+        return (
+            Certificate.objects.get(id=self.dataset_id)
+            .get_descendants(include_self=True)
+            .exclude(_private_key__isnull=True)
+            .filter(scope_definition_id=ScopeDefinitions.FULL_FACILITY)
+            .exists()
+        )
+
+    @cached_property
+    def full_facility_on_my_own_setup(self):
+        if self.dataset.extra_fields is not None:
+            return self.dataset.extra_fields.get("on_my_own_setup", False)
+        return False
 
     @property
     def can_manage_content(self):
@@ -1414,6 +1466,23 @@ class Facility(Collection):
 
     def remove_coach(self, user):
         self.remove_role(user, role_kinds.COACH)
+
+    @classmethod
+    def get_or_create(cls, facility_name):
+        if cls.objects.count() == 0:
+            return cls.objects.create(name=facility_name)
+        else:
+            facility = None
+            try:
+                # We accept the parameter so we may as well try searching for it first
+                facility = cls.objects.get(name=facility_name)
+            except cls.DoesNotExist:
+                # or just fall back to returning the first Facility that exists
+                facility = cls.objects.get()
+                if facility_name:
+                    facility.name = facility_name
+                    facility.save()
+            return facility
 
     @property
     def on_my_own_setup(self):

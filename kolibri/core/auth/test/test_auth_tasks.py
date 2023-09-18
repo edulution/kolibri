@@ -1,8 +1,10 @@
+import datetime
 from uuid import uuid4
 
 from django.core.management.base import CommandError
 from django.test import TestCase
 from django.urls import reverse
+from mock import MagicMock
 from mock import Mock
 from mock import patch
 from requests.exceptions import ConnectionError
@@ -41,6 +43,8 @@ fake_job_defaults = dict(
     traceback="",
     percentage_progress=0,
     cancellable=False,
+    args=(),
+    kwargs={},
     extra_metadata={},
     func="",
 )
@@ -50,6 +54,13 @@ def fake_job(**kwargs):
     fake_data = fake_job_defaults.copy()
     fake_data.update(kwargs)
     return Mock(spec=Job, **fake_data)
+
+
+class dummy_orm_job_data(object):
+    scheduled_time = datetime.datetime(year=2023, month=1, day=1, tzinfo=None)
+    repeat = 5
+    interval = 8600
+    retry_interval = 5
 
 
 @patch("kolibri.core.tasks.api.job_storage")
@@ -116,6 +127,7 @@ class FacilityTasksAPITestCase(APITestCase):
             extra_metadata=dict(this_is_extra=True),
         )
         mock_job_storage.get_job.return_value = fake_job(**fake_job_data)
+        mock_job_storage.get_orm_job.return_value = dummy_orm_job_data
 
         response = self.client.post(
             reverse("kolibri:core:task-list"),
@@ -152,6 +164,7 @@ class FacilityTasksAPITestCase(APITestCase):
             extra_metadata=dict(this_is_extra=True),
         )
         mock_job_storage.get_job.return_value = fake_job(**fake_job_data)
+        mock_job_storage.get_orm_job.return_value = dummy_orm_job_data
 
         response = self.client.post(
             reverse("kolibri:core:task-list"),
@@ -219,6 +232,7 @@ class FacilityTasksAPITestCase(APITestCase):
         )
         fake_job_data["extra_metadata"].update(extra_metadata)
         mock_job_storage.get_job.return_value = fake_job(**fake_job_data)
+        mock_job_storage.get_orm_job.return_value = dummy_orm_job_data
 
         req_data = dict(
             facility=self.facility.id,
@@ -228,7 +242,7 @@ class FacilityTasksAPITestCase(APITestCase):
             device_id=device.id,
         )
 
-        network_client = NetworkClient.return_value
+        network_client = NetworkClient.build_for_address.return_value
         network_client.base_url = "https://some.server.test/"
 
         response = self.client.post(
@@ -283,6 +297,7 @@ class FacilityTasksAPITestCase(APITestCase):
         )
         fake_job_data["extra_metadata"].update(extra_metadata)
         mock_job_storage.get_job.return_value = fake_job(**fake_job_data)
+        mock_job_storage.get_orm_job.return_value = dummy_orm_job_data
 
         req_data = dict(
             facility=self.facility.id,
@@ -292,7 +307,7 @@ class FacilityTasksAPITestCase(APITestCase):
             device_id=device.id,
         )
 
-        network_client = NetworkClient.return_value
+        network_client = NetworkClient.build_for_address.return_value
         network_client.base_url = "https://some.server.test/"
 
         response = self.client.post(
@@ -331,6 +346,7 @@ class FacilityTasksAPITestCase(APITestCase):
         )
         fake_job_data["extra_metadata"].update(extra_metadata)
         mock_job_storage.get_job.return_value = fake_job(**fake_job_data)
+        mock_job_storage.get_orm_job.return_value = dummy_orm_job_data
 
         response = self.client.post(
             reverse("kolibri:core:task-list"),
@@ -463,7 +479,7 @@ class FacilityTaskHelperTestCase(TestCase):
             password="mypassword",
         )
 
-        network_client = NetworkClient.return_value
+        network_client = NetworkClient.build_for_address.return_value
         network_client.base_url = "https://some.server.test/"
 
         network_connection = Mock()
@@ -476,6 +492,7 @@ class FacilityTaskHelperTestCase(TestCase):
         expected = dict(
             facility_id=facility_id,
             args=["sync"],
+            enqueue_args={},
             kwargs=dict(
                 baseurl="https://some.server.test/",
                 facility=facility_id,
@@ -557,7 +574,7 @@ class FacilityTaskHelperTestCase(TestCase):
             username="tester",
             password="mypassword",
         )
-        NetworkClient.side_effect = NetworkLocationNotFound()
+        NetworkClient.build_for_address.side_effect = NetworkLocationNotFound()
         with self.assertRaises(ResourceGoneError):
             PeerFacilitySyncJobValidator(data=data).is_valid(raise_exception=True)
 
@@ -688,6 +705,7 @@ class TestRequestSoUDSync(TestCase):
         )
 
     @patch("kolibri.core.tasks.registry.job_storage")
+    @patch("kolibri.core.auth.tasks.get_current_job")
     @patch("kolibri.core.auth.tasks.NetworkClient")
     @patch("kolibri.core.auth.tasks.requests")
     @patch("kolibri.core.auth.utils.sync.MorangoProfileController")
@@ -700,6 +718,7 @@ class TestRequestSoUDSync(TestCase):
         MorangoProfileController,
         requests_mock,
         NetworkClient,
+        get_current_job,
         job_storage,
     ):
         baseurl = "http://whatever.com:8000"
@@ -720,8 +739,12 @@ class TestRequestSoUDSync(TestCase):
         network_client = NetworkClient.return_value
         network_client.base_url = baseurl
 
+        current_job_mock = MagicMock()
+
+        get_current_job.return_value = current_job_mock
+
         request_soud_sync(baseurl, self.test_user.id)
-        self.assertEqual(job_storage.enqueue_in.call_count, 0)
+        self.assertEqual(current_job_mock.retry_in.call_count, 0)
 
         requests_mock.post.return_value.status_code = 200
         requests_mock.post.return_value.json.return_value = {
@@ -730,7 +753,7 @@ class TestRequestSoUDSync(TestCase):
             "id": str(uuid4()),
         }
         request_soud_sync("whatever_server", self.test_user.id)
-        self.assertEqual(job_storage.enqueue_in.call_count, 1)
+        self.assertEqual(current_job_mock.retry_in.call_count, 1)
 
     @patch("kolibri.core.tasks.registry.job_storage")
     @patch("kolibri.core.auth.tasks.requests")

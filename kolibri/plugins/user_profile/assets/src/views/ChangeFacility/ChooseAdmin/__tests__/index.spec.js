@@ -1,9 +1,13 @@
+import { coreStoreFactory } from 'kolibri.coreVue.vuex.store';
 import { shallowMount, mount } from '@vue/test-utils';
 import ChooseAdmin from '../index.vue';
 
 const sendMachineEvent = jest.fn();
 function makeWrapper({ userId, sourceFacilityUsers } = {}) {
+  const store = coreStoreFactory();
+  store.dispatch('notLoading');
   return mount(ChooseAdmin, {
+    store,
     provide: {
       changeFacilityService: {
         send: sendMachineEvent,
@@ -54,7 +58,7 @@ describe(`ChangeFacility/ChooseAdmin`, () => {
   it('shows the title and the description', () => {
     const wrapper = makeWrapper();
     expect(wrapper.text()).toContain('Choose a new super admin');
-    expect(wrapper.text()).toContain('Choose an account to manage channels and accounts.');
+    expect(wrapper.text()).toContain('Choose someone to manage channels and user accounts.');
   });
 
   it('shows a selectable table with all facility users except of a current user', () => {

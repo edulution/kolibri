@@ -66,11 +66,19 @@ const checkExists = assign((context, event) => {
   };
 });
 
+const setCurrentUserAsSuperAdmin = assign({
+  setAsSuperAdmin: () => true,
+});
+
 const setNewSuperAdminId = assign({
   newSuperAdminId: (_, event) => event.value,
 });
 
 const setTargetAccount = assign({
+  targetAccount: (_, event) => event.value,
+});
+
+const setTargetAccountPassword = assign({
   targetAccount: (_, event) => event.value,
 });
 
@@ -90,6 +98,9 @@ const setTaskId = assign({
   taskId: (_, event) => event.value.task_id,
 });
 
+const resetTaskId = assign({
+  taskId: () => null,
+});
 const resetMachineContext = assign(() => {
   return generateMachineContext();
 });
@@ -129,6 +140,8 @@ const generateMachineContext = () => {
     isMerging: false,
     // id of the backend task executing the merging
     taskId: null,
+    // whether the migrated user will become a super admin after facility change
+    setAsSuperAdmin: false,
     // Contains machine states history, its items are states names.
     // Doesn't necessarily capture all transitions as it is used
     // for user-facing back navigation, therefore we don't want to
@@ -239,8 +252,31 @@ const states = {
         actions: [send({ type: 'PUSH_HISTORY', value: 'confirmAccountUsername' })],
       },
       CONTINUE: {
-        target: 'isAdmin',
+        target: 'doesTargetRequirePassword',
         actions: [send({ type: 'PUSH_HISTORY', value: 'confirmAccountUsername' })],
+      },
+    },
+  },
+  doesTargetRequirePassword: {
+    always: [
+      {
+        cond: context => context.targetFacility.learner_can_login_with_no_password === false,
+        target: 'provideTargetAccountPassword',
+      },
+      {
+        target: 'isAdmin',
+      },
+    ],
+  },
+  provideTargetAccountPassword: {
+    meta: { route: 'TARGET_PASSWORD', path: '/change_facility' },
+    on: {
+      CONTINUE: {
+        target: 'isAdmin',
+        actions: [
+          setTargetAccountPassword,
+          send({ type: 'PUSH_HISTORY', value: 'provideTargetAccountPassword' }),
+        ],
       },
     },
   },
@@ -266,13 +302,32 @@ const states = {
         });
       },
       onDone: {
-        target: 'checkNeedsNewSuperAdmin',
+        target: 'checkFacilityHasNoMoreUsers',
         actions: [setSourceFacilityUsers],
       },
       onError: {
         target: 'error',
       },
     },
+  },
+  checkFacilityHasNoMoreUsers: {
+    always: [
+      {
+        cond: context => context.sourceFacilityUsers.length == 1,
+        target: 'setCurrentUserToSuperAdmin',
+      },
+      {
+        target: 'checkNeedsNewSuperAdmin',
+      },
+    ],
+  },
+  setCurrentUserToSuperAdmin: {
+    always: [
+      {
+        target: 'checkIsMerging',
+        actions: [setCurrentUserAsSuperAdmin, clearSourceFacilityUsers],
+      },
+    ],
   },
   checkNeedsNewSuperAdmin: {
     always: [
@@ -329,7 +384,7 @@ const states = {
     on: {
       SETTASKID: { actions: setTaskId },
       FINISH: 'syncFinished',
-      TASKERROR: 'changeFacility',
+      TASKERROR: { target: 'changeFacility', actions: [resetTaskId] },
     },
   },
   syncFinished: {

@@ -342,6 +342,7 @@ class ContentNodeAPIBase(object):
                 "assessmentmetadata": assessmentmetadata,
                 "is_leaf": expected.kind != "topic",
                 "files": files,
+                "admin_imported": bool(expected.admin_imported),
             },
         )
 
@@ -377,6 +378,7 @@ class ContentNodeAPIBase(object):
         self._assert_nodes(response.data, nodes)
 
     def _recurse_and_assert(self, data, nodes, recursion_depth=0):
+        recursion_depths = []
         for actual, expected in zip(data, nodes):
             children = actual.pop("children", None)
             self._assert_node(actual, expected)
@@ -399,11 +401,14 @@ class ContentNodeAPIBase(object):
                         self.assertEqual(
                             children["more"]["params"]["baseurl"], self.baseurl
                         )
-                self._recurse_and_assert(
-                    children["results"],
-                    child_nodes,
-                    recursion_depth=recursion_depth + 1,
+                recursion_depths.append(
+                    self._recurse_and_assert(
+                        children["results"],
+                        child_nodes,
+                        recursion_depth=recursion_depth + 1,
+                    )
                 )
+        return recursion_depth if not recursion_depths else max(recursion_depths)
 
     def test_contentnode_tree(self):
         root = content.ContentNode.objects.get(title="root")
@@ -417,6 +422,15 @@ class ContentNodeAPIBase(object):
         response = self.client.get(
             reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
             + "?parent={}".format(uuid.uuid4().hex)
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_contentnode_tree_bad_pk(self):
+        response = self.client.get(
+            reverse(
+                "kolibri:core:contentnode_tree-detail",
+                kwargs={"pk": "this is not a UUID"},
+            )
         )
         self.assertEqual(response.status_code, 404)
 
@@ -490,11 +504,56 @@ class ContentNodeAPIBase(object):
         self.assertEqual(len(nested_page_response.data["children"]["results"]), 5)
         self.assertIsNone(nested_page_response.data["children"]["more"])
 
+    def test_contentnode_tree_singleton_path(self):
+        builder = ChannelBuilder(levels=5, num_children=1)
+        builder.insert_into_default_db()
+        content.ContentNode.objects.all().update(available=True)
+        root = content.ContentNode.objects.get(id=builder.root_node["id"])
+        response = self._get(
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+        )
+        max_depth = self._recurse_and_assert([response.data], [root])
+        # Should recurse all the way down the tree through a total of 6 levels
+        # including the root.
+        self.assertEqual(max_depth, 6)
+
+    def test_contentnode_tree_singleton_child(self):
+        builder = ChannelBuilder(levels=5, num_children=2)
+        builder.insert_into_default_db()
+        content.ContentNode.objects.all().update(available=True)
+        root = content.ContentNode.objects.get(id=builder.root_node["id"])
+        first_child = root.children.first()
+        first_child.available = False
+        first_child.save()
+        response = self._get(
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+        )
+        max_depth = self._recurse_and_assert([response.data], [root])
+        # Should recurse an extra level to find multiple descendants under the first grandchild.
+        self.assertEqual(max_depth, 3)
+
+    def test_contentnode_tree_singleton_grandchild(self):
+        builder = ChannelBuilder(levels=5, num_children=2)
+        builder.insert_into_default_db()
+        content.ContentNode.objects.all().update(available=True)
+        root = content.ContentNode.objects.get(id=builder.root_node["id"])
+        first_grandchild = root.children.first().children.first()
+        first_grandchild.available = False
+        first_grandchild.save()
+        response = self._get(
+            reverse("kolibri:core:contentnode_tree-detail", kwargs={"pk": root.id})
+        )
+        max_depth = self._recurse_and_assert([response.data], [root])
+        # Should recurse an extra level to find multiple descendants under the first child.
+        self.assertEqual(max_depth, 3)
+
 
 class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
     """
     Testcase for content API methods
     """
+
+    maxDiff = None
 
     def test_prerequisite_for_filter(self):
         c1_id = content.ContentNode.objects.get(title="c1").id
@@ -1065,6 +1124,23 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
         for i in range(len(titles)):
             self.assertEqual(response.data[i]["title"], titles[i])
 
+    def test_contentnode_content_id(self):
+        node = content.ContentNode.objects.get(title="c2c2")
+        response = self.client.get(
+            reverse("kolibri:core:contentnode-list"),
+            data={"content_id": node.content_id},
+        )
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["title"], node.title)
+
+    def test_contentnode_bad_content_id(self):
+        response = self.client.get(
+            reverse("kolibri:core:contentnode-list"),
+            data={"content_id": "this is not a uuid"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 0)
+
     def test_contentnode_parent(self):
         parent = content.ContentNode.objects.get(title="c2")
         children = parent.get_children()
@@ -1173,7 +1249,7 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
 
     def test_file_list(self):
         response = self.client.get(reverse("kolibri:core:file-list"))
-        self.assertEqual(len(response.data), 5)
+        self.assertEqual(len(response.data), 10)
 
     def test_file_retrieve(self):
         response = self.client.get(
@@ -1245,48 +1321,6 @@ class ContentNodeAPITestCase(ContentNodeAPIBase, APITestCase):
             available=False
         ).count()  # coach_content node should be returned
         self.assertEqual(len(response.data), expected_output)
-
-    def test_copies(self):
-        # the pk is actually a content id
-        response = self.client.get(
-            reverse(
-                "kolibri:core:contentnode-copies",
-                kwargs={"pk": "c6f49ea527824f398f4d5d26faf19396"},
-            )
-        )
-        expected_titles = set(["root", "c1", "copy"])
-        response_titles = set()
-        for node in response.data[0]:
-            response_titles.add(node["title"])
-        self.assertSetEqual(expected_titles, response_titles)
-
-    def test_available_copies(self):
-        # the pk is actually a content id
-        response = self.client.get(
-            reverse(
-                "kolibri:core:contentnode-copies",
-                kwargs={"pk": "f2332710c2fd483386cdeb5dcbdda81a"},
-            )
-        )
-        # no results should be returned for unavailable content node
-        self.assertEqual(len(response.data), 0)
-
-    def test_copies_count(self):
-        response = self.client.get(
-            reverse("kolibri:core:contentnode-copies-count"),
-            data={
-                "content_ids": "f2332710c2fd483386cdeb5dcbdda81f,c6f49ea527824f398f4d5d26faf15555,f2332710c2fd483386cdeb5dcbdda81a"
-            },
-        )
-        # assert non existent content id does not show up in results
-        # no results should be returned for unavailable content node
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(
-            response.data[0]["count"],
-            content.ContentNode.objects.filter(
-                content_id="f2332710c2fd483386cdeb5dcbdda81f"
-            ).count(),
-        )
 
     def test_search_total_results(self):
         response = self.client.get(
@@ -1755,14 +1789,6 @@ class KolibriStudioAPITestCase(APITestCase):
         self.assertEqual(response.data[0]["id"], 1)
 
     @mock_patch_decorator
-    def test_channel_retrieve_list(self):
-        response = self.client.get(
-            reverse("kolibri:core:remotechannel-retrieve-list", kwargs={"pk": 1}),
-            format="json",
-        )
-        self.assertEqual(response.data[0]["id"], 1)
-
-    @mock_patch_decorator
     def test_no_permission_non_superuser_channel_list(self):
         user = FacilityUser.objects.create(username="user", facility=self.facility)
         user.set_password(DUMMY_PASSWORD)
@@ -1815,6 +1841,8 @@ class KolibriStudioAPITestCase(APITestCase):
 
 
 class ProxyContentMetadataTestCase(ContentNodeAPIBase, LiveServerTestCase):
+    maxDiff = None
+
     @property
     def baseurl(self):
         return self.live_server_url

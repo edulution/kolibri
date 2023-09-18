@@ -21,7 +21,7 @@ const logging = logger.getLogger(__filename);
 export default {
   state() {
     return {
-      busy: false,
+      dataLoading: false,
       classList: [],
       pageName: '',
       toolbarRoute: {},
@@ -37,6 +37,9 @@ export default {
     },
     SET_TOOLBAR_TITLE(state, title) {
       state.toolbarTitle = title;
+    },
+    SET_DATA_LOADING(state, dataLoading) {
+      state.dataLoading = dataLoading;
     },
     SET_TOOLBAR_ROUTE(state, toolbarRoute) {
       state.toolbarRoute = toolbarRoute;
@@ -60,13 +63,22 @@ export default {
   },
   actions: {
     setClassList(store, facilityId) {
+      if (!facilityId) {
+        throw new Error("Missing required 'facilityId' argument");
+      }
+      store.commit('SET_DATA_LOADING', true);
+      store.commit('SET_CLASS_LIST', []); // Reset the list if we're loading a new one
       return ClassroomResource.fetchCollection({
-        getParams: { parent: facilityId || store.getters.currentFacilityId, role: 'coach' },
+        getParams: { parent: facilityId, role: 'coach' },
       })
         .then(classrooms => {
           store.commit('SET_CLASS_LIST', classrooms);
+          store.commit('SET_DATA_LOADING', false);
         })
-        .catch(error => store.dispatch('handleApiError', error));
+        .catch(error => {
+          store.dispatch('handleApiError', error);
+          store.commit('SET_DATA_LOADING', false);
+        });
     },
     /**
       * Handle coach page errors.
@@ -106,8 +118,9 @@ export default {
         return Promise.all([
           // Make sure we load any class list data, so that we know
           // whether this user has access to multiple classes or not.
-          store.dispatch('setClassList'),
-          store.dispatch('classSummary/loadClassSummary', classId),
+          store
+            .dispatch('classSummary/loadClassSummary', classId)
+            .then(summary => store.dispatch('setClassList', summary.facility_id)),
           store.dispatch('coachNotifications/fetchNotificationsForClass', classId),
         ]).catch(error => {
           store.dispatch('handleError', error);

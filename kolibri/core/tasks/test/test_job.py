@@ -11,6 +11,10 @@ from kolibri.core.tasks.registry import RegisteredTask
 from kolibri.core.tasks.validation import JobValidator
 
 
+def status_fn(job):
+    pass
+
+
 class JobTest(TestCase):
     def setUp(self):
         self.job = Job(id, track_progress=True)
@@ -52,6 +56,11 @@ class JobTest(TestCase):
         with self.assertRaises(ReferenceError):
             self.job.save_as_cancellable(cancellable=cancellable)
 
+    def test_job_retry_in(self):
+        dt = timedelta(seconds=15)
+        self.job.retry_in(dt)
+        self.job.storage.retry_job_in.assert_called_once_with(self.job.job_id, dt)
+
 
 class TestRegisteredTask(TestCase):
     def setUp(self):
@@ -64,13 +73,14 @@ class TestRegisteredTask(TestCase):
             cancellable=True,
             track_progress=True,
             long_running=True,
+            status_fn=status_fn,
         )
 
     def test_constructor_sets_required_params(self):
         self.assertEqual(self.registered_task.func, int)
         self.assertEqual(self.registered_task.validator, JobValidator)
         self.assertEqual(self.registered_task.priority, Priority.HIGH)
-        self.assertTrue(isinstance(self.registered_task.permissions[0], IsSuperAdmin))
+        self.assertIsInstance(self.registered_task.permissions[0], IsSuperAdmin)
         self.assertEqual(self.registered_task.job_id, "test")
         self.assertEqual(self.registered_task.queue, "test")
         self.assertEqual(self.registered_task.cancellable, True)
@@ -125,6 +135,38 @@ class TestRegisteredTask(TestCase):
 
     @mock.patch("kolibri.core.tasks.registry.RegisteredTask._ready_job")
     @mock.patch("kolibri.core.tasks.registry.job_storage")
+    def test_enqueue_in__override_priority(self, mock_job_storage, _ready_job_mock):
+        args = ("10",)
+        kwargs = dict(base=10)
+
+        _ready_job_mock.return_value = "job"
+
+        override_priority = 20
+        self.assertNotEqual(self.registered_task.priority, override_priority)
+        delta = timedelta(seconds=5)
+
+        self.registered_task.enqueue_in(
+            delta_time=delta,
+            interval=10,
+            repeat=10,
+            args=args,
+            priority=override_priority,
+            kwargs=kwargs,
+        )
+
+        _ready_job_mock.assert_called_once_with(args=args, kwargs=kwargs)
+        mock_job_storage.enqueue_in.assert_called_once_with(
+            delta,
+            "job",
+            queue="test",
+            interval=10,
+            priority=override_priority,
+            repeat=10,
+            retry_interval=None,
+        )
+
+    @mock.patch("kolibri.core.tasks.registry.RegisteredTask._ready_job")
+    @mock.patch("kolibri.core.tasks.registry.job_storage")
     def test_enqueue_at(self, mock_job_storage, _ready_job_mock):
         args = ("10",)
         kwargs = dict(base=10)
@@ -154,6 +196,39 @@ class TestRegisteredTask(TestCase):
 
     @mock.patch("kolibri.core.tasks.registry.RegisteredTask._ready_job")
     @mock.patch("kolibri.core.tasks.registry.job_storage")
+    def test_enqueue_at__override_priority(self, mock_job_storage, _ready_job_mock):
+        args = ("10",)
+        kwargs = dict(base=10)
+
+        _ready_job_mock.return_value = "job"
+
+        now = datetime.now()
+
+        override_priority = 20
+        self.assertNotEqual(self.registered_task.priority, override_priority)
+
+        self.registered_task.enqueue_at(
+            datetime=now,
+            interval=10,
+            repeat=10,
+            priority=override_priority,
+            args=args,
+            kwargs=kwargs,
+        )
+
+        _ready_job_mock.assert_called_once_with(args=args, kwargs=kwargs)
+        mock_job_storage.enqueue_at.assert_called_once_with(
+            now,
+            "job",
+            queue="test",
+            interval=10,
+            priority=override_priority,
+            repeat=10,
+            retry_interval=None,
+        )
+
+    @mock.patch("kolibri.core.tasks.registry.RegisteredTask._ready_job")
+    @mock.patch("kolibri.core.tasks.registry.job_storage")
     def test_enqueue(self, job_storage_mock, _ready_job_mock):
         args = ("10",)
         kwargs = dict(base=10)
@@ -167,5 +242,27 @@ class TestRegisteredTask(TestCase):
             "job",
             queue=self.registered_task.queue,
             priority=self.registered_task.priority,
+            retry_interval=None,
+        )
+
+    @mock.patch("kolibri.core.tasks.registry.RegisteredTask._ready_job")
+    @mock.patch("kolibri.core.tasks.registry.job_storage")
+    def test_enqueue__override_priority(self, job_storage_mock, _ready_job_mock):
+        args = ("10",)
+        kwargs = dict(base=10)
+
+        _ready_job_mock.return_value = "job"
+
+        override_priority = 20
+        self.assertNotEqual(self.registered_task.priority, override_priority)
+        self.registered_task.enqueue(
+            args=args, kwargs=kwargs, priority=override_priority
+        )
+
+        _ready_job_mock.assert_called_once_with(args=args, kwargs=kwargs)
+        job_storage_mock.enqueue_job.assert_called_once_with(
+            "job",
+            queue=self.registered_task.queue,
+            priority=override_priority,
             retry_interval=None,
         )

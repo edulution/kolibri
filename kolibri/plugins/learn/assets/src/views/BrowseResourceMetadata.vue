@@ -13,17 +13,17 @@
           }"
           data-test="beginners-chip"
         >
-          {{ coreString("ForBeginners") }}
+          {{ coreString('forBeginners') }}
         </span>
       </div>
 
       <div>
         <KRouterLink
           ref="resourceButton"
-          :text="metadataStrings.$tr('viewResource')"
+          :text="learnString('viewResource')"
           appearance="raised-button"
           :primary="false"
-          :to="genContentLink(content.id, null, content.is_leaf, $route.name, { ...$route.query })"
+          :to="genContentLinkKeepCurrentBackLink(content.id, content.is_leaf)"
           data-test="view-resource-link"
         />
       </div>
@@ -61,7 +61,7 @@
 
     <div v-if="content.duration" class="section" data-test="estimated-time">
       <span class="label">
-        {{ metadataStrings.$tr('estimatedTime') }}:
+        {{ learnString('estimatedTime') }}:
       </span>
       <span>
         <TimeDuration :seconds="content.duration" />
@@ -74,16 +74,16 @@
       data-test="grade-levels"
     >
       <span class="label">
-        {{ metadataStrings.$tr('level') }}:
+        {{ coreString('levelLabel') }}:
       </span>
       <span>
-        {{ content.grade_levels.join(", ") }}
+        {{ levels(content.grade_levels) }}
       </span>
     </div>
 
     <div v-if="content.lang" class="section" data-test="lang">
       <span class="label">
-        {{ metadataStrings.$tr('language') }}:
+        {{ coreString('languageLabel') }}:
       </span>
       <span>
         {{ content.lang.lang_name }}
@@ -101,7 +101,7 @@
 
     <div v-if="content.learner_needs" class="section" data-test="learner-needs">
       <span class="label">
-        {{ metadataStrings.$tr('whatYouWillNeed') }}:
+        {{ learnString('whatYouWillNeed') }}:
       </span>
       <span>
         {{ learnerNeedsLabels }}
@@ -110,7 +110,7 @@
 
     <div v-if="content.author" class="section" data-test="author">
       <span class="label">
-        {{ metadataStrings.$tr('author') }}:
+        {{ learnString('author') }}:
       </span>
       <span>
         {{ content.author }}
@@ -119,7 +119,7 @@
 
     <div v-if="content.license_owner" class="section" data-test="license-owner">
       <span class="label">
-        {{ metadataStrings.$tr('copyrightHolder') }}:
+        {{ learnString('copyrightHolder') }}:
       </span>
       <span>
         {{ content.license_owner }}
@@ -128,13 +128,13 @@
 
     <div v-if="licenseDescription" class="section" data-test="license-desc">
       <span class="label">
-        {{ metadataStrings.$tr('license') }}:
+        {{ learnString('license') }}:
       </span>
       <span>
         {{ licenseShortName || '' }}
         <KIconButton
           :icon="licenseDescriptionIsVisible ? 'chevronUp' : 'chevronDown'"
-          :ariaLabel="metadataStrings.$tr('toggleLicenseDescription')"
+          :ariaLabel="learnString('toggleLicenseDescription')"
           size="small"
           type="secondary"
           class="absolute-icon license-toggle"
@@ -159,7 +159,7 @@
           :key="related.title"
           class="list-item"
         >
-          <KRouterLink :to="genContentLink(related.id, null, related.is_leaf, null, {})">
+          <KRouterLink :to="genContentLinkKeepCurrentBackLink(related.id, related.is_leaf)">
             <KLabeledIcon>
               <template #icon>
                 <LearningActivityIcon :kind="related.learning_activities" />
@@ -174,19 +174,25 @@
     <div v-if="showLocationsInChannel && locationsInChannel" class="section" data-test="locations">
       <div class="label">
         {{
-          metadataStrings
-            .$tr('locationsInChannel', { 'channelname': (content.ancestors[0] || {}).title })
+          learnString('locationsInChannel', { 'channelname': (content.ancestors[0] || {}).title })
         }}:
       </div>
       <div v-for="location in locationsInChannel" :key="location.id">
         <div>
           <KRouterLink
-            :to="genContentLink(lastAncestor(location).id, null, false, null, {})"
+            :to="genContentLinkKeepCurrentBackLink(lastAncestor(location).id, false)"
           >
             {{ lastAncestor(location).title }}
           </KRouterLink>
         </div>
       </div>
+    </div>
+
+    <div v-if="canDownloadExternally" class="section" data-test="download">
+      <DownloadButton
+        :files="content.files"
+        :nodeTitle="content.title"
+      />
     </div>
 
   </section>
@@ -198,6 +204,9 @@
 
   import TimeDuration from 'kolibri.coreVue.components.TimeDuration';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import camelCase from 'lodash/camelCase';
+  import { ContentLevels } from 'kolibri.coreVue.vuex.constants';
+  import DownloadButton from 'kolibri.coreVue.components.DownloadButton';
   import get from 'lodash/get';
   import {
     licenseShortName,
@@ -205,27 +214,35 @@
     licenseDescriptionForConsumer,
   } from 'kolibri.utils.licenseTranslations';
   import LearnerNeeds from 'kolibri-constants/labels/Needs';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import { ContentNodeResource } from 'kolibri.resources';
-  import genContentLink from '../utils/genContentLink';
+  import useContentLink from '../composables/useContentLink';
+  import commonLearnStrings from './commonLearnStrings';
   import LearningActivityIcon from './LearningActivityIcon';
   import ContentNodeThumbnail from './thumbnails/ContentNodeThumbnail';
-  import SidePanelResourceMetadata from './SidePanelResourceMetadata';
 
   export default {
     name: 'BrowseResourceMetadata',
     components: {
+      DownloadButton,
       LearningActivityIcon,
       TimeDuration,
       ContentNodeThumbnail,
     },
-    mixins: [commonCoreStrings],
+    mixins: [commonCoreStrings, commonLearnStrings],
+    setup() {
+      const { genContentLinkKeepCurrentBackLink } = useContentLink();
+      return { genContentLinkKeepCurrentBackLink };
+    },
     props: {
       content: {
         type: Object,
         required: true,
       },
       showLocationsInChannel: {
+        type: Boolean,
+        default: false,
+      },
+      canDownloadExternally: {
         type: Boolean,
         default: false,
       },
@@ -236,7 +253,6 @@
         showMoreOrLess: 'Show More',
         truncate: 'truncate-description',
         descriptionOverflow: false,
-        metadataStrings: { $tr: () => null },
         recommendations: null,
         locationsInChannel: null,
       };
@@ -305,11 +321,9 @@
         });
       }
 
-      this.metadataStrings = crossComponentTranslator(SidePanelResourceMetadata);
       this.calculateDescriptionOverflow();
     },
     methods: {
-      genContentLink,
       lastAncestor(location) {
         const lastAncestor = location.ancestors[location.ancestors.length - 1];
         return lastAncestor;
@@ -318,18 +332,41 @@
         if (this.showMoreOrLess === 'Show More') {
           this.showMoreOrLess = 'Show Less';
           this.truncate = 'show-description';
-          /* eslint-disable kolibri/vue-no-undefined-string-uses */
-          return this.metadataStrings.$tr('showLess');
+          return this.learnString('showLess');
         } else {
           this.showMoreOrLess = 'Show More';
           this.truncate = 'truncate-description';
-          return this.metadataStrings.$tr('showMore');
-          /* eslint-enable kolibri/vue-no-undefined-string-uses */
+          return this.learnString('showMore');
         }
       },
       calculateDescriptionOverflow() {
         if (this.$refs.description && this.$refs.description.scrollHeight > 175) {
           this.descriptionOverflow = true;
+        }
+      },
+      levels(levels) {
+        const matches = Object.keys(ContentLevels)
+          .sort()
+          .filter(k => levels.includes(ContentLevels[k]));
+        if (matches && matches.length > 0) {
+          let adjustedMatches = [];
+          matches.map(key => {
+            let translationKey;
+            if (key === 'PROFESSIONAL') {
+              translationKey = 'specializedProfessionalTraining';
+            } else if (key === 'WORK_SKILLS') {
+              translationKey = 'allLevelsWorkSkills';
+            } else if (key === 'BASIC_SKILLS') {
+              translationKey = 'allLevelsBasicSkills';
+            } else {
+              translationKey = camelCase(key);
+            }
+            adjustedMatches.push(translationKey);
+          });
+          adjustedMatches = adjustedMatches.map(m => this.coreString(m)).join(', ');
+          return adjustedMatches;
+        } else {
+          return '-';
         }
       },
       /**

@@ -11,18 +11,24 @@
       </p>
 
       <CardList
-        v-for="content in bookmarks"
+        v-for="contentNode in bookmarks"
         v-else
-        :key="content.id"
-        :content="content"
+        :key="contentNode.id"
+        :contentNode="contentNode"
         class="card-grid-item"
         :isMobile="windowIsSmall"
-        :link="genContentLink(content)"
-        :footerIcons="footerIcons"
-        :createdDate="content.bookmark ? content.bookmark.created : null"
-        @viewInformation="toggleInfoPanel(content)"
-        @removeFromBookmarks="removeFromBookmarks(content.bookmark)"
-      />
+        :to="genContentLinkBackLinkCurrentPage(contentNode.id, contentNode.is_leaf)"
+        :createdDate="contentNode.bookmark ? contentNode.bookmark.created : null"
+      >
+        <template #footer>
+          <HybridLearningFooter
+            :contentNode="contentNode"
+            :bookmarked="true"
+            @toggleInfoPanel="toggleInfoPanel(contentNode)"
+            @removeFromBookmarks="removeFromBookmarks(contentNode.bookmark)"
+          />
+        </template>
+      </CardList>
 
       <KButton
         v-if="more && !loading"
@@ -68,6 +74,7 @@
         ref="resourcePanel"
         :content="sidePanelContent"
         :showLocationsInChannel="true"
+        :canDownloadExternally="canDownloadExternally"
       />
     </SidePanelModal>
   </LearnAppBarPage>
@@ -79,18 +86,19 @@
 
   import { mapActions } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import SidePanelModal from 'kolibri.coreVue.components.SidePanelModal';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import { ContentNodeResource } from 'kolibri.resources';
   import client from 'kolibri.client';
   import urls from 'kolibri.urls';
-  import genContentLink from '../utils/genContentLink';
-  import { normalizeContentNode } from '../modules/coreLearn/utils.js';
   import useContentNodeProgress from '../composables/useContentNodeProgress';
+  import useContentLink from '../composables/useContentLink';
+  import useCoreLearn from '../composables/useCoreLearn';
+  import SidePanelModal from './SidePanelModal';
   import commonLearnStrings from './commonLearnStrings';
   import LearnAppBarPage from './LearnAppBarPage';
   import LearningActivityChip from './LearningActivityChip';
   import CardList from './CardList';
+  import HybridLearningFooter from './HybridLearningContentCard/HybridLearningFooter';
 
   import BrowseResourceMetadata from './BrowseResourceMetadata';
 
@@ -107,11 +115,14 @@
       LearningActivityChip,
       CardList,
       LearnAppBarPage,
+      HybridLearningFooter,
     },
     mixins: [commonCoreStrings, commonLearnStrings, responsiveWindowMixin],
     setup() {
+      const { canDownloadExternally } = useCoreLearn();
       const { fetchContentNodeProgress } = useContentNodeProgress();
-      return { fetchContentNodeProgress };
+      const { genContentLinkBackLinkCurrentPage } = useContentLink();
+      return { canDownloadExternally, fetchContentNodeProgress, genContentLinkBackLinkCurrentPage };
     },
     data() {
       return {
@@ -121,39 +132,22 @@
         sidePanelContent: null,
       };
     },
-    computed: {
-      footerIcons() {
-        return { infoOutline: 'viewInformation', close: 'removeFromBookmarks' };
-      },
-      backRoute() {
-        return this.$route.name;
-      },
-    },
     created() {
       ContentNodeResource.fetchBookmarks({ params: { limit: 25, available: true } }).then(data => {
         this.more = data.more;
-        this.bookmarks = data.results ? data.results.map(normalizeContentNode) : [];
+        this.bookmarks = data.results ? data.results : [];
         this.loading = false;
         this.fetchContentNodeProgress({ ids: this.bookmarks.map(b => b.id) });
       });
     },
     methods: {
       ...mapActions(['createSnackbar']),
-      genContentLink(content) {
-        return genContentLink(
-          content.id,
-          this.topicId,
-          content.is_leaf,
-          this.backRoute,
-          this.context
-        );
-      },
       loadMore() {
         if (!this.loading) {
           this.loading = true;
           ContentNodeResource.fetchBookmarks({ params: this.more }).then(data => {
             this.more = data.more;
-            this.bookmarks.push(...data.results.map(normalizeContentNode));
+            this.bookmarks.push(...data.results);
             this.loading = false;
             this.fetchContentNodeProgress({ ids: data.results.map(b => b.id) });
           });

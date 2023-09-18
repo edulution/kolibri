@@ -23,7 +23,6 @@
 
 <script>
 
-  import get from 'lodash/get';
   import OnboardingStepBase from '../OnboardingStepBase';
 
   const Options = Object.freeze({
@@ -38,7 +37,7 @@
     },
     inject: ['wizardService'],
     data() {
-      let selected = get(this, 'wizardService.context.setupType', Options.FULL);
+      const selected = this.wizardService.state.context['fullOrLOD'] || Options.FULL;
       return {
         Options,
         selected,
@@ -52,7 +51,8 @@
     $trs: {
       whatKindOfDeviceTitle: {
         message: 'What kind of device is this?',
-        context: '',
+        context:
+          'Title for the Kolibri setup wizard step where user decides if they want to configure their device as only used by one or more learners, of as a full device to also be used by coaches and administrators.',
       },
       fullDeviceLabel: {
         message: 'Full device',
@@ -60,7 +60,7 @@
       },
       fullDeviceDescription: {
         message:
-          'This device will be a fully featured Kolibri server used by admins, coaches and learners',
+          'This device will be a fully-featured Kolibri server used by admins, coaches, and learners.',
         context: '',
       },
       learnOnlyDeviceLabel: {
@@ -69,7 +69,7 @@
       },
       learnOnlyDeviceDescription: {
         message:
-          'This device will have one or more learner accounts from a full device that already exists. Learner accounts will be auto-synced with the full device',
+          'This device will have one or more learner accounts imported from a full device that already exists. Learner accounts will auto-sync with the full device.',
         context: '',
       },
     },

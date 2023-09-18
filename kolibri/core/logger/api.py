@@ -1,27 +1,29 @@
 import logging
 from datetime import timedelta
 from itertools import groupby
+from math import ceil
 from random import randint
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Case
 from django.db.models import IntegerField
-from django.db.models import OuterRef
 from django.db.models import Q
-from django.db.models import Subquery
 from django.db.models import Sum
 from django.db.models import Value
+from django.db.models import When
 from django.db.models.functions import Coalesce
 from django.http import Http404
 from django_filters.rest_framework import BooleanFilter
 from django_filters.rest_framework import CharFilter
+from django_filters.rest_framework import ChoiceFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
+from django_filters.rest_framework import ModelChoiceFilter
 from django_filters.rest_framework import NumberFilter
 from django_filters.rest_framework import UUIDFilter
 from le_utils.constants import content_kinds
 from le_utils.constants import exercises
-from le_utils.constants import modalities
 from rest_framework import serializers
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -31,14 +33,14 @@ from rest_framework.response import Response
 from .models import AttemptLog
 from .models import ContentSessionLog
 from .models import ContentSummaryLog
+from .models import GenerateCSVLogRequest
 from .models import MasteryLog
 from kolibri.core.api import ReadOnlyValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
 from kolibri.core.auth.api import KolibriAuthPermissionsFilter
 from kolibri.core.auth.models import dataset_cache
+from kolibri.core.auth.models import Facility
 from kolibri.core.content.api import OptionalPageNumberPagination
-from kolibri.core.content.models import AssessmentMetaData
-from kolibri.core.content.models import ContentNode
 from kolibri.core.decorators import query_params_required
 from kolibri.core.exams.models import Exam
 from kolibri.core.lessons.models import Lesson
@@ -67,9 +69,19 @@ class HexStringUUIDField(serializers.UUIDField):
         return super(HexStringUUIDField, self).to_internal_value(data).hex
 
 
+class MasteryModelSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(choices=exercises.MASTERY_MODELS)
+    m = serializers.IntegerField(required=False)
+    n = serializers.IntegerField(required=False)
+
+
 class StartSessionSerializer(serializers.Serializer):
     lesson_id = HexStringUUIDField(required=False)
     node_id = HexStringUUIDField(required=False)
+    content_id = HexStringUUIDField(required=False)
+    channel_id = HexStringUUIDField(required=False)
+    kind = serializers.ChoiceField(choices=content_kinds.choices, required=False)
+    mastery_model = MasteryModelSerializer(required=False)
     # Do this as a special way of handling our coach generated quizzes
     quiz_id = HexStringUUIDField(required=False)
     # A flag to indicate whether to start the session over again
@@ -80,6 +92,32 @@ class StartSessionSerializer(serializers.Serializer):
             raise ValidationError("quiz_id must not be mixed with other context")
         if "node_id" not in data and "quiz_id" not in data:
             raise ValidationError("node_id is required if not a coach assigned quiz")
+        if "node_id" in data:
+            errors = {}
+            if "kind" not in data:
+                errors["kind"] = ValidationError("kind is required for any node_id")
+            else:
+                if (
+                    data["kind"] == content_kinds.EXERCISE
+                    and "mastery_model" not in data
+                ):
+                    errors["mastery_model"] = ValidationError(
+                        "mastery model must be specified for exercise kinds"
+                    )
+                elif data["kind"] != content_kinds.EXERCISE and "mastery_model" in data:
+                    errors["mastery_model"] = ValidationError(
+                        "mastery model must not be specified for non-exercise kinds"
+                    )
+            if "content_id" not in data:
+                errors["content_id"] = ValidationError(
+                    "content_id is required for any node_id"
+                )
+            if "channel_id" not in data:
+                errors["channel_id"] = ValidationError(
+                    "channel_id is required for any node_id"
+                )
+            if errors:
+                raise ValidationError(errors)
         return data
 
 
@@ -228,35 +266,14 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         context = LogContext()
 
         if node_id is not None:
-            try:
-                node = (
-                    ContentNode.objects.annotate(
-                        mastery_model=Subquery(
-                            AssessmentMetaData.objects.filter(
-                                contentnode_id=OuterRef("id")
-                            ).values_list("mastery_model", flat=True)[:1]
-                        )
-                    )
-                    .values(
-                        "content_id", "channel_id", "kind", "mastery_model", "options"
-                    )
-                    .get(id=node_id)
-                )
-                mastery_model = node["mastery_model"]
-                content_id = node["content_id"]
-                channel_id = node["channel_id"]
-                kind = node["kind"]
-                context["node_id"] = node_id
-                if lesson_id:
-                    self._check_lesson_permissions(user, lesson_id)
-                    context["lesson_id"] = lesson_id
-                if (
-                    node["options"]
-                    and node["options"].get("modality") == modalities.QUIZ
-                ):
-                    mastery_model = {"type": exercises.QUIZ}
-            except ContentNode.DoesNotExist:
-                raise ValidationError("Invalid node_id")
+            mastery_model = validated_data.get("mastery_model")
+            content_id = validated_data.get("content_id")
+            channel_id = validated_data.get("channel_id")
+            kind = validated_data.get("kind")
+            context["node_id"] = node_id
+            if lesson_id:
+                self._check_lesson_permissions(user, lesson_id)
+                context["lesson_id"] = lesson_id
         elif quiz_id is not None:
             self._check_quiz_permissions(user, quiz_id)
             mastery_model = {"type": exercises.QUIZ, "coach_assigned": True}
@@ -658,6 +675,37 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             **interaction
         )
 
+    def _get_attemptlog(self, session_id, masterylog_id, user, interaction):
+        if "id" in interaction:
+            try:
+                return AttemptLog.objects.get(
+                    id=interaction["id"],
+                    masterylog_id=masterylog_id,
+                    user=user,
+                )
+            except AttemptLog.DoesNotExist:
+                raise ValidationError("Invalid attemptlog id specified")
+        elif interaction.get("replace", False):
+            try:
+                if user:
+                    return AttemptLog.objects.get(
+                        masterylog_id=masterylog_id,
+                        user=user,
+                        item=interaction["item"],
+                    )
+                else:
+                    # If this is an anonymous user, then the best we can do is
+                    # try to update any previous attempt from this session.
+                    # In this case, both the user and masterylog_id will be null.
+                    return AttemptLog.objects.get(
+                        masterylog_id__isnull=True,
+                        sessionlog_id=session_id,
+                        user__isnull=True,
+                        item=interaction["item"],
+                    )
+            except AttemptLog.DoesNotExist:
+                pass
+
     def _update_or_create_attempts(
         self, session_id, masterylog_id, user, interactions, end_timestamp, context
     ):
@@ -674,16 +722,11 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
                 "_morango_dirty_bit",
             }
             item_interactions = list(item_interactions)
-            if "id" in item_interactions[0]:
-                try:
-                    attemptlog = AttemptLog.objects.get(
-                        id=item_interactions[0]["id"],
-                        masterylog_id=masterylog_id,
-                        user=user,
-                    )
-                except AttemptLog.DoesNotExist:
-                    raise ValidationError("Invalid attemptlog id specified")
-            else:
+            attemptlog = self._get_attemptlog(
+                session_id, masterylog_id, user, item_interactions[0]
+            )
+
+            if attemptlog is None:
                 attemptlog = self._create_attempt(
                     session_id,
                     masterylog_id,
@@ -728,12 +771,15 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
                 return ContentSessionLog.objects.get(id=session_id, user__isnull=True)
             else:
                 return ContentSessionLog.objects.get(id=session_id, user=user)
-        except ContentSessionLog.DoesNotExist:
+        except (ValueError, ContentSessionLog.DoesNotExist):
             raise Http404(
                 "ContentSessionLog with id {} does not exist".format(session_id)
             )
 
     def _normalize_progress(self, progress):
+        # Round progress to three decimal places
+        # but always rounding up.
+        progress = ceil(progress * 1000) / float(1000)
         return max(0, min(1.0, progress))
 
     def _update_content_log(self, log, end_timestamp, validated_data):
@@ -874,9 +920,25 @@ class TotalContentProgressViewSet(viewsets.GenericViewSet):
         if request.user.is_anonymous or pk != request.user.id:
             raise PermissionDenied("Can only access progress data for self")
         progress = (
-            request.user.contentsummarylog_set.filter(progress=1)
-            .aggregate(Sum("progress"))
+            request.user.contentsummarylog_set.annotate(
+                mastery_progress=Sum(
+                    Case(
+                        When(masterylogs__complete=True, then=Value(1)),
+                        When(masterylogs__complete=False, then=Value(0)),
+                        default=Value(None),
+                        output_field=IntegerField(),
+                    )
+                )
+            )
+            .filter(Q(progress=1) | Q(mastery_progress__isnull=False))
+            .aggregate(
+                progress__sum=Sum(
+                    Coalesce("mastery_progress", "progress"),
+                    output_field=IntegerField(),
+                )
+            )
             .get("progress__sum")
+            or 0
         )
         return Response(
             {
@@ -1039,3 +1101,69 @@ class AttemptLogViewSet(ReadOnlyValuesViewset):
     filter_class = AttemptFilter
 
     values = attemptlog_values
+
+
+class GenerateCSVLogRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GenerateCSVLogRequest
+        fields = [
+            "facility",
+            "log_type",
+            "selected_start_date",
+            "selected_end_date",
+            "date_requested",
+        ]
+
+
+class GenerateCSVLogRequestFilter(FilterSet):
+    log_type = ChoiceFilter(choices=GenerateCSVLogRequest.LOG_TYPE_CHOICES)
+    facility = ModelChoiceFilter(queryset=Facility.objects.all())
+
+    class Meta:
+        model = GenerateCSVLogRequest
+        fields = ["log_type", "facility"]
+
+
+class GenerateCSVLogRequestViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows csv log request data to be created or updated
+    """
+
+    permission_classes = (KolibriAuthPermissions,)
+    filter_backends = (KolibriAuthPermissionsFilter, DjangoFilterBackend)
+    queryset = GenerateCSVLogRequest.objects.all()
+    serializer_class = GenerateCSVLogRequestSerializer
+    filter_class = GenerateCSVLogRequestFilter
+
+    def _get_or_create_logrequest(
+        self,
+        facility,
+        log_type,
+        selected_start_date,
+        selected_end_date,
+        date_requested,
+    ):
+
+        try:
+            csvlogrequest = GenerateCSVLogRequest.objects.get(
+                facility=facility,
+                log_type=log_type,
+            )
+            updated_fields = (
+                "selected_start_date",
+                "selected_end_date",
+                "date_requested",
+            )
+            csvlogrequest.selected_start_date = selected_start_date
+            csvlogrequest.selected_end_date = selected_end_date
+            csvlogrequest.date_requested = date_requested
+            csvlogrequest.save(update_fields=updated_fields)
+        except GenerateCSVLogRequest.DoesNotExist:
+            csvlogrequest = GenerateCSVLogRequest.objects.create(
+                facility=facility,
+                log_type=log_type,
+                selected_start_date=selected_start_date,
+                selected_end_date=selected_end_date,
+                date_requested=date_requested,
+            )
+            csvlogrequest.save()

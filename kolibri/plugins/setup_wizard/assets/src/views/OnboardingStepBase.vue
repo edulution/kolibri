@@ -21,7 +21,7 @@
         v-else-if="!noBackAction"
         class="back-icon-button"
         icon="back"
-        @click="wizardService.send('BACK')"
+        @click="wizardService.send(eventOnGoBack)"
       />
 
       <!-- Language switcher visible regardless of screen size -->
@@ -41,10 +41,32 @@
       :topMargin="16"
       :noPadding="true"
     >
-      <div class="content">
+
+      <div v-if="coreError" style="padding: 16px;">
+        <AppError :hideParagraphs="true">
+          <h2>{{ coreError }}</h2>
+          <template #buttons>
+            <KButton
+              :text="coreString('startOverAction')"
+              :primary="true"
+              @click="startOver"
+            />
+          </template>
+        </AppError>
+      </div>
+      <div v-else class="content">
+        <!-- Optional back arrow to show at the top for longer content views -->
+        <KIconButton
+          v-if="showBackArrow"
+          icon="back"
+          style="margin-left: -12px;"
+          @click="wizardService.send(eventOnGoBack)"
+        />
+
         <h1 class="title">
           {{ title }}
         </h1>
+
         <p v-if="description" class="description">
           {{ description }}
         </p>
@@ -53,6 +75,7 @@
 
       <!-- Border hidden on mobile by making it the same as the background -->
       <div
+        v-if="!coreError"
         class="footer"
         :style="{
           borderTop: `1px solid ${windowIsSmall ? $themeTokens.surface : $themeTokens.fineLine}`
@@ -62,6 +85,7 @@
              On med+ screens, to be used to show short strings of text eg, "Step 1 / 4" -->
         <div v-if="!windowIsSmall" class="footer-section">
           <slot name="footer"></slot>
+          {{ footerMessage }}
         </div>
 
 
@@ -76,7 +100,7 @@
             appearance="flat-button"
             :primary="false"
             :disabled="navDisabled"
-            @click="wizardService.send('BACK')"
+            @click="wizardService.send(eventOnGoBack)"
           />
           <KButton
             v-if="!$slots.buttons"
@@ -119,15 +143,30 @@
   import CoreLogo from 'kolibri.coreVue.components.CoreLogo';
   import LanguageSwitcherModal from 'kolibri.coreVue.components.LanguageSwitcherModal';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import AppError from 'kolibri-common/components/AppError';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import { availableLanguages, currentLanguage } from 'kolibri.utils.i18n';
+  import { FooterMessageTypes } from '../constants';
 
   export default {
     name: 'OnboardingStepBase',
-    components: { CoreLogo, LanguageSwitcherModal },
+    components: { AppError, CoreLogo, LanguageSwitcherModal },
     inject: ['wizardService'],
     mixins: [commonCoreStrings, responsiveWindowMixin],
     props: {
+      /**
+       * The event sent to the state machine when the user clicks GO BACK.
+       * Can be an object with the `type` and `value` and used to include data
+       * to the state machine to use during the transition back.
+       */
+      eventOnGoBack: {
+        type: Object,
+        default: () => ({ type: 'BACK' }),
+      },
+      showBackArrow: {
+        type: Boolean,
+        default: false,
+      },
       noBackAction: {
         type: Boolean,
         default: false,
@@ -144,6 +183,21 @@
         type: String,
         default: null,
       },
+      footerMessageType: {
+        type: String,
+        default: null,
+        validate(str) {
+          return Object.keys(FooterMessageTypes).includes(str);
+        },
+      },
+      step: {
+        type: Number,
+        default: null,
+      },
+      steps: {
+        type: Number,
+        default: null,
+      },
     },
     data() {
       return {
@@ -151,17 +205,64 @@
       };
     },
     computed: {
+      footerMessage() {
+        switch (this.footerMessageType) {
+          case FooterMessageTypes.NEW_FACILITY:
+            return this.$tr('newLearningFacilitySteps', { step: this.step, steps: this.steps });
+          case FooterMessageTypes.IMPORT_FACILITY:
+            return this.$tr('importLearningFacilitySteps', { step: this.step, steps: this.steps });
+          case FooterMessageTypes.IMPORT_INDIVIDUALS:
+            return this.$tr('importIndividualUsersSteps', { step: this.step, steps: this.steps });
+          case FooterMessageTypes.JOIN_FACILITY:
+            return this.$tr('joinLearningFacilitySteps', { step: this.step, steps: this.steps });
+          default:
+            return null;
+        }
+      },
       selectedLanguage() {
         return availableLanguages[currentLanguage];
       },
+      coreError() {
+        if (this.$store) {
+          return this.$store.state.core.error;
+        } else {
+          return null;
+        }
+      },
     },
     methods: {
+      startOver() {
+        this.wizardService.send('START_OVER');
+        this.$store.dispatch('clearError');
+      },
       /* If the user is focused on a form element and hits enter, continue */
       handleEnterKey(e) {
         e.preventDefault();
         if (!this.navDisabled & (e.target.tagName === 'INPUT')) {
           this.$emit('continue');
         }
+      },
+    },
+    $trs: {
+      newLearningFacilitySteps: {
+        message: 'New learning facility - {step} of {steps}',
+        context:
+          'A message indicating to the user the number of steps in the process and\n        how far along they are in the process',
+      },
+      importLearningFacilitySteps: {
+        message: 'Import learning facility - {step} of {steps}',
+        context:
+          'A message indicating to the user the number of steps in the process and\n        how far along they are in the process',
+      },
+      importIndividualUsersSteps: {
+        message: 'Import individual user accounts - {step} of {steps}',
+        context:
+          'A message indicating to the user the number of steps in the process and\n        how far along they are in the process',
+      },
+      joinLearningFacilitySteps: {
+        message: 'Join learning facility - {step} of {steps}',
+        context:
+          'A message indicating to the user the number of steps in the process and\n        how far along they are in the process',
       },
     },
   };
@@ -258,6 +359,7 @@
 
   .footer-section {
     max-width: 50%;
+    line-height: 2.5;
 
     &.footer-actions {
       // Aligns action buttons with right-most text

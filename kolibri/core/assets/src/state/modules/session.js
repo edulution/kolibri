@@ -10,6 +10,7 @@ export const baseSessionState = {
   kind: [UserKinds.ANONYMOUS],
   user_id: undefined,
   username: '',
+  full_facility_import: true,
 };
 
 export default {
@@ -41,6 +42,9 @@ export default {
     isSuperuser(state) {
       return state.kind.includes(UserKinds.SUPERUSER);
     },
+    isFacilityAdmin(state) {
+      return state.kind.includes(UserKinds.ADMIN);
+    },
     // An "Multi-Facility Admin" is a superuser for a device with 2+ facilities
     userIsMultiFacilityAdmin(state, getters, rootState) {
       return getters.isSuperuser && rootState.core.facilities.length > 1;
@@ -50,7 +54,7 @@ export default {
       permissions.can_manage_content = state.can_manage_content;
       return permissions;
     },
-    currentFacilityId(state) {
+    userFacilityId(state) {
       return state.facility_id;
     },
     currentUserId(state) {
@@ -76,6 +80,9 @@ export default {
     },
     isAppContext(state) {
       return state.app_context;
+    },
+    isLearnerOnlyImport(state) {
+      return !state.full_facility_import;
     },
   },
   mutations: {

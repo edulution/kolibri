@@ -27,7 +27,7 @@ const baseContentNode = {
   categories: [Subjects.NUMERACY],
   duration: 3600,
   // Need a file with a preset that doesn't end in "thumbnail" to ensure that
-  // the download button will show when the canDownloadContent prop is also true
+  // the download button will show when the canDownloadExternally prop is also true
   files: [{ preset: 'fake' }],
   lang: {
     id: 'en',
@@ -55,7 +55,7 @@ function makeContentNode(metadata = {}) {
 
 function makeWrapper(metadata = {}, options = {}) {
   const content = makeContentNode(metadata);
-  const propsData = { content, canDownloadContent: true };
+  const propsData = { content, canDownloadExternally: true };
   return shallowMount(CurrentlyViewedResourceMetadata, {
     propsData,
     ...options,
@@ -129,12 +129,11 @@ describe('CurrentlyViewedResourceMetadata', () => {
             license_name: null,
             license_owner: null,
           },
-          { propsData: { canDownloadContent: false } }
+          { propsData: { canDownloadExternally: false } }
         ))
     );
 
     it('does not show the forBeginners chip when one of LearnerNeeds is FOR_BEGINNERS', () => {
-      console.log(wrapper.vm.forBeginners);
       expect(wrapper.find("[data-test='beginners-chip']").exists()).toBeFalsy();
     });
 
@@ -162,7 +161,7 @@ describe('CurrentlyViewedResourceMetadata', () => {
       expect(wrapper.find("[data-test='license-desc']").exists()).toBeFalsy();
     });
 
-    it('does not show the download button when canDownloadContent is not true', () => {
+    it('does not show the download button when canDownloadExternally is not true', () => {
       expect(wrapper.find("[data-test='download-button']").exists()).toBeFalsy();
     });
   });

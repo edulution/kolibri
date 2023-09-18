@@ -1,8 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const execSync = require('child_process').execSync;
-const mkdirp = require('mkdirp');
-const rimraf = require('rimraf');
 const webpack = require('webpack');
 const buildConfig = require('./perseusBuildConfig');
 const extractPerseusMessages = require('./extractPerseusMessages');
@@ -13,8 +11,8 @@ const submodulesPath = path.resolve(__dirname, './submodules');
 
 // Clear submodules, create the directory anew, cd into it, and clone the submodules
 console.log('Cloning the Learning Equality Perseus repo');
-rimraf.sync(submodulesPath);
-mkdirp.sync(submodulesPath);
+fs.rmSync(submodulesPath, { recursive: true, force: true });
+fs.mkdirSync(submodulesPath, { recursive: true });
 process.chdir(submodulesPath);
 execSync('git clone https://github.com/learningequality/perseus.git');
 console.log('Learning Equality Perseus repo successfully cloned');
@@ -36,8 +34,8 @@ console.log('Perseus dependencies installed');
 process.chdir(__dirname);
 const target = path.resolve(__dirname, './assets/dist');
 console.log('Clearing dist folder');
-rimraf.sync(target);
-mkdirp.sync(target);
+fs.rmSync(target, { recursive: true, force: true });
+fs.mkdirSync(target, { recursive: true });
 
 
 // A regex for detecting paths inside `url` in CSS, paths can either be quoted or unquoted.
@@ -87,7 +85,7 @@ compiler.run(err => {
           const newUrl = absolute ? p2.slice(1) : p2;
           const source = path.resolve(absolute ? path.join(__dirname, './submodules/perseus') : path.dirname(file), newUrl).split('#')[0];
           const fileTarget = path.join(target, newUrl).split('#')[0];
-          mkdirp.sync(path.dirname(fileTarget));
+          fs.mkdirSync(path.dirname(fileTarget), { recursive: true });
           try {
             fs.copyFileSync(source, fileTarget);
             console.log(`Copied ${source} to ${fileTarget}`);
@@ -112,7 +110,7 @@ compiler.run(err => {
     }
     // Now that the file has been built, we can extract all the perseus messages.
     extractPerseusMessages().then(() => {
-      rimraf.sync(submodulesPath);
+      fs.rmSync(submodulesPath, { recursive: true, force: true });
       // Write out the readme to the dist folder.
       fs.writeFileSync(path.join(target, 'README.md'), README, { encoding: 'utf-8' });
       process.chdir(currentCwd);
@@ -120,7 +118,7 @@ compiler.run(err => {
   } else {
     // If there's an error still cleanup after ourselves.
     console.log(err);
-    rimraf.sync(submodulesPath);
+    fs.rmSync(submodulesPath, { recursive: true, force: true });
     process.chdir(currentCwd);
   }
 });

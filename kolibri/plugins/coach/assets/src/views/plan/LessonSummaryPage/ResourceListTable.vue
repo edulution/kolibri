@@ -10,12 +10,15 @@
         :key="resource.contentnode_id"
       >
         <DragHandle>
-          <KFixedGrid
+
+          <!-- replaced KFixedGrid with normal div to prevent text overlap error  -->
+          <div
             class="row"
             :style="{ backgroundColor: $themeTokens.surface }"
-            numCols="8"
           >
-            <KFixedGridItem span="1" class="relative">
+            <!-- replaced KFixedGridItem with normal div to prevent text overlap error  -->
+
+            <div class="relative">
               <div class="move-handle">
                 <DragSortWidget
                   :moveUpText="$tr('moveResourceUpButtonDescription')"
@@ -26,9 +29,9 @@
                   @moveDown="moveDownOne(index)"
                 />
               </div>
-            </KFixedGridItem>
-            <KFixedGridItem span="4">
-              <template v-if="getCachedResource(resource.contentnode_id)">
+            </div>
+            <div class="relative">
+              <div v-if="getCachedResource(resource.contentnode_id)">
                 <div class="resource-title">
                   <div class="content-icon">
                     <ContentIcon :kind="resourceKind(resource.contentnode_id)" />
@@ -41,7 +44,12 @@
                       )"
                     />
                   </div>
-                  <p dir="auto" class="channel-title" :style="{ color: $themeTokens.annotation }">
+                  <p
+                    v-if="resourceChannelTitle(resource.contentnode_id).length"
+                    dir="auto"
+                    class="channel-title"
+                    :style="{ color: $themeTokens.annotation }"
+                  >
                     <dfn class="visuallyhidden"> {{ $tr('parentChannelLabel') }} </dfn>
                     {{ resourceChannelTitle(resource.contentnode_id) }}
                   </p>
@@ -51,22 +59,30 @@
                   :value="getCachedResource(resource.contentnode_id).num_coach_contents"
                   :isTopic="false"
                 />
-              </template>
-              <template v-else>
-                <p>
-                  <KIcon icon="warning" :style=" { fill: $themePalette.orange.v_400 }" />
-                  {{ resourceMissingText }}
-                </p>
-              </template>
-            </KFixedGridItem>
-            <KFixedGridItem :style="{ 'padding-top': '16px' }" span="3" alignment="right">
+              </div>
+              <div v-else class="child">
+                {{ resourceMissingText }}
+              </div>
+
+            </div>
+
+            <div class="relative">
+              <KIcon
+                v-if="!getCachedResource(resource.contentnode_id) ||
+                  !getCachedResource(resource.contentnode_id).available"
+                icon="warning"
+                :style=" { fill: $themePalette.orange.v_400 }"
+              />
+            </div>
+
+            <div class="relative">
               <KButton
                 :text="coreString('removeAction')"
                 appearance="flat-button"
                 @click="removeResource(resource)"
               />
-            </KFixedGridItem>
-          </KFixedGrid>
+            </div>
+          </div>
         </DragHandle>
       </Draggable>
     </transition-group>
@@ -85,7 +101,6 @@
   import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import CoachContentLabel from 'kolibri.coreVue.components.CoachContentLabel';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { coachStringsMixin } from '../../common/commonCoachStrings';
 
   const removalSnackbarTime = 5000;
 
@@ -99,7 +114,7 @@
       CoachContentLabel,
       ContentIcon,
     },
-    mixins: [commonCoreStrings, coachStringsMixin],
+    mixins: [commonCoreStrings],
     data() {
       return {
         workingResourcesBackup: [...this.$store.state.lessonSummary.workingResources],
@@ -107,6 +122,7 @@
     },
     computed: {
       ...mapState('lessonSummary', {
+        classId: state => state.currentLesson.classroom.id,
         lessonId: state => state.currentLesson.id,
         workingResources: state => state.workingResources,
         // consider loading this async?
@@ -121,12 +137,16 @@
         return this.workingResourcesBackup.length - this.workingResources.length;
       },
       resourceMissingText() {
-        return this.getMissingContentString('resourceNotFoundOnDevice');
+        return this.coreString('resourceNotFoundOnDevice');
       },
     },
     methods: {
       ...mapActions(['clearSnackbar']),
-      ...mapActions('lessonSummary', ['saveLessonResources', 'updateCurrentLesson']),
+      ...mapActions('lessonSummary', [
+        'saveLessonResources',
+        'updateCurrentLesson',
+        'fetchLessonsSizes',
+      ]),
       ...mapMutations('lessonSummary', {
         removeFromWorkingResources: 'REMOVE_FROM_WORKING_RESOURCES',
         setWorkingResources: 'SET_WORKING_RESOURCES',
@@ -143,7 +163,7 @@
       removeResource(resource) {
         this.removeFromWorkingResources([resource]);
 
-        this.autoSave(this.lessonId, this.workingResources);
+        this.autoSave(this.lessonId, this.workingResources, this.classId);
 
         if (this.numberOfRemovals > 0) {
           this.showSnackbarNotification(
@@ -155,7 +175,7 @@
               actionText: this.$tr('undoActionPrompt'),
               actionCallback: () => {
                 this.setWorkingResources(this.workingResourcesBackup);
-                this.autoSave(this.lessonId, this.workingResources);
+                this.autoSave(this.lessonId, this.workingResources, this.classId);
                 this.clearSnackbar();
               },
               hideCallback: () => {
@@ -190,13 +210,17 @@
         this.autoSave(this.lessonId, newArray);
         this.showSnackbarNotification('resourceOrderSaved');
       },
-      autoSave(id, resources) {
+      autoSave(id, resources, classID) {
         this.saveLessonResources({ lessonId: id, resources: resources })
           .then(() => {
             this.updateCurrentLesson(id);
           })
+          .then(() => {
+            this.fetchLessonsSizes({ classId: classID });
+          })
           .catch(() => {
             this.updateCurrentLesson(id).then(currentLesson => {
+              this.fetchLessonsSizes({ classId: currentLesson.classroom.id });
               this.setWorkingResources(currentLesson.resources);
             });
           });
@@ -242,10 +266,33 @@
     margin-left: 8px;
   }
 
+  // updated the styles of resources row to prevent the overlap issue
+  // using flex we are able to rectify the issue
   .row {
+    display: flex;
+    flex-direction: row;
     padding: 8px;
     cursor: grab;
     user-select: none;
+
+    .relative:nth-child(1) {
+      flex-shrink: 0;
+      width: 3rem;
+    }
+
+    .relative:nth-child(2) {
+      flex-grow: 1;
+      flex-shrink: 1;
+      padding-right: 2rem;
+    }
+
+    .relative:nth-child(3) {
+      flex-shrink: 1;
+    }
+
+    .relative:last-child {
+      flex-shrink: 0;
+    }
   }
 
   .headers {
@@ -260,8 +307,11 @@
     margin-right: 8px;
   }
 
+  // updated the class coach-content-label
   .coach-content-label {
+    position: absolute;
     display: inline-block;
+    width: fit-content;
     vertical-align: top;
   }
 
@@ -277,6 +327,7 @@
     position: absolute;
     top: 16px;
     left: 18px;
+    left: 16px;
   }
 
   .move-button.down {
@@ -312,6 +363,16 @@
   .content-link {
     display: inline-block;
     width: calc(100% - 16px);
+  }
+
+  .parent {
+    position: relative;
+  }
+
+  .child {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
 </style>

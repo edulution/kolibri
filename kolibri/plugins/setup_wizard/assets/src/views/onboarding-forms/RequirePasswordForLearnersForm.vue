@@ -2,6 +2,10 @@
 
   <OnboardingStepBase
     :title="$tr('header')"
+    :footerMessageType="footerMessageType"
+    :step="4"
+    :steps="5"
+    :eventOnGoBack="backEvent"
     @continue="handleContinue"
   >
     <KRadioButton
@@ -19,8 +23,9 @@
       :value="false"
     />
     <p class="description">
-      {{ $tr('changeLater') }}
+      {{ getCommonSyncString('changeLater') }}
     </p>
+
   </OnboardingStepBase>
 
 </template>
@@ -28,7 +33,8 @@
 
 <script>
 
-  import { Presets } from '../../constants';
+  import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
+  import { Presets, FooterMessageTypes } from '../../constants';
   import OnboardingStepBase from '../OnboardingStepBase';
 
   export default {
@@ -36,19 +42,26 @@
     components: {
       OnboardingStepBase,
     },
+    mixins: [commonSyncElements],
+    inject: ['wizardService'],
     data() {
-      let setting;
-      const { preset } = this.$store.state.onboardingData;
-      if (preset === null || preset === Presets.NONFORMAL) {
-        setting = true;
-      } else {
-        setting = false;
+      let setting = this.wizardService.state.context['requirePassword'];
+      if (setting === null) {
+        // Set default for the setting if one isn't selected; depends on the preset selected
+        const preset = this.wizardService.state.context['formalOrNonformal'];
+        setting = preset === Presets.NONFORMAL;
       }
+      const footerMessageType = FooterMessageTypes.NEW_FACILITY;
       return {
+        footerMessageType,
         setting,
       };
     },
-    inject: ['wizardService'],
+    computed: {
+      backEvent() {
+        return { type: 'BACK', value: Boolean(this.setting) };
+      },
+    },
     methods: {
       handleContinue() {
         this.wizardService.send({ type: 'CONTINUE', value: this.setting });
@@ -66,13 +79,9 @@
           "Option on the 'Enable passwords for learners' screen. The admin selects this option if they don't want to enable passwords for learner accounts.",
       },
       noOptionLabel: {
-        message: 'No. Learner accounts can sign in with just a username',
+        message: 'No. Learners can sign in with just a username.',
         context:
           "Option on the 'Enable passwords for learners' screen. The admin selects this option if they don't want to enable passwords for learner accounts.",
-      },
-      changeLater: {
-        message: 'You can change this in your learning facility settings later',
-        context: '',
       },
     },
   };

@@ -1,13 +1,17 @@
 from __future__ import unicode_literals
 
 import csv
+import datetime
 import logging
 import math
 import os
 from collections import OrderedDict
 from functools import partial
 
+from dateutil import parser
 from django.core.cache import cache
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 from le_utils.constants import content_kinds
 
 from .models import ContentSessionLog
@@ -21,8 +25,8 @@ from kolibri.core.utils.csv import output_mapper
 logger = logging.getLogger(__name__)
 
 CSV_EXPORT_FILENAMES = {
-    "session": "{}_{}_content_session_logs.csv",
-    "summary": "{}_{}_content_summary_logs.csv",
+    "session": "{}_{}_content_session_logs_from_{}_to_{}.csv",
+    "summary": "{}_{}_content_summary_logs_from_{}_to_{}.csv",
 }
 
 
@@ -62,18 +66,42 @@ mappings = {
 
 labels = OrderedDict(
     (
-        ("user__facility__name", "Facility name"),
-        ("user__username", "Username"),
-        ("channel_id", "Channel id"),
-        ("channel_name", "Channel name"),
-        ("content_id", "Content id"),
-        ("content_title", "Content title"),
-        ("start_timestamp", "Time of first interaction"),
-        ("end_timestamp", "Time of last interaction"),
-        ("completion_timestamp", "Time of completion"),
-        ("time_spent", "Time Spent (sec)"),
-        ("progress", "Progress (0-1)"),
-        ("kind", "Content kind"),
+        ("user__facility__name", _("Facility name")),
+        ("user__username", _("Username")),
+        ("channel_id", _("Channel id")),
+        ("channel_name", _("Channel name")),
+        ("content_id", _("Content id")),
+        ("content_title", _("Content title")),
+        (
+            "start_timestamp",
+            pgettext_lazy(
+                "CSV column header for the time of the first interaction in the exported logs",
+                "Time of first interaction",
+            ),
+        ),
+        (
+            "end_timestamp",
+            pgettext_lazy(
+                "CSV column header for the time of the last interaction in the exported logs",
+                "Time of last interaction",
+            ),
+        ),
+        (
+            "completion_timestamp",
+            pgettext_lazy(
+                "CSV column header for the percentage of completion in the exported logs",
+                "Time of completion",
+            ),
+        ),
+        (
+            "time_spent",
+            pgettext_lazy(
+                "CSV column header for the time spent in a resource in the exported logs",
+                "Time Spent (sec)",
+            ),
+        ),
+        ("progress", _("Progress (0-1)")),
+        ("kind", _("Content kind")),
     )
 )
 
@@ -115,7 +143,9 @@ classes_info = {
 }
 
 
-def csv_file_generator(facility, log_type, filepath, overwrite=False):
+def csv_file_generator(
+    facility, log_type, filepath, start_date, end_date, overwrite=False
+):
 
     if log_type not in ("summary", "session"):
         raise ValueError(
@@ -123,10 +153,24 @@ def csv_file_generator(facility, log_type, filepath, overwrite=False):
         )
 
     log_info = classes_info[log_type]
+    start = start_date if start_date is None else parser.parse(start_date)
+    end = (
+        end_date
+        if end_date is None
+        else parser.parse(end_date) + datetime.timedelta(days=1)
+    )
 
     if not overwrite and os.path.exists(filepath):
         raise ValueError("{} already exists".format(filepath))
-    queryset = log_info["queryset"].filter(dataset_id=facility.dataset_id)
+    queryset = log_info["queryset"].filter(
+        dataset_id=facility.dataset_id,
+    )
+
+    if start:
+        queryset = queryset.filter(start_timestamp__gte=start)
+
+    if end:
+        queryset = queryset.filter(start_timestamp__lte=end)
 
     # Exclude completion timestamp for the sessionlog CSV
     header_labels = tuple(

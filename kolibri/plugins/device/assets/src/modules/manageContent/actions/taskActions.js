@@ -11,8 +11,7 @@ const logging = logger.getLogger(__filename);
 
 export function cancelTask(store, taskId) {
   return new Promise(resolve => {
-    let cancelWatch;
-    cancelWatch = coreStore.watch(
+    const cancelWatch = coreStore.watch(
       state =>
         (state.manageContent.taskList.find(task => task.id === taskId) || {}).status ===
         TaskStatuses.CANCELED,
@@ -21,7 +20,7 @@ export function cancelTask(store, taskId) {
         TaskResource.clear(taskId).then(resolve);
       }
     );
-    TaskResource.cancelTask(taskId);
+    TaskResource.cancel(taskId);
   });
 }
 

@@ -1,9 +1,9 @@
 <template>
 
-  <span v-if="isSpecified && displayText">
-    {{ displayText }}
-  </span>
-  <KEmptyPlaceholder v-else />
+  <KOptionalText
+    :text="
+      (isSpecified && displayText) ? displayText : ''"
+  />
 
 </template>
 
@@ -26,7 +26,7 @@
     },
     computed: {
       isSpecified() {
-        return this.gender !== NOT_SPECIFIED && this.birthYear !== DEFERRED;
+        return this.gender !== NOT_SPECIFIED && this.gender !== DEFERRED;
       },
       displayText() {
         if (this.gender === MALE) {

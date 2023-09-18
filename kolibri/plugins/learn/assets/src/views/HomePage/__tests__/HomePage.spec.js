@@ -2,32 +2,27 @@ import { shallowMount, mount, createLocalVue } from '@vue/test-utils';
 import VueRouter from 'vue-router';
 import Vuex from 'vuex';
 
+import { useDevicesWithFacility } from 'kolibri.coreVue.componentSets.sync';
+import useUser, { useUserMock } from 'kolibri.coreVue.composables.useUser';
+import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
 import { ClassesPageNames } from '../../../constants';
 import HomePage from '../index';
 /* eslint-disable import/named */
 import useChannels, { useChannelsMock } from '../../../composables/useChannels';
-import useUser, { useUserMock } from '../../../composables/useUser';
 import useDeviceSettings, { useDeviceSettingsMock } from '../../../composables/useDeviceSettings';
 import useLearnerResources, {
   useLearnerResourcesMock,
 } from '../../../composables/useLearnerResources';
 /* eslint-enable import/named */
-
+jest.mock('kolibri.coreVue.componentSets.sync');
 jest.mock('../../../composables/useChannels');
-jest.mock('../../../composables/useUser');
+jest.mock('kolibri.coreVue.composables.useUser');
 jest.mock('../../../composables/useDeviceSettings');
 jest.mock('../../../composables/useLearnerResources');
-
-jest.mock('kolibri.utils.coreStrings', () => {
-  const translations = {
-    readReference: 'Reference',
-  };
-  return {
-    $tr: jest.fn(key => {
-      return translations[key];
-    }),
-  };
-});
+jest.mock('../../../composables/useContentLink');
+// Needed to test anything using mount() where children use this composable
+jest.mock('../../../composables/useLearningActivities');
+jest.mock('kolibri-design-system/lib/useKResponsiveWindow');
 
 const localVue = createLocalVue();
 localVue.use(Vuex);
@@ -36,6 +31,7 @@ const mockStore = new Vuex.Store({
   state: { core: { loading: false } },
   getters: {
     isUserLoggedIn: jest.fn(),
+    isAppContext: jest.fn(),
     isLearner: jest.fn(),
   },
 });
@@ -88,12 +84,26 @@ function getExploreChannelsSection(wrapper) {
 }
 
 describe(`HomePage`, () => {
+  beforeAll(() => {
+    useKResponsiveWindow.mockImplementation(() => ({
+      windowIsSmall: false,
+    }));
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     // set back to default values defined in __mocks__
     useUser.mockImplementation(() => useUserMock());
     useDeviceSettings.mockImplementation(() => useDeviceSettingsMock());
     useLearnerResources.mockImplementation(() => useLearnerResourcesMock());
+    useDevicesWithFacility.mockReturnValue({
+      devices: [
+        {
+          id: '1',
+          available: true,
+        },
+      ],
+    });
   });
 
   it(`smoke test`, () => {
@@ -186,9 +196,6 @@ describe(`HomePage`, () => {
             getClassQuizLink() {
               return { path: '/class-quiz' };
             },
-            getClassResourceLink() {
-              return { path: '/class-resource' };
-            },
           })
         );
       });
@@ -211,14 +218,6 @@ describe(`HomePage`, () => {
         expect(getContinueLearningFromClassesSection(wrapper).text()).not.toContain(
           'Non-class resource 2'
         );
-      });
-
-      it(`clicking a resource navigates to the class resource page`, () => {
-        const wrapper = makeWrapper();
-        expect(wrapper.vm.$route.path).toBe('/');
-        const links = getContinueLearningFromClassesSection(wrapper).findAll('a');
-        links.at(0).trigger('click');
-        expect(wrapper.vm.$route.path).toBe('/class-resource');
       });
 
       it(`clicking a quiz navigates to the class quiz page`, () => {
@@ -326,9 +325,6 @@ describe(`HomePage`, () => {
               { id: 'non-class-resource-1', title: 'Non-class resource 1', is_leaf: true },
               { id: 'non-class-resource-2', title: 'Non-class resource 2', is_leaf: true },
             ],
-            getTopicContentNodeLink() {
-              return { path: '/topic-resource' };
-            },
           })
         );
       });
@@ -354,14 +350,6 @@ describe(`HomePage`, () => {
           expect(links.length).toBe(2);
           expect(links.at(0).text()).toBe('Non-class resource 1');
           expect(links.at(1).text()).toBe('Non-class resource 2');
-        });
-
-        it(`clicking a resource navigates to the topic resource page`, () => {
-          const wrapper = makeWrapper();
-          expect(wrapper.vm.$route.path).toBe('/');
-          const links = getContinueLearningOnYourOwnSection(wrapper).findAll('a');
-          links.at(0).trigger('click');
-          expect(wrapper.vm.$route.path).toBe('/topic-resource');
         });
       });
     });

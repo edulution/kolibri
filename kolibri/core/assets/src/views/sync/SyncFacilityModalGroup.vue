@@ -8,12 +8,29 @@
       @cancel="closeModal()"
     />
 
-    <SelectAddressModalGroup
+    <SelectDeviceModalGroup
       v-else-if="atSelectAddress"
       :filterByFacilityId="facilityForSync.id"
       :selectAddressDisabled="syncSubmitDisabled"
       @submit="handleAddressSubmit"
       @cancel="closeModal()"
+    />
+
+    <RegisterFacilityModal
+      v-else-if="atRegister"
+      :displaySkipOption="true"
+      @success="handleValidateSuccess"
+      @cancel="closeModal"
+      @skip="emitKdpSync"
+    />
+    <ConfirmationRegisterModal
+      v-else-if="atConfirmation"
+      :targetFacility="facilityForSync"
+      :projectName="kdpProject.name"
+      :token="kdpProject.token"
+      :successOnAlreadyRegistered="true"
+      @success="emitKdpSync"
+      @cancel="closeModal"
     />
   </div>
 
@@ -24,23 +41,29 @@
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import SelectAddressModalGroup from './SelectAddressModalGroup';
+  import SelectDeviceModalGroup from './SelectDeviceModalGroup';
   import SelectSyncSourceModal from './SelectSyncSourceModal';
+  import RegisterFacilityModal from './RegisterFacilityModal';
+  import ConfirmationRegisterModal from './ConfirmationRegisterModal';
 
   const Steps = Object.freeze({
     SELECT_SOURCE: 'SELECT_SOURCE',
     SELECT_ADDRESS: 'SELECT_ADDRESS',
+    REGISTER_FACILITY: 'REGISTER_FACILITY',
+    CONFIRMATION_REGISTER: 'CONFIRMATION_REGISTER',
   });
 
   export default {
     name: 'SyncFacilityModalGroup',
     components: {
+      ConfirmationRegisterModal,
+      RegisterFacilityModal,
       SelectSyncSourceModal,
-      SelectAddressModalGroup,
+      SelectDeviceModalGroup,
     },
     mixins: [commonCoreStrings, commonSyncElements],
     props: {
-      // If facility has not been KDP-registered, skip to SelectAddressForm
+      // If facility has not been KDP-registered, skip to SelectDeviceForm
       // and use facility ID to filter the selectable addresses
       facilityForSync: {
         type: Object,
@@ -49,8 +72,9 @@
     },
     data() {
       return {
-        step: this.facilityForSync.dataset.registered ? Steps.SELECT_SOURCE : Steps.SELECT_ADDRESS,
+        step: Steps.SELECT_SOURCE,
         syncSubmitDisabled: false,
+        kdpProject: null, // { name, token }
       };
     },
     computed: {
@@ -60,46 +84,40 @@
       atSelectAddress() {
         return this.step === Steps.SELECT_ADDRESS;
       },
+      atRegister() {
+        return this.step === Steps.REGISTER_FACILITY;
+      },
+      atConfirmation() {
+        return this.step === Steps.CONFIRMATION_REGISTER;
+      },
     },
     methods: {
       handleSourceSubmit(data) {
         if (data.source === 'PEER') {
           this.step = Steps.SELECT_ADDRESS;
         } else {
-          this.startKdpSync();
+          if (this.facilityForSync.dataset.registered) {
+            this.emitKdpSync();
+          } else {
+            this.step = Steps.REGISTER_FACILITY;
+          }
         }
       },
       handleAddressSubmit(data) {
         if (!data.device_name) {
           data.device_name = data.nickname;
         }
-        this.startPeerSync(data);
+        this.$emit('syncPeer', data, this.facilityForSync);
+      },
+      handleValidateSuccess({ name, token }) {
+        this.kdpProject = { name, token };
+        this.step = Steps.CONFIRMATION_REGISTER;
       },
       closeModal() {
         this.$emit('close');
       },
-      startKdpSync() {
-        this.syncSubmitDisabled = true;
-        this.startKdpSyncTask(this.facilityForSync.id)
-          .then(task => {
-            this.$emit('success', task.id);
-          })
-          .catch(() => {
-            this.$emit('failure');
-          });
-      },
-      startPeerSync(peerData) {
-        this.syncSubmitDisabled = true;
-        this.startPeerSyncTask({
-          facility: this.facilityForSync.id,
-          device_id: peerData.id,
-        })
-          .then(task => {
-            this.$emit('success', task.id);
-          })
-          .catch(() => {
-            this.$emit('failure');
-          });
+      emitKdpSync() {
+        this.$emit('syncKDP', this.facilityForSync);
       },
     },
   };

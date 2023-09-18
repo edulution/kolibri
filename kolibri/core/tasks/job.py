@@ -3,13 +3,16 @@ import json
 import logging
 import traceback
 import uuid
+from collections import namedtuple
 
 from six import string_types
 
 from kolibri.core.tasks.exceptions import UserCancelledError
+from kolibri.core.tasks.utils import callable_to_import_path
 from kolibri.core.tasks.utils import current_state_tracker
-from kolibri.core.tasks.utils import import_stringified_func
-from kolibri.core.tasks.utils import stringify_func
+from kolibri.core.tasks.utils import import_path_to_callable
+from kolibri.utils import translation
+from kolibri.utils.translation import ugettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +83,34 @@ class Priority(object):
     channel metadata.
     """
 
+    LOW = 15
     REGULAR = 10
     HIGH = 5
 
     # A set of all valid priorities
-    Priorities = {HIGH, REGULAR}
+    Priorities = {HIGH, REGULAR, LOW}
+
+
+JobStatus = namedtuple("Status", ("title", "text"))
+
+
+def default_status_text(job):
+    if job.state == State.COMPLETED:
+        # Translators: Message shown to indicate that a background process has finished successfully.
+        return _("Complete")
+    elif job.state == State.FAILED or job.state == State.CANCELED:
+        # Translators: Message shown to indicate that a background process has failed.
+        return _("Failed")
+    elif job.state == State.CANCELED:
+        # Translators: Message shown to indicate that a background process has been cancelled.
+        return _("Cancelled")
+    elif job.state == State.RUNNING and job.percentage_progress:
+        # Translators: Message shown to indicate the percentage completed of a background process.
+        return _("In progress - {percent}%").format(
+            percent=round(job.percentage_progress * 100)
+        )
+    # Translators: Message shown to indicate that while a background process has started, no progress can be reported yet.
+    return _("Waiting")
 
 
 class Job(object):
@@ -95,6 +121,27 @@ class Job(object):
     to the workers.
     """
 
+    UPDATEABLE_KEYS = {
+        "state",
+        "exception",
+        "traceback",
+        "track_progress",
+        "cancellable",
+        "extra_metadata",
+        "progress",
+        "total_progress",
+        "result",
+        "args",
+        "kwargs",
+    }
+
+    JSON_KEYS = UPDATEABLE_KEYS | {
+        "job_id",
+        "facility_id",
+        "func",
+        "long_running",
+    }
+
     def to_json(self):
         """
         Creates and returns a JSON-serialized string representing this Job.
@@ -102,26 +149,8 @@ class Job(object):
         This storage method is why task exceptions are stored as strings.
         """
 
-        keys = [
-            "job_id",
-            "facility_id",
-            "state",
-            "exception",
-            "traceback",
-            "track_progress",
-            "cancellable",
-            "extra_metadata",
-            "progress",
-            "total_progress",
-            "args",
-            "kwargs",
-            "func",
-            "result",
-            "long_running",
-        ]
-
         working_dictionary = {
-            key: self.__dict__[key] for key in keys if key in self.__dict__
+            key: self.__dict__[key] for key in self.JSON_KEYS if key in self.__dict__
         }
 
         try:
@@ -212,7 +241,7 @@ class Job(object):
         self.args = args
         self.kwargs = kwargs or {}
         self._storage = None
-        self.func = stringify_func(func)
+        self.func = callable_to_import_path(func)
 
     def _check_storage_attached(self):
         if self._storage is None:
@@ -238,6 +267,11 @@ class Job(object):
             self.total_progress = total_progress
             self.storage.update_job_progress(self.job_id, progress, total_progress)
 
+    def update_metadata(self, **kwargs):
+        for key, value in kwargs.items():
+            self.extra_metadata[key] = value
+        self.save_meta()
+
     def check_for_cancel(self):
         if self.cancellable:
             if self.storage.check_job_canceled(self.job_id):
@@ -250,12 +284,15 @@ class Job(object):
         self.cancellable = cancellable
         self.storage.save_job_as_cancellable(self.job_id, cancellable=cancellable)
 
+    def retry_in(self, dt, **kwargs):
+        self.storage.retry_job_in(self.job_id, dt, **kwargs)
+
     def execute(self):
         self._check_storage_attached()
 
         setattr(current_state_tracker, "job", self)
 
-        func = import_stringified_func(self.func)
+        func = self.task
 
         args, kwargs = copy.copy(self.args), copy.copy(self.kwargs)
 
@@ -276,6 +313,22 @@ class Job(object):
             self.storage.mark_job_as_failed(self.job_id, e, traceback_str)
 
         setattr(current_state_tracker, "job", None)
+
+    @property
+    def task(self):
+        """
+        In theory we could read this from the task registry instead
+        but as this is running inside an ephemeral task runner thread
+        or process, we can potentially save ourselves some initialization
+        time and memory by just importing just this function - whereas initializing
+        the registry would import all of the registered tasks for this Kolibri.
+        This is less of an issue when the task runner is using threads and has
+        shared memory, but when it is using multiprocessing or is running in another
+        context, this will save some time.
+
+        We don't bother caching this property, as we rely on the Python module import cache instead.
+        """
+        return import_path_to_callable(self.func)
 
     @property
     def percentage_progress(self):
@@ -300,3 +353,21 @@ class Job(object):
                 total=self.total_progress,
             )
         )
+
+    def status(self, lang):
+        with translation.override(lang):
+            return self.task.generate_status(self)
+
+
+def log_status(job, orm_job, state=None, **kwargs):
+    """
+    An example handler for task update hooks.
+    All it does is attempt to generate a status object for the job
+    and log it if it returns one.
+    """
+
+    status = job.status(translation.get_language())
+    if status:
+        logging.info(status.title)
+        if status.text:
+            logging.info(status.text)

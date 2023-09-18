@@ -17,6 +17,7 @@ from django.http import Http404
 from django.utils.cache import patch_response_headers
 from django.utils.decorators import method_decorator
 from django.utils.translation import ugettext as _
+from django.views.decorators.cache import cache_page
 from django.views.decorators.http import etag
 from django_filters.rest_framework import BaseInFilter
 from django_filters.rest_framework import BooleanFilter
@@ -38,6 +39,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
 from kolibri.core.api import BaseValuesViewset
+from kolibri.core.api import CreateModelMixin
 from kolibri.core.api import ListModelMixin
 from kolibri.core.api import ReadOnlyValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
@@ -46,7 +48,12 @@ from kolibri.core.auth.middleware import session_exempt
 from kolibri.core.bookmarks.models import Bookmark
 from kolibri.core.content import models
 from kolibri.core.content import serializers
+from kolibri.core.content.models import ContentDownloadRequest
+from kolibri.core.content.models import ContentRemovalRequest
+from kolibri.core.content.models import ContentRequestReason
+from kolibri.core.content.models import ContentRequestStatus
 from kolibri.core.content.permissions import CanManageContent
+from kolibri.core.content.tasks import automatic_resource_import
 from kolibri.core.content.utils.content_types_tools import (
     renderable_contentnodes_q_filter,
 )
@@ -77,6 +84,7 @@ from kolibri.core.utils.pagination import ValuesViewsetLimitOffsetPagination
 from kolibri.core.utils.pagination import ValuesViewsetPageNumberPagination
 from kolibri.core.utils.urls import join_url
 from kolibri.utils.conf import OPTIONS
+from kolibri.utils.urls import validator
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +109,17 @@ def metadata_cache(some_func):
             request = kwargs.get("request", request)
         except IndexError:
             request = kwargs.get("request", None)
-        if "contentCacheKey" in request.GET:
-            # Only do long running caching if the contentCacheKey is explicitly
-            # set in the URL, otherwise rely on the Etag to do a quick 304.
-            patch_response_headers(response, cache_timeout=cache_timeout)
+        if response.status_code < 400 or response.status_code == 404:
+            # By default cache for 60 seconds to prevent repeated requests
+            # and we are returning a non-error response.
+            # or if there was a 404.
+
+            timeout = 60
+            if "contentCacheKey" in request.GET:
+                # Do long running caching if the contentCacheKey is explicitly
+                # set in the URL.
+                timeout = cache_timeout
+            patch_response_headers(response, cache_timeout=timeout)
 
         return response
 
@@ -120,7 +135,8 @@ class RemoteMixin(object):
     def _get_request_headers(self, request):
         return {
             "Accept": request.META.get("HTTP_ACCEPT"),
-            "Accept-Encoding": request.META.get("HTTP_ACCEPT_ENCODING"),
+            # Don't proxy client's accept headers as it may include br for brotli
+            # that we cannot rely on having decompression for available on the server.
             "Accept-Language": request.META.get("HTTP_ACCEPT_LANGUAGE"),
             "Content-Type": request.META.get("CONTENT_TYPE"),
             "If-None-Match": request.META.get("HTTP_IF_NONE_MATCH", ""),
@@ -129,7 +145,6 @@ class RemoteMixin(object):
     def _get_response_headers(self, response):
         return {
             "Cache-Control": response.headers.get("cache-control"),
-            "Content-Type": response.headers.get("content-type"),
             "Etag": response.headers.get("etag"),
         }
 
@@ -148,11 +163,18 @@ class RemoteMixin(object):
         qs = request.GET.copy()
         del qs[self.remote_url_param]
         qs.pop("contentCacheKey", None)
+        try:
+            validator(baseurl)
+        except ValidationError:
+            raise Http404("Remote resource not found")
         remote_url = join_url(baseurl, remote_path)
         try:
             response = requests.get(
                 remote_url, params=qs, headers=self._get_request_headers(request)
             )
+            if response.status_code == 404:
+                raise Http404("Remote resource not found")
+            response.raise_for_status()
             # If Etag is set on the response we have returned here, any further Etag will not be modified
             # by the django etag decorator, so this should allow us to transparently proxy the remote etag.
             try:
@@ -170,10 +192,12 @@ class RemoteMixin(object):
 
 
 class RemoteViewSet(ReadOnlyValuesViewset, RemoteMixin):
-    def retrieve(self, request, *args, **kwargs):
+    def retrieve(self, request, pk=None):
+        if pk is None:
+            raise Http404
         if self._should_proxy_request(request):
             return self._hande_proxied_request(request)
-        return super(RemoteViewSet, self).retrieve(request, *args, **kwargs)
+        return super(RemoteViewSet, self).retrieve(request, pk=pk)
 
     def list(self, request, *args, **kwargs):
         if self._should_proxy_request(request):
@@ -508,6 +532,7 @@ class BaseContentNodeMixin(object):
     """
     A base mixin for viewsets that need to return the same format of data
     serialization for ContentNodes.
+    Also used for public ContentNode endpoints!
     """
 
     filter_backends = (DjangoFilterBackend,)
@@ -552,6 +577,8 @@ class BaseContentNodeMixin(object):
     }
 
     def get_queryset(self):
+        if self.request.GET.get("no_available_filtering", False):
+            return models.ContentNode.objects.all()
         return models.ContentNode.objects.filter(available=True)
 
     def get_related_data_maps(self, items, queryset):
@@ -648,6 +675,19 @@ class BaseContentNodeMixin(object):
                 output.append(item)
         return output
 
+
+class InternalContentNodeMixin(BaseContentNodeMixin):
+    """
+    A mixin for all content node viewsets for internal use, whereas BaseContentNodeMixin is reused
+    for public API endpoints also.
+    """
+
+    values = BaseContentNodeMixin.values + ("admin_imported",)
+
+    field_map = BaseContentNodeMixin.field_map.copy()
+
+    field_map["admin_imported"] = lambda x: bool(x["admin_imported"])
+
     def update_data(self, response_data, baseurl):
         if type(response_data) is dict:
             if "more" in response_data and "results" in response_data:
@@ -662,6 +702,9 @@ class BaseContentNodeMixin(object):
                 )
             else:
                 response_data = self.add_base_url_to_node(response_data, baseurl)
+                response_data["admin_imported"] = (
+                    response_data["id"] in self.locally_admin_imported_ids
+                )
                 if "children" in response_data:
                     response_data["children"] = self.update_data(
                         response_data["children"], baseurl
@@ -728,8 +771,31 @@ class OptionalContentNodePagination(OptionalPagination):
 
 
 @method_decorator(metadata_cache, name="dispatch")
-class ContentNodeViewset(BaseContentNodeMixin, RemoteViewSet):
+class ContentNodeViewset(InternalContentNodeMixin, RemoteMixin, ReadOnlyValuesViewset):
     pagination_class = OptionalContentNodePagination
+
+    def retrieve(self, request, pk=None):
+        if pk is None:
+            raise Http404
+        if self._should_proxy_request(request):
+            if self.get_queryset().filter(admin_imported=True, pk=pk).exists():
+                # Used in the update method for remote request retrieval
+                self.locally_admin_imported_ids = set([pk])
+            else:
+                # Used in the update method for remote request retrieval
+                self.locally_admin_imported_ids = set()
+            return self._hande_proxied_request(request)
+        return super(ContentNodeViewset, self).retrieve(request, pk=pk)
+
+    def list(self, request, *args, **kwargs):
+        if self._should_proxy_request(request):
+            queryset, _ = self._get_list_queryset()
+            # Used in the update method for remote request retrieval
+            self.locally_admin_imported_ids = set(
+                queryset.filter(admin_imported=True).values_list("id", flat=True)
+            )
+            return self._hande_proxied_request(request)
+        return super(ContentNodeViewset, self).list(request, *args, **kwargs)
 
     @action(detail=False)
     def random(self, request, **kwargs):
@@ -816,78 +882,6 @@ class ContentNodeViewset(BaseContentNodeMixin, RemoteViewSet):
         return Response(data)
 
     @action(detail=True)
-    def copies(self, request, pk=None):
-        """
-        Returns each nodes that has this content id, along with their ancestors.
-        """
-        # let it be noted that pk is actually the content id in this case
-        cache_key = "contentnode_copies_ancestors_{content_id}".format(content_id=pk)
-
-        if cache.get(cache_key) is not None:
-            return Response(cache.get(cache_key))
-
-        copies = []
-        nodes = models.ContentNode.objects.filter(content_id=pk, available=True)
-        for node in nodes:
-            copies.append(node.get_ancestors(include_self=True).values("id", "title"))
-
-        cache.set(cache_key, copies, 60 * 10)
-        return Response(copies)
-
-    @action(detail=False)
-    def copies_count(self, request, **kwargs):
-        """
-        Returns the number of node copies for each content id.
-        """
-        content_id_string = self.request.query_params.get("content_ids")
-        if content_id_string:
-            content_ids = content_id_string.split(",")
-            counts = (
-                models.ContentNode.objects.filter_by_content_ids(content_ids)
-                .filter(available=True)
-                .values("content_id")
-                .order_by()
-                .annotate(count=Count("content_id"))
-            )
-        else:
-            counts = 0
-        return Response(counts)
-
-    @action(detail=True)
-    def next_content(self, request, **kwargs):
-        # retrieve the "next" content node, according to depth-first tree traversal.
-        # topicOnly flag set to true will find the next topic node after the parent
-        # of this item. Will return this_item parent if nothing found
-        this_item = self.get_object()
-        topic_only = request.query_params.get("topicOnly")
-        next_item_query = models.ContentNode.objects.filter(
-            available=True, tree_id=this_item.tree_id, lft__gt=this_item.rght
-        )
-        if topic_only:
-            next_item_query.filter(kind=content_kinds.TOPIC)
-
-        next_item = next_item_query.order_by("lft").first()
-
-        if not next_item:
-            next_item = this_item.get_root()
-
-        thumbnails = serializers.FileSerializer(
-            next_item.files.filter(thumbnail=True), many=True
-        ).data
-        thumbnail = thumbnails[0]["storage_url"] if thumbnails else None
-        return Response(
-            {
-                "kind": next_item.kind,
-                "id": next_item.id,
-                "title": next_item.title,
-                "thumbnail": thumbnail,
-                "is_leaf": next_item.kind != content_kinds.TOPIC,
-                "learning_activities": _split_text_field(next_item.learning_activities),
-                "duration": next_item.duration,
-            }
-        )
-
-    @action(detail=True)
     def recommendations_for(self, request, **kwargs):
         """
         Recommend items that are similar to this piece of content.
@@ -939,58 +933,90 @@ class TreeQueryMixin(object):
 
         return depth, next__gt
 
+    def _get_gc_by_parent(self, child_ids):
+        # Use this to keep track of how many grand children we have accumulated per child of the parent node
+        gc_by_parent = {}
+        # Iterate through the grand children of the parent node in lft order so we follow the tree traversal order
+        for gc in (
+            self.filter_queryset(self.get_queryset())
+            .filter(parent_id__in=child_ids)
+            .values("id", "parent_id")
+            .order_by("lft")
+        ):
+            # If we have not already added a list of nodes to the gc_by_parent map, initialize it here
+            if gc["parent_id"] not in gc_by_parent:
+                gc_by_parent[gc["parent_id"]] = []
+            gc_by_parent[gc["parent_id"]].append(gc["id"])
+        return gc_by_parent
+
     def get_grandchild_ids(self, child_ids, depth, page_size):
+        grandchild_ids = []
         if depth == 2:
             # Use this to keep track of how many grand children we have accumulated per child of the parent node
-            gc_by_parent = {}
-            # Iterate through the grand children of the parent node in lft order so we follow the tree traversal order
-            for gc in (
-                self.filter_queryset(self.get_queryset())
-                .filter(parent_id__in=child_ids)
-                .values("id", "parent_id")
-                .order_by("lft")
-            ):
-                # If we have not already added a list of nodes to the gc_by_parent map, initialize it here
-                if gc["parent_id"] not in gc_by_parent:
-                    gc_by_parent[gc["parent_id"]] = []
-                # If the number of grand children for a specific child node is less than the page size
-                # then we keep on adding them to both lists
-                # If not, we just skip this node, as we have already hit the page limit for the node that is
-                # its parent.
-                if len(gc_by_parent[gc["parent_id"]]) < page_size:
-                    gc_by_parent[gc["parent_id"]].append(gc["id"])
-                    yield gc["id"]
+            gc_by_parent = self._get_gc_by_parent(child_ids)
+            singletons = []
+            # Now loop through each of the child_ids we passed in
+            # that have any children, check if any of them have only one
+            # child, and also add up to the page size to the list of
+            # grandchild_ids.
+            for child_id in gc_by_parent:
+                gc_ids = gc_by_parent[child_id]
+                if len(gc_ids) == 1:
+                    singletons.append(gc_ids[0])
+                # Only add up to the page size to the list
+                grandchild_ids.extend(gc_ids[:page_size])
+            if singletons:
+                grandchild_ids.extend(
+                    self.get_grandchild_ids(singletons, depth, page_size)
+                )
+        return grandchild_ids
+
+    def get_child_ids(self, parent_id, next__gt):
+        # Get a list of child_ids of the parent node up to the pagination limit
+        child_qs = self.get_queryset().filter(parent_id=parent_id)
+        if next__gt is not None:
+            child_qs = child_qs.filter(lft__gt=next__gt)
+        return child_qs.values_list("id", flat=True).order_by("lft")[0:NUM_CHILDREN]
 
     def get_tree_queryset(self, request, pk):
         # Get the model for the parent node here - we do this so that we trigger a 404 immediately if the node
         # does not exist (or exists but is not available, or is filtered).
-        parent_id = (
-            pk
-            if pk and self.filter_queryset(self.get_queryset()).filter(id=pk).exists()
-            else None
-        )
+        try:
+            parent_id = (
+                pk
+                if pk
+                and self.filter_queryset(self.get_queryset()).filter(id=pk).exists()
+                else None
+            )
+        except ValueError:
+            # If the pk is a badly formed uuid, we will get a ValueError here, so we catch it and set to None
+            # so that it raises a 404 below.
+            parent_id = None
 
         if parent_id is None:
             raise Http404
         depth, next__gt = self.validate_and_return_params(request)
 
-        # Get a list of child_ids of the parent node up to the pagination limit
-        child_qs = self.get_queryset().filter(parent_id=parent_id)
-        if next__gt is not None:
-            child_qs = child_qs.filter(lft__gt=next__gt)
-        child_ids = child_qs.values_list("id", flat=True).order_by("lft")[
-            0:NUM_CHILDREN
-        ]
+        child_ids = self.get_child_ids(parent_id, next__gt)
+
+        ancestor_ids = []
+
+        while next__gt is None and len(child_ids) == 1:
+            ancestor_ids.extend(child_ids)
+            child_ids = self.get_child_ids(child_ids[0], next__gt)
 
         # Get a flat list of ids for grandchildren we will be returning
         gc_ids = self.get_grandchild_ids(child_ids, depth, NUM_GRANDCHILDREN_PER_CHILD)
         return self.filter_queryset(self.get_queryset()).filter(
-            Q(id=parent_id) | Q(id__in=child_ids) | Q(id__in=gc_ids)
+            Q(id=parent_id)
+            | Q(id__in=ancestor_ids)
+            | Q(id__in=child_ids)
+            | Q(id__in=gc_ids)
         )
 
 
 class BaseContentNodeTreeViewset(
-    BaseContentNodeMixin, TreeQueryMixin, BaseValuesViewset
+    InternalContentNodeMixin, TreeQueryMixin, BaseValuesViewset
 ):
     def retrieve(self, request, pk=None):
         """
@@ -1025,19 +1051,19 @@ class BaseContentNodeTreeViewset(
         # The serialized parent representation is the first node in the lft order
         parent = nodes[0]
 
-        # Use this to keep track of direct children of the parent node
-        # this will allow us to do lookups for the grandchildren, in order
+        # Use this to keep track of descendants of the parent node
+        # this will allow us to do lookups for any further descendants, in order
         # to insert them into the "children" property
-        children_by_id = {}
+        descendants_by_id = {}
 
         # Iterate through all the descendants that we have serialized
         for desc in nodes[1:]:
+            # Add them to the descendants_by_id map so that
+            # descendants can reference them later
+            descendants_by_id[desc["id"]] = desc
             # First check to see whether it is a direct child of the
             # parent node that we initially queried
             if desc["parent"] == pk:
-                # If so add them to the children_by_id map so that
-                # grandchildren descendants can reference them later
-                children_by_id[desc["id"]] = desc
                 # The parent of this descendant is the parent node
                 # for this query
                 desc_parent = parent
@@ -1047,11 +1073,11 @@ class BaseContentNodeTreeViewset(
                 # For the parent node the page size is the maximum number of children
                 # we are returning (regardless of whether they have a full representation)
                 page_size = NUM_CHILDREN
-            elif desc["parent"] in children_by_id:
+            elif desc["parent"] in descendants_by_id:
                 # Otherwise, check to see if our descendant's parent is in the
-                # children_by_id map - if it failed the first condition,
+                # descendants_by_id map - if it failed the first condition,
                 # it really should not fail this
-                desc_parent = children_by_id[desc["parent"]]
+                desc_parent = descendants_by_id[desc["parent"]]
                 # When we request more results for pagination, we only want to return
                 # nodes at this level, and not any of its children
                 more_depth = 1
@@ -1090,10 +1116,21 @@ class BaseContentNodeTreeViewset(
 
 @method_decorator(metadata_cache, name="dispatch")
 class ContentNodeTreeViewset(BaseContentNodeTreeViewset, RemoteMixin):
-    def retrieve(self, request, *args, **kwargs):
+    def retrieve(self, request, pk=None):
+        if pk is None:
+            raise Http404
         if self._should_proxy_request(request):
+            try:
+                queryset = self.get_tree_queryset(request, pk)
+                # Used in the update method for remote request retrieval
+                self.locally_admin_imported_ids = set(
+                    queryset.filter(admin_imported=True).values_list("id", flat=True)
+                )
+            except Http404:
+                # Used in the update method for remote request retrieval
+                self.locally_admin_imported_ids = set()
             return self._hande_proxied_request(request)
-        return super(ContentNodeTreeViewset, self).retrieve(request, *args, **kwargs)
+        return super(ContentNodeTreeViewset, self).retrieve(request, pk=pk)
 
 
 # return the result of and-ing a list of queries
@@ -1259,7 +1296,7 @@ class BookmarkFilter(FilterSet):
 
 
 class ContentNodeBookmarksViewset(
-    BaseContentNodeMixin, BaseValuesViewset, ListModelMixin
+    InternalContentNodeMixin, BaseValuesViewset, ListModelMixin
 ):
     permission_classes = (KolibriAuthPermissions,)
     filter_backends = (
@@ -1294,6 +1331,81 @@ class ContentNodeBookmarksViewset(
                     item["bookmark"] = bookmark
                     sorted_items.append(item)
         return sorted_items
+
+
+class ContentRequestViewset(ReadOnlyValuesViewset, CreateModelMixin):
+    serializer_class = serializers.ContentDownloadRequestSerializer
+
+    pagination_class = OptionalPageNumberPagination
+
+    values = (
+        "id",
+        "requested_at",
+        "reason",
+        "contentnode_id",
+        "metadata",
+        "status",
+        "facility",
+        "source_id",
+    )
+
+    def get_queryset(self):
+        return ContentDownloadRequest.objects.filter(
+            source_id=self.request.user.id, reason=ContentRequestReason.UserInitiated
+        )
+
+    def annotate_queryset(self, queryset):
+        return queryset.annotate(
+            has_removal=Exists(
+                ContentRemovalRequest.objects.filter(
+                    source_model=OuterRef("source_model"),
+                    source_id=OuterRef("source_id"),
+                    contentnode_id=OuterRef("contentnode_id"),
+                    requested_at__gte=OuterRef("requested_at"),
+                ).exclude(status=ContentRequestStatus.Failed)
+            )
+        ).filter(has_removal=False)
+
+    def delete(self, request, pk=None):
+        request_id = pk
+
+        if request_id is None:
+            return Response(
+                {"detail": "Request ID is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing_download_request = (
+            self.get_queryset()
+            .filter(
+                id=request_id,
+            )
+            .first()
+        )
+
+        if existing_download_request is None:
+            return Response(
+                {"detail": "No existing download request found"},
+                status=status.HTTP_204_NO_CONTENT,
+            )
+
+        existing_deletion_request = ContentRemovalRequest.objects.filter(
+            contentnode_id=existing_download_request.contentnode_id,
+            reason=existing_download_request.reason,
+            source_id=request.user.id,
+        ).first()
+
+        if existing_deletion_request:
+            if existing_deletion_request.status == ContentRequestStatus.Failed:
+                existing_deletion_request.status = ContentRequestStatus.Pending
+                existing_deletion_request.save()
+        else:
+            content_request = ContentRemovalRequest.build_for_user(request.user)
+            content_request.contentnode_id = existing_download_request.contentnode_id
+            content_request.save()
+
+        automatic_resource_import.enqueue_if_not()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @method_decorator(etag(get_cache_key), name="retrieve")
@@ -1364,7 +1476,10 @@ class UserContentNodeFilter(ContentNodeFilter):
 
     def filter_by_lesson(self, queryset, name, value):
         try:
-            lesson = Lesson.objects.get(pk=value)
+            lesson = Lesson.objects.filter(
+                lesson_assignments__collection__membership__user=self.request.user,
+                is_active=True,
+            ).get(pk=value)
             node_ids = list(map(lambda x: x["contentnode_id"], lesson.resources))
             return queryset.filter(pk__in=node_ids)
         except Lesson.DoesNotExist:
@@ -1482,7 +1597,9 @@ class UserContentNodeFilter(ContentNodeFilter):
         fields = contentnode_filter_fields + ["resume", "lesson"]
 
 
-class UserContentNodeViewset(BaseContentNodeMixin, BaseValuesViewset, ListModelMixin):
+class UserContentNodeViewset(
+    InternalContentNodeMixin, BaseValuesViewset, ListModelMixin
+):
     """
     A content node viewset for filtering on user specific fields.
     """
@@ -1586,6 +1703,7 @@ class FileViewset(viewsets.ReadOnlyModelViewSet):
         return models.File.objects.all()
 
 
+@method_decorator(cache_page(60 * 5), name="dispatch")
 class RemoteChannelViewSet(viewsets.ViewSet):
     permission_classes = (CanManageContent,)
 
@@ -1668,9 +1786,10 @@ class RemoteChannelViewSet(viewsets.ViewSet):
         baseurl = request.GET.get("baseurl", None)
         keyword = request.GET.get("keyword", None)
         language = request.GET.get("language", None)
+        token = request.GET.get("token", None)
         try:
             channels = self._make_channel_endpoint_request(
-                baseurl=baseurl, keyword=keyword, language=language
+                identifier=token, baseurl=baseurl, keyword=keyword, language=language
             )
         except requests.exceptions.ConnectionError:
             return Response(
@@ -1704,22 +1823,9 @@ class RemoteChannelViewSet(viewsets.ViewSet):
             if resp.status_code == 404:
                 raise requests.ConnectionError("Kolibri Studio URL is incorrect!")
             else:
-                return Response({"status": "online"})
+                data = resp.json()
+                data["available"] = True
+                data["status"] = "online"
+                return Response(data)
         except requests.ConnectionError:
-            return Response({"status": "offline"})
-
-    @action(detail=True)
-    def retrieve_list(self, request, pk=None):
-        baseurl = request.GET.get("baseurl", None)
-        keyword = request.GET.get("keyword", None)
-        language = request.GET.get("language", None)
-        try:
-            return Response(
-                self._make_channel_endpoint_request(
-                    identifier=pk, baseurl=baseurl, keyword=keyword, language=language
-                )
-            )
-        except requests.exceptions.ConnectionError:
-            return Response(
-                {"status": "offline"}, status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+            return Response({"status": "offline", "available": False})

@@ -1,47 +1,60 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
 
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
-
     <KPageContainer>
-      <ReportsGroupHeader :enablePrint="true" />
-      <ReportsControls @export="exportCSV" />
-      <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
-        <template #headers>
-          <th>{{ coachString('nameLabel') }}</th>
-          <th>{{ coachString('avgScoreLabel') }}</th>
-          <th>{{ coachString('exercisesCompletedLabel') }}</th>
-          <th>{{ coachString('resourcesViewedLabel') }}</th>
-          <th>{{ coachString('lastActivityLabel') }}</th>
-        </template>
-        <template #tbody>
-          <transition-group tag="tbody" name="list">
-            <tr v-for="tableRow in table" :key="tableRow.id">
-              <td>
-                <KRouterLink
-                  :text="tableRow.name"
-                  :to="classRoute('ReportsLearnerReportPage', { learnerId: tableRow.id })"
-                  icon="person"
-                />
-              </td>
-              <td><Score :value="tableRow.avgScore" /></td>
-              <td>{{ $formatNumber(tableRow.exercises) }}</td>
-              <td>{{ $formatNumber(tableRow.resources) }}</td>
-              <td><ElapsedTime :date="tableRow.lastActivity" /></td>
-            </tr>
-          </transition-group>
-        </template>
-      </CoreTable>
+      <ReportsGroupHeader
+        :activeTabId="ReportsGroupTabs.MEMBERS"
+        :enablePrint="true"
+      />
+      <KTabsPanel
+        :tabsId="REPORTS_GROUP_TABS_ID"
+        :activeTabId="ReportsGroupTabs.MEMBERS"
+      >
+        <ReportsControls @export="exportCSV" />
+        <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
+          <template #headers>
+            <th>{{ coachString('nameLabel') }}</th>
+            <th>{{ coachString('avgScoreLabel') }}</th>
+            <th>{{ coachString('exercisesCompletedLabel') }}</th>
+            <th>{{ coachString('resourcesViewedLabel') }}</th>
+            <th>{{ coachString('lastActivityLabel') }}</th>
+          </template>
+          <template #tbody>
+            <transition-group
+              tag="tbody"
+              name="list"
+            >
+              <tr
+                v-for="tableRow in table"
+                :key="tableRow.id"
+              >
+                <td>
+                  <KRouterLink
+                    :text="tableRow.name"
+                    :to="classRoute('ReportsLearnerReportPage', { learnerId: tableRow.id })"
+                    icon="person"
+                  />
+                </td>
+                <td>
+                  <Score :value="tableRow.avgScore" />
+                </td>
+                <td>{{ $formatNumber(tableRow.exercises) }}</td>
+                <td>{{ $formatNumber(tableRow.resources) }}</td>
+                <td>
+                  <ElapsedTime :date="tableRow.lastActivity" />
+                </td>
+              </tr>
+            </transition-group>
+          </template>
+        </CoreTable>
+      </KTabsPanel>
     </KPageContainer>
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -50,6 +63,8 @@
 
   import sortBy from 'lodash/sortBy';
   import commonCoach from '../common';
+  import { REPORTS_GROUP_TABS_ID, ReportsGroupTabs } from '../../constants/tabsConstants';
+  import CoachAppBarPage from '../CoachAppBarPage';
   import CSVExporter from '../../csv/exporter';
   import * as csvFields from '../../csv/fields';
   import ReportsGroupHeader from './ReportsGroupHeader';
@@ -58,10 +73,17 @@
   export default {
     name: 'ReportsGroupLearnerListPage',
     components: {
+      CoachAppBarPage,
       ReportsGroupHeader,
       ReportsControls,
     },
     mixins: [commonCoach],
+    data() {
+      return {
+        REPORTS_GROUP_TABS_ID,
+        ReportsGroupTabs,
+      };
+    },
     computed: {
       group() {
         return this.groupMap[this.$route.params.groupId];

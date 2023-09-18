@@ -78,7 +78,7 @@
               </template>
             </HeaderTableRow>
             <HeaderTableRow
-              :keyText="$tr('suggestedTimeToCompleteHeader')"
+              :keyText="coreString('suggestedTime')"
             >
               <template #value>
                 {{ currentContentNode.duration || 'Not available' }}
@@ -217,7 +217,7 @@
         return '';
       },
       description() {
-        if (this.content) {
+        if (this.content && this.content.description) {
           const md = new markdownIt('zero', { breaks: true });
           return md.render(this.content.description);
         }
@@ -275,15 +275,13 @@
         context:
           'Notification that can refer to when resources are added to a lesson, for example.',
       },
-      addButtonLabel: 'Add',
+      addButtonLabel: {
+        message: 'Add',
+        context: 'Label for a button to add a resource to lessons.',
+      },
       totalQuestionsHeader: {
         message: 'Total questions',
         context: 'Refers to the total number of questions in a quiz.',
-      },
-      suggestedTimeToCompleteHeader: {
-        message: 'Suggested time',
-        context:
-          'Refers to the recommended time it takes to complete a quiz.\n\nDuration is set by whoever made the quiz originally.',
       },
     },
   };

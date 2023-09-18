@@ -76,6 +76,7 @@
 <script>
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import { computed, inject, onMounted, ref } from 'kolibri.lib.vueCompositionApi';
   import { TaskResource } from 'kolibri.resources';
@@ -94,7 +95,7 @@
       };
     },
     components: { BottomAppBar },
-    mixins: [commonCoreStrings],
+    mixins: [commonCoreStrings, responsiveWindowMixin],
     setup() {
       const changeFacilityService = inject('changeFacilityService');
       const state = inject('state');
@@ -144,60 +145,72 @@
       function pollTask() {
         if (taskId.value === null) {
           // first, try to see if there's already one running
-          TaskResource.fetchCollection().then(allTasks => {
-            const tasks = allTasks.filter(
-              t => t.type === 'kolibri.plugins.user_profile.tasks.mergeuser'
-            );
-            if (tasks.length > 0) {
-              updateMachineContext(tasks[0]);
-            } else {
-              // if not, start a new one or wait for the previous request to finish
-              if (!isTaskRequested) {
-                isTaskRequested = true;
-                const params = {
-                  type: 'kolibri.plugins.user_profile.tasks.mergeuser',
-                  baseurl: state.value.targetFacility.url,
-                  facility: state.value.targetFacility.id,
-                  username: state.value.targetAccount.username,
-                  local_user_id: state.value.userId,
-                  user_id: state.value.targetAccount.id,
-                };
-                if (state.value.targetAccount.password !== '') {
-                  params['password'] = state.value.targetAccount.password;
-                }
-                if (state.value.newSuperAdminId !== '') {
-                  params['new_superuser_id'] = state.value.newSuperAdminId;
-                }
-                if (state.value.targetAccount.AdminUsername !== undefined) {
-                  params['using_admin'] = true;
-                  params['username'] = state.value.targetAccount.AdminUsername;
-                  params['password'] = state.value.targetAccount.AdminPassword;
-                }
+          TaskResource.fetchCollection()
+            .then(allTasks => {
+              const tasks = allTasks.filter(
+                t => t.type === 'kolibri.plugins.user_profile.tasks.mergeuser'
+              );
+              if (tasks.length > 0) {
+                updateMachineContext(tasks[0]);
+              } else {
+                // if not, start a new one or wait for the previous request to finish
+                if (!isTaskRequested) {
+                  isTaskRequested = true;
+                  const params = {
+                    type: 'kolibri.plugins.user_profile.tasks.mergeuser',
+                    baseurl: state.value.targetFacility.url,
+                    facility: state.value.targetFacility.id,
+                    username: state.value.targetAccount.username,
+                    local_user_id: state.value.userId,
+                    facility_name: state.value.targetFacility.name,
+                    user_id: state.value.targetAccount.id,
+                  };
+                  if (state.value.targetAccount.password !== '') {
+                    params['password'] = state.value.targetAccount.password;
+                  }
+                  if (state.value.newSuperAdminId !== '') {
+                    params['new_superuser_id'] = state.value.newSuperAdminId;
+                  }
+                  if (state.value.setAsSuperAdmin !== false) {
+                    params['set_as_super_user'] = true;
+                  }
+                  if (state.value.targetAccount.AdminUsername !== undefined) {
+                    params['using_admin'] = true;
+                    params['username'] = state.value.targetAccount.AdminUsername;
+                    params['password'] = state.value.targetAccount.AdminPassword;
+                  }
 
-                TaskResource.startTask(params)
-                  .then(startedTask => {
-                    updateMachineContext(startedTask);
-                    isTaskRequested = false;
-                  })
-                  .catch(error => {
-                    console.log('-- error starting task', error);
-                    if (error.response.status === 400) {
-                      const message = get(error.response, 'data[0].metadata.message', '');
-                      if (
-                        message === 'USERNAME_ALREADY_EXISTS' ||
-                        message === 'PASSWORD_NOT_SPECIFIED'
-                      ) {
+                  TaskResource.startTask(params)
+                    .then(startedTask => {
+                      updateMachineContext(startedTask);
+                      isTaskRequested = false;
+                    })
+                    .catch(error => {
+                      if (error.response.status === 400) {
+                        const message = get(error.response, 'data[0].metadata.message', '');
+                        if (
+                          message === 'USERNAME_ALREADY_EXISTS' ||
+                          message === 'PASSWORD_NOT_SPECIFIED'
+                        ) {
+                          taskError.value = true;
+                          isPolling = false;
+                        } else {
+                          // if the request is bad, we can't do anything
+                          changeFacilityService.send('TASKERROR');
+                        }
+                      } else if (error.response.status == 410) {
                         taskError.value = true;
                         isPolling = false;
-                      } else {
-                        // if the request is bad, we can't do anything
-                        changeFacilityService.send('TASKERROR');
                       }
-                    }
-                  });
+                    });
+                }
               }
-            }
-          });
+            })
+            .catch(() => {
+              // if the request is bad, we can't do anything
+              taskError.value = true;
+              isPolling = false;
+            });
         } else {
           TaskResource.fetchModel({ id: taskId.value, force: true }).then(startedTask => {
             task.value = startedTask;
@@ -227,6 +240,10 @@
           pk: state.value.targetAccount.id,
           token,
         };
+        // if the user was created in the target facility, we need to gets its id:
+        if (params.pk === undefined) {
+          params.pk = this.task.extra_metadata.remote_user_pk;
+        }
         client({
           url: urls['kolibri:kolibri.plugins.user_profile:loginmergeduser'](),
           method: 'POST',
@@ -240,6 +257,7 @@
         if (taskId.value !== null) {
           TaskResource.clear(taskId.value);
         }
+        taskError.value = false;
         changeFacilityService.send('TASKERROR');
       }
 
@@ -263,7 +281,7 @@
           const targetUsername = get(state, 'value.targetAccount.username', '');
           const currentUsername = get(state, 'value.username', '');
           let errorString = 'failedTaskError';
-          if (get(task, 'value.status', '') !== TaskStatuses.FAILED) {
+          if (task.value !== null && get(task, 'value.status', '') !== TaskStatuses.FAILED) {
             errorString = targetUsername !== currentUsername ? 'userExistsError' : 'userAdminError';
           }
           return this.$tr(errorString, {
@@ -293,25 +311,25 @@
         context: 'Title of this step for the change facility page.',
       },
       success: {
-        message: 'Successfully joined ‘{target_facility}’ learning facility.',
+        message: "Successfully joined '{target_facility}' learning facility.",
         context: 'Status message for a successful task.',
       },
       // eslint-disable-next-line kolibri/vue-no-unused-translations
       userExistsError: {
         message:
-          'User ‘{username}’ already exists in ‘{target_facility}’. Please choose a different username.',
+          "User '{username}' already exists in '{target_facility}'. Please choose a different username.",
         context: 'Error message for a user already existing in the target facility.',
       },
       // eslint-disable-next-line kolibri/vue-no-unused-translations
       userAdminError: {
         message:
-          'User ‘{username}’ already exists in ‘{target_facility}’ is not a learner. Please choose a different username.',
+          "User '{username}' already exists in '{target_facility}' and is not a learner. Please choose a different username.",
         context: 'Error message for a user being other than a learner in the target facility.',
       },
       // eslint-disable-next-line kolibri/vue-no-unused-translations
       failedTaskError: {
         message:
-          'Merging task for ‘{username}’ has failed due to some problem connecting to the ‘{target_facility}’. Please, check your network connection and try again.',
+          "Merging task for '{username}' has failed due to some problem connecting to the '{target_facility}'. Please, check your network connection and try again.",
         context: 'Error message for a connection error when merging the user',
       },
     },

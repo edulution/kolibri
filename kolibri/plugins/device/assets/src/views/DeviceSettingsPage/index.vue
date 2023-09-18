@@ -1,12 +1,20 @@
 <template>
 
-  <AppBarPage :title="pageTitle">
+  <DeviceAppBarPage :title="pageTitle">
 
     <template #subNav>
       <DeviceTopNav />
     </template>
-    <KPageContainer class="device-container">
 
+    <KPageContainer v-if="!isPageLoading" class="device-container">
+      <UiAlert
+        v-if="showDisabledAlert && alertDismissed"
+        type="warning"
+        @dismiss="alertDismissed = false"
+      >
+        {{ disabledAlertText }}
+
+      </UiAlert>
       <section>
         <h1>
           {{ $tr('pageHeader') }}
@@ -60,12 +68,14 @@
         <div class="fieldset">
           <label class="fieldset-label">{{ $tr('landingPageLabel') }}</label>
           <KRadioButton
+            data-test="landingPageButton"
             :label="$tr('learnerAppPageChoice')"
             :value="landingPageChoices.LEARN"
             :currentValue="landingPage"
             @input="handleLandingPageChange"
           />
           <KRadioButton
+            data-test="signInPageButton"
             :label="$tr('signInPageChoice')"
             :value="landingPageChoices.SIGN_IN"
             :currentValue="landingPage"
@@ -73,6 +83,7 @@
           />
           <div class="fieldset" style="margin-left: 32px">
             <KRadioButton
+              data-test="allowGuestAccessButton"
               :label="$tr('allowGuestAccess')"
               :value="SignInPageOptions.ALLOW_GUEST_ACCESS"
               :currentValue="signInPageOption"
@@ -80,6 +91,7 @@
               @input="handleSignInPageChange"
             />
             <KRadioButton
+              data-test="disallowGuestAccessButton"
               :label="$tr('disallowGuestAccess')"
               :value="SignInPageOptions.DISALLOW_GUEST_ACCESS"
               :currentValue="signInPageOption"
@@ -87,6 +99,7 @@
               @input="handleSignInPageChange"
             />
             <KRadioButton
+              data-test="lockedContentButton"
               :label="$tr('lockedContent')"
               :value="SignInPageOptions.LOCKED_CONTENT"
               :currentValue="signInPageOption"
@@ -95,23 +108,173 @@
             />
           </div>
         </div>
+
+        <div v-if="deviceIsAndroid" class="fieldset">
+          <h2>
+            <label>{{ $tr('allowDownloadOnMeteredConnection') }}</label>
+          </h2>
+          <p class="info-description">
+            {{ $tr('DownloadOnMeteredConnectionDescription') }}
+          </p>
+          <KRadioButton
+            :label="$tr('doNotAllowDownload')"
+            :value="meteredConnectionDownloadOptions.DISALLOW_DOWNLOAD_ON_METERED_CONNECTION"
+            :currentValue="meteredConnectionDownloadOption"
+            @input="handleMeteredConnectionDownloadChange"
+          />
+          <KRadioButton
+            :label="$tr('allowDownload')"
+            :value="meteredConnectionDownloadOptions.ALLOW_DOWNLOAD_ON_METERED_CONNECTION"
+            :currentValue="meteredConnectionDownloadOption"
+            @input="handleMeteredConnectionDownloadChange"
+          />
+        </div>
+
+        <div>
+          <h2>
+            {{ $tr('primaryStorage') }}
+          </h2>
+          <p class="info-description">
+            {{ $tr('primaryStorageDescription') }}
+          </p>
+          <p>
+            {{ primaryStorageLocation }}
+            <KButton
+              v-show="(secondaryStorageLocations.length >= 1)"
+              :text="$tr('changeLocation')"
+              :primary="true"
+              appearance="basic-link"
+              :disabled="!multipleWritablePaths || isRemoteContent"
+              :class="{ 'disabled': !multipleWritablePaths }"
+              @click="showChangePrimaryLocationModal = true"
+            />
+          </p>
+          <KButton
+            v-if="browserLocationMatchesServerURL && (secondaryStorageLocations.length === 0)"
+            :text="$tr('addLocation')"
+            :disabled="isRemoteContent"
+            appearance="raised-button"
+            secondary
+            @click="showAddStorageLocationModal = true"
+          />
+        </div>
+
+        <div v-show="browserLocationMatchesServerURL && (secondaryStorageLocations.length > 0)">
+          <h2>
+            {{ $tr('secondaryStorage') }}
+          </h2>
+          <p v-show="multipleReadOnlyPaths" class="info-description">
+            {{ $tr('secondaryStorageDescription') }}
+          </p>
+          <p v-for="path in secondaryStorageLocations" :key="path.index">
+            {{ path }} {{ isWritablePath(path) }}
+          </p>
+          <KButton
+            hasDropdown
+            secondary
+            appearance="raised-button"
+            :disabled="isRemoteContent"
+            :text="coreString('optionsLabel')"
+          >
+            <template #menu>
+              <KDropdownMenu :options="storageLocationOptions" @select="handleSelect($event)" />
+            </template>
+          </KButton>
+        </div>
+
+        <div class="fieldset">
+          <h2>
+            <label>{{ $tr('autoDownload') }}</label>
+          </h2>
+          <KCheckbox
+            :label="$tr('enableAutoDownload')"
+            :checked="enableAutomaticDownload"
+            :description="$tr('enableAutoDownloadDescription')"
+            :disabled="isRemoteContent"
+            @change="handleCheckAutodownload('enableAutomaticDownload', $event)"
+          />
+          <div class="fieldset left-margin">
+            <KCheckbox
+              :label="$tr('allowLearnersDownloadResources')"
+              :checked="allowLearnerDownloadResources"
+              :description="$tr('allowLearnersDownloadDescription')"
+              :disabled="isRemoteContent"
+              @change="handleCheckAutodownload('allowLearnerDownloadResources', $event)"
+            />
+            <KCheckbox
+              :label="$tr('setStorageLimit')"
+              :checked="setLimitForAutodownload"
+              :description="$tr('setStorageLimitDescription')"
+              :disabled="isRemoteContent"
+              @change="handleCheckAutodownload('setLimitForAutodownload', $event)"
+            />
+            <div
+              v-show="setLimitForAutodownload"
+              class="left-margin"
+              :disabled="isRemoteContent"
+            >
+              <KTextbox
+                ref="autoDownloadLimit"
+                v-model="limitForAutodownload"
+                class="download-limit-textbox"
+                :disabled="notEnoughFreeSpace || isRemoteContent"
+                type="number"
+                :label="$tr('sizeInGigabytesLabel')"
+                :min="0"
+                :max="freeSpace"
+                :invalid="notEnoughFreeSpace"
+                :invalidText="$tr('notEnoughFreeSpace')"
+              />
+              <div class="slider-section">
+                <input
+                  id="slider"
+                  v-model="limitForAutodownload"
+                  :class="$computedClass(sliderStyle)"
+                  :disabled="notEnoughFreeSpace || isRemoteContent"
+                  type="range"
+                  min="0"
+                  :max="freeSpace"
+                  step="1"
+                >
+                <div class="slider-constraints">
+                  <p class="slider-min-max">
+                    0
+                  </p>
+                  <p class="slider-min-max">
+                    {{ freeSpace }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fieldset">
+          <h2>
+            {{ $tr('enabledPages') }}
+          </h2>
+          <p class="info-description">
+            {{ deviceString('newEnabledPluginsState') }}
+          </p>
+
+          <KCheckbox
+            v-for="plugin in dataPlugins"
+            :key="plugin.id"
+            :label="plugin.name"
+            :checked="plugin.enabled"
+            :disabled="!canRestart"
+            @change="plugin.enabled = $event"
+          />
+        </div>
       </section>
 
-      <section>
-        <KButton
-          :text="coreString('saveAction')"
-          appearance="raised-button"
-          primary
-          @click="handleClickSave"
-        />
-      </section>
 
       <!-- List of separate links to Facility Settings pages -->
       <section v-if="isMultiFacilitySuperuser">
         <h2>{{ $tr('configureFacilitySettingsHeader') }}</h2>
         <ul class="ul-reset">
-          <template v-for="(facility, idx) in facilities">
-            <li :key="idx">
+          <template>
+            <li v-for="(facility, idx) in facilities" :key="idx">
               <KExternalLink
                 :text="facility.name"
                 :href="getFacilitySettingsPath(facility.id)"
@@ -122,8 +285,59 @@
         </ul>
       </section>
 
+      <section v-if="deviceIsAndroid || isAppContext" class="android-bar">
+        <KButton
+          :text="coreString('saveChangesAction')"
+          appearance="raised-button"
+          primary
+          data-test="saveButtonAndroid"
+          @click="handleClickSave"
+        />
+      </section>
+      <BottomAppBar v-else>
+        <KButtonGroup>
+          <KButton
+            :text="coreString('saveChangesAction')"
+            appearance="raised-button"
+            primary
+            data-test="saveButton"
+            @click="handleClickSave"
+          />
+        </KButtonGroup>
+      </BottomAppBar>
+
+      <PrimaryStorageLocationModal
+        v-if="showChangePrimaryLocationModal"
+        :primaryPath="primaryStorageLocation"
+        :storageLocations="storageLocations.filter(el => el.writable)"
+        @cancel="showChangePrimaryLocationModal = false"
+        @submit="changePrimaryLocation"
+      />
+
+      <AddStorageLocationModal
+        v-if="showAddStorageLocationModal"
+        :paths="storageLocations"
+        @cancel="showAddStorageLocationModal = false"
+        @submit="addStorageLocation"
+      />
+
+      <RemoveStorageLocationModal
+        v-if="showRemoveStorageLocationModal"
+        :storageLocations="secondaryStorageLocations"
+        @cancel="showRemoveStorageLocationModal = false"
+        @submit="removeStorageLocation"
+      />
+
+      <ServerRestartModal
+        v-if="showRestartModal"
+        :path="restartPath"
+        :changedSetting="restartSetting"
+        @cancel="showRestartModal = false"
+        @submit="handleServerRestart"
+      />
+
     </KPageContainer>
-  </AppBarPage>
+  </DeviceAppBarPage>
 
 </template>
 
@@ -133,14 +347,24 @@
   import { mapGetters } from 'vuex';
   import find from 'lodash/find';
   import urls from 'kolibri.urls';
+  import { ref } from 'kolibri.lib.vueCompositionApi';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
   import { availableLanguages, currentLanguage } from 'kolibri.utils.i18n';
   import sortLanguages from 'kolibri.utils.sortLanguages';
-  import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
-  import { LandingPageChoices } from '../../constants';
-  import DeviceTopNav from '../DeviceTopNav';
-  import { deviceString } from '../commonDeviceStrings';
-  import { getDeviceSettings, saveDeviceSettings } from './api';
+  import bytesForHumans from 'kolibri.utils.bytesForHumans';
+  import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
+  import commonDeviceStrings from '../commonDeviceStrings';
+  import DeviceAppBarPage from '../DeviceAppBarPage';
+  import { LandingPageChoices, MeteredConnectionDownloadOptions } from '../../constants';
+  import { getFreeSpaceOnServer } from '../AvailableChannelsPage/api';
+  import useDeviceRestart from '../../composables/useDeviceRestart';
+  import usePlugins from '../../composables/usePlugins';
+  import { getDeviceSettings, getPathsPermissions, saveDeviceSettings, getDeviceURLs } from './api';
+  import PrimaryStorageLocationModal from './PrimaryStorageLocationModal';
+  import AddStorageLocationModal from './AddStorageLocationModal';
+  import RemoveStorageLocationModal from './RemoveStorageLocationModal';
+  import ServerRestartModal from './ServerRestartModal';
 
   const SignInPageOptions = Object.freeze({
     LOCKED_CONTENT: 'LOCKED_CONTENT',
@@ -155,8 +379,47 @@
         title: this.$tr('pageHeader'),
       };
     },
-    components: { AppBarPage, DeviceTopNav },
-    mixins: [commonCoreStrings],
+    components: {
+      DeviceAppBarPage,
+      BottomAppBar,
+      PrimaryStorageLocationModal,
+      AddStorageLocationModal,
+      RemoveStorageLocationModal,
+      ServerRestartModal,
+      UiAlert,
+    },
+    mixins: [commonCoreStrings, commonDeviceStrings],
+    setup() {
+      const { restart } = useDeviceRestart();
+      const { plugins, fetchPlugins, togglePlugin } = usePlugins();
+      const dataPlugins = ref(null);
+
+      fetchPlugins.then(() => {
+        dataPlugins.value = plugins.value.map(plugin => ({ ...plugin }));
+      });
+
+      function checkAndTogglePlugins() {
+        dataPlugins.value.forEach((plugin, index) => {
+          if (plugin.enabled !== plugins.value[index].enabled) {
+            togglePlugin(plugin.id, plugin.enabled);
+          }
+        });
+      }
+
+      function checkPluginChanges() {
+        // returns true if any of the plugins have changed its
+        // enabled state
+        const unchanged = dataPlugins.value.every((plugin, index) => {
+          if (plugin.enabled !== plugins.value[index].enabled) {
+            return false;
+          }
+          return true;
+        });
+        return !unchanged;
+      }
+
+      return { restart, dataPlugins, checkPluginChanges, checkAndTogglePlugins };
+    },
     data() {
       return {
         language: {},
@@ -166,16 +429,38 @@
         landingPageChoices: LandingPageChoices,
         signInPageOption: '',
         SignInPageOptions,
+        extraSettings: {},
+        meteredConnectionDownloadOption: '',
+        meteredConnectionDownloadOptions: MeteredConnectionDownloadOptions,
+        primaryStorageLocation: null,
+        secondaryStorageLocations: [],
+        storageLocations: {},
+        enableAutomaticDownload: null,
+        allowLearnerDownloadResources: null,
+        setLimitForAutodownload: null,
+        limitForAutodownload: '0',
+        freeSpace: 0,
+        deviceUrls: [],
+        showChangePrimaryLocationModal: false,
+        showAddStorageLocationModal: false,
+        showRemoveStorageLocationModal: false,
         browserDefaultOption: {
           value: null,
           label: this.$tr('browserDefaultLanguage'),
         },
+        restartPath: {},
+        restartSetting: null,
+        showRestartModal: false,
+        writablePaths: 0,
+        readOnlyPaths: 0,
+        alertDismissed: true,
       };
     },
     computed: {
-      ...mapGetters(['isAppContext']),
+      ...mapGetters(['isAppContext', 'isPageLoading']),
+      ...mapGetters('deviceInfo', ['getDeviceOS', 'canRestart', 'isRemoteContent']),
       pageTitle() {
-        return deviceString('deviceManagementTitle');
+        return this.deviceString('deviceManagementTitle');
       },
       facilities() {
         return this.$store.getters.facilities;
@@ -184,7 +469,7 @@
         return this.$store.getters.isSuperuser && this.facilities.length > 1;
       },
       languageOptions() {
-        let languages = sortLanguages(Object.values(availableLanguages), currentLanguage).map(
+        const languages = sortLanguages(Object.values(availableLanguages), currentLanguage).map(
           language => {
             return {
               value: language.id,
@@ -199,37 +484,127 @@
       disableSignInPageOptions() {
         return this.landingPage !== LandingPageChoices.SIGN_IN;
       },
+      storageLocationOptions() {
+        return [this.$tr('addStorageLocation'), this.$tr('removeStorageLocation')];
+      },
+      browserLocationMatchesServerURL() {
+        return (
+          window.location.hostname.includes('127.0.0.1') ||
+          window.location.hostname.includes('localhost')
+        );
+      },
+      notEnoughFreeSpace() {
+        return this.freeSpace === 0;
+      },
+      multipleWritablePaths() {
+        Object.values(this.storageLocations).forEach(el => {
+          if (el.writable === true) this.writablePaths += 1;
+        });
+        return this.writablePaths >= 2;
+      },
+      multipleReadOnlyPaths() {
+        Object.values(this.storageLocations).forEach(el => {
+          if (el.writable === false) this.readOnlyPaths += 1;
+        });
+        return this.readOnlyPaths >= 1;
+      },
+      sliderStyle() {
+        if (this.notEnoughFreeSpace) {
+          return {
+            background: `linear-gradient(to right, ${this.$themeTokens.primary} 0%, ${
+              this.$themeTokens.primary
+            }
+            ${((0 - 0) / (100 - 0)) * 100}%, ${this.$themeTokens.fineLine} ${((0 - 0) / (100 - 0)) *
+              100}%, ${this.$themeTokens.fineLine} 100%)`,
+            '::-webkit-slider-thumb': {
+              background: this.$themeTokens.fineLine,
+            },
+          };
+        } else {
+          return {
+            background: `linear-gradient(to right, ${this.$themeTokens.primary} 0%, ${
+              this.$themeTokens.primary
+            }
+            ${((this.limitForAutodownload - 0) / (this.freeSpace - 0)) * 100}%,
+            ${this.$themeTokens.fineLine} ${((this.limitForAutodownload - 0) /
+              (this.freeSpace - 0)) *
+              100}%, ${this.$themeTokens.fineLine} 100%)`,
+            '::-webkit-slider-thumb': {
+              background: this.$themeTokens.primary,
+            },
+          };
+        }
+      },
+      deviceIsAndroid() {
+        if (this.getDeviceOS === undefined) {
+          return true;
+        }
+        return this.getDeviceOS.includes('Android');
+      },
+
+      showDisabledAlert() {
+        return this.isRemoteContent || !this.canRestart;
+      },
+      disabledAlertText() {
+        if (!this.canRestart && this.isRemoteContent) {
+          return this.$tr('alertDisabledOptions');
+        }
+        if (!this.canRestart) {
+          return this.$tr('alertDisabledPlugins');
+        }
+        if (this.isRemoteContent) {
+          return this.$tr('alertDisabledPaths');
+        }
+        return this.$tr('alertDisabledOptions');
+      },
+    },
+    created() {
+      this.setDeviceURLs();
+      this.setFreeSpace();
     },
     beforeMount() {
-      this.getDeviceSettings().then(settings => {
-        const {
-          languageId,
-          landingPage,
-          allowGuestAccess,
-          allowLearnerUnassignedResourceAccess,
-          allowPeerUnlistedChannelImport,
-          allowOtherBrowsersToConnect,
-        } = settings;
+      this.getDeviceSettings()
+        .then(settings => {
+          const {
+            languageId = null,
+            landingPage = '',
+            allowGuestAccess = false,
+            allowLearnerUnassignedResourceAccess = false,
+            allowPeerUnlistedChannelImport = null,
+            allowOtherBrowsersToConnect = null,
+            primaryStorageLocation = null,
+            secondaryStorageLocations = [],
+            extraSettings = {},
+          } = settings;
+          const match = find(this.languageOptions, { value: languageId });
+          if (match) {
+            this.language = { ...match };
+          } else {
+            this.language = this.browserDefaultOption;
+          }
 
-        const match = find(this.languageOptions, { value: languageId });
-        if (match) {
-          this.language = { ...match };
-        } else {
-          this.language = this.browserDefaultOption;
-        }
+          if (settings.landingPage === LandingPageChoices.SIGN_IN) {
+            this.setSignInPageOption(settings);
+          }
 
-        if (settings.landingPage === LandingPageChoices.SIGN_IN) {
-          this.setSignInPageOption(settings);
-        }
+          this.setExtraSettings(extraSettings);
 
-        Object.assign(this, {
-          landingPage,
-          allowGuestAccess,
-          allowLearnerUnassignedResourceAccess,
-          allowPeerUnlistedChannelImport,
-          allowOtherBrowsersToConnect,
-        });
-      });
+          Object.assign(this, {
+            landingPage,
+            allowGuestAccess,
+            allowLearnerUnassignedResourceAccess,
+            allowPeerUnlistedChannelImport,
+            allowOtherBrowsersToConnect,
+            primaryStorageLocation,
+            secondaryStorageLocations,
+            extraSettings,
+          });
+          this.storageLocations = getPathsPermissions([
+            ...this.secondaryStorageLocations,
+            this.primaryStorageLocation,
+          ]);
+        })
+        .then(() => this.$store.dispatch('notLoading'));
     },
     methods: {
       setSignInPageOption(settings) {
@@ -240,6 +615,28 @@
         } else if (settings.allowGuestAccess === false) {
           this.signInPageOption = SignInPageOptions.DISALLOW_GUEST_ACCESS;
         }
+      },
+      setExtraSettings(extraSettings) {
+        // Destructuring the object
+        const {
+          allow_download_on_metered_connection = false,
+          allow_learner_download_resources = false,
+          enable_automatic_download = true,
+          limit_for_autodownload = 0,
+          set_limit_for_autodownload = false,
+        } = extraSettings;
+
+        if (allow_download_on_metered_connection === false) {
+          this.meteredConnectionDownloadOption =
+            MeteredConnectionDownloadOptions.DISALLOW_DOWNLOAD_ON_METERED_CONNECTION;
+        } else {
+          this.meteredConnectionDownloadOption =
+            MeteredConnectionDownloadOptions.ALLOW_DOWNLOAD_ON_METERED_CONNECTION;
+        }
+        this.allowLearnerDownloadResources = allow_learner_download_resources;
+        this.enableAutomaticDownload = enable_automatic_download;
+        this.limitForAutodownload = limit_for_autodownload.toString();
+        this.setLimitForAutodownload = set_limit_for_autodownload;
       },
       getContentSettings() {
         // This is the inverse of 'setSignInPageOption'
@@ -264,6 +661,37 @@
           };
         }
       },
+      getExtraSettings() {
+        const newExtraSettings = {
+          allow_download_on_metered_connection:
+            this.meteredConnectionDownloadOption ===
+            MeteredConnectionDownloadOptions.DISALLOW_DOWNLOAD_ON_METERED_CONNECTION
+              ? false
+              : true,
+          allow_learner_download_resources:
+            this.enableAutomaticDownload === false ? false : this.allowLearnerDownloadResources,
+          enable_automatic_download: this.enableAutomaticDownload,
+          limit_for_autodownload:
+            this.notEnoughFreeSpace || this.setLimitForAutodownload === false
+              ? 0
+              : parseInt(this.limitForAutodownload),
+          set_limit_for_autodownload:
+            this.enableAutomaticDownload === false || this.notEnoughFreeSpace
+              ? false
+              : this.setLimitForAutodownload,
+        };
+        Object.assign(this.extraSettings, newExtraSettings);
+      },
+      setDeviceURLs() {
+        return getDeviceURLs().then(({ deviceUrls }) => {
+          this.deviceUrls = deviceUrls;
+        });
+      },
+      setFreeSpace() {
+        return getFreeSpaceOnServer().then(({ freeSpace }) => {
+          this.freeSpace = parseInt(bytesForHumans(freeSpace).substring(0, 3));
+        });
+      },
       handleLandingPageChange(option) {
         this.landingPage = option;
         if (option === LandingPageChoices.LEARN) {
@@ -275,6 +703,9 @@
       handleSignInPageChange(option) {
         this.signInPageOption = option;
       },
+      handleMeteredConnectionDownloadChange(option) {
+        this.meteredConnectionDownloadOption = option;
+      },
       getFacilitySettingsPath(facilityId = '') {
         const getUrl = urls['kolibri:kolibri.plugins.facility:facility_management'];
         if (getUrl) {
@@ -285,11 +716,45 @@
         }
         return '';
       },
+      handleCheckAutodownload(option, value) {
+        switch (option) {
+          case 'enableAutomaticDownload':
+            this.enableAutomaticDownload = value;
+            if (!value) {
+              this.allowLearnerDownloadResources = false;
+              this.setLimitForAutodownload = false;
+            }
+            break;
+          case 'allowLearnerDownloadResources':
+            this.allowLearnerDownloadResources = value;
+            break;
+          case 'setLimitForAutodownload':
+            this.setLimitForAutodownload = value;
+            break;
+        }
+        this.enableAutomaticDownload =
+          this.enableAutomaticDownload ||
+          this.allowLearnerDownloadResources ||
+          this.setLimitForAutodownload;
+      },
       handleClickSave() {
+        const restartPlugins = this.checkPluginChanges();
+        if (restartPlugins) {
+          this.restartSetting = 'plugin';
+          this.showRestartModal = true;
+        } else {
+          this.restartSetting = null;
+          this.handleSave();
+        }
+      },
+      handleSave() {
         const {
           allowGuestAccess,
           allowLearnerUnassignedResourceAccess,
         } = this.getContentSettings();
+        this.getExtraSettings();
+
+        this.checkAndTogglePlugins();
 
         this.saveDeviceSettings({
           languageId: this.language.value,
@@ -298,9 +763,17 @@
           allowLearnerUnassignedResourceAccess,
           allowPeerUnlistedChannelImport: this.allowPeerUnlistedChannelImport,
           allowOtherBrowsersToConnect: this.allowOtherBrowsersToConnect,
+          extraSettings: this.extraSettings,
+          secondaryStorageLocations: this.secondaryStorageLocations,
+          primaryStorageLocation: this.primaryStorageLocation,
         })
           .then(() => {
             this.$store.dispatch('createSnackbar', this.$tr('saveSuccessNotification'));
+            this.showRestartModal = false;
+            if (this.restartSetting !== null) {
+              this.restart();
+              this.restartSetting = null;
+            }
           })
           .catch(() => {
             this.$store.dispatch('createSnackbar', this.$tr('saveFailureNotification'));
@@ -308,6 +781,90 @@
       },
       getDeviceSettings,
       saveDeviceSettings,
+      handleSelect(selectedOption) {
+        if (selectedOption === this.$tr('addStorageLocation')) {
+          this.showAddStorageLocationModal = true;
+          this.showRemoveStorageLocationModal = false;
+        } else if (selectedOption === this.$tr('removeStorageLocation')) {
+          this.showRemoveStorageLocationModal = true;
+          this.showAddStorageLocationModal = false;
+        }
+      },
+      changePrimaryLocation(path) {
+        const writable = true;
+        this.restartPath = {
+          path,
+          writable,
+        };
+        this.restartSetting = 'primary';
+        this.showRestartModal = true;
+        this.showChangePrimaryLocationModal = false;
+      },
+      addStorageLocation(path, writable) {
+        this.restartPath = {
+          path,
+          writable,
+        };
+
+        this.restartSetting = 'add';
+        this.showRestartModal = true;
+        this.showAddStorageLocationModal = false;
+      },
+      removeStorageLocation(path, writable) {
+        this.restartPath = {
+          path,
+          writable,
+        };
+
+        this.restartSetting = 'remove';
+        this.showRestartModal = true;
+        this.showRemoveStorageLocationModal = false;
+      },
+      handleServerRestart(confirmationChecked) {
+        this.showRestartModal = false;
+        switch (this.restartSetting) {
+          case 'plugin':
+            this.handleSave();
+            break;
+          case 'primary':
+            this.secondaryStorageLocations.push(this.primaryStorageLocation);
+            this.secondaryStorageLocations = this.secondaryStorageLocations.filter(
+              el => el !== this.restartPath.path
+            );
+            this.primaryStorageLocation = this.restartPath.path;
+            this.handleSave();
+            break;
+          case 'add':
+            this.storageLocations.push(this.restartPath);
+            if (confirmationChecked === true) {
+              this.secondaryStorageLocations.push(this.primaryStorageLocation);
+              this.secondaryStorageLocations = this.secondaryStorageLocations.filter(
+                el => el !== this.restartPath.path
+              );
+              this.primaryStorageLocation = this.restartPath.path;
+            } else {
+              this.secondaryStorageLocations.push(this.restartPath.path);
+            }
+            this.handleSave();
+            break;
+          case 'remove':
+            this.storageLocations = this.storageLocations.filter(
+              el => el.path !== this.restartPath.path
+            );
+            this.secondaryStorageLocations = this.secondaryStorageLocations.filter(
+              el => el !== this.restartPath.path
+            );
+            this.handleSave();
+            break;
+        }
+      },
+      isWritablePath(path) {
+        const found = this.storageLocations.find(el => el.path === path);
+        if (found !== undefined && !found.writable) {
+          return this.$tr('readOnly');
+        }
+        return '';
+      },
     },
     $trs: {
       browserDefaultLanguage: {
@@ -366,7 +923,7 @@
         context: 'This refers to the page you reach when you click "Learn" in the main side nav.',
       },
       unlistedChannels: {
-        message: 'Allow other computers on this network to import my unlisted channels',
+        message: 'Allow other devices on this network to view and import my unlisted channels',
         context: "Option on 'Device settings' page.",
       },
       configureFacilitySettingsHeader: {
@@ -389,6 +946,121 @@
       externalDeviceSettings: {
         message: 'External devices',
         context: 'Label for device settings controlling how Kolibri interacts with other devices.',
+      },
+      allowDownloadOnMeteredConnection: {
+        message: 'Download on mobile connection',
+        context:
+          'Label for device setting that allows user to determine whether or not to download data on mobile connections',
+      },
+      DownloadOnMeteredConnectionDescription: {
+        message:
+          'If users on this device are using Kolibri with a limited data plan, they may have to pay extra charges on a mobile connection.',
+        context:
+          'Warns the user of potential extra charges if using Kolibri with a limited data plan.',
+      },
+      doNotAllowDownload: {
+        message: 'Do not allow download on a mobile connection',
+        context: 'Option to not allow downloads on mobile connections.',
+      },
+      allowDownload: {
+        message: 'Allow download on a mobile connection',
+        context: 'Option to allow downloads on mobile connections.',
+      },
+      primaryStorage: {
+        message: 'Primary storage location',
+        context: 'Option to allow downloads on mobile connections.',
+      },
+      primaryStorageDescription: {
+        message:
+          'Kolibri channels are stored here. Newly downloaded resources will be added to this location.',
+        context: 'Informs user of storage location for Kolibri channels and new resources',
+      },
+      secondaryStorage: {
+        message: 'Other storage locations',
+        context: 'Secondary storage paths for users to store downloaded resources',
+      },
+      secondaryStorageDescription: {
+        message:
+          'Kolibri will display channels stored in these locations. Read-only locations cannot be the primary storage location.',
+        context: 'Informs user of limits for read-only locations',
+      },
+      autoDownload: {
+        message: 'Auto-download',
+        context: 'Label for Auto-download section',
+      },
+      enableAutoDownload: {
+        message: 'Enable auto-download',
+        context: "Option on 'Device settings' page.",
+      },
+      enableAutoDownloadDescription: {
+        message:
+          "Kolibri will automatically download assigned lessons, quizzes, and other resources on the 'My downloads' list.",
+        context: 'Enable auto download description.',
+      },
+      allowLearnersDownloadResources: {
+        message: 'Allow learners to download resources',
+        context: "Option on 'Device settings' page.",
+      },
+      allowLearnersDownloadDescription: {
+        message:
+          "Allow users to explore resources they don't have, and mark them for Kolibri to automatically download when available in their network.",
+        context:
+          "Description for 'Allow learners to download resources' option under 'Auto-download' section.",
+      },
+      setStorageLimit: {
+        message: 'Set storage limit for auto-download and learner-initiated downloads',
+        context: "Option on 'Device settings' page.",
+      },
+      sizeInGigabytesLabel: {
+        message: 'GB',
+        context:
+          'Indicates the gigabyte unit of digital information when referring to the storage space available on a device.\n\nSee https://en.wikipedia.org/wiki/Gigabyte',
+      },
+      setStorageLimitDescription: {
+        message:
+          'Kolibri will not auto-download more than a set amount of remaining storage on the device',
+        context: "Description for 'Set storage limit' option under 'Auto-download' section.",
+      },
+      addStorageLocation: {
+        message: 'Add storage location',
+        context: 'Menu option for storage paths',
+      },
+      removeStorageLocation: {
+        message: 'Remove storage location',
+        context: 'Menu option for storage paths',
+      },
+      addLocation: {
+        message: 'Add location',
+        context: 'Label for a button used to add storage location',
+      },
+      changeLocation: {
+        message: 'Change',
+        context: 'Label to change primary storage location',
+      },
+      notEnoughFreeSpace: {
+        message: 'No available storage',
+        context: 'Error text that is provided if there is not enough free storage on device',
+      },
+      readOnly: {
+        message: '(read-only)',
+        context: 'Label for read-only storage locations',
+      },
+      enabledPages: {
+        message: 'Enabled pages',
+        context: 'Label for enabled pages section',
+      },
+      alertDisabledOptions: {
+        message: 'Some configuration options are disabled due to the way Kolibri has been set up.',
+        context: 'Alert text that is provided if some options are disabled',
+      },
+      alertDisabledPaths: {
+        message: 'This Kolibri is not set up to manage its own resource files locally.',
+        context: 'Alert text that is provided if some storage locations are disabled',
+      },
+      alertDisabledPlugins: {
+        message:
+          'This Kolibri is not able to initiate a restart from the user interface - management of the enabled pages will have to happen from the command line, and Kolibri will have to be restarted manually.',
+        context: 'Alert text that is provided if some plugins are disabled',
       },
     },
   };
@@ -433,6 +1105,69 @@
     font-size: 15px;
     // to match label in KSelect
     color: rgba(0, 0, 0, 0.54);
+  }
+
+  .left-margin {
+    margin-left: 32px;
+  }
+
+  .info-description {
+    color: #616161;
+  }
+
+  input[type='range'] {
+    width: 264px;
+    height: 2px;
+    margin-left: 10px;
+    appearance: none;
+    outline: none;
+  }
+
+  input[type='range']::-webkit-slider-thumb {
+    width: 12px;
+    height: 12px;
+    appearance: none;
+    cursor: pointer;
+    border-radius: 10px;
+  }
+
+  .download-limit-textbox {
+    display: inline-block;
+    width: 70px;
+  }
+
+  .slider-section {
+    position: absolute;
+    display: inline-block;
+    padding-top: 10px;
+  }
+
+  .slider-constraints {
+    display: flex;
+    justify-content: space-between;
+    margin-left: 10px;
+  }
+
+  .slider-min-max {
+    display: inline-block;
+    margin-top: 5px;
+    font-size: 14px;
+    font-weight: 400;
+    color: #686868;
+  }
+
+  .disabled {
+    color: #e0e0e0 !important;
+    pointer-events: none;
+  }
+
+  .android-bar {
+    padding-top: 10px;
+    border-top: 1px solid rgb(222, 222, 222);
+  }
+
+  /deep/ .ui-alert--type-warning .ui-alert__body {
+    background-color: rgba(255, 253, 231, 1) !important;
   }
 
 </style>

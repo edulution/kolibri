@@ -2,6 +2,9 @@ import logging
 import os
 from logging.handlers import TimedRotatingFileHandler
 
+from colorlog import ColoredFormatter
+from colorlog import TTYColoredFormatter as BaseTTYColoredFormatter
+
 
 GET_FILES_TO_DELETE = "getFilesToDelete"
 DO_ROLLOVER = "doRollover"
@@ -165,6 +168,24 @@ class NoExceptionsFilter(logging.Filter):
         return record.levelno < logging.ERROR
 
 
+class TTYColoredFormatter(BaseTTYColoredFormatter):
+    """
+    A logging formatter that can be used to colorize output to a TTY.
+    Subclassed from the base TTY formatter to allow slightly more more permissive
+    color formatting when we are running using the NPM concurrently package,
+    which does not register as a TTY context.
+    """
+
+    def color(self, log_colors, level_name):
+        """
+        Only returns colors if STDOUT is a TTY, or if we are running in a
+        NPM concurrently context.
+        """
+        if not self.stream.isatty() and "FORCE_COLOR" not in os.environ:
+            log_colors = {}
+        return ColoredFormatter.color(self, log_colors, level_name)
+
+
 def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
     """
     A minimal logging config for just kolibri without any Django
@@ -197,7 +218,7 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
             },
             "simple_date": {"format": "%(levelname)s %(asctime)s %(name)s %(message)s"},
             "color": {
-                "()": "colorlog.ColoredFormatter",
+                "()": "kolibri.utils.logger.TTYColoredFormatter",
                 "format": "%(log_color)s%(levelname)-8s %(asctime)s %(message)s",
                 "log_colors": LOG_COLORS,
             },
@@ -240,11 +261,6 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
                 "handlers": DEFAULT_HANDLERS,
                 "level": DEFAULT_LEVEL,
             },
-            "kolibri": {
-                "handlers": DEFAULT_HANDLERS,
-                "level": DEFAULT_LEVEL,
-                "propagate": False,
-            },
             "cherrypy.access": {
                 "handlers": [] if DISABLE_REQUEST_LOGGING else DEFAULT_HANDLERS,
                 "level": DEFAULT_LEVEL,
@@ -254,35 +270,14 @@ def get_default_logging_config(LOG_ROOT, debug=False, debug_database=False):
             # We should introduce custom debug log levels or log
             # targets, i.e. --debug-level=high
             "kolibri.core.tasks.worker": {
-                "handlers": DEFAULT_HANDLERS,
                 "level": "INFO",
-                "propagate": False,
-            },
-            "morango": {
-                "handlers": DEFAULT_HANDLERS,
-                "level": DEFAULT_LEVEL,
-                "propagate": False,
-            },
-            "django": {
-                "handlers": DEFAULT_HANDLERS,
-                "level": DEFAULT_LEVEL,
-                "propagate": False,
             },
             "django.db.backends": {
-                "handlers": DEFAULT_HANDLERS,
                 "level": DATABASE_LEVEL,
-                "propagate": False,
-            },
-            "django.request": {
-                "handlers": DEFAULT_HANDLERS,
-                "level": DEFAULT_LEVEL,
-                "propagate": False,
             },
             "django.template": {
-                "handlers": DEFAULT_HANDLERS,
                 # Django template debug is very noisy, only log INFO and above.
                 "level": "INFO",
-                "propagate": False,
             },
         },
     }
@@ -297,7 +292,8 @@ def get_base_logging_config(LOG_ROOT, debug=False, debug_database=False):
     config = get_default_logging_config(
         LOG_ROOT, debug=debug, debug_database=debug_database
     )
-    config["filters"]["require_debug_true"] = {"()": get_require_debug_true(debug)}
+    filters = config.setdefault("filters", {})
+    filters["require_debug_true"] = {"()": get_require_debug_true(debug)}
 
     return config
 
@@ -312,10 +308,11 @@ def get_logging_config(LOG_ROOT, debug=False, debug_database=False):
         LOG_ROOT, debug=debug, debug_database=debug_database
     )
 
-    config["filters"]["require_debug_false"] = {
-        "()": "django.utils.log.RequireDebugFalse"
-    }
-    config["handlers"].update(
+    filters = config.setdefault("filters", {})
+    filters["require_debug_false"] = {"()": "django.utils.log.RequireDebugFalse"}
+
+    handlers = config.setdefault("handlers", {})
+    handlers.update(
         {
             "mail_admins": {
                 "level": "ERROR",
@@ -325,7 +322,9 @@ def get_logging_config(LOG_ROOT, debug=False, debug_database=False):
         }
     )
     # Add the mail_admins handler
-    config["loggers"]["kolibri"]["handlers"].append("mail_admins")
-    config["loggers"]["django"]["handlers"].append("mail_admins")
-    config["loggers"]["django.request"]["handlers"].append("mail_admins")
+    loggers = config.setdefault("loggers", {})
+    for name in ("kolibri", "django", "django.request"):
+        admin_logger = loggers.setdefault(name, {})
+        admin_logger_handlers = admin_logger.setdefault("handlers", [])
+        admin_logger_handlers.append("mail_admins")
     return config

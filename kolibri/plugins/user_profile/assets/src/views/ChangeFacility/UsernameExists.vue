@@ -1,7 +1,7 @@
 <template>
 
   <div>
-    <h1>{{ $tr('documentTitle') }}</h1>
+    <h1>{{ coreString('changeLearningFacility') }}</h1>
     <p data-test="line1">
       {{ mergeAccountInfoLine1 }}
     </p>
@@ -13,14 +13,15 @@
         <KButtonGroup>
           <KButton
             :primary="false"
-            :text="$tr('createAccount')"
+            :text="profileString('createAccount')"
+            :disabled="isCreateAccountButtonDisabled"
             appearance="flat-button"
             data-test="createButton"
             @click="to_create"
           />
           <KButton
             :primary="true"
-            :text="$tr('mergeAccounts')"
+            :text="profileString('mergeAccounts')"
             data-test="mergeButton"
             @click="to_merge"
           />
@@ -39,17 +40,18 @@
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import { computed, inject } from 'kolibri.lib.vueCompositionApi';
   import get from 'lodash/get';
+  import commonProfileStrings from '../commonProfileStrings';
 
   export default {
     name: 'UsernameExists',
     metaInfo() {
       return {
-        title: this.$tr('documentTitle'),
+        title: this.profileString('mergeAccounts'),
       };
     },
     components: { BottomAppBar },
 
-    mixins: [commonCoreStrings],
+    mixins: [commonCoreStrings, commonProfileStrings],
     setup() {
       const changeFacilityService = inject('changeFacilityService');
       const state = inject('state');
@@ -71,6 +73,12 @@
         },
       });
 
+      const isCreateAccountButtonDisabled = computed({
+        get() {
+          return !get(state, 'value.targetFacility.learner_can_sign_up', true);
+        },
+      });
+
       function to_create() {
         changeFacilityService.send({
           type: 'NEW',
@@ -83,31 +91,25 @@
         });
       }
 
-      return { mergeAccountInfoLine1, mergeAccountInfoLine2, to_create, to_merge };
+      return {
+        isCreateAccountButtonDisabled,
+        mergeAccountInfoLine1,
+        mergeAccountInfoLine2,
+        to_create,
+        to_merge,
+      };
     },
 
     $trs: {
-      documentTitle: {
-        message: 'Change Facility',
-        context: 'Title of this step for the change facility page.',
-      },
-      mergeAccounts: {
-        message: 'Merge Accounts',
-        context: 'Button for the merge accounts between facilities.',
-      },
-      createAccount: {
-        message: 'Create new account',
-        context: 'Button for the create new account in the new facility.',
-      },
       changeFacilityInfoLine1: {
         message:
-          'An account with the username ‘{username}’ already exists in the ‘{target_facility}’ learning facility.',
+          "An account with the username '{username}' already exists in the '{target_facility}' learning facility. You can merge your account and its progress data with this account.",
         context:
           'First line of text explaining that the username also exists in the target facility.',
       },
       changeFacilityInfoLine2: {
         message:
-          'You can merge all of your account and progress data with this account in ‘{target_facility}’ learning facility, or you can create a new account. All of your progress data will be moved to this new account.',
+          'Alternatively, you can create a new account and all your progress data will be moved to this new account.',
         context:
           'Second line of text explaining that the username also exists in the target facility.',
       },

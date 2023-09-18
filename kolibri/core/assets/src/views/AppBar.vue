@@ -1,12 +1,16 @@
 <template>
 
-  <div v-show="!$isPrint" :style="{ backgroundColor: $themeTokens.appBar }">
+  <div
+    v-show="!$isPrint"
+    :style="{ backgroundColor: $themeTokens.appBar }"
+  >
 
     <header>
       <SkipNavigationLink />
 
       <UiToolbar
         :title="title"
+        :removeNavIcon="isAppContext && !windowIsLarge"
         type="clear"
         textColor="white"
         class="app-bar"
@@ -14,7 +18,10 @@
         :raised="false"
         :removeBrandDivider="true"
       >
-        <template #icon>
+        <template
+          v-if="windowIsLarge || !isAppContext"
+          #icon
+        >
           <KIconButton
             icon="menu"
             :color="$themeTokens.textInverted"
@@ -29,16 +36,24 @@
             :src="themeConfig.appBar.topLogo.src"
             :alt="themeConfig.appBar.topLogo.alt"
             :style="themeConfig.appBar.topLogo.style"
-            class="brand-logo"
+            :class="isAppContext ? 'brand-logo-left' : 'brand-logo'"
           >
         </template>
 
-        <template v-if="windowIsLarge" #navigation>
+        <template
+          v-if="windowIsLarge"
+          #navigation
+        >
           <slot name="sub-nav"></slot>
         </template>
 
         <template #actions>
-          <div aria-live="polite">
+          <div
+            aria-live="polite"
+            :style="{
+              paddingBottom: '6px',
+            }"
+          >
             <slot name="app-bar-actions"></slot>
             <span v-if="isLearner">
               <KIconButton
@@ -46,6 +61,9 @@
                 icon="pointsActive"
                 :ariaLabel="$tr('pointsAriaLabel')"
               />
+              <div v-if="!windowIsSmall" class="points-description">
+                {{ $formatNumber(totalPoints) }}
+              </div>
               <div
                 v-if="pointsDisplayed"
                 class="points-popover"
@@ -58,7 +76,10 @@
                 {{ $tr('pointsMessage', { points: totalPoints }) }}
               </div>
             </span>
-            <span v-if="isUserLoggedIn" tabindex="-1">
+            <span
+              v-if="isUserLoggedIn"
+              tabindex="-1"
+            >
               <KIcon
                 icon="person"
                 :style="{
@@ -78,7 +99,14 @@
         </template>
       </UiToolbar>
     </header>
-    <div v-if="!windowIsLarge" class="subpage-nav">
+    <!-- IF making changes to the sub nav, make sure to make -->
+    <!-- corresponding changes in SideNav.vue in regards to  -->
+    <!-- Window size and app context. Changes may need to be made -->
+    <!-- in parallel in both files for non-breaking updates -->
+    <div
+      v-if="!windowIsLarge && !isAppContext"
+      class="subpage-nav"
+    >
       <slot name="sub-nav"></slot>
     </div>
   </div>
@@ -88,16 +116,14 @@
 
 <script>
 
-  import { mapGetters, mapState, mapActions } from 'vuex';
+  import { mapActions, mapGetters, mapState } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import UiToolbar from 'kolibri.coreVue.components.UiToolbar';
   import KIconButton from 'kolibri-design-system/lib/buttons-and-links/KIconButton';
-  import { SyncStatus } from 'kolibri.coreVue.vuex.constants';
   import themeConfig from 'kolibri.themeConfig';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
   import navComponentsMixin from '../mixins/nav-components';
   import SkipNavigationLink from './SkipNavigationLink';
-  import plugin_data from 'plugin_data';
 
   const hashedValuePattern = /^[a-f0-9]{30}$/;
 
@@ -108,9 +134,10 @@
       KIconButton,
       SkipNavigationLink,
     },
-    mixins: [commonCoreStrings, navComponentsMixin, responsiveWindowMixin],
+    mixins: [commonCoreStrings, navComponentsMixin],
     setup() {
-      return { themeConfig };
+      const { windowIsLarge, windowIsSmall } = useKResponsiveWindow();
+      return { themeConfig, windowIsLarge, windowIsSmall };
     },
     props: {
       title: {
@@ -121,19 +148,13 @@
     data() {
       return {
         pointsDisplayed: false,
-        userSyncStatus: null,
-        isPolling: false,
-        // poll every 10 seconds
-        pollingInterval: 10000,
-        isSubsetOfUsersDevice: plugin_data['isSubsetOfUsersDevice'],
       };
     },
     computed: {
-      ...mapGetters(['isUserLoggedIn', 'totalPoints', 'isLearner']),
+      ...mapGetters(['isUserLoggedIn', 'totalPoints', 'isLearner', 'isAppContext']),
       ...mapState({
         username: state => state.core.session.username,
         fullName: state => state.core.session.full_name,
-        userId: state => state.core.session.user_id,
       }),
       // temp hack for the VF plugin
       usernameForDisplay() {
@@ -141,29 +162,18 @@
       },
     },
     created() {
+      if (this.isLearner) {
+        this.fetchPoints();
+      }
       window.addEventListener('click', this.handleWindowClick);
       window.addEventListener('keydown', this.handlePopoverByKeyboard, true);
     },
     beforeDestroy() {
       window.removeEventListener('click', this.handleWindowClick);
       window.removeEventListener('keydown', this.handlePopoverByKeyboard, true);
-      this.isPolling = false;
     },
     methods: {
-      ...mapActions(['fetchUserSyncStatus']),
-      pollUserSyncStatusTask() {
-        this.fetchUserSyncStatus({ user: this.userId }).then(syncData => {
-          if (syncData && syncData[0]) {
-            this.userSyncStatus = syncData[0];
-            this.setPollingInterval(this.userSyncStatus.status);
-          }
-        });
-        if (this.isPolling && this.isSubsetOfUsersDevice) {
-          setTimeout(() => {
-            this.pollUserSyncStatusTask();
-          }, this.pollingInterval);
-        }
-      },
+      ...mapActions(['fetchPoints']),
       handleWindowClick(event) {
         if (this.$refs.pointsButton && this.$refs.pointsButton.$el) {
           if (!this.$refs.pointsButton.$el.contains(event.target) && this.pointsDisplayed) {
@@ -181,15 +191,6 @@
       handlePopoverByKeyboard(event) {
         if ((event.key == 'Tab' || event.key == 'Escape') && this.pointsDisplayed) {
           this.pointsDisplayed = false;
-        }
-      },
-      setPollingInterval(status) {
-        if (status === SyncStatus.QUEUED) {
-          // check more frequently for updates if the user is waiting to sync,
-          // so that the sync isn't missed
-          this.pollingInterval = 1000;
-        } else {
-          this.pollingInterval = 10000;
         }
       },
     },
@@ -299,6 +300,7 @@
   /deep/ .ui-toolbar__left {
     display: flex;
     align-items: center;
+    margin-left: 8px;
   }
 
   .brand-logo {
@@ -306,6 +308,10 @@
     max-height: 48px;
     margin-right: 8px;
     vertical-align: middle;
+  }
+
+  .brand-logo-left {
+    margin-left: -16px !important;
   }
 
   // Hide the UiButton focus ring
@@ -321,6 +327,12 @@
     z-index: 24;
     font-size: 12px;
     border-radius: 8px;
+  }
+
+  .points-description {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 14px;
   }
 
 </style>

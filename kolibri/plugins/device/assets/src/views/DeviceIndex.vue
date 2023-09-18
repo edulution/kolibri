@@ -9,6 +9,14 @@
     </template>
 
     <transition name="delay-entry">
+      <PinAuthenticationModal
+        v-if="showModal && authenticateWithPin"
+        @submit="submit"
+        @cancel="closePinModal"
+      />
+    </transition>
+
+    <transition name="delay-entry">
       <PostSetupModalGroup
         v-if="welcomeModalVisible"
         @cancel="hideWelcomeModal"
@@ -23,23 +31,49 @@
 
 <script>
 
+  import Cookies from 'js-cookie';
   import { mapGetters, mapState } from 'vuex';
+  import find from 'lodash/find';
   import NotificationsRoot from 'kolibri.coreVue.components.NotificationsRoot';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { IsPinAuthenticated } from 'kolibri.coreVue.vuex.constants';
+  import redirectBrowser from 'kolibri.utils.redirectBrowser';
+  import urls from 'kolibri.urls';
   import { PageNames } from '../constants';
   import PostSetupModalGroup from './PostSetupModalGroup';
+  import PinAuthenticationModal from './PinAuthenticationModal';
   import plugin_data from 'plugin_data';
 
-  const welcomeDimissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
+  const welcomeDismissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
 
   export default {
     name: 'DeviceIndex',
     components: {
       NotificationsRoot,
       PostSetupModalGroup,
+      PinAuthenticationModal,
+    },
+    mixins: [commonCoreStrings],
+    data() {
+      return {
+        showModal: false,
+        currentFacility: {},
+      };
     },
     computed: {
-      ...mapGetters(['isUserLoggedIn']),
-      ...mapState({ welcomeModalVisibleState: 'welcomeModalVisible' }),
+      ...mapGetters(['isUserLoggedIn', 'userFacilityId']),
+      ...mapState(['authenticateWithPin', 'grantPluginAccess']),
+      ...mapState({
+        welcomeModalVisibleState: 'welcomeModalVisible',
+      }),
+      facilities() {
+        return this.$store.state.core.facilities;
+      },
+      isPinSet() {
+        const dataset = this.currentFacility['dataset'] || {};
+        const extraFields = dataset['extra_fields'] || {};
+        return extraFields['pin_code'];
+      },
       userIsAuthorized() {
         if (this.pageName === PageNames.BOOKMARKS) {
           return this.isUserLoggedIn;
@@ -51,36 +85,46 @@
       welcomeModalVisible() {
         return (
           this.welcomeModalVisibleState &&
-          window.sessionStorage.getItem(welcomeDimissalKey) !== 'true'
+          window.sessionStorage.getItem(welcomeDismissalKey) !== 'true'
         );
       },
       pageName() {
         return this.$route.name;
       },
-      currentPageIsImmersive() {
-        if (this.pageName == PageNames.MANAGE_CONTENT_PAGE) {
-          return false;
-        }
-        return (
-          this.inContentManagementPage || [PageNames.USER_PERMISSIONS_PAGE].includes(this.pageName)
-        );
-      },
-      inContentManagementPage() {
-        return this.$route.path.includes('/content');
-      },
     },
     watch: {
-      currentPageIsImmersive(val) {
-        // If going to a non-immersive page, reset the state to show normal Toolbar
-        if (!val) {
-          this.$store.commit('coreBase/SET_APP_BAR_TITLE', '');
-        }
+      facilities(newValue) {
+        this.currentFacility = find(newValue, { id: this.userFacilityId }) || {};
+        const { dataset } = this.currentFacility;
+        this.$store.commit('facilityConfig/SET_STATE', {
+          facilityDatasetId: dataset.id, //Required for pin authentication
+        });
+      },
+      isPinSet: {
+        handler(newValue) {
+          if (!newValue) {
+            this.grantPluginAccess();
+          }
+          this.showModal = newValue && this.authenticateWithPin;
+        },
+        deep: true,
       },
     },
     methods: {
       hideWelcomeModal() {
-        window.sessionStorage.setItem(welcomeDimissalKey, true);
+        window.sessionStorage.setItem(welcomeDismissalKey, true);
         this.$store.commit('SET_WELCOME_MODAL_VISIBLE', false);
+      },
+      closePinModal() {
+        redirectBrowser(urls['kolibri:kolibri.plugins.learn:learn']());
+        return (this.showModal = false);
+      },
+      submit() {
+        Cookies.set(IsPinAuthenticated, true, {
+          expires: new Date(new Date().getTime() + 15 * 1000),
+        });
+        this.$store.commit('SET_AUTHENTICATE_WITH_PIN', false);
+        this.grantPluginAccess();
       },
     },
   };

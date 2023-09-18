@@ -1,10 +1,6 @@
 <template>
 
-  <AppBarPage :title="pageTitle">
-
-    <template #subNav>
-      <DeviceTopNav />
-    </template>
+  <DeviceAppBarPage :title="pageTitle">
 
     <KPageContainer class="device-container">
       <HeaderWithOptions :headerText="coreString('facilitiesLabel')">
@@ -12,12 +8,13 @@
           <!-- Margins to and bottom adds space when buttons are vertically stacked -->
           <KButtonGroup>
             <KButton
+              v-if="isAnyFacilityRegistered"
               :text="$tr('syncAllAction')"
               style="margin-top: 16px; margin-bottom: -16px;"
               @click="showSyncAllModal = true"
             />
             <KButton
-              :text="$tr('importFacilityAction')"
+              :text="getCommonSyncString('importFacilityAction')"
               primary
               style="margin-top: 16px; margin-bottom: -16px;"
               @click="showImportModal = true"
@@ -27,13 +24,13 @@
       </HeaderWithOptions>
 
       <TasksBar
-        v-if="facilityTasks.length > 0"
-        :tasks="facilityTasks"
+        v-if="activeFacilityTasks.length > 0"
+        :tasks="activeFacilityTasks"
         :taskManagerLink="{ name: 'FACILITIES_TASKS_PAGE' }"
         @clearall="handleClickClearAll"
       />
 
-      <CoreTable>
+      <CoreTable :dataLoading="loadingFacilities">
         <template #headers>
           <th>{{ coreString('facilityLabel') }}</th>
         </template>
@@ -41,13 +38,17 @@
           <!-- On mobile, put buttons on a row of their own -->
           <tbody v-if="windowIsSmall">
             <template v-for="(facility, idx) in facilities">
-              <tr :key="idx" style="border: none!important">
+              <tr
+                :key="idx"
+                style="border: none!important"
+              >
                 <td>
                   <FacilityNameAndSyncStatus
                     :facility="facility"
                     :isSyncing="facilityIsSyncing(facility)"
                     :isDeleting="facilityIsDeleting(facility)"
                     :syncHasFailed="facility.syncHasFailed"
+                    :goToRoute="manageSync(facility.id)"
                   />
                 </td>
               </tr>
@@ -58,6 +59,7 @@
                   <KButtonGroup style="margin-left: -16px; margin-right: -16px; max-width: 100%">
                     <KButton
                       :text="coreString('syncAction')"
+                      :disabled="facilityIsSyncing(facility)"
                       appearance="flat-button"
                       @click="facilityForSync = facility"
                     />
@@ -65,6 +67,7 @@
                       hasDropdown
                       appearance="flat-button"
                       :text="coreString('optionsLabel')"
+                      :disabled="facilityIsSyncing(facility)"
                     >
                       <template #menu>
                         <KDropdownMenu
@@ -81,19 +84,24 @@
 
           <!-- Non-mobile -->
           <tbody v-else>
-            <tr v-for="(facility, idx) in facilities" :key="idx">
+            <tr
+              v-for="(facility, idx) in facilities"
+              :key="idx"
+            >
               <td>
                 <FacilityNameAndSyncStatus
                   :facility="facility"
                   :isSyncing="facilityIsSyncing(facility)"
                   :isDeleting="facilityIsDeleting(facility)"
                   :syncHasFailed="facility.syncHasFailed"
+                  :goToRoute="manageSync(facility.id)"
                 />
               </td>
               <td class="button-col">
                 <KButtonGroup>
                   <KButton
                     :text="coreString('syncAction')"
+                    :disabled="facilityIsSyncing(facility)"
                     appearance="flat-button"
                     @click="facilityForSync = facility"
                   />
@@ -101,10 +109,11 @@
                     hasDropdown
                     appearance="flat-button"
                     :text="coreString('optionsLabel')"
+                    :disabled="facilityIsSyncing(facility)"
                   >
                     <template #menu>
                       <KDropdownMenu
-                        :options="facilityOptions(facility)"
+                        :options="facilityOptions()"
                         @select="handleOptionSelect($event.value, facility)"
                       />
                     </template>
@@ -141,8 +150,10 @@
         <RegisterFacilityModal
           v-if="!kdpProject"
           :facility="facilityForRegister"
+          :displaySkipOption="false"
           @success="handleValidateSuccess"
           @cancel="clearRegistrationState"
+          @skip="handleKDPSync"
         />
 
         <ConfirmationRegisterModal
@@ -159,10 +170,11 @@
         v-if="Boolean(facilityForSync)"
         :facilityForSync="facilityForSync"
         @close="facilityForSync = null"
-        @success="handleStartSyncSuccess"
+        @syncKDP="handleKDPSync"
+        @syncPeer="handlePeerSync"
       />
     </KPageContainer>
-  </AppBarPage>
+  </DeviceAppBarPage>
 
 </template>
 
@@ -172,7 +184,6 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import { FacilityResource } from 'kolibri.resources';
   import {
@@ -182,9 +193,11 @@
     SyncFacilityModalGroup,
   } from 'kolibri.coreVue.componentSets.sync';
   import { TaskStatuses, TaskTypes } from 'kolibri.utils.syncTaskUtils';
+  import some from 'lodash/some';
+  import DeviceAppBarPage from '../DeviceAppBarPage';
+  import { PageNames } from '../../constants';
   import { deviceString } from '../commonDeviceStrings';
   import TasksBar from '../ManageContentPage/TasksBar';
-  import DeviceTopNav from '../DeviceTopNav';
   import HeaderWithOptions from '../HeaderWithOptions';
   import RemoveFacilityModal from './RemoveFacilityModal';
   import SyncAllFacilitiesModal from './SyncAllFacilitiesModal';
@@ -194,6 +207,7 @@
   const Options = Object.freeze({
     REGISTER: 'REGISTER',
     REMOVE: 'REMOVE',
+    MANAGESYNC: 'MANAGE SYNC',
   });
 
   export default {
@@ -204,10 +218,9 @@
       };
     },
     components: {
-      AppBarPage,
+      DeviceAppBarPage,
       ConfirmationRegisterModal,
       CoreTable,
-      DeviceTopNav,
       HeaderWithOptions,
       FacilityNameAndSyncStatus,
       ImportFacilityModalGroup,
@@ -228,18 +241,21 @@
         facilityForRegister: null,
         kdpProject: null, // { name, token }
         taskIdsToWatch: [],
-        // (facilityTaskQueue) facilityTasks
+        loadingFacilities: true, // We're fetching in beforeMount so should make it true
       };
     },
     computed: {
       pageTitle() {
         return deviceString('deviceManagementTitle');
       },
+      isAnyFacilityRegistered() {
+        return some(this.facilities, facility => facility.dataset.registered);
+      },
     },
     watch: {
       // Update facilities whenever a watched task completes
       facilityTasks(newTasks) {
-        for (let index in newTasks) {
+        for (const index in newTasks) {
           const task = newTasks[index];
           if (this.taskIdsToWatch.includes(task.id)) {
             if (task.status === TaskStatuses.COMPLETED) {
@@ -264,15 +280,20 @@
       },
     },
     beforeMount() {
-      this.fetchFacilites();
+      this.fetchFacilites()
+        .then(() => (this.loadingFacilities = false))
+        .catch(() => (this.loadingFacilities = false));
     },
     methods: {
-      facilityOptions(facility) {
+      facilityOptions() {
         return [
+          {
+            label: this.coreString('manageSyncAction'),
+            value: Options.MANAGESYNC,
+          },
           {
             label: this.coreString('registerAction'),
             value: Options.REGISTER,
-            disabled: facility.dataset.registered,
           },
           {
             label: this.coreString('removeAction'),
@@ -285,6 +306,9 @@
           this.facilityForRemoval = facility;
         } else if (option === Options.REGISTER) {
           this.facilityForRegister = facility;
+        } else if (option === Options.MANAGESYNC) {
+          const route = this.manageSync(facility.id);
+          this.$router.push(route);
         }
       },
       fetchFacilites() {
@@ -306,8 +330,9 @@
         this.facilityForRegister = null;
         this.kdpProject = null;
       },
-      handleStartSyncSuccess(taskId) {
-        this.taskIdsToWatch.push(taskId);
+      handleStartSyncSuccess(task) {
+        this.taskIdsToWatch.push(task.id);
+        this.facilityTasks.push(task);
         this.facilityForSync = null;
       },
       handleSyncAllSuccess() {
@@ -318,6 +343,15 @@
           name: 'FACILITIES_TASKS_PAGE',
         });
         this.showImportModal = false;
+      },
+      manageSync(facilityId) {
+        return {
+          name: PageNames.MANAGE_SYNC_SCHEDULE,
+          facilityId,
+          params: {
+            facilityId,
+          },
+        };
       },
       showFacilityRemovedSnackbar(facilityName) {
         this.$store.dispatch(
@@ -331,16 +365,36 @@
         this.taskIdsToWatch.push(taskId);
         this.facilityForRemoval = null;
       },
+      handleKDPSync(facility) {
+        this.facilityForSync = null;
+        this.facilityForRegister = null;
+        this.startKdpSyncTask(facility.id)
+          .then(task => {
+            this.handleStartSyncSuccess(task);
+          })
+          .catch(() => {
+            this.$emit('failure');
+          });
+      },
+      handlePeerSync(peerData, facility) {
+        this.facilityForSync = null;
+        this.startPeerSyncTask({
+          facility: facility.id,
+          device_id: peerData.id,
+        })
+          .then(task => {
+            this.handleStartSyncSuccess(task);
+          })
+          .catch(() => {
+            this.$emit('failure');
+          });
+      },
     },
     $trs: {
       syncAllAction: {
         message: 'Sync all',
         context:
           'Label for a button used to synchronize all facilities at once with the data portal',
-      },
-      importFacilityAction: {
-        message: 'Import facility',
-        context: 'Label for a button used to import a facility on the device',
       },
       facilityRemovedSnackbar: {
         message: "Removed '{facilityName}' from this device",

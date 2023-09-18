@@ -1,14 +1,10 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
 
     <KGrid v-if="!loading">
       <KGridItem>
@@ -26,11 +22,13 @@
         </QuizLessonDetailsHeader>
       </KGridItem>
       <KGridItem :layout12="{ span: 4 }">
+        <h2 class="visuallyhidden">
+          {{ coachString('generalInformationLabel') }}
+        </h2>
         <LessonStatus
           :className="className"
           :lesson="currentLesson"
           :groupNames="getRecipientNamesForLesson(currentLesson)"
-          activeKey="is_active"
         />
       </KGridItem>
       <KGridItem :layout12="{ span: 8 }">
@@ -57,7 +55,10 @@
 
               <ResourceListTable v-if="workingResources.length" />
 
-              <p v-else class="no-resources-message">
+              <p
+                v-else
+                class="no-resources-message"
+              >
                 {{ coachString('noResourcesInLessonLabel') }}
               </p>
 
@@ -72,8 +73,7 @@
         </KPageContainer>
       </KGridItem>
     </KGrid>
-
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -82,6 +82,7 @@
 
   import { mapState } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import CoachAppBarPage from '../../CoachAppBarPage';
   import commonCoach from '../../common';
   import { selectionRootLink } from '../../../routes/planLessonsRouterUtils';
   import ManageLessonModals from './ManageLessonModals';
@@ -96,6 +97,7 @@
       };
     },
     components: {
+      CoachAppBarPage,
       ResourceListTable,
       ManageLessonModals,
       LessonOptionsDropdownMenu,

@@ -16,8 +16,7 @@ If you encounter issues:
 * Please let us know if our docs can be improved, either by filing an issue or submitting a PR!
 
 .. note::
-  Theoretically, Windows can be used to develop Kolibri, but we haven't tested this lately. If you're running Windows, you are likely to encounter issues with this guide. That said, we'd appreciate any help improving these docs for Windows developers!
-
+  Theoretically, Windows can be used to develop Kolibri, but we haven't done much testing with it. If you're running Windows, you are likely to encounter some issues with this guide, and we'd appreciate any help improving these docs for Windows developers!
 
 Git and GitHub
 ~~~~~~~~~~~~~~
@@ -50,22 +49,12 @@ Next, initialize Git LFS:
 
 Finally, add the Learning Equality repo as a remote called `upstream`. That way you can keep your local checkout updated with the most recent changes:
 
+
 .. code-block:: bash
 
   git remote add upstream git@github.com:learningequality/kolibri.git
   git fetch --all  # Check if there are changes upstream
   git checkout -t upstream/develop # Checkout the development branch
-
-
-Checkout release-v0.15.x
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-We are currently updating our “setting up Kolibri” (user workflow) for our upcoming 0.16 release, and the code is only partially merged in develop. Therefore, you may run into some challenges if you try to setup on develop.
-When setting up Kolibri for the first time, even if you will be working off of develop for your feature or bug, please complete your initial Kolibri set up up on the release-0.15.x branch. This will allow you to go through the existing user workflow for setting up a facility in the UI. Once you facility is created, you can git checkout develop (or any other branch) and continue to use the facility that you have set up.
-
-.. code-block:: bash
-
-  git checkout -t upstream/release-v0.15.x
 
 
 Python and Pip
@@ -159,7 +148,6 @@ To install Kolibri project-specific dependencies make sure you're in the ``kolib
   pip install -e .
 
   # optional
-  pip install -r requirements/build.txt --upgrade
   pip install -r requirements/test.txt --upgrade
   pip install -r requirements/docs.txt --upgrade
 
@@ -182,7 +170,7 @@ The Python project-specific dependencies installed above will install ``nodeenv`
   # If you are setting up the release-v0.15.x branch or earlier:
   nodeenv -p --node=10.17.0
   # If you are setting up the develop branch:
-  nodeenv -p --node=16.13.2
+  nodeenv -p --node=16.20.0
   npm install -g yarn
 
   # other required project dependencies
@@ -249,11 +237,6 @@ For a complete reference of the commands that can be run and what they do, inspe
 
   If you get an error similar to "Node Sass could not find a binding for your current environment", try running ``npm rebuild node-sass``
 
-Kolibri setup
-~~~~~~~~~~~~~
-
-Most development on Kolibri requires a configured facility - this is done during the setup wizard. Complete the setup wizard on release-v0.15.x. If you are then intending to contribute to the develop branch, once this is completed, check out the develop branch, reinstall Python dependencies, and install NodeJS 16 as per instructions above.
-
 
 Production server
 ~~~~~~~~~~~~~~~~~
@@ -269,6 +252,13 @@ In production, content is served through `Whitenoise <http://whitenoise.evans.io
   kolibri start
 
 Now you should be able to access the server at ``http://127.0.0.1:8080/``.
+
+Kolibri has support for being run as a ``Type=notify`` service under
+`systemd <https://www.freedesktop.org/software/systemd/>`__. When doing so, it
+is recommended to run ``kolibri start`` with the ``--skip-update`` option, and
+to run ``kolibri configure setup`` separately beforehand to handle database
+migrations and other one-time setup steps. This avoids the ``kolibri start``
+command timing out under systemd if migrations are happening.
 
 
 Separate servers
@@ -295,6 +285,29 @@ and in the second terminal, start the webpack build process for frontend assets:
 .. code-block:: bash
 
   yarn run frontend-devserver
+
+
+Running in App Mode
+~~~~~~~~~~~~~~~~~~~
+
+Some of Kolibri's functionality will differ when being run as a mobile app. In order to run the development server in that "app mode" context, you can use the following commands.
+
+.. code-block:: bash
+
+   # run the Python "app mode" server and the frontend server together:
+   yarn run app-devserver
+
+   # you may also run the python "app mode" server by itself
+   # this will require you to run the frontend server in a separate terminal
+   yarn run app-python-devserver
+
+This will run the script located at ``integration_testing/scripts/run_kolibri_app_mode.py``. There you may change the port, register app capabilities (ie, ``os_user``) and make adjustments to meet your needs.
+
+When the app development server is started, you will see a message with a particular URL that you will need to use in order to initialize your browser session properly. Once your browser session has been initialized for use in the app mode, your browser session will remain in this mode until you clear your cookies, even if you've started your normal Kolibri development server.
+
+.. code-block:: bash
+
+   [app-python-devserver] Kolibri running at: http://127.0.0.1:8000/app/api/initialize/6b91ec2b697042c2b360235894ad2632
 
 
 Editor configuration
@@ -337,19 +350,19 @@ Manual linting and formatting
 
 Linting and code auto-formatting are done by Prettier and Black.
 
-You can manually run the auto-formatters using:
+You can manually run the auto-formatters for the frontend using:
 
 .. code-block:: bash
 
   yarn run lint-frontend:format
-  yarn run fmt-backend
 
 Or to check the formatting without writing changes, run:
 
 .. code-block:: bash
 
   yarn run lint-frontend
-  yarn run fmt-backend:check
+
+The linting and formatting for the backend is handled using ``pre-commit`` below.
 
 
 Pre-commit hooks

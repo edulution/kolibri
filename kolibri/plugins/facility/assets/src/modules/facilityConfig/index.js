@@ -1,4 +1,11 @@
-import { saveFacilityConfig, resetFacilityConfig, saveFacilityName } from './actions';
+import {
+  saveFacilityConfig,
+  resetFacilityConfig,
+  saveFacilityName,
+  setPin,
+  unsetPin,
+  isPinValid,
+} from './actions';
 
 function defaultState() {
   return {
@@ -10,12 +17,19 @@ function defaultState() {
     facilityNameSaved: false,
     facilityNameError: false,
     facilities: [],
+    isFacilityPinValid: false,
+    facilityDataLoading: false,
   };
 }
 
 export default {
   namespaced: true,
   state: defaultState(),
+  getters: {
+    getFacilityDataLoading(state) {
+      return state.facilityDataLoading;
+    },
+  },
   mutations: {
     SET_STATE(state, payload) {
       Object.assign(state, payload);
@@ -49,15 +63,27 @@ export default {
       state.facilityNameError = false;
       state.facilityNameSaved = false;
     },
+    SET_FACILITY_DATA_LOADING(state, value) {
+      state.facilityDataLoading = value;
+    },
     UPDATE_FACILITIES(state, payload) {
       state.facilities.find(f => {
         return f.name === payload.oldName;
       }).name = payload.newName;
+    },
+    SET_IS_FACILITY_PIN_VALID(state, valid) {
+      state.isFacilityPinValid = valid;
+    },
+    UPDATE_FACILITY_EXTRA_SETTINGS(state, extraSettings) {
+      state.settings = Object.assign({}, state.settings, extraSettings);
     },
   },
   actions: {
     saveFacilityConfig,
     resetFacilityConfig,
     saveFacilityName,
+    setPin,
+    unsetPin,
+    isPinValid,
   },
 };

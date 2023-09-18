@@ -1,12 +1,14 @@
 <template>
 
   <Navbar>
-    <div v-for="(link, index) in navigationLinks" :key="index" ref="navLinks">
-      <!-- seeting navbarlink to "not hidden" is a bit counter intutive,  -->
-      <!-- but it allows us to only sent the "hidden" value when needed -->
-      <!-- rather than for every link -->
+    <div
+      ref="navContainer"
+      class="navcontainer"
+    >
       <NavbarLink
-        v-if="!link.isHidden"
+        v-for="(link, index) in allLinks"
+        :key="index"
+        ref="navLinks"
         :title="link.title"
         :link="link.link"
       >
@@ -18,7 +20,6 @@
     </div>
     <span v-if="overflowMenuLinks && overflowMenuLinks.length > 0">
       <KIconButton
-        class="menu-icon"
         :tooltip="coreString('moreOptions')"
         tooltipPosition="top"
         :ariaLabel="coreString('moreOptions')"
@@ -48,8 +49,7 @@
   import Navbar from 'kolibri.coreVue.components.Navbar';
   import NavbarLink from 'kolibri.coreVue.components.NavbarLink';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import debounce from 'lodash/debounce';
+  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
 
   export default {
     name: 'HorizontalNavBarWithOverflowMenu',
@@ -57,7 +57,13 @@
       Navbar,
       NavbarLink,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
+    setup() {
+      const { windowWidth } = useKResponsiveWindow();
+      return {
+        windowWidth,
+      };
+    },
     props: {
       /**
        * An array of options objects, with one object per dropdown item
@@ -72,61 +78,35 @@
       },
     },
     data() {
-      return {
-        numberOfNavigationTabsToDisplay: 0,
-        overflowMenuLinks: [],
-      };
+      return { mounted: false };
     },
     computed: {
+      allLinks() {
+        return this.navigationLinks.filter(l => !l.isHidden);
+      },
       color() {
         return this.$themeTokens.textInverted;
       },
+      overflowMenuLinks() {
+        return (this.mounted && this.windowWidth
+          ? this.allLinks.filter((link, index) => {
+              const navLink = this.$refs.navLinks[index].$el;
+              const navLinkTop = navLink.offsetTop;
+
+              const containerTop = this.$refs.navContainer.offsetTop;
+              const containerBottom = containerTop + this.$refs.navContainer.clientHeight;
+              return navLinkTop >= containerBottom;
+            })
+          : []
+        ).map(l => ({ label: l.title, value: l.link, icon: l.icon }));
+      },
     },
     mounted() {
-      this.updateNavigationTabDisplay();
-      window.addEventListener('resize', this.updateNavigationTabDisplay);
-    },
-    beforeDestroy() {
-      document.removeEventListener('resize', this.debouncedUpdateNavigation);
+      this.mounted = true;
     },
     methods: {
-      debouncedUpdateNavigation() {
-        return debounce(this.updateNavigationTabDisplay, 1000);
-      },
       handleSelect(option) {
         this.$router.push(this.$router.getRoute(option.value.name));
-      },
-      generateOverflowMenu() {
-        const limitedList = this.navigationLinks.slice(
-          this.numberOfNavigationTabsToDisplay,
-          this.navigationLinks.length
-        );
-        let options = [];
-        limitedList.forEach(o => options.push({ label: o.title, value: o.link, icon: o.icon }));
-        this.overflowMenuLinks = options;
-      },
-      updateNavigationTabDisplay() {
-        if (this.$refs.navLinks) {
-          // to get the list item, rather than the wrapping <div>
-          const navItems = this.$refs.navLinks.map(item => item.firstElementChild);
-          let index = 0;
-          let viewportWidthTakenUp = 0;
-          let numberOfTabLinks = 0;
-          if (navItems && navItems.length > 0) {
-            while (index < navItems.length) {
-              viewportWidthTakenUp = viewportWidthTakenUp + navItems[index].offsetWidth;
-              if (viewportWidthTakenUp < window.innerWidth - 60) {
-                navItems[index].classList.add('visible');
-                numberOfTabLinks = index + 1;
-              } else {
-                navItems[index].classList.remove('visible');
-              }
-              index = index + 1;
-            }
-          }
-          this.numberOfNavigationTabsToDisplay = numberOfTabLinks;
-          this.generateOverflowMenu();
-        }
       },
     },
   };
@@ -138,9 +118,11 @@
 
   @import '~kolibri-design-system/lib/styles/definitions';
 
-  .menu-icon {
-    position: absolute;
-    right: 4px;
+  .navcontainer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow: hidden;
   }
 
 </style>

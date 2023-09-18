@@ -161,12 +161,24 @@
         this.loading = false;
         this.$emit('error', err);
       });
+      let storageUrl = this.defaultFile.storage_url;
+      if (!this.isH5P) {
+        // In the case that this is being routed via a remote URL
+        // ensure we preserve that for the zip endpoint.
+        const url = new URL(this.defaultFile.storage_url, window.location.href);
+        const baseurl = url.searchParams.get('baseurl');
+        storageUrl = urls.zipContentUrl(
+          this.defaultFile.checksum,
+          this.defaultFile.extension,
+          this.entry,
+          baseurl ? encodeURIComponent(baseurl) : undefined
+        );
+      }
+
       this.hashi.initialize(
         (this.extraFields && this.extraFields.contentState) || {},
         this.userData,
-        this.isH5P
-          ? this.defaultFile.storage_url
-          : urls.zipContentUrl(this.defaultFile.checksum, this.defaultFile.extension, this.entry),
+        storageUrl,
         this.defaultFile.checksum
       );
       this.$emit('startTracking');
@@ -182,14 +194,16 @@
     },
     methods: {
       recordProgress() {
+        let progress;
         if (this.forceDurationBasedProgress) {
-          this.$emit('updateProgress', this.durationBasedProgress);
+          progress = this.durationBasedProgress;
         } else {
           const hashiProgress = this.hashi ? this.hashi.getProgress() : null;
-          this.$emit(
-            'updateProgress',
-            hashiProgress === null ? this.durationBasedProgress : hashiProgress
-          );
+          progress = hashiProgress === null ? this.durationBasedProgress : hashiProgress;
+        }
+        this.$emit('updateProgress', progress);
+        if (progress >= 1) {
+          this.$emit('finished');
         }
         this.pollProgress();
       },

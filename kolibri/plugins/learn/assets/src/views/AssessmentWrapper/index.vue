@@ -72,6 +72,7 @@ oriented data synchronization.
           @stopTracking="stopTracking"
           @updateProgress="updateProgress"
           @updateContentState="updateContentState"
+          @error="err => $emit('error', err)"
         />
       </div>
 
@@ -146,8 +147,7 @@ oriented data synchronization.
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import CoreInfoIcon from 'kolibri.coreVue.components.CoreInfoIcon';
-  import { createTranslator } from 'kolibri.utils.i18n';
-  import { defaultLanguage } from 'kolibri-design-system/lib/utils/i18n';
+  import { createTranslator, defaultLanguage } from 'kolibri.utils.i18n';
   import LessonMasteryBar from './LessonMasteryBar';
   import ExerciseAttempts from './ExerciseAttempts';
 
@@ -325,17 +325,20 @@ oriented data synchronization.
         return null;
       },
       renderer() {
-        // TODO: rtibbles - update the KContentRenderer API to expose hint info
-        // and add takeHint public method
-        return (
-          this.mounted && this.$refs.contentRenderer && this.$refs.contentRenderer.$refs.contentView
-        );
+        return this.mounted && this.$refs.contentRenderer;
       },
       availableHints() {
         return (this.renderer && this.renderer.availableHints) || 0;
       },
       totalHints() {
         return (this.renderer && this.renderer.totalHints) || 0;
+      },
+    },
+    watch: {
+      success(newValue, oldValue) {
+        if (newValue && !oldValue) {
+          this.$emit('finished');
+        }
       },
     },
     created() {

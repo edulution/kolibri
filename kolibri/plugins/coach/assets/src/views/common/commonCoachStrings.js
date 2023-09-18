@@ -49,18 +49,8 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Option to view all elements that make up a class. For example, all quizzes or all lessons.',
   },
-  showMoreAction: {
-    message: 'Show more',
-    context:
-      'Generic button which allows user to see more content on a page. For example more learning resources.',
-  },
 
   // labels, phrases, titles, headers...
-  // activeLabel: 'Active',
-  // activeQuizzesLabel: {
-  //   message: 'Active quizzes',
-  //   context: 'An active quiz is one that is in progress.',
-  // },
   activityLabel: {
     message: 'Activity',
     context:
@@ -117,10 +107,15 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'No description',
     context: 'Indicates when a lesson does not have a description.',
   },
+  generalInformationLabel: {
+    message: 'General information',
+    context:
+      'Used as a visually hidden label for the section on quiz and lesson pages that contains general information about a lesson or a quizz',
+  },
   detailsLabel: {
     message: 'Details',
     context:
-      'Can refer to the details of the quiz that the coach is creating. For example, the title and the number of questions.',
+      'Visually hidden label for the section that contains detailed interaction reports for each resource in the lesson or a quiz.',
   },
   difficultQuestionsLabel: {
     message: 'Difficult questions',
@@ -137,6 +132,51 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Exercises are marked as completed when the learner has answered the required number of questions correctly in that specific exercise.',
   },
+  filterLessonAll: {
+    message: 'All',
+    context:
+      'Refers to LESSON. Default option in the selector used to filter and display lessons by status.',
+  },
+  filterLessonNotVisible: {
+    message: 'Not visible',
+    context:
+      'Refers to LESSON. Option in the selector used to filter and display only the lessons not visible  to learners.',
+  },
+  filterLessonStatus: {
+    message: 'Status',
+    context: 'Label for the selector used to filter and display lessons by status.',
+  },
+  filterLessonVisible: {
+    message: 'Visible',
+    context:
+      'Refers to LESSON. Option in the selector used to filter and display only the lessons visible to learners. ',
+  },
+
+  filterQuizAll: {
+    message: 'All',
+    context:
+      'Refers to QUIZ. Default option in the selector used to filter and display quizes by status.',
+  },
+  filterQuizEnded: {
+    message: 'Ended',
+    context:
+      'Refers to QUIZ. Option in the selector used to filter and display only the ended quizzes.',
+  },
+  filterQuizNotStarted: {
+    message: 'Not started',
+    context:
+      'Refers to QUIZ. Option in the selector used to filter and display only the quizes not started. ',
+  },
+  filterQuizStarted: {
+    message: 'Started',
+    context:
+      'Refers to QUIZ. Option in the selector used to filter and display only the started quizes. ',
+  },
+  filterQuizStatus: {
+    message: 'Status',
+    context: 'Label for the selector used to filter and display quizes by status.',
+  },
+
   groupNameLabel: {
     message: 'Group name',
     context: "Displays on the 'Create new group' window when a coach creates a new group.",
@@ -151,12 +191,10 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "In the 'Difficult questions' sub-tab within the 'Reports' section, there's a column called 'Help needed' which shows the coach which learners need help on what questions.\n\nCoaches can also filter class activity by 'Help needed'",
   },
-  // inactiveQuizzesLabel: 'Inactive quizzes',
   lastActivityLabel: {
     message: 'Last activity',
     context: 'Indicates when a learner was last active on a particular resource.',
   },
-  // inactiveLabel: 'Inactive',
   learnersLabel: {
     message: 'Learners',
     context:
@@ -176,6 +214,29 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'Lessons assigned',
     context:
       'Indicates which lessons have been assigned to a learner or a group in the reports section.',
+  },
+  makeLessonVisibleTitle: {
+    message: 'Make lesson visible',
+    context: 'Informational prompt for coaches when updating lesson visibility to learners',
+  },
+  makeLessonNotVisibleTitle: {
+    message: 'Make lesson not visible',
+    context: 'Informational prompt for coaches when updating lesson visibility to learners',
+  },
+  makeLessonVisibleText: {
+    message:
+      'Learners will be able to see this lesson and use its resources. Resource files in this lesson will be downloaded to learn-only devices that are set up to sync with this server.',
+    context: 'Informational prompt for coaches when updating lesson visibility to learners',
+  },
+  makeLessonNotVisibleText: {
+    message:
+      'Learners will no longer be able to see this lesson. Resource files in this lesson will be removed from learn-only devices that are set up to sync with this server.',
+    context: 'Informational prompt for coaches when updating lesson visibility to learners',
+  },
+  totalLessonsSize: {
+    message: 'Total size of lessons visible to learners: {size}',
+    context:
+      "Descriptive text at the top of the table that displays the calculated file size of all lessons' resources (i.e. 120 MB)",
   },
   membersLabel: {
     message: 'Members',
@@ -210,6 +271,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'Each learner sees a different question order',
     context:
       "Coaches can choose between 'Randomized' and 'Fixed' question order when they create quizzes.\n\nThis text is a description of the 'Randomized' question order.",
+  },
+  planLabel: {
+    message: 'Plan',
+    context:
+      "Translate as a VERB. Refers to the 'Plan' tab where coaches manage lessons, quizzes, and groups.",
   },
   previewLabel: {
     message: 'Preview',
@@ -360,10 +426,20 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "Refers to the number of resources in a lesson. Only translate 'resource' and 'resources'.",
   },
+  resourcesAndSize: {
+    message: '{value, number, integer} {value, plural, one {resource} other {resources}}, {size}',
+    context:
+      "Refers to the number of resources in a lesson and the total size (i.e. 20 MB) of the lesson. Only translate 'resource' and 'resources'.",
+  },
   ratioShort: {
     message: '{value, number, integer} of {total, number, integer}',
     context:
       "Refers to a number out of a total. For example, a number of learners in a class. \n\ne.g. 5 of 10. (Only translate 'of'.)",
+  },
+  sizeLabel: {
+    message: 'Size',
+    context:
+      'Refers to the number of resources in a lesson or quiz, and/or the total size (i.e. 20 MB) of the lesson or quiz.',
   },
 
   // Errors
@@ -418,6 +494,24 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'A brief snackbar message notifying the user that learners may no longer view their quiz report. It will show when the user changes a setting to make the quiz no longer visible.',
   },
+  makeQuizReportVisibleTitle: {
+    message: 'Make quiz report visible',
+  },
+  makeQuizReportNotVisibleTitle: {
+    message: 'Make quiz report not visible',
+  },
+  makeQuizReportVisibleText: {
+    message:
+      'Learners will be able to see this quiz report. Resource files in this quiz will be downloaded to learn-only devices that are set up to sync with this server.',
+    context:
+      'A message within a pop up modal explaining the impact of changing the quiz report visibility to learners',
+  },
+  makeQuizReportNotVisibleText: {
+    message:
+      'Learners will no longer be able to see this quiz report. Resource files in this quiz will be removed from learn-only devices that are set up to sync with this server.',
+    context:
+      'A message within a pop up modal explaining the impact of changing the quiz report visibility to learners',
+  },
   openQuizLabel: {
     message: 'Start quiz',
     context:
@@ -451,6 +545,26 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'Lesson is visible to learners',
     context:
       'Snackbar message telling the user that the lesson is now visible to learners. This will display whenever the user changes the lesson from not visible to visible.',
+  },
+  dontShowAgain: {
+    message: "Don't show this message again",
+    context: 'Option for a check box to not be prompted again with an informational modal',
+  },
+  fileSizeToDownload: {
+    message: 'File size to download: {size}',
+    context:
+      'The size of the file or files that must be downloaded to learner devices for the lesson or quiz, (i.e. 20 KB)',
+  },
+  fileSizeToRemove: {
+    message: 'File size to remove: {size}',
+    context:
+      'The size of the file or files that will be removed from learner devices for the lesson or quiz, (i.e. 20 KB)',
+  },
+  lodQuizDetail: {
+    message:
+      'Resource files in this quiz will be downloaded to learn-only devices that are set up to sync with this server.',
+    context:
+      'Information provided to a coach when starting a quiz that has been assigned to learners.',
   },
   // TODO - move these into diff sections as we make this a full feature in 0.16
   // Past Papers Project (12/2021) strings
@@ -493,32 +607,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
 
 // Strings for the Missing Content modals, tooltips, alerts, etc.
 const MissingContentStrings = createTranslator('MissingContentStrings', {
-  someResourcesMissingOrNotSupported: {
-    message: 'Some resources are missing or not supported',
-    context:
-      'Floating notification message that appears over the alert icon and indicates that there are missing resources',
-  },
-  resourceNotFoundOnDevice: {
-    message: 'Resource not found on device',
-    context:
-      'Error message that displays if a learning resource cannot be found on the device being used currently.',
-  },
-  resourcesUnavailableTitle: {
-    message: 'Resources unavailable',
-    context: 'Title of the modal window',
-  },
-  resourcesUnavailableP1: {
-    message:
-      'Some report data is missing, either because there are resources that were not found on the device, or because they are not compatible with your version of Kolibri.',
-
-    context: 'First paragraph of the "Resources Unavailable - Learn More" modal',
-  },
-  resourcesUnavailableP2: {
-    message:
-      'Consult your administrator for guidance, or use an account with device permissions to manage channels and resources.',
-
-    context: 'Second paragraph of the "Resources Unavailable - Learn More" modal.',
-  },
   upgradeKolibriTitle: {
     message: 'Upgrade Kolibri to view resources',
     context: 'Title of the modal window',

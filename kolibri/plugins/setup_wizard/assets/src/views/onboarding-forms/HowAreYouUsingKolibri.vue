@@ -3,7 +3,7 @@
   <OnboardingStepBase
     dir="auto"
     :noBackAction="true"
-    :title="$tr('howAreYouUsingKolibriTitle')"
+    :title="getCommonSyncString('howAreYouUsingKolibri')"
     @continue="handleContinue"
   >
     <KRadioButton
@@ -11,7 +11,7 @@
       style="margin-bottom: 1em"
       :value="UsePresets.ON_MY_OWN"
       :label="$tr('onMyOwnLabel')"
-      :description="$tr('onMyOwnDescription')"
+      :description="getCommonSyncString('onMyOwn')"
     />
     <KRadioButton
       v-model="selected"
@@ -26,16 +26,19 @@
 
 <script>
 
+  import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
   import OnboardingStepBase from '../OnboardingStepBase';
   import { Presets, UsePresets } from '../../constants';
 
   export default {
     name: 'HowAreYouUsingKolibri',
     components: { OnboardingStepBase },
+    mixins: [commonSyncElements],
     inject: ['wizardService'],
     data() {
+      const selected = this.wizardService.state.context['onMyOwnOrGroup'] || UsePresets.ON_MY_OWN;
       return {
-        selected: UsePresets.ON_MY_OWN,
+        selected,
       };
     },
     computed: {
@@ -60,18 +63,9 @@
       },
     },
     $trs: {
-      howAreYouUsingKolibriTitle: {
-        message: 'How are you using Kolibri?',
-        context: 'hello',
-      },
       onMyOwnLabel: {
         message: 'On my own',
         context: 'Label for a radio button...',
-      },
-      onMyOwnDescription: {
-        message:
-          'For homeschooling, supplementary individual learning, and other self-directed use',
-        context: 'Description',
       },
       groupLearningLabel: {
         message: 'Group learning',
@@ -79,7 +73,7 @@
       },
       groupLearningDescription: {
         message:
-          'This device will need to connect with other devices using Kolibri in schools, educational programs, organizations, or other group learning settings',
+          'This device will need to connect with other devices using Kolibri in schools or other group learning settings.',
         context: 'desc',
       },
     },

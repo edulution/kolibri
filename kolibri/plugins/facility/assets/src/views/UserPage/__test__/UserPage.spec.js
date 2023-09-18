@@ -1,12 +1,14 @@
 import mock from 'xhr-mock';
 import { mount } from '@vue/test-utils';
 import VueRouter from 'vue-router';
+import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
 import makeStore from '../../../../test/makeStore';
 import UserPage from '../index';
 
 jest.mock('kolibri.lib.logging');
 jest.mock('kolibri.urls');
 jest.mock('lockr');
+jest.mock('kolibri-design-system/lib/useKResponsiveWindow');
 
 const router = new VueRouter({
   routes: [
@@ -21,6 +23,7 @@ UserPage.computed.newUserLink = () => ({});
 
 function makeWrapper() {
   const store = makeStore();
+  store.dispatch('notLoading');
   const wrapper = mount(UserPage, {
     store,
     router,
@@ -34,6 +37,11 @@ const unicornUser = { id: '1', kind: 'UNICORN', username: 'unicorn', full_name: 
 const coachUser = { id: '1', kind: 'coach', username: 'coach', full_name: 'coach' };
 
 describe('UserPage component', () => {
+  beforeAll(() => {
+    useKResponsiveWindow.mockImplementation(() => ({
+      windowIsSmall: false,
+    }));
+  });
   // replace the real XHR object with the mock XHR object before each test
   beforeEach(() => mock.setup());
 

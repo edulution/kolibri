@@ -1,9 +1,9 @@
 <template>
 
-  <span v-if="isSpecified && birthYear">
-    {{ $formatDate(birthYear, { year: 'numeric' }) }}
-  </span>
-  <KEmptyPlaceholder v-else />
+  <KOptionalText
+    :text="
+      birthYearDate ? $formatDate(birthYearDate, { year: 'numeric' }) : ''"
+  />
 
 </template>
 
@@ -27,6 +27,14 @@
     computed: {
       isSpecified() {
         return this.birthYear !== NOT_SPECIFIED && this.birthYear !== DEFERRED;
+      },
+      birthYearDate() {
+        if (!this.isSpecified || !this.birthYear) {
+          return null;
+        }
+        const date = new Date();
+        date.setFullYear(this.birthYear);
+        return date;
       },
     },
   };

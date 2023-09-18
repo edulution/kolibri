@@ -1,18 +1,32 @@
 <template>
 
-  <AppBarPage
-    :title="appBarTitle"
+  <component
+    :is="page"
+    :appBarTitle="appBarTitle"
     :appearanceOverrides="appearanceOverrides"
     :loading="loading"
+    :primary="false"
+    :route="route"
+    :title="appBarTitle"
   >
+    <template #actions>
+      <DeviceConnectionStatus
+        v-if="deviceId"
+        :deviceId="deviceId"
+        color="white"
+      />
+    </template>
 
-    <template #subNav>
+    <template
+      v-if="!deviceId"
+      #subNav
+    >
       <LearnTopNav ref="topNav" />
     </template>
 
     <slot></slot>
 
-  </AppBarPage>
+  </component>
 
 </template>
 
@@ -20,13 +34,21 @@
 <script>
 
   import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import LearnTopNav from './LearnTopNav';
+  import DeviceConnectionStatus from './DeviceConnectionStatus.vue';
 
   export default {
     name: 'LearnAppBarPage',
-    components: { AppBarPage, LearnTopNav },
+    components: {
+      AppBarPage,
+      ImmersivePage,
+      LearnTopNav,
+      DeviceConnectionStatus,
+    },
     mixins: [commonCoreStrings],
+
     props: {
       appBarTitle: {
         type: String,
@@ -37,9 +59,24 @@
         required: false,
         default: null,
       },
+      deviceId: {
+        type: String,
+        default: null,
+      },
+      route: {
+        type: Object,
+        default() {
+          return {};
+        },
+      },
       loading: {
         type: Boolean,
-        default: null,
+        default: false,
+      },
+    },
+    computed: {
+      page() {
+        return this.deviceId ? 'ImmersivePage' : 'AppBarPage';
       },
     },
   };

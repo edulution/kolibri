@@ -1,13 +1,24 @@
 import { shallowMount, mount } from '@vue/test-utils';
-
+import { useDevicesWithFacility } from 'kolibri.coreVue.componentSets.sync';
 import { LearningActivities } from 'kolibri.coreVue.vuex.constants';
 import LearningActivityBar from '../../src/views/LearningActivityBar';
 
+jest.mock('kolibri.coreVue.componentSets.sync');
 function makeWrapper({ propsData } = {}) {
   return mount(LearningActivityBar, { propsData });
 }
 
 describe('LearningActivityBar', () => {
+  beforeEach(() => {
+    useDevicesWithFacility.mockReturnValue({
+      devices: [
+        {
+          id: '1',
+          available: true,
+        },
+      ],
+    });
+  });
   it('smoke test', () => {
     const wrapper = shallowMount(LearningActivityBar, {
       propsData: {
@@ -250,6 +261,48 @@ describe('LearningActivityBar', () => {
       it("emits `viewInfo` event on the 'View information' bar button click", () => {
         wrapper.find("[data-test='bar_viewInfoButton']").trigger('click');
         expect(wrapper.emitted().viewInfo.length).toBe(1);
+      });
+    });
+
+    describe(`download`, () => {
+      it(`doesn't show the download button by default`, () => {
+        const wrapper = makeWrapper();
+        expect(wrapper.find("[data-test='bar_downloadButton']").exists()).toBeFalsy();
+      });
+
+      describe(`for truthy 'showDownloadButton'`, () => {
+        let wrapper;
+
+        beforeEach(() => {
+          wrapper = makeWrapper({
+            propsData: {
+              showDownloadButton: true,
+            },
+          });
+        });
+
+        it(`shows the download button`, () => {
+          expect(wrapper.find("[data-test='bar_downloadButton']").exists()).toBeTruthy();
+        });
+
+        it(`clicking the download button emits the 'download' event`, () => {
+          wrapper.find("[data-test='bar_downloadButton']").trigger('click');
+          expect(wrapper.emitted().download.length).toBe(1);
+        });
+      });
+
+      it(`doesn't show the downloading loader by default`, () => {
+        const wrapper = makeWrapper();
+        expect(wrapper.find("[data-test='downloadingLoader'] svg").exists()).toBeFalsy();
+      });
+
+      it(`shows the downloading loader for truthy 'isDownloading'`, () => {
+        const wrapper = makeWrapper({
+          propsData: {
+            isDownloading: true,
+          },
+        });
+        expect(wrapper.find("[data-test='downloadingLoader'] svg").exists()).toBeTruthy();
       });
     });
   });

@@ -1,7 +1,7 @@
 <template>
 
   <ImmersivePage
-    :appBarTitle="toolbarTitle()"
+    :appBarTitle="toolbarTitle"
     :route="backRoute"
   >
     <KPageContainer class="device-container">
@@ -17,7 +17,10 @@
         :selectAllCheckbox="multipleMode"
       >
         <template #header>
-          <h1 v-if="status === ''" data-test="title">
+          <h1
+            v-if="status === ''"
+            data-test="title"
+          >
             {{ multipleMode ? $tr('importChannelsHeader') : $tr('importResourcesHeader') }}
           </h1>
         </template>
@@ -31,22 +34,36 @@
               @click="toggleMultipleMode"
             />
           </p>
-          <p v-if="showUnlistedChannels">
-            <KButton
-              data-test="token-button"
-              :text="$tr('channelTokenButtonLabel')"
-              appearance="raised-button"
-              name="showtokenmodal"
-              @click="showTokenModal = true"
-            />
-          </p>
+          <KButton
+            v-if="showUnlistedChannels"
+            data-test="token-button"
+            :text="$tr('channelTokenButtonLabel')"
+            appearance="raised-button"
+            name="showtokenmodal"
+            @click="showTokenModal = true"
+          />
+          <div
+            v-if="$route.query.token"
+            class="token-chip"
+            :style="{ backgroundColor: $themePalette.grey.v_300 }"
+          >
+            <span>
+              <p class="token-chip-text">{{ $route.query.token }}</p>
+              <KIconButton
+                icon="delete"
+                size="mini"
+                class="token-chip-button"
+                @click="clearToken"
+              />
+            </span>
+          </div>
           <p>
             <UiAlert
               v-show="notEnoughFreeSpace"
               :dismissible="false"
               type="error"
             >
-              {{ $tr('notEnoughSpaceForChannelsWarning') }}
+              {{ deviceString('notEnoughSpaceForChannelsWarning') }}
             </UiAlert>
           </p>
 
@@ -73,7 +90,10 @@
         </template>
       </FilteredChannelListContainer>
 
-      <KCircularLoader v-else style="margin: 2em auto;" />
+      <KCircularLoader
+        v-else
+        style="margin: 2em auto;"
+      />
 
       <ChannelTokenModal
         v-if="showTokenModal"
@@ -113,7 +133,7 @@
 
 <script>
 
-  import { mapState, mapMutations, mapGetters } from 'vuex';
+  import { mapState, mapGetters } from 'vuex';
   import find from 'lodash/find';
   import differenceBy from 'lodash/differenceBy';
   import omit from 'lodash/omit';
@@ -125,6 +145,7 @@
   import { TaskResource } from 'kolibri.resources';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
   import { TransferTypes, TaskTypes } from 'kolibri.utils.syncTaskUtils';
+  import commonDeviceStrings from '../commonDeviceStrings';
   import ChannelPanel from '../ManageContentPage/ChannelPanel/WithImportDetails';
   import ContentWizardUiAlert from '../SelectContentPage/ContentWizardUiAlert';
   import { selectContentPageLink } from '../ManageContentPage/manageContentLinks';
@@ -155,7 +176,7 @@
       SelectionBottomBar,
       UiAlert,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin, taskNotificationMixin],
+    mixins: [commonCoreStrings, commonDeviceStrings, responsiveWindowMixin, taskNotificationMixin],
     setup() {
       useContentTasks();
     },
@@ -244,6 +265,19 @@
             return '';
         }
       },
+      toolbarTitle() {
+        switch (this.transferType) {
+          case TransferTypes.LOCALIMPORT:
+            return this.$tr('importFromDisk', { driveName: this.selectedDrive.name });
+          case TransferTypes.PEERIMPORT:
+            return this.$tr('importFromPeer', {
+              deviceName: this.selectedPeer.device_name || this.selectedPeer.nickname,
+              address: this.selectedPeer.base_url,
+            });
+          default:
+            return this.$tr('importFromKolibriStudio');
+        }
+      },
       channelsAreLoading() {
         return this.status === 'LOADING_CHANNELS_FROM_KOLIBRI_STUDIO';
       },
@@ -267,22 +301,8 @@
         return this.freeSpace < this.fileSize;
       },
     },
-    watch: {
-      // HACK doing it here to avoid moving $trs out of the component
-      transferType(val) {
-        this.setAppBarTitle(this.toolbarTitle(val));
-      },
-    },
     created() {
       this.setFreeSpace();
-    },
-    beforeMount() {
-      this.$store.commit('coreBase/SET_QUERY', this.$route.query);
-      if (this.status) {
-        this.setAppBarTitle(this.$tr('pageLoadError'));
-      } else {
-        this.setAppBarTitle(this.toolbarTitle(this.transferType));
-      }
     },
     mounted() {
       // If arriving here from the PostSetupModalGroup/WelcomeModal,
@@ -292,22 +312,6 @@
       }
     },
     methods: {
-      ...mapMutations('coreBase', {
-        setAppBarTitle: 'SET_APP_BAR_TITLE',
-      }),
-      toolbarTitle(transferType) {
-        switch (transferType) {
-          case TransferTypes.LOCALIMPORT:
-            return this.$tr('importFromDisk', { driveName: this.selectedDrive.name });
-          case TransferTypes.PEERIMPORT:
-            return this.$tr('importFromPeer', {
-              deviceName: this.selectedPeer.device_name || this.selectedPeer.nickname,
-              address: this.selectedPeer.base_url,
-            });
-          default:
-            return this.$tr('importFromKolibriStudio');
-        }
-      },
       channelIsOnDevice(channel) {
         const match = this.installedChannelsWithResources.find(({ id }) => id === channel.id);
         return Boolean(match);
@@ -326,26 +330,34 @@
         }
         return this.$router.push({ query: newQuery });
       },
-      handleSubmitToken(channel) {
-        if (this.multipleMode) {
-          this.disableModal = true;
-          this.$store
-            .dispatch('manageContent/wizard/fetchUnlistedChannelInfo', channel.id)
-            .then(channels => {
-              const newChannels = channels.map(x => Object.assign(x, { newUnlistedChannel: true }));
-              // Need to de-duplicate channels in case user enters same token twice, etc.
-              this.newUnlistedChannels = uniqBy(
-                [...newChannels, ...this.newUnlistedChannels],
-                'id'
-              );
-              this.showTokenModal = false;
-              this.disableModal = false;
-            })
-            .catch(error => {
-              this.$store.dispatch('handleApiError', error);
+      handleSubmitToken({ token, channels }) {
+        if (channels.length > 1) {
+          if (this.$route.query.token !== token) {
+            this.disableModal = true;
+            this.$router.push({
+              ...this.$route,
+              query: {
+                ...this.$route.query,
+                token,
+              },
             });
+          } else {
+            this.showTokenModal = false;
+          }
         } else {
-          this.goToSelectContentPageForChannel(channel);
+          this.goToSelectContentPageForChannel(channels[0]);
+        }
+      },
+      clearToken() {
+        if (this.$route.query.token) {
+          const query = {
+            ...this.$route.query,
+          };
+          delete query.token;
+          this.$router.push({
+            ...this.$route,
+            query,
+          });
         }
       },
       goToSelectContentPageForChannel(channel) {
@@ -394,7 +406,7 @@
         if (this.inLocalImportMode) {
           baseParams.drive_id = this.selectedDrive.id;
         } else if (this.inPeerImportMode) {
-          baseParams.peer_id = this.selectedPeer.id;
+          baseParams.peer = this.selectedPeer.id;
         }
         const taskParams = this.selectedChannels.map(x => ({
           ...baseParams,
@@ -441,10 +453,6 @@
         context:
           "If a user needs to import learning resources from a private/unlisted channel, they would click on the 'Import with token' button above the channel list.",
       },
-      pageLoadError: {
-        message: 'There was a problem loading this page…',
-        context: 'Error message.',
-      },
       documentTitleForLocalImport: {
         message: "Available Channels on '{driveName}'",
         context: 'Indicates the available resource channels on a device.',
@@ -467,13 +475,6 @@
         context:
           'Option to allow the user to select individual folders/resources within a channel instead of importing entire channels.',
       },
-      notEnoughSpaceForChannelsWarning: {
-        message:
-          'Not enough space available on your device. Free up disk space or select fewer resources',
-
-        context:
-          'Warning that appears when there is not enough space on the user’s device for the selected resources',
-      },
     },
   };
 
@@ -491,6 +492,26 @@
   .channel-list-header {
     padding: 16px 0;
     font-size: 14px;
+  }
+
+  .token-chip {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 14px;
+    vertical-align: middle;
+    border-radius: 34px;
+  }
+
+  .token-chip-text {
+    display: inline-block;
+    margin: 4px 0 4px 8px;
+    font-size: 14px;
+  }
+
+  .token-chip-button {
+    min-width: 24px !important;
+    margin: 2px;
+    vertical-align: middle;
   }
 
 </style>

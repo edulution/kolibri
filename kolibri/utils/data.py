@@ -46,3 +46,16 @@ def bytes_from_humans(size, suffix="B"):
         if match:
             return int(float(match.groups()[0]) * PREFIX_FACTOR_BYTES ** i)
     raise ValueError("Could not parse bytes value from {}".format(size))
+
+
+class ChoicesEnum(object):
+    @classmethod
+    def choices(cls):
+        choices_list = [
+            ("{}".format(m), getattr(cls, m)) for m in cls.__dict__ if m[0] != "_"
+        ]
+        return tuple(sorted(choices_list))
+
+    @classmethod
+    def max_length(cls):
+        return max(len(getattr(cls, m)) for m in cls.__dict__ if m[0] != "_")

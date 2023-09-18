@@ -5,7 +5,7 @@
     <div class="container" :style="{ flexWrap: windowBreakpoint > 0 ? 'nowrap' : 'wrap' }">
       <TextTruncatorCss
         class="requirements"
-        :text="overallStatusStrings.$tr('goal', { count: requiredCorrectAnswers })"
+        :text="coreString('shortExerciseGoalDescription', { count: requiredCorrectAnswers })"
       />
       <span>
         <slot name="hint"></slot>
@@ -22,10 +22,6 @@
   import BaseToolbar from 'kolibri.coreVue.components.BaseToolbar';
   import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
   import KResponsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
-  import OverallStatus from './OverallStatus.vue';
-
-  const overallStatusStrings = crossComponentTranslator(OverallStatus);
 
   export default {
     name: 'LessonMasteryBar',
@@ -40,11 +36,6 @@
         type: Number,
         required: true,
       },
-    },
-    data() {
-      return {
-        overallStatusStrings,
-      };
     },
   };
 

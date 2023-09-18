@@ -18,7 +18,6 @@ import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
 import responsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
 import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
 import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
-import scriptLoader from 'kolibri-design-system/lib/utils/scriptLoader';
 import UiIconButton from 'kolibri-design-system/lib/keen/UiIconButton'; // temp hack
 import * as vueCompositionApi from '@vue/composition-api';
 import logging from '../logging';
@@ -33,12 +32,10 @@ import ProgressBar from '../views/ProgressBar';
 import ContentIcon from '../views/ContentIcon';
 import ProgressIcon from '../views/ProgressIcon';
 import PermissionsIcon from '../views/PermissionsIcon';
-import CoreBase from '../views/CoreBase';
 import AppBarPage from '../views/CorePage/AppBarPage';
 import AppBar from '../views/AppBar';
 import ImmersivePage from '../views/CorePage/ImmersivePage';
-import ScrollingHeader from '../views/CoreBase/ScrollingHeader';
-import SidePanelModal from '../views/SidePanelModal';
+import ScrollingHeader from '../views/ScrollingHeader';
 import SideNav from '../views/SideNav';
 import Navbar from '../views/Navbar';
 import NavbarLink from '../views/Navbar/NavbarLink';
@@ -48,8 +45,10 @@ import LanguageSwitcherList from '../views/language-switcher/LanguageSwitcherLis
 import LanguageSwitcherModal from '../views/language-switcher/LanguageSwitcherModal';
 import ElapsedTime from '../views/ElapsedTime';
 import PointsIcon from '../views/PointsIcon';
+import TotalPoints from '../views/TotalPoints';
 import AuthMessage from '../views/AuthMessage';
 import FilterTextbox from '../views/FilterTextbox';
+import KolibriLoadingSnippet from '../views/KolibriLoadingSnippet';
 import router from '../router';
 import commonCoreStrings from '../mixins/commonCoreStrings'; // eslint-disable-line import/no-duplicates
 import { coreStrings } from '../mixins/commonCoreStrings'; // eslint-disable-line import/no-duplicates
@@ -81,7 +80,6 @@ import UserTable from '../views/UserTable';
 import CoachContentLabel from '../views/CoachContentLabel';
 import PrivacyInfoModal from '../views/PrivacyInfoModal';
 import UserTypeDisplay from '../views/UserTypeDisplay';
-import TechnicalTextBlock from '../views/AppError/TechnicalTextBlock';
 import Draggable from '../views/sortable/Draggable';
 import DragHandle from '../views/sortable/DragHandle';
 import DragContainer from '../views/sortable/DragContainer';
@@ -105,6 +103,8 @@ import sortLanguages from '../utils/sortLanguages';
 import * as sync from '../views/sync/syncComponentSet';
 import PageRoot from '../views/PageRoot';
 import NotificationsRoot from '../views/NotificationsRoot';
+import useMinimumKolibriVersion from '../composables/useMinimumKolibriVersion';
+import useUser from '../composables/useUser';
 
 // webpack optimization
 import CoreInfoIcon from '../views/CoreInfoIcon';
@@ -161,8 +161,6 @@ export default {
       AppBar,
       AppBarPage,
       ImmersivePage,
-      CoreBase,
-      SidePanelModal,
       SideNav,
       Navbar,
       NavbarLink,
@@ -171,6 +169,7 @@ export default {
       LanguageSwitcherList,
       ElapsedTime,
       PointsIcon,
+      TotalPoints,
       AuthMessage,
       FilterTextbox,
       CoreSnackbar,
@@ -194,7 +193,6 @@ export default {
       UiToolbar,
       PrivacyInfoModal,
       UserTypeDisplay,
-      TechnicalTextBlock,
       Draggable,
       DragHandle,
       DragContainer,
@@ -216,6 +214,7 @@ export default {
       PageRoot,
       MasteryModel,
       NotificationsRoot,
+      KolibriLoadingSnippet,
     },
     componentSets: {
       sync,
@@ -231,6 +230,8 @@ export default {
     },
     composables: {
       useKResponsiveWindow,
+      useMinimumKolibriVersion,
+      useUser,
     },
   },
   resources,
@@ -252,7 +253,6 @@ export default {
     navComponents,
     redirectBrowser,
     samePageCheckGenerator,
-    scriptLoader,
     serverClock,
     shuffled,
     sortLanguages,

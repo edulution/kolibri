@@ -54,6 +54,7 @@
               @interaction="saveAnswer"
               @updateProgress="updateProgress"
               @updateContentState="updateContentState"
+              @error="err => $emit('error', err)"
             />
             <UiAlert v-else :dismissible="false" type="error">
               {{ $tr('noItemId') }}
@@ -330,11 +331,7 @@
     },
     watch: {
       itemId(newVal, oldVal) {
-        // HACK: manually dismiss the perseus renderer message when moving
-        // to a different item (fixes #3853)
         if (newVal !== oldVal) {
-          this.$refs.contentRenderer.$refs.contentView.dismissMessage &&
-            this.$refs.contentRenderer.$refs.contentView.dismissMessage();
           this.startTime = Date.now();
         }
       },
@@ -431,6 +428,7 @@
       finishExam() {
         this.saveAnswer(true).then(() => {
           this.submitModalOpen = false;
+          this.$emit('finished');
         });
       },
       updateProgress(...args) {

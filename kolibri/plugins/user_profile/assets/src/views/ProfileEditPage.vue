@@ -1,16 +1,13 @@
 <template>
 
   <!-- The v-if ensures the page isn't visible briefly before redirection -->
-  <CoreBase
-    v-if="!isSubsetOfUsersDevice"
-    :immersivePage="true"
-    immersivePageIcon="close"
+  <ImmersivePage
+    v-if="!isLearnerOnlyImport"
+    icon="close"
     :appBarTitle="$tr('editProfileHeader')"
-    :pageTitle="$tr('editProfileHeader')"
-    :showSubNav="false"
-    :immersivePageRoute="profileRoute"
+    :route="profileRoute"
   >
-    <KPageContainer class="narrow-container">
+    <KPageContainer class="narrow-container" :topMargin="100">
       <form class="form" @submit.prevent="handleSubmit">
         <h1>{{ $tr('editProfileHeader') }}</h1>
 
@@ -62,7 +59,8 @@
         </KButtonGroup>
       </form>
     </KPageContainer>
-  </CoreBase>
+
+  </Immersivepage>
 
 </template>
 
@@ -78,12 +76,12 @@
   import GenderSelect from 'kolibri.coreVue.components.GenderSelect';
   import BirthYearSelect from 'kolibri.coreVue.components.BirthYearSelect';
   import FullNameTextbox from 'kolibri.coreVue.components.FullNameTextbox';
+  import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import UsernameTextbox from 'kolibri.coreVue.components.UsernameTextbox';
+  import useUser from 'kolibri.coreVue.composables.useUser';
   import { FacilityUserResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import CoreBase from 'kolibri.coreVue.components.CoreBase';
   import { RoutesMap } from '../constants';
-  import plugin_data from 'plugin_data';
 
   export default {
     name: 'ProfileEditPage',
@@ -97,9 +95,13 @@
       BirthYearSelect,
       FullNameTextbox,
       UsernameTextbox,
-      CoreBase,
+      ImmersivePage,
     },
     mixins: [commonCoreStrings],
+    setup() {
+      const { isLearnerOnlyImport } = useUser();
+      return { isLearnerOnlyImport };
+    },
     data() {
       return {
         fullName: '',
@@ -112,7 +114,6 @@
         formSubmitted: false,
         status: '',
         userCopy: {},
-        isSubsetOfUsersDevice: plugin_data['isSubsetOfUsersDevice'],
       };
     },
     computed: {
@@ -148,7 +149,7 @@
     created() {
       // Users cannot edit profiles on SoUD so redirect them if they get here which should
       // only be possible by direct linking to the URL that leads here
-      if (plugin_data['isSubsetOfUsersDevice']) {
+      if (this.isLearnerOnlyImport) {
         redirectBrowser();
       }
     },

@@ -1,13 +1,9 @@
 <template>
 
-  <AppBarPage :title="pageTitle">
+  <DeviceAppBarPage :title="pageTitle">
 
-    <template #subNav>
-      <DeviceTopNav />
-    </template>
-
-    <KPageContainer class="device-container">
-      <div v-if="!$store.state.core.loading">
+    <KPageContainer v-if="!isPageLoading" class="device-container">
+      <div>
         <h1>{{ $tr('header') }}</h1>
         <table :class="windowIsSmall ? 'mobile-table' : ''">
           <tr>
@@ -75,20 +71,19 @@
         />
       </div>
     </KPageContainer>
-  </AppBarPage>
+  </DeviceAppBarPage>
 
 </template>
 
 
 <script>
 
-  import { mapState } from 'vuex';
-  import TechnicalTextBlock from 'kolibri.coreVue.components.TechnicalTextBlock';
+  import { mapGetters, mapState } from 'vuex';
+  import TechnicalTextBlock from 'kolibri-common/components/AppError/TechnicalTextBlock';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
+  import DeviceAppBarPage from './DeviceAppBarPage';
   import { deviceString } from './commonDeviceStrings';
-  import DeviceTopNav from './DeviceTopNav';
   import DeviceNameModal from './DeviceNameModal';
 
   export default {
@@ -99,9 +94,8 @@
       };
     },
     components: {
-      AppBarPage,
+      DeviceAppBarPage,
       DeviceNameModal,
-      DeviceTopNav,
       TechnicalTextBlock,
     },
     mixins: [commonCoreStrings, responsiveWindowMixin],
@@ -112,6 +106,7 @@
       };
     },
     computed: {
+      ...mapGetters(['isPageLoading']),
       ...mapState('deviceInfo', ['deviceInfo', 'deviceName']),
       buttonText() {
         return this.advancedShown ? this.$tr('hide') : this.coreString('showAction');

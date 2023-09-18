@@ -1,6 +1,7 @@
 import logging
 import os
 import signal
+import socket
 import sys
 import threading
 import time
@@ -278,6 +279,10 @@ class ZeroConfPlugin(Monitor):
             # Only bother doing dynamic updates of the zeroconf service if we're bound
             # to all available IP addresses.
             Monitor.__init__(self, bus, self.run, frequency=5)
+        else:
+            # Otherwise do a dummy initialization
+            # A frequency of less than 0 will prevent the monitor from running
+            Monitor.__init__(self, bus, None, frequency=-1)
         self.bus.subscribe("SERVING", self.SERVING)
         self.bus.subscribe("UPDATE_ZEROCONF", self.UPDATE_ZEROCONF)
         self.broadcast = None
@@ -290,6 +295,19 @@ class ZeroConfPlugin(Monitor):
             else [conf.OPTIONS["Deployment"]["LISTEN_ADDRESS"]]
         )
 
+    @property
+    def addresses_changed(self):
+        # if we're bound to a specific addresses, then we don't need to do dynamic updates
+        if conf.OPTIONS["Deployment"]["LISTEN_ADDRESS"] != "0.0.0.0":
+            return False
+
+        current_addresses = set(get_all_addresses())
+        return (
+            self.broadcast is not None
+            and self.broadcast.is_broadcasting
+            and self.broadcast.addresses != current_addresses
+        )
+
     def SERVING(self, port):
         self.port = port or self.port
 
@@ -299,24 +317,19 @@ class ZeroConfPlugin(Monitor):
             build_broadcast_instance,
             KolibriBroadcast,
         )
-        from kolibri.core.discovery.utils.network.search import (
-            DynamicNetworkLocationListener,
-            SoUDClientListener,
-            SoUDServerListener,
-        )
+        from kolibri.core.discovery.utils.network.search import NetworkLocationListener
 
         instance = build_broadcast_instance(self.port)
 
         if self.broadcast is None:
             self.broadcast = KolibriBroadcast(instance, interfaces=self.interfaces)
-            self.broadcast.add_listener(DynamicNetworkLocationListener)
-            self.broadcast.add_listener(SoUDClientListener)
-            self.broadcast.add_listener(SoUDServerListener)
+            self.broadcast.add_listener(NetworkLocationListener)
             self.broadcast.start_broadcast()
         else:
-            self.broadcast.update_broadcast(
-                instance=instance, interfaces=self.interfaces
-            )
+            # `interfaces` should only be passed to update when there is a change to the interfaces,
+            # like the detection in self.run()
+            interfaces = self.interfaces if self.addresses_changed else None
+            self.broadcast.update_broadcast(instance=instance, interfaces=interfaces)
 
     def UPDATE_ZEROCONF(self):
         self.RUN()
@@ -332,12 +345,7 @@ class ZeroConfPlugin(Monitor):
         # If set of addresses that were present at the last time zeroconf updated its broadcast list
         # don't match the current set of all addresses for this device, then we should reinitialize
         # zeroconf, the listener, and the broadcast kolibri service.
-        current_addresses = set(get_all_addresses())
-        if (
-            self.broadcast is not None
-            and self.broadcast.is_broadcasting
-            and self.broadcast.addresses != current_addresses
-        ):
+        if self.addresses_changed:
             logger.info(
                 "List of local addresses has changed since zeroconf was last initialized, updating now"
             )
@@ -378,6 +386,8 @@ class PIDPlugin(SimplePlugin):
 
         :param: status: status of the process
         """
+        if status is None:
+            _, _, _, status = _read_pid_file(self.bus.pid_file)
         with open(self.bus.pid_file, "w") as f:
             f.write(
                 "{}\n{}\n{}\n{}\n".format(
@@ -391,12 +401,67 @@ class PIDPlugin(SimplePlugin):
 
     def ZIP_SERVING(self, zip_port):
         self.bus.zip_port = zip_port or self.bus.zip_port
+        self.set_pid_file(None)
 
     def EXIT(self):
         try:
             os.unlink(self.bus.pid_file)
         except OSError:
             pass
+
+
+class SystemdNotifyPlugin(SimplePlugin):
+    """
+    A plugin to notify systemd of the process' state when it's starting up and
+    shutting down.
+
+    This allows systemd to wait before starting dependent processes until all
+    Kolibri process plugins have started successfully. In particular, zeroconf
+    registration can take a few seconds.
+
+    You must check to see if systemd is supported before instantiating this
+    plugin, by calling ```SystemdNotifyPlugin.is_supported()```.
+    """
+
+    def __init__(self, bus):
+        self.bus = bus
+
+        if not self.is_supported():
+            raise RuntimeError(
+                "Attempted to use SystemdNotifyPlugin when NOTIFY_SOCKET environment variable is not set"
+            )
+
+        self.notify_socket_path = os.environ["NOTIFY_SOCKET"]
+
+        self.bus.subscribe("RUN", self.send_ready, priority=999)
+        self.bus.subscribe("STOP", self.send_stopping, priority=1)
+        self.bus.subscribe("EXIT", self.send_stopping, priority=1)
+
+    @classmethod
+    def is_supported(cls):
+        return os.environ.get("NOTIFY_SOCKET", "") != ""
+
+    def sd_notify(self, state):
+        """
+        Sends a state notification to systemd
+
+        See man page sd_notify(3)
+
+        :param: state: new service state
+        """
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+                logger.info("Sending sd-notify state {}".format(state))
+                s.connect(self.notify_socket_path)
+                s.send(state.encode())
+        except OSError as e:
+            logger.warning("Failed to send sd-notify state {}: {}".format(state, e))
+
+    def send_ready(self):
+        self.sd_notify("READY=1")
+
+    def send_stopping(self):
+        self.sd_notify("STOPPING=1")
 
 
 def _port_check(port):
@@ -521,6 +586,11 @@ class ProcessControlPlugin(Monitor):
             if command == RESTART:
                 self.bus.log("Restarting server.")
                 self.thread.cancel()
+                if installation_types.WINDOWS in installation_type().lower():
+                    # On Windows, we need to restart the server with the same executable
+                    # magicbus gets messed up trying to find a python script to run
+                    sys.executable = sys.argv[0]
+                    sys.argv = sys.argv[1:]
                 self.bus.restart()
             elif command == STOP:
                 self.bus.log("Stopping server.")
@@ -639,6 +709,10 @@ class BaseKolibriProcessBus(ProcessBus):
         # possible and reduce the risk of competing servers
         pid_plugin = PIDPlugin(self)
         pid_plugin.subscribe()
+
+        if SystemdNotifyPlugin.is_supported():
+            systemd_plugin = SystemdNotifyPlugin(self)
+            systemd_plugin.subscribe()
 
         logger.info("Starting Kolibri {version}".format(version=kolibri.__version__))
 

@@ -1,6 +1,7 @@
 import json
 import logging
 import socket
+import uuid
 
 from magicbus.base import Bus
 from magicbus.plugins import SimplePlugin
@@ -207,6 +208,37 @@ class KolibriInstance(object):
         instance.zeroconf_id = service_info.name.replace(SERVICE_TYPE, "").strip(".")
         return instance
 
+    def to_dict(self):
+        """
+        :rtype: dict
+        """
+        return dict(
+            id=self.id,
+            ip=self.ip,
+            port=self.port,
+            host=self.host,
+            device_info=self.device_info,
+            is_self=self.is_self,
+            prefix=self.prefix,
+        )
+
+    @classmethod
+    def from_dict(cls, state):
+        """
+        :type state: dict
+        :rtype: KolibriInstance
+        """
+        instance = cls(
+            state.pop("id"),
+            ip=state.pop("ip"),
+            port=state.pop("port"),
+            host=state.pop("host"),
+            device_info=state.pop("device_info"),
+            prefix=state.pop("prefix"),
+        )
+        instance.is_self = state.pop("is_self")
+        return instance
+
 
 def build_broadcast_instance(port):
     """
@@ -279,27 +311,6 @@ class KolibriInstanceListener(SimplePlugin):
         super(KolibriInstanceListener, self).__init__(broadcast.events)
         self.broadcast = broadcast
 
-    def partial_subscribe(self, events):
-        """
-        See similarity to SimplePlugin.subscribe()
-        :param events: A list of string event names, matching methods on this class
-        """
-        for event in events:
-            method = getattr(self, event, None)
-            listeners = self.bus.listeners.get(event)
-            if method is not None and method not in listeners:
-                self.bus.subscribe(event, method)
-
-    def partial_unsubscribe(self, events):
-        """
-        See similarity to SimplePlugin.unsubscribe()
-        :param events: A list of string event names, matching methods on this class
-        """
-        for event in events:
-            method = getattr(self, event, None)
-            if method is not None:
-                self.bus.unsubscribe(event, method)
-
 
 class KolibriBroadcast(object):
     """
@@ -307,6 +318,7 @@ class KolibriBroadcast(object):
     """
 
     __slots__ = (
+        "id",
         "instance",
         "interfaces",
         "events",
@@ -319,6 +331,7 @@ class KolibriBroadcast(object):
         :param instance: A `KolibriInstance` we'll register and broadcast on Zeroconf
         :param interfaces: A list of addresses or a Zeroconf `InterfaceChoice`
         """
+        self.id = uuid.uuid4().hex
         self.instance = instance
         self.interfaces = interfaces
         self.events = KolibriBroadcastEvents()
@@ -357,9 +370,13 @@ class KolibriBroadcast(object):
         self.register()
 
         # manually add our service browser to Zeroconf so it's automatically cleaned up on close
-        self.zeroconf.browsers["bus"] = ServiceBrowser(
-            self.zeroconf, SERVICE_TYPE, handlers=[self.events.publish_zeroconf_change]
-        )
+        # Check that the zeroconf attribute has not been set to None by a previous call to stop_broadcast
+        if self.zeroconf is not None:
+            self.zeroconf.browsers["bus"] = ServiceBrowser(
+                self.zeroconf,
+                SERVICE_TYPE,
+                handlers=[self.events.publish_zeroconf_change],
+            )
 
     def update_broadcast(self, instance=None, interfaces=None):
         """
@@ -373,16 +390,33 @@ class KolibriBroadcast(object):
             logger.error("Zeroconf service is not broadcasting!")
             return
 
-        # when interfaces is being updated, pass along to Zeroconf so it can bind to them
-        if interfaces is not None:
-            self.interfaces = interfaces
-            self.zeroconf.update_interfaces(interfaces=interfaces)
+        # nothing to do
+        if instance is None and interfaces is None:
+            return
 
-        # when our instance is being updated,
+        # when our instance is being updated
         if instance is not None:
             instance.zeroconf_id = self.instance.zeroconf_id
             self.instance = instance
-            self.renew()
+            # skip broadcasting if we're also updating our interfaces
+            self.renew(do_broadcast=interfaces is None)
+
+        # when interfaces is being updated, pass along to Zeroconf so it can bind to them
+        if interfaces is not None:
+            # a new ID every time the broadcast interfaces change
+            new_id = uuid.uuid4().hex
+            logging.debug(
+                "Updating broadcast with new ID: {}, old ID: {}".format(new_id, self.id)
+            )
+            self.id = new_id
+
+            # call the unregister listeners so that we enqueue necessary tasks to delete old
+            # locations from the database
+            self.events.publish(EVENT_UNREGISTER_INSTANCE, self.instance)
+
+            self.interfaces = interfaces
+            # `update_interfaces` will broadcast the new instance if it was updated
+            self.zeroconf.update_interfaces(interfaces=interfaces)
 
     def stop_broadcast(self):
         """Stops broadcasting our instance and shuts down Zeroconf"""
@@ -431,9 +465,11 @@ class KolibriBroadcast(object):
         self.zeroconf.register_service(service, ttl=service.ttl)
         self.instance.set_broadcasting(service, is_self=True)
 
-    def renew(self):
+    def renew(self, do_broadcast=True):
         """
         'Renews' the registration of our instance on the network
+        :param do_broadcast: Whether to broadcast the renewal or not
+        :type do_broadcast: bool
         """
         if not self.is_broadcasting:
             return
@@ -447,7 +483,20 @@ class KolibriBroadcast(object):
         service.ttl = SERVICE_TTL
         # very important to publish the event first, to avoid race conditions
         self.events.publish(EVENT_RENEW_INSTANCE, self.instance)
-        self.zeroconf.update_service(service, ttl=SERVICE_TTL)
+
+        if do_broadcast:
+            # `update_service` does 2 things:
+            # 1. updates the service info in the cache
+            # 2. sends out a new broadcast
+            self.zeroconf.update_service(service, ttl=SERVICE_TTL)
+        else:
+            # if we weren't explicitly told to broadcast, we still need to update the cache
+            # assuming something else will trigger the broadcast, like `update_interfaces` which
+            # internally calls the same broadcast method in `update_service`
+            service.ttl = SERVICE_TTL
+            self.zeroconf.services[service.name.lower()] = service
+
+        # even though may not have actually broadcast, we still set that we're broadcasting
         self.instance.set_broadcasting(service, is_self=True)
 
     def unregister(self):
@@ -459,7 +508,8 @@ class KolibriBroadcast(object):
 
         # very important to publish the event first, to avoid race conditions
         self.events.publish(EVENT_UNREGISTER_INSTANCE, self.instance)
-        self.zeroconf.unregister_service(self.instance.service_info)
+        if self.instance.service_info is not None:
+            self.zeroconf.unregister_service(self.instance.service_info)
         self.instance.reset_broadcasting()
 
     def add_listener(self, listener_cls):
@@ -568,7 +618,6 @@ class KolibriBroadcast(object):
         if not self.is_broadcasting:
             return None
 
-        logger.debug("Querying service information for service {}".format(name))
         timeout = 10000
         service_info = self.zeroconf.get_service_info(
             SERVICE_TYPE, name, timeout=timeout

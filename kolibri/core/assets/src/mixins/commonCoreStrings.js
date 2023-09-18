@@ -7,6 +7,10 @@ import notificationStrings from './notificationStrings';
 
 export const coreStrings = createTranslator('CommonCoreStrings', {
   // actions
+  acceptAction: {
+    message: 'Accept',
+    context: 'Button to agree and accept the selected terms',
+  },
   cancelAction: {
     message: 'Cancel',
     context:
@@ -20,6 +24,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   clearAction: {
     message: 'Clear',
     context: 'Button that allows to clear a single *task* from the list in the task manager.',
+  },
+  clearAllAction: {
+    message: 'Clear all',
+    context: 'Button that allows a user to clear all selections or filters.',
   },
   closeAction: {
     message: 'Close',
@@ -35,6 +43,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'Used on a button to move to the next step in a process like creating an account, for example.',
   },
+  declineAction: {
+    message: 'Decline',
+    context: 'Button text to decline selected terms (i.e. cookie usage)',
+  },
   deleteAction: {
     message: 'Delete',
     context:
@@ -43,12 +55,17 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   editAction: {
     message: 'Edit',
     context:
-      "Edit allows users to change some element in Kolbri.\n\nFor example, a coach can use 'Edit' to rename their class or an admin can edit the name of their facility.",
+      "Edit allows users to change some element in Kolibri.\n\nFor example, a coach can use 'Edit' to rename their class or an admin can edit the name of their facility.",
   },
   editDetailsAction: {
     message: 'Edit details',
     context:
       "'Edit details' changes a set of information in Kolibri.\n\nFor example, in a list of users, selecting OPTIONS > 'Edit details' allows a user to edit other users' information like their name, username or type.",
+  },
+  filter: {
+    message: 'filter',
+    context:
+      'The filter functionality allows users to find elements in Kolibri more efficiently. For example, in a list of users the filter can be used to view users by permissions, user type or facility.',
   },
   finishAction: {
     message: 'Finish',
@@ -74,6 +91,15 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Register',
     context: 'Register a facility to the Kolibri Data Portal',
   },
+  manageSyncAction: {
+    message: 'Manage sync schedule',
+    context: 'Action for managing sync schedule',
+  },
+  whenAvailable: {
+    message: 'When available',
+    context:
+      'An option to select to sync learner progress data to either a local or an online server whenever it is available on the network or Internet.',
+  },
   retryAction: {
     message: 'Retry',
     context:
@@ -83,6 +109,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Remove',
     context:
       'Description of a remove task. For example, a coach can remove a user from a class if they are no longer in that class.\n',
+  },
+  downloadAction: {
+    message: 'Download',
+    context: 'Label for a button used to initiate a file download.',
   },
   saveAction: {
     message: 'Save',
@@ -104,6 +134,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       "Users have the option to either 'show' or 'hide' coach resources in the 'Manage lesson resources' section.",
   },
+  showMoreAction: {
+    message: 'Show more',
+    context:
+      'Generic button which allows user to see more content on a page. For example more learning resources.',
+  },
   startOverAction: {
     message: 'Start over',
     context:
@@ -114,10 +149,18 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       "The 'Sync facility' feature is located in the Device > Facilities dashboard.\n\nBy pressing the 'SYNC' button, an admin can, for example, synchronize facility data (classes, groups, learner progress) with a device from which they previously imported it from.",
   },
+  justNow: {
+    message: 'Just now',
+    context: 'This is used to indicate when an event occurred.',
+  },
   updateAction: {
     message: 'Update',
     context:
       "If a user account has been created prior to version 0.13 of Kolibri, the user will see a notification that they can update their profile to provide their birth year and gender. \n\nThe 'UPDATE' button allows them to provide this new information if they choose to do so.",
+  },
+  viewAll: {
+    message: 'View all',
+    context: 'Option to view all available options',
   },
   viewAction: {
     message: 'View',
@@ -227,6 +270,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       "A topic is marked as 'Completed' when a learner finishes that specific topic within an educational resource. A topic could be a video, audio, document file or interactive app.",
   },
+  dataLabel: {
+    message: 'Data',
+    context: "Title of tab in 'Facility' section.",
+  },
   deviceNameLabel: {
     message: 'Device name',
     context:
@@ -284,6 +331,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       "An 'Identifier' could be a student ID number or an existing user identification number. This is an optional field in the user create/edit screen.",
   },
+  infoLabel: {
+    message: 'Info',
+    context: "Title of tab in 'Device' section.",
+  },
   inProgressLabel: {
     message: 'In progress',
     context:
@@ -317,9 +368,19 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'A lesson is a linear learning pathway defined by a coach. The coach can select resources from any channel, add them to the lesson, define the ordering, and assign the lesson to learners in their class.',
   },
+  libraryLabel: {
+    message: 'Library',
+    context:
+      "The 'Library' section displays channels available on Kolibri server, and allows learners to browse, explore and filter topics and resources on their own.",
+  },
   loadingLabel: {
     message: 'Loading…',
     context: 'Message displayed when a resource is loading indicating that the user should wait.',
+  },
+  menuLabel: {
+    message: 'Menu',
+    context:
+      'Label that indicates a list of options. May be a button label, or a reference to the menu itself',
   },
   nameLabel: {
     message: 'Name',
@@ -328,6 +389,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   noUsersExistLabel: {
     message: 'No users exist',
     context: 'Displays when there are no users in the facility.',
+  },
+  noResultsLabel: {
+    message: 'No results',
+    context: 'Displays when there are no matching search results',
   },
   optionsLabel: {
     message: 'Options',
@@ -351,6 +416,16 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Question { questionNumber, number }',
     context: 'Indicates the question number in a quiz that a learner could be taking.',
   },
+  questionsCorrectLabel: {
+    message: 'Questions answered correctly',
+    context:
+      "In a report, learners can see how many questions they have got correct in a quiz.\n\nThe 'Questions answered correctly' label will indicate something like 4 out of 5, or 8 out of 10, for example.",
+  },
+  questionsCorrectValue: {
+    message: '{correct, number} out of {total, number}',
+    context:
+      "When a learner views their report they can see how many questions they answered correctly in a quiz.\n\nThe 'Questions correct' label will indicate something like 4 out of 5, or 8 out of 10, for example. That's to say, the number of correct answers as well as the total number of questions.",
+  },
   quizzesLabel: {
     message: 'Quizzes',
     context:
@@ -369,6 +444,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Search for a user...',
     context:
       'Text which appears in the search field above the table with users from whom to choose from (e.g. when enrolling learners to a class, selecting users to sync, etc.)',
+  },
+  settingsLabel: {
+    message: 'Settings',
+    context: "Title of tab used in 'Facility' and 'Device' sections.",
   },
   findSomethingToLearn: {
     message: 'Find something to learn',
@@ -403,6 +482,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'The "Usage and privacy" link displays on the \'Create an account\' screen and on the left navigation bar.\n\nIt contains information about who has access to personal information of users.',
   },
+  cookiePolicy: {
+    message: 'Cookie policy',
+    context:
+      'The "Cookie policy" link displays on the \'cookie notification\' banner and on the left navigation bar.\n\nIt contains information about usage of cookies within online Kolibri instances. It is also used as a title and heading on the page that describes this policy.',
+  },
   userTypeLabel: {
     message: 'User type',
     context:
@@ -416,6 +500,9 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Users',
     context:
       'A user is any person who has access to a facility in Kolibri. There are  four main types of users in Kolibri: Learners, Coaches, Admins and Super admins.',
+  },
+  uncountedAdditionalResults: {
+    message: 'More than { num, number } results',
   },
   viewMoreAction: {
     message: 'View more',
@@ -504,6 +591,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   explore: {
     message: 'Explore',
     context: 'Resource and filter label for the type of learning activity. Translate as a VERB',
+  },
+  activityType: {
+    message: 'Activity type',
+    context: 'Indicate the kind of learning activity, such as: reading, listening, watching, etc.',
   },
 
   // Library Categories
@@ -686,7 +777,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Numeracy',
     context: 'Category type. See https://en.wikipedia.org/wiki/Numeracy',
   },
-  digitialLiteracy: {
+  digitalLiteracy: {
     message: 'Digital literacy',
     context: 'Category type. See https://en.wikipedia.org/wiki/Digital_literacy',
   },
@@ -708,7 +799,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   },
 
   //  VocationalSubcategories
-  softwareToolsAndTraining: {
+  toolsAndSoftwareTraining: {
     message: 'Software tools and training',
     context: 'Subcategory type for technical and vocational training.',
   },
@@ -768,25 +859,39 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
       'Category label in the Kolibri resources library; refers to lesson planning materials for teachers.',
   },
 
+  uncategorized: {
+    message: 'Uncategorized',
+    context: 'A label to indicate that no category label has been applied to the resource.',
+  },
+
   // Resources Needed Categories = {
-  ForBeginners: {
+  forBeginners: {
     message: 'For beginners',
     context: 'Filter option and a label for the resources in the Kolibri Library.',
   },
-  ToUseWithTeachersAndPeers: {
-    message: 'To use with teachers and peers',
+  toUseWithPeers: {
+    message: 'To use with peers',
     context:
       "'Peers' in this context refers to classmates or other learners who are interacting with Kolibri.",
   },
-  ToUseWithPaperAndPencil: {
+  toUseWithTeachers: {
+    message: 'To use with teachers',
+    context:
+      'To use with a subject matter or pedagogical expert who is helping to guide the learner.',
+  },
+  toUseWithPaperAndPencil: {
     message: 'To use with paper and pencil',
     context: 'Refers to a filter for resources.\n',
   },
-  NeedsInternet: {
+  needsInternet: {
     message: 'That need internet connection',
     context: 'Refers to a filter for resources.',
   },
-  NeedsMaterials: {
+  needsSpecialSoftware: {
+    message: 'That need special software',
+    context: 'Refers to a filter for resources.',
+  },
+  needsMaterials: {
     message: 'That need other materials',
     context: 'Refers to a filter for resources.\n',
   },
@@ -877,11 +982,6 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Browse channel',
     context: 'Heading on page where a user can browse the content within a channel',
   },
-  topicLabel: {
-    message: 'Folder',
-    context:
-      'A collection of resources and other subfolders within a channel. Nested folders allow a channel to be organized as a tree or hierarchy.',
-  },
   readReference: {
     message: 'Reference',
     context:
@@ -894,6 +994,16 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   longActivity: {
     message: 'Long activity',
     context: 'Label with time estimation for learning activities that take more than 30 minutes.',
+  },
+  shortExerciseGoalDescription: {
+    message: 'Get {count, number, integer} {count, plural, other {correct}}',
+    context:
+      'Label that indicates to the learner how many correct answers they need to give in order to master the given topic, and for the exercise to be considered completed.',
+  },
+  practiceQuizLabel: {
+    message: 'Practice quiz',
+    context:
+      'Label that indicates this self paced activity is in the style of a quiz, and learners will only see the correct answers once they have submitted the quiz.',
   },
 
   // assigning bookmarked resources
@@ -935,6 +1045,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   },
   doNotShowAgain: {
     message: "Don't show this again",
+    context:
+      'Option that allows the user to prevent this resource from displaying in the future while using category search',
+  },
+  doNotShowMessageAgain: {
+    message: "Don't show this message again",
     context:
       'Option that allows the user to prevent this resource from displaying in the future while using category search',
   },
@@ -1041,6 +1156,162 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
       "Could also be translated as \"View information about providing identifier\"\n\nAll 'AriaLabel' type of messages are providing additional context to the screen-reader users. \n\nIn this case the screen-reader will announce the message to the user indicating that they can access more information and examples about the 'Identifier' through the 'i' icon.",
   },
 
+  // Missing resource strings
+  someResourcesMissingOrNotSupported: {
+    message: 'Some resources are missing or not supported',
+    context:
+      'Floating notification message that appears over the alert icon and indicates that there are missing resources',
+  },
+  resourceNotFoundOnDevice: {
+    message: 'Resource not found on device',
+    context:
+      'Error message that displays if a learning resource cannot be found on the device being used currently.',
+  },
+
+  // Downloads management
+  myDownloadsLabel: {
+    message: 'My downloads',
+    context: "Users can access and see their content downloads via 'my downloads' option.",
+  },
+  removeFromLibrary: {
+    message: 'Remove from library',
+    context:
+      'Title of the modal that appears when the user tries to remove a resource from the library.',
+  },
+  resourcesSelectedMessage: {
+    message: 'Selected: {count, number} {count, plural, one {resource} other {resources}} ({size})',
+    context: 'Indicates how many resources have been selected to be deleted.\n',
+  },
+  removeSelectedMessage: {
+    message: 'Remove selected',
+    context: 'Action to remove selected resources',
+  },
+  dateCreated: {
+    message: 'Date created',
+    context: '',
+  },
+  totalSizeMyDownloads: {
+    message: 'Total size of my downloads',
+    context:
+      'A lable explaining the size (i.e. in MB) of the resources a user has downloaded to their library',
+  },
+  availableStorage: {
+    message: 'Available storage',
+    context:
+      'A lable explaining the amount (i.e. in MB) of the storage remaining that a user has to downloads items to their library',
+  },
+  fileSize: {
+    message: 'File size',
+    context: 'A lable explaining the size (i.e. in MB) of a single resource',
+  },
+  dateAdded: {
+    message: 'Date added',
+    context: "The date a resource was downloaded to a user's library",
+  },
+  noResourcesDownloaded: {
+    message: 'You do not have any resources downloaded',
+    context:
+      'Message displayed a user looks at their My Downloads page, but has not yet downloaded any resources to the device',
+  },
+  removeResourceText: {
+    message:
+      "You will no longer be able to use this resource, but you can download it again later when it's available around you.",
+    context:
+      'Text displayed in a modal when a user decides to remove one downloaded resource from the device',
+  },
+  removeResourcesText: {
+    message:
+      'You will no longer be able to use these resources, but you can download them again later when they are available around you.',
+    context:
+      'Text displayed in a modal when a user decides to remove more than one downloaded resources from the device',
+  },
+  waitingToDownload: {
+    message: 'Waiting to download',
+    context: 'Text that displays the status of a resource the user has downloaded',
+  },
+  downloadStarted: {
+    message: 'Download started',
+    context: 'Text that displays the status of a resource the user has downloaded',
+  },
+  downloadedFailedWillRetry: {
+    message: 'Download failed. Retrying in {minutes, number} minutes',
+    context:
+      'Text that displays the status of a resource the user has downloaded when the download has failed, but Kolibri is able to automatically try the download again.',
+  },
+  downloadedFailedCanNotRetry: {
+    message: 'Download failed. Unable to retry.',
+    context:
+      'Text that displays the status of a resource the user has downloaded when the download has failed, and Kolibri is not able to automatically try the download again.',
+  },
+  deviceDisconnected: {
+    message: 'Your device seems to be disconnected',
+    context: '',
+  },
+  disconnected: {
+    message: 'Disconnected',
+    context: '',
+  },
+  addToLibrary: {
+    message: 'Add to library',
+    context: '',
+  },
+  selectADevice: {
+    message: 'Select a device from your network',
+  },
+  //
+  sortBy: {
+    message: 'Sort by',
+    context: '',
+  },
+  newestResource: {
+    message: 'Newest',
+    context: 'Label to filter by newest resource',
+  },
+  oldestResource: {
+    message: 'Oldest',
+    context: 'Label to filter by oldest resource',
+  },
+  largestFile: {
+    message: 'Largest file size',
+    context: 'Label to filter by largest file size',
+  },
+  smallestFile: {
+    message: 'Smallest file size',
+    context: 'Label to filter by smallest file size',
+  },
+  myLibrary: {
+    message: 'My library',
+    context: '',
+  },
+  showingYourLibrary: {
+    message: 'Showing results from your library only',
+    context: '',
+  },
+
+  // Device upgrades recommended
+  currentDeviceUsingIE11: {
+    message: 'You seem to be using Internet Explorer 11.',
+    context:
+      'Displayed on a device that is using Internet Explorer 11, as part of a message encouraging the user to upgrade.',
+  },
+  userDevicesUsingIE11: {
+    message: 'Some users seem to be accessing Kolibri via Internet Explorer 11',
+    context:
+      'Displayed to an admin, where devices on their network are using Internet Explorer 11, as part of a message encouraging the user to upgrade.',
+  },
+  browserSupportWillBeDroppedIE11: {
+    message:
+      'Please note that support for this browser will be dropped in the upcoming version, 0.17.  We recommend installing other browsers, such as Mozilla Firefox or Google Chrome, in order to continue working with Kolibri.',
+    context:
+      'Displayed to users of kolibri where one or more devices on the network are using Internet Explorer 11, as part of a message encouraging the user to upgrade.',
+  },
+  pythonSupportWillBeDropped: {
+    message:
+      'Please note that support for Python 2.7 will be dropped in the upcoming version 0.17. Upgrade your Python version to Python 3.7+ to continue working with Kolibri. More recent versions of Python 3 are recommended.',
+    context:
+      'Displayed to users of kolibri where one or more devices on the network are using Python 2.7, as part of a message encouraging the user to upgrade.',
+  },
+
   // Content activity
   notStartedLabel: {
     message: 'Not started',
@@ -1059,12 +1330,19 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'Score obtained by a learner on a quiz, indicated by the percentage of correct answers given.',
   },
-
   // TODO - move these into diff sections as we make this a full feature in 0.16
   // Past Papers Project (12/2021) strings
   timeSpentLabel: {
     message: 'Time spent',
     context: 'The time a learner has spent on a quiz.',
+  },
+  suggestedTimeToComplete: {
+    message: 'Suggested time to complete',
+    context: 'Tooltip label indicating the approximate time needed to complete the resource.',
+  },
+  suggestedTime: {
+    message: 'Suggested time',
+    context: 'Time suggested by coach for how long an independent practice quiz should take',
   },
   statusLabel: {
     message: 'Status',
@@ -1083,23 +1361,183 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'Change learning facility',
     context: 'Menu or screen used for the user to move to a different learning facility',
   },
-});
-
-// We forgot a string, so we are using one from the PerseusInternalMessages namespace
-// do not do this, do as I say, not as I do, etc. etc.
-// TODO: 0.16 - remove this and put a proper string in place
-const noneOfTheAboveTranslator = createTranslator('PerseusInternalMessages', {
-  'None of the above': 'None of the above',
-});
-
-// We forgot another string, so we are using one from the EPubRenderer SearchSideBar namespace
-// do not do this, do as I say, not as I do, etc. etc.
-// TODO: 0.16 - remove this and put a proper string in place
-const overResultsTranslator = createTranslator('SearchSideBar', {
-  overCertainNumberOfSearchResults: {
-    message: 'Over {num, number, integer} {num, plural, one {result} other {results}}',
+  enterPinPlaceholder: {
+    message: 'Enter PIN',
+    context: 'Placholder text for the enter PIN textbox',
+  },
+  removePinPlacholder: {
+    message: 'Remove PIN',
+    context: 'Placholder text for the remove PIN textbox',
+  },
+  setPin: {
+    message: 'Choose a 4-digit number to set as your new PIN',
+    context: 'Label to allow user to choose numbers to set PIN',
+  },
+  numbersOnly: {
+    message: 'Enter numbers only',
     context:
-      'Refers to number of search results when there are over a specified amount. Only translate "over", "result" and "results".\n',
+      'Error message indicating a user has entered characters other than numbers as their PIN',
+  },
+  wrongNumberOfDigits: {
+    message: 'Please enter a 4-digit number',
+    context: 'Error message indicating a user has entered the wrong number of digits as their PIN',
+  },
+  noEmptyField: {
+    message: 'The field cannot be empty',
+    context: 'Error message indicating a user has not added their PIN to the form field',
+  },
+
+  // preferred learning language and UI language
+  preferredLanguage: {
+    message: 'Preferred language',
+    context:
+      'Label for an setting where a user can select the language that they would like to learn in',
+  },
+  changePreferredLanguage: {
+    message: 'Change preferred language',
+    context:
+      'Title for a modal where a user can select the language that they would like to learn in',
+  },
+  preferredLanguageHelperText: {
+    message: 'Channels in the preferred language will be displayed first',
+    context:
+      'Explanatory text for the setting where a user can select the language that they would like to learn in',
+  },
+  changeLanguageOption: {
+    message: 'Change language',
+    context: "Option to change the Kolibri interface language on the  'Change language' screen.",
+  },
+  // getting started, pre-and-post-setup-wizard misc.
+
+  // pre setup
+  getStarted: {
+    message: 'Get started',
+    context: '',
+  },
+  learnWherever: {
+    message: 'Learn wherever you are',
+    context: '',
+  },
+  learnWhereverDescription: {
+    message: 'Thousands of learning materials at your fingertips, completely offline',
+    context: '',
+  },
+  goAtYourOwnPace: {
+    message: 'Go at your own pace',
+    context: '',
+  },
+  goAtYourOwnPaceDescription: {
+    message: 'Track your own progress and use your learning materials as many times as you need',
+    context: '',
+  },
+  exploreGlobalLibrary: {
+    message: 'Explore a global library',
+    context: '',
+  },
+  exploreGlobalLibraryDescription: {
+    message: 'Find learning materials in over 170 languages',
+    context: '',
+  },
+  neverPay: {
+    message: 'Never pay to learn',
+    context: '',
+  },
+  neverPayDescription: {
+    message: 'Kolibri and its library will always be free of charge',
+    context: '',
+  },
+
+  // setup wizard catch all
+  whatLanguage: {
+    message: 'What language do you want your learning materials to be in?',
+    context: '',
+  },
+  whatLanguageDescription: {
+    message: 'Kolibri will recommend materials in the language you select.',
+    context: '',
+  },
+  currentLanguageLabel: {
+    message: 'Language: {curentLanguage}',
+    context: '',
+  },
+  superAdminAccountDescription: {
+    message:
+      'This is a super admin account that will let you manage resources and user accounts on this device.',
+    context: '',
+  },
+  learningFacilityDescription: {
+    message:
+      'A learning facility represents the location where you are installing Kolibri, such as a school, training center, or your home.',
+    context: '',
+  },
+  joinLearningFacility: {
+    message: 'Join learning facility',
+    context: '',
+  },
+  joinedSuccessfully: {
+    message: "You have successfully joined the '{facility}' learning facility",
+    context: '',
+  },
+  dontKnowUserName: {
+    message: "Don't know the username?",
+    context: '',
+  },
+  editAccountDetails: {
+    message: 'Edit account details',
+    context: '',
+  },
+  enterPassword: {
+    message: 'Enter password',
+    context: '',
+  },
+
+  // post setup
+  preLoadedContentWelcomeText: {
+    message:
+      "Welcome to the '{facility}' learning facility. Your class materials can be found on the home page.",
+    context: '',
+  },
+  channelsDescriptionNoChannelsAdded: {
+    message:
+      'Channels are collections of learning materials. Explore your network to start finding channels.',
+  },
+  nothingInLibraryLearner: {
+    message:
+      'There is nothing in your library yet. Explore libraries around you and start adding materials to your own.',
+  },
+  noNearbyFacilities: {
+    message: 'There are no learning facilities around you right now',
+    context: '',
+  },
+
+  changingStorageLocation: {
+    message: 'Changing storage location',
+    context: '',
+  },
+  showingLibrariesAroundYou: {
+    message: 'Showing other libraries around you.',
+    context: '',
+  },
+  noLibraries: {
+    message: 'No libraries found around you.',
+    context: '',
+  },
+  refresh: {
+    message: 'Refresh',
+    context: '',
+  },
+  addLearningMaterials: {
+    message: 'Add learning materials',
+    context: '',
+  },
+  addLearningMaterialsDescription: {
+    message:
+      'Choose materials to use on your device. You will also be able to add more whenever you are connected to the internet or there are other Kolibris around you.',
+    context: '',
+  },
+  yourLibrary: {
+    message: 'Your library',
+    context: '',
   },
 });
 
@@ -1113,15 +1551,17 @@ const overResultsTranslator = createTranslator('SearchSideBar', {
  * - Keys which, when _.camelCase()'ed will not result in a valid key, requiring manual mapping
  */
 const nonconformingKeys = {
-  PEOPLE: 'ToUseWithTeachersAndPeers',
-  PAPER_PENCIL: 'ToUseWithPaperAndPencil',
-  INTERNET: 'NeedsInternet',
-  MATERIALS: 'NeedsMaterials',
-  FOR_BEGINNERS: 'ForBeginners',
-  digitalLiteracy: 'digitialLiteracy',
+  PEERS: 'toUseWithPeers',
+  TEACHER: 'toUseWithTeachers',
+  PAPER_PENCIL: 'toUseWithPaperAndPencil',
+  INTERNET: 'needsInternet',
+  SPECIAL_SOFTWARE: 'needsSpecialSoftware',
+  MATERIALS: 'needsMaterials',
+  OTHER_SUPPLIES: 'needsMaterials',
+  FOR_BEGINNERS: 'forBeginners',
   BASIC_SKILLS: 'allLevelsBasicSkills',
   FOUNDATIONS: 'basicSkills',
-  toolsAndSoftwareTraining: 'softwareToolsAndTraining',
+  foundations: 'basicSkills',
   foundationsLogicAndCriticalThinking: 'logicAndCriticalThinking',
 };
 
@@ -1141,6 +1581,7 @@ const MetadataLookup = invert(
     METADATA.ResourcesNeededTypes
   )
 );
+
 /**
  * Return translated string for key defined in the coreStrings translator. Will map
  * ID keys generated in the kolibri-constants library to their appropriate translations
@@ -1152,14 +1593,6 @@ const MetadataLookup = invert(
  * string mapping to the values to be passed for those arguments.
  */
 export function coreString(key, args) {
-  if (key === 'None of the above' || key === METADATA.NoCategories) {
-    return noneOfTheAboveTranslator.$tr('None of the above', args);
-  }
-
-  if (key === 'overCertainNumberOfSearchResults') {
-    return overResultsTranslator.$tr(key, args);
-  }
-
   const metadataKey = get(MetadataLookup, key, null);
   key = metadataKey ? camelCase(metadataKey) : key;
 
@@ -1187,7 +1620,7 @@ export default {
      * `CORE_CREATE_SNACKBAR` mutation.
      */
     showSnackbarNotification(key, args, coreCreateSnackbarArgs) {
-      let text = notificationStrings.$tr(key, args || {});
+      const text = notificationStrings.$tr(key, args || {});
       if (coreCreateSnackbarArgs) {
         this.$store.commit('CORE_CREATE_SNACKBAR', {
           ...coreCreateSnackbarArgs,

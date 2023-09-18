@@ -357,3 +357,28 @@ class ExamAttemptLog(BaseAttemptLog):
 
     def calculate_partition(self):
         return self.dataset_id
+
+
+class GenerateCSVLogRequest(models.Model):
+    """
+    This model provides a record of a user's request to generate session and summary log files
+    """
+
+    LOG_TYPE_CHOICES = [
+        ("session", "Session"),
+        ("summary", "Summary"),
+    ]
+    permissions = RoleBasedPermissions(
+        target_field="facility",
+        can_be_created_by=(role_kinds.ADMIN,),
+        can_be_read_by=(role_kinds.ADMIN,),
+        can_be_updated_by=(role_kinds.ADMIN,),
+        can_be_deleted_by=(role_kinds.ADMIN,),
+        is_syncable=False,
+    )
+
+    facility = models.ForeignKey(Facility, on_delete=models.CASCADE)
+    selected_start_date = DateTimeTzField(null=True, blank=True)
+    selected_end_date = DateTimeTzField(null=True, blank=True)
+    date_requested = DateTimeTzField(default=local_now)
+    log_type = models.CharField(max_length=7, choices=LOG_TYPE_CHOICES)

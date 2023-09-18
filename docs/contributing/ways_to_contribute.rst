@@ -10,9 +10,9 @@ little bit helps, and credit will always be given.
 Talk to us
 ----------
 
-* Get support in our `Community Forums <http://community.learningequality.org/>`__.
+* Get product support in our `Community Forums <http://community.learningequality.org/>`__.
+* Get development contributions support in `Kolibri GitHub Discussions <https://github.com/learningequality/kolibri/discussions>`__.
 * Email us at info@learningequality.org
-* Visit the ``#kolibri`` room on Freenode IRC
 
 Translate
 ---------
@@ -36,12 +36,7 @@ Please make sure to use the template. Replace the HTML comments (the ``<!-- ... 
 Write code
 ----------
 
-Look through the GitHub issues for issues you'd like to address. We have a number of issues tagged as `beginner issues <https://github.com/learningequality/kolibri/labels/TAG%3A%20beginner%20friendly>`__, and these are an excellent starting point. You can check our `upcoming milestones <https://github.com/learningequality/kolibri/milestones>`__ to look for high-priority items.
-
-Then, visit :ref:`getting_started` to begin contributing.
-
-Note that since Kolibri is still in development, the APIs are subject to change, and a lot of code is still in flux.
-
+See `How can I contribute? <https://github.com/learningequality/kolibri/blob/develop/CONTRIBUTING.md>`__
 
 Write documentation
 -------------------

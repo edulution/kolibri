@@ -76,10 +76,10 @@ describe('channelTokenModal component', () => {
     });
 
     it('emits a "submit" event if token lookup is successful', () => {
-      const tokenPayload = { id: 'toka-toka-token' };
+      const tokenPayload = { token: 'toka-toka-token', channels: [{ id: 'toka-toka-token' }] };
       const { lookupTokenStub } = getElements(wrapper);
       const lookupStub = lookupTokenStub();
-      lookupStub.mockResolvedValue([tokenPayload]);
+      lookupStub.mockResolvedValue(tokenPayload.channels);
       return inputToken(wrapper, 'toka-toka-token')
         .then(() => {
           wrapper.vm.submitForm();
@@ -119,7 +119,7 @@ describe('channelTokenModal component', () => {
       await inputToken(wrapper, 'toka-toka-token');
       await wrapper.vm.submitForm();
       expect(lookupStub).toHaveBeenCalledWith('toka-toka-token');
-      expect(Object.keys(wrapper.emitted()).length).toEqual(0);
+      expect(wrapper.emitted().submit).toBeUndefined();
       assertTextboxInvalid(wrapper);
     });
 
@@ -132,7 +132,7 @@ describe('channelTokenModal component', () => {
       await inputToken(wrapper, 'toka-toka-token');
       await wrapper.vm.submitForm();
       expect(lookupStub).toHaveBeenCalledWith('toka-toka-token');
-      expect(Object.keys(wrapper.emitted()).length).toEqual(0);
+      expect(wrapper.emitted().submit).toBeUndefined();
       expect(textbox.props().invalid).toEqual(false);
       expect(networkErrorAlert().exists()).toEqual(true);
     });

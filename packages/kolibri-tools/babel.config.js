@@ -4,9 +4,10 @@ module.exports = {
       '@babel/preset-env',
       {
         useBuiltIns: 'entry',
-        corejs: '3.13',
+        corejs: '3.31',
       },
     ],
   ],
-  plugins: ['@babel/plugin-proposal-object-rest-spread', '@babel/plugin-syntax-import-assertions'],
+  plugins: ['@babel/plugin-syntax-import-assertions'],
+  sourceType: 'unambiguous',
 };

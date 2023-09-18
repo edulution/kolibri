@@ -6,6 +6,7 @@ import SideNav from '../../src/views/SideNav';
 import logoutSideNavEntry from '../../src/views/LogoutSideNavEntry';
 import LearnOnlyDeviceNotice from '../../src/views/LearnOnlyDeviceNotice';
 import SyncStatusDisplay from '../../src/views/SyncStatusDisplay';
+import { stubWindowLocation } from 'testUtils'; // eslint-disable-line
 
 import { coreStoreFactory as makeStore } from '../../src/state/store';
 
@@ -42,16 +43,25 @@ function setUserKind(store, userKind) {
   });
 }
 
-function createAndRegisterComponent(name, options = {}) {
-  const component = {
-    name,
-    render() {
-      return '';
-    },
-    ...options,
+const url = '/test/url';
+const label = 'label1';
+const label2 = 'label2';
+const icon = 'library';
+const role = UserKinds.LEARNER;
+
+function createAndRegisterComponent(name, url, label, icon, role, priority, section) {
+  const config = {
+    name: name,
+    url: url,
+    label: label,
+    icon: icon,
+    role: role,
+    priority: priority,
+    section: section,
+    bottomBar: true,
   };
-  navComponents.register(component);
-  return component;
+  navComponents.register(config);
+  return config;
 }
 
 function emptyNavComponents(n = 1) {
@@ -62,6 +72,8 @@ function emptyNavComponents(n = 1) {
 }
 
 describe('side nav component', () => {
+  stubWindowLocation(beforeAll, afterAll);
+
   it('should be hidden if navShown is false', () => {
     const wrapper = createWrapper({ navShown: false });
     expect(wrapper.find('.side-nav').element).not.toBeVisible();
@@ -111,17 +123,15 @@ describe('side nav component', () => {
     it.each(testCases)(
       'if user is %s, then %s component should show (%s)',
       async (kind, otherKind, shouldShow) => {
-        const component = createAndRegisterComponent(`${otherKind}SideNavEntry`, {
-          role: otherKind,
-        });
+        createAndRegisterComponent(`${otherKind}SideNavEntry`, url, label, icon, otherKind);
         expect(navComponents).toHaveLength(1);
         const wrapper = createWrapper();
         setUserKind(wrapper.vm.$store, kind);
         await wrapper.vm.$nextTick();
         if (shouldShow) {
-          expect(wrapper.findComponent(component).element).toBeTruthy();
+          expect(wrapper.text()).toContain(label);
         } else {
-          expect(wrapper.findComponent(component).element).toBeFalsy();
+          expect(wrapper.text()).not.toContain(label);
         }
       }
     );
@@ -141,16 +151,16 @@ describe('side nav component', () => {
       [UserKinds.ADMIN, UserKinds.CAN_MANAGE_CONTENT],
     ];
     it.each(testCases)('%s component should above %s component', async (kind, otherKind) => {
-      const component1 = createAndRegisterComponent(`${kind}SideNavEntry`, { role: kind });
-      const component2 = createAndRegisterComponent(`${otherKind}SideNavEntry`, {
-        role: otherKind,
-      });
+      createAndRegisterComponent(`${kind}SideNavEntry`, url, label, icon, kind, 10);
+      createAndRegisterComponent(`${otherKind}SideNavEntry`, url, label2, icon, otherKind, 10);
       expect(navComponents).toHaveLength(2);
       const wrapper = createWrapper();
       setUserKind(wrapper.vm.$store, UserKinds.SUPERUSER);
       await wrapper.vm.$nextTick();
-      expect(wrapper.vm.menuOptions[0]).toBe(component1);
-      expect(wrapper.vm.menuOptions[1]).toBe(component2);
+      const sideNavComponents = wrapper.findAll("[data-test='side-nav-component']");
+      expect(sideNavComponents.exists()).toBeTruthy();
+      expect(sideNavComponents.at(0).html()).toContain(label);
+      expect(sideNavComponents.at(1).html()).toContain(label2);
     });
   });
 
@@ -160,34 +170,45 @@ describe('side nav component', () => {
     });
 
     it('should show higher priority component above lower priority component', () => {
-      const component1 = createAndRegisterComponent('1SideNavEntry', { priority: 1 });
-      const component2 = createAndRegisterComponent('2SideNavEntry', { priority: 10 });
+      createAndRegisterComponent('1SideNavEntry', url, label, icon, role, 1);
+      createAndRegisterComponent('2SideNavEntry', url, label2, icon, role, 10);
       expect(navComponents).toHaveLength(2);
       const wrapper = createWrapper();
-      expect(wrapper.vm.menuOptions[0]).toBe(component1);
-      expect(wrapper.vm.menuOptions[1]).toBe(component2);
+      const sideNavComponents = wrapper.findAll("[data-test='side-nav-component']");
+      expect(sideNavComponents.exists()).toBeTruthy();
+      expect(sideNavComponents.at(0).html()).toContain(label);
+      expect(sideNavComponents.at(1).html()).toContain(label2);
     });
 
     it('should show account section component below lower priority component', () => {
-      const component1 = createAndRegisterComponent('1SideNavEntry', {
-        priority: 1,
-        section: NavComponentSections.ACCOUNT,
-      });
-      const component2 = createAndRegisterComponent('2SideNavEntry', { priority: 10 });
+      createAndRegisterComponent('1SideNavEntry', url, label, icon, role, 1);
+      createAndRegisterComponent(
+        '2SideNavEntry',
+        url,
+        label2,
+        icon,
+        role,
+        10,
+        NavComponentSections.ACCOUNT
+      );
       expect(navComponents).toHaveLength(2);
       const wrapper = createWrapper();
-      expect(wrapper.vm.menuOptions[2]).toBe(component1);
-      expect(wrapper.vm.menuOptions[0]).toBe(component2);
+      const sideNavComponents = wrapper.findAll("[data-test='side-nav-component']");
+      expect(sideNavComponents.exists()).toBeTruthy();
+      expect(sideNavComponents.at(1).html()).toContain(label2);
+      expect(sideNavComponents.at(0).html()).toContain(label);
     });
 
     it('should show component with priority above undefined priority component', () => {
       // Component 2 should be registered first
-      const component2 = createAndRegisterComponent('2SideNavEntry', { priority: 10 });
-      const component1 = createAndRegisterComponent('1SideNavEntry');
+      createAndRegisterComponent('2SideNavEntry', url, label2, icon, role, 10);
+      createAndRegisterComponent('1SideNavEntry', url, label, icon, role, undefined);
       expect(navComponents).toHaveLength(2);
       const wrapper = createWrapper();
-      expect(wrapper.vm.menuOptions[1]).toBe(component1);
-      expect(wrapper.vm.menuOptions[0]).toBe(component2);
+      const sideNavComponents = wrapper.findAll("[data-test='side-nav-component']");
+      expect(sideNavComponents.exists()).toBeTruthy();
+      expect(sideNavComponents.at(0).html()).toContain(label2);
+      expect(sideNavComponents.at(1).html()).toContain(label);
     });
   });
 
@@ -195,7 +216,7 @@ describe('side nav component', () => {
     describe('on an SoUD with learn-only device indicators', () => {
       let wrapper;
       beforeAll(() => {
-        wrapper = createWrapper(undefined, { isSubsetOfUsersDevice: true });
+        wrapper = createWrapper(undefined, { isLearnerOnlyImport: true });
       });
       describe('showing the SyncStatusDisplay', () => {
         it('shows the SyncStatusDisplay to Learners', async () => {
@@ -216,7 +237,7 @@ describe('side nav component', () => {
       /* Note that Facilty & Coach plugins are hackily disabled in their kolibri_plugin
        * definitions - hence no tests to ensure they're hidden here when on SoUD */
       it('shows the Learn-only notice to non-Learners', async () => {
-        const wrapper = createWrapper(undefined, { isSubsetOfUsersDevice: true });
+        const wrapper = createWrapper(undefined, { isLearnerOnlyImport: true });
         setUserKind(wrapper.vm.$store, UserKinds.COACH);
         await wrapper.vm.$nextTick();
         expect(wrapper.findComponent(LearnOnlyDeviceNotice).exists()).toBe(true);
@@ -226,7 +247,7 @@ describe('side nav component', () => {
       });
 
       it('does not show learn-only notice to Learners or Guests', async () => {
-        const wrapper = createWrapper(undefined, { isSubsetOfUsersDevice: true });
+        const wrapper = createWrapper(undefined, { isLearnerOnlyImport: true });
         setUserKind(wrapper.vm.$store, UserKinds.LEARNER);
         await wrapper.vm.$nextTick();
         expect(wrapper.findComponent(LearnOnlyDeviceNotice).exists()).toBe(false);
@@ -238,7 +259,7 @@ describe('side nav component', () => {
     describe('NOT on a SoUD', () => {
       let wrapper;
       beforeEach(async () => {
-        wrapper = createWrapper(undefined, { isSubsetOfUsersDevice: false });
+        wrapper = createWrapper(undefined, { isLearnerOnlyImport: false });
       });
 
       it('shows no notice', () => {

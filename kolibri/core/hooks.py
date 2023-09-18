@@ -16,6 +16,8 @@ from __future__ import unicode_literals
 
 from abc import abstractproperty
 
+from django.utils.safestring import mark_safe
+
 from kolibri.core.webpack.hooks import WebpackBundleHook
 from kolibri.core.webpack.hooks import WebpackInclusionASyncMixin
 from kolibri.core.webpack.hooks import WebpackInclusionSyncMixin
@@ -31,6 +33,14 @@ class NavigationHook(WebpackBundleHook):
 
 @define_hook
 class RoleBasedRedirectHook(KolibriHook):
+    # If True, will only be used to redirect if the user is part
+    # of a full facility import
+    require_full_facility = False
+
+    # If True, will only be used to redirect if the user is not
+    # in an 'on my own' facility
+    require_no_on_my_own_facility = False
+
     # User role to redirect for
     @abstractproperty
     def roles(self):
@@ -59,6 +69,25 @@ class FrontEndBaseASyncHook(WebpackInclusionASyncMixin):
     Inherit a hook defining assets to be loaded in kolibri/base.html, that means
     ALL pages. Use with care.
     """
+
+
+@define_hook
+class FrontEndBaseHeadHook(KolibriHook):
+    """
+    Inherit a hook defining markup to be injected in the head of
+    kolibri/base.html, that means ALL pages. Use with care.
+    """
+
+    @abstractproperty
+    def head_html(self):
+        pass
+
+    @classmethod
+    def html(cls):
+        tags = []
+        for hook in cls.registered_hooks:
+            tags.append(hook.head_html)
+        return mark_safe("\n".join(tags))
 
 
 @define_hook(only_one_registered=True)

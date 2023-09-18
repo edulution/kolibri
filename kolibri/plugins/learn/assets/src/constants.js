@@ -1,3 +1,5 @@
+import plugin_data from 'plugin_data';
+
 // a name for every URL pattern
 export const PageNames = {
   ROOT: 'ROOT',
@@ -11,6 +13,15 @@ export const PageNames = {
   EXAM: 'EXAM',
   EXAM_ROOT: 'EXAM_ROOT',
   BOOKMARKS: 'BOOKMARKS',
+  EXPLORE_LIBRARIES: 'EXPLORE_LIBRARIES',
+};
+
+export const ExternalPageNames = {
+  MY_DOWNLOADS: 'MY_DOWNLOADS',
+};
+
+export const ExternalPagePaths = {
+  [ExternalPageNames.MY_DOWNLOADS]: '/my-downloads',
 };
 
 // switch between modes
@@ -40,3 +51,5 @@ export const pageNameToModuleMap = {
   [PageNames.TOPICS_TOPIC]: 'topicsTree',
   [PageNames.TOPICS_TOPIC_SEARCH]: 'topicsTree',
 };
+
+export const KolibriStudioId = plugin_data.studioDevice?.instance_id;

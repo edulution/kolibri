@@ -173,6 +173,26 @@
         </KGridItem>
       </div>
 
+      <!-- quiz size -->
+      <div v-if="!$isPrint" class="status-item">
+        <KGridItem
+          class="status-label"
+          :layout4="{ span: 4 }"
+          :layout8="{ span: 4 }"
+          :layout12="{ span: 12 }"
+        >
+          {{ coachString('sizeLabel') }}
+        </KGridItem>
+        <KGridItem
+          :layout4="{ span: 4 }"
+          :layout8="{ span: 4 }"
+          :layout12="{ span: 12 }"
+        >
+          <p>{{ exam.size_string ? exam.size_string : '--' }}</p>
+        </KGridItem>
+      </div>
+
+
     </KGrid>
 
     <KModal
@@ -183,7 +203,9 @@
       @cancel="showConfirmationModal = false"
       @submit="handleOpenQuiz"
     >
-      <div>{{ coachString('openQuizModalDetail') }}</div>
+      <p>{{ coachString('openQuizModalDetail') }}</p>
+      <p>{{ coachString('lodQuizDetail') }}</p>
+      <p>{{ coachString('fileSizeToDownload', { size: exam.size_string }) }}</p>
     </KModal>
 
     <KModal
@@ -197,6 +219,39 @@
       <div>{{ coachString('closeQuizModalDetail') }}</div>
     </KModal>
 
+    <KModal
+      v-if="showRemoveReportVisibilityModal"
+      :title="coachString('makeQuizReportNotVisibleTitle')"
+      :submitText="coreString('continueAction')"
+      :cancelText="coreString('cancelAction')"
+      @cancel="showRemoveReportVisibilityModal = false"
+      @submit="makeQuizInactive(exam)"
+    >
+      <p>{{ coachString('makeQuizReportNotVisibleText') }}</p>
+      <p>{{ coachString('fileSizeToRemove', { size: exam.size_string }) }}</p>
+      <KCheckbox
+        :checked="dontShowAgainChecked"
+        :label="coachString('dontShowAgain')"
+        @change="dontShowAgainChecked = $event"
+      />
+    </KModal>
+    <KModal
+      v-if="showMakeReportVisibleModal"
+      :title="coachString('makeQuizReportVisibleTitle')"
+      :submitText="coreString('continueAction')"
+      :cancelText="coreString('cancelAction')"
+      @cancel="showMakeReportVisibleModal = false"
+      @submit="makeQuizInactive(exam)"
+    >
+      <p>{{ coachString('makeQuizReportVisibleText') }}</p>
+      <p>{{ coachString('fileSizeToDownload', { size: exam.size_string }) }}</p>
+      <KCheckbox
+        :checked="dontShowAgainChecked"
+        :label="coachString('dontShowAgain')"
+        @change="dontShowAgainChecked = $event"
+      />
+    </KModal>
+
   </KPageContainer>
 
 </template>
@@ -207,6 +262,9 @@
   import { ExamResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import ElapsedTime from 'kolibri.coreVue.components.ElapsedTime';
+  import Lockr from 'lockr';
+  import { QUIZ_REPORT_VISIBILITY_MODAL_DISMISSED } from 'kolibri.coreVue.vuex.constants';
+  import { mapActions } from 'vuex';
   import { coachStringsMixin } from './commonCoachStrings';
   import Score from './Score';
   import Recipients from './Recipients';
@@ -239,6 +297,10 @@
       return {
         showConfirmationModal: false,
         showCancellationModal: false,
+        showRemoveReportVisibilityModal: false,
+        showMakeReportVisibleModal: false,
+        dontShowAgainChecked: false,
+        learnOnlyDevicesExist: false,
       };
     },
     computed: {
@@ -275,9 +337,13 @@
         return { span: this.$isPrint ? 9 : 12 };
       },
     },
+    mounted() {
+      this.checkIfAnyLODsInClass();
+    },
     methods: {
+      ...mapActions(['fetchUserSyncStatus']),
       handleOpenQuiz() {
-        let promise = ExamResource.saveModel({
+        const promise = ExamResource.saveModel({
           id: this.$route.params.quizId,
           data: {
             active: true,
@@ -297,7 +363,7 @@
           });
       },
       handleCloseQuiz() {
-        let promise = ExamResource.saveModel({
+        const promise = ExamResource.saveModel({
           id: this.$route.params.quizId,
           data: {
             archive: true,
@@ -316,13 +382,42 @@
             this.$store.dispatch('createSnackbar', this.coachString('quizFailedToCloseMessage'));
           });
       },
+      // modal about quiz report size should only exist of LODs exist in the class
+      // which we are checking via if there have recently been any user syncs
+      // TODO: refactor to a more robust check
+      checkIfAnyLODsInClass() {
+        this.fetchUserSyncStatus({ member_of: this.$route.params.classId }).then(data => {
+          if (data && data.length > 0) {
+            this.learnOnlyDevicesExist = true;
+          }
+        });
+      },
       handleToggleVisibility() {
+        // has the user set their preferences to not have a modal confirmation?
+        const hideModalConfirmation = Lockr.get(QUIZ_REPORT_VISIBILITY_MODAL_DISMISSED);
+        if (!hideModalConfirmation && this.learnOnlyDevicesExist) {
+          if (this.exam.active) {
+            this.showRemoveReportVisibilityModal = true;
+            this.showMakeReportVisibleModal = false;
+          } else {
+            this.showMakeReportVisibleModal = true;
+            this.showRemoveReportVisibilityModal = false;
+          }
+        } else {
+          // proceed with visibility changes withhout the modal
+          this.makeQuizInactive(this.exam);
+        }
+      },
+      makeQuizInactive() {
+        if (this.dontShowAgainChecked) {
+          Lockr.set(QUIZ_REPORT_VISIBILITY_MODAL_DISMISSED, true);
+        }
         const newActiveState = !this.exam.active;
         const snackbarMessage = newActiveState
           ? this.coachString('quizVisibleToLearners')
           : this.coachString('quizNotVisibleToLearners');
 
-        let promise = ExamResource.saveModel({
+        const promise = ExamResource.saveModel({
           id: this.$route.params.quizId,
           data: {
             active: newActiveState,
@@ -333,6 +428,8 @@
         return promise.then(() => {
           this.$store.dispatch('classSummary/refreshClassSummary');
           this.showConfirmationModal = false;
+          this.showRemoveReportVisibilityModal = false;
+          this.showMakeReportVisibleModal = false;
           this.$store.dispatch('createSnackbar', snackbarMessage);
         });
       },

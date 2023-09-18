@@ -15,6 +15,9 @@ from django.db.utils import ProgrammingError
 
 import kolibri
 from kolibri.core.auth.constants.facility_presets import mappings
+from kolibri.core.content.constants.schema_versions import MIN_CONTENT_SCHEMA_VERSION
+from kolibri.utils.android import ANDROID_PLATFORM_SYSTEM_VALUE
+from kolibri.utils.android import on_android
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,7 @@ LANDING_PAGE_SIGN_IN = "sign-in"
 LANDING_PAGE_LEARN = "learn"
 
 APP_KEY_COOKIE_NAME = "app_key_cookie"
+APP_AUTH_TOKEN_COOKIE_NAME = "app_auth_token_cookie"
 
 
 class DeviceNotProvisioned(Exception):
@@ -100,12 +104,12 @@ def provision_device(device_name=None, is_provisioned=True, **kwargs):
     device_settings.save()
 
 
-def provision_single_user_device(user):
+def provision_single_user_device(user, **kwargs):
     from .models import DevicePermissions
 
     # if device has not been provisioned, set it up
     if not device_provisioned():
-        provision_device(default_facility=user.facility)
+        provision_device(**kwargs)
         set_device_settings(subset_of_users_device=True)
 
     DevicePermissions.objects.get_or_create(
@@ -125,10 +129,13 @@ def valid_app_key_on_request(request):
     )
 
 
-def set_app_key_on_response(response):
+def set_app_key_on_response(response, auth_token):
     from .models import DeviceAppKey
 
     response.set_cookie(APP_KEY_COOKIE_NAME, DeviceAppKey.get_app_key())
+
+    if auth_token:
+        response.set_cookie(APP_AUTH_TOKEN_COOKIE_NAME, auth_token, httponly=True)
 
 
 def _check_setting(name, available, msg):
@@ -390,9 +397,18 @@ device_info_keys = {
         "operating_system",
         "subset_of_users_device",
     ],
+    "3": [
+        "application",
+        "kolibri_version",
+        "instance_id",
+        "device_name",
+        "operating_system",
+        "subset_of_users_device",
+        "min_content_schema_version",
+    ],
 }
 
-DEVICE_INFO_VERSION = "2"
+DEVICE_INFO_VERSION = "3"
 
 
 def get_device_info(version=DEVICE_INFO_VERSION):
@@ -422,8 +438,11 @@ def get_device_info(version=DEVICE_INFO_VERSION):
         "kolibri_version": kolibri.__version__,
         "instance_id": instance_model.id,
         "device_name": device_name,
-        "operating_system": platform.system(),
+        "operating_system": ANDROID_PLATFORM_SYSTEM_VALUE
+        if on_android()
+        else platform.system(),
         "subset_of_users_device": subset_of_users_device,
+        "min_content_schema_version": MIN_CONTENT_SCHEMA_VERSION,
     }
 
     info = {}

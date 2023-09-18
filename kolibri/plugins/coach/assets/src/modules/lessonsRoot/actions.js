@@ -20,6 +20,21 @@ export function refreshClassLessons(store, classId) {
       // resolve lessons in case it's needed
       return lessons;
     })
+    .then(lessons => {
+      if (Object.keys(lessons).length > 0) {
+        return store.dispatch('fetchLessonsSizes', classId);
+      }
+    })
+    .catch(error => {
+      return store.dispatch('handleApiError', error, { root: true });
+    });
+}
+
+export function fetchLessonsSizes(store, classId) {
+  return LessonResource.fetchLessonsSizes({ collection: classId })
+    .then(sizes => {
+      store.commit('SET_CLASS_LESSONS_SIZES', sizes);
+    })
     .catch(error => {
       return store.dispatch('handleApiError', error, { root: true });
     });

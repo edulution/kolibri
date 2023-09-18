@@ -1,17 +1,5 @@
 import { Resource } from 'kolibri.lib.apiResource';
 
-export const NetworkLocationResource = new Resource({
-  name: 'networklocation',
-});
-
-export const StaticNetworkLocationResource = new Resource({
-  name: 'staticnetworklocation',
-});
-
-export const DynamicNetworkLocationResource = new Resource({
-  name: 'dynamicnetworklocation',
-});
-
 export const BookmarksResource = new Resource({
   name: 'bookmarks',
 });
@@ -33,6 +21,7 @@ export { default as ExamResource } from './exam';
 export { default as FacilityDatasetResource } from './facilityDataset';
 export { default as UserProgressResource } from './userProgress';
 export { default as UserSyncStatusResource } from './userSyncStatus';
+export { default as ContentRequestResource } from './contentRequest';
 export { default as ContentNodeProgressResource } from './contentNodeProgress';
 export { default as DevicePermissionsResource } from './devicePermissions';
 export { default as RemoteChannelResource } from './remoteChannel';
@@ -40,4 +29,11 @@ export { default as LessonResource } from './lesson';
 export { default as AttemptLogResource } from './attemptLog';
 export { default as PingbackNotificationResource } from './pingbackNotification';
 export { default as PingbackNotificationDismissedResource } from './pingbackNotificationDismissed';
+export { default as PinnedDeviceResource } from './pinnedDevice';
 export { default as PortalResource } from './portal';
+export { default as GenerateCSVLogRequestResource } from './generateCSVLogRequest';
+export {
+  NetworkLocationResource,
+  StaticNetworkLocationResource,
+  DynamicNetworkLocationResource,
+} from './networkLocation';

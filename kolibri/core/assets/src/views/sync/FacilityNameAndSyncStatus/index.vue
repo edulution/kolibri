@@ -25,25 +25,48 @@
     <div>
       <span>
         <template v-if="facility.syncing || isSyncing">
-          <KCircularLoader class="loader" :size="16" :delay="false" />
+          <KCircularLoader
+            class="loader"
+            :size="16"
+            :delay="false"
+          />
           {{ $tr('syncing') }}
         </template>
         <template v-else-if="isDeleting">
-          <KCircularLoader class="loader" :size="16" :delay="false" />
+          <KCircularLoader
+            class="loader"
+            :size="16"
+            :delay="false"
+          />
           {{ getTaskString('removingFacilityStatus') }}
         </template>
         <template v-else>
-          <span v-if="syncFailed" class="sync-message">
+          <span
+            v-if="syncFailed"
+            class="sync-message"
+          >
             {{ $tr('syncFailed') }}
           </span>
-          <span v-else-if="neverSynced" class="sync-message">
+          <span
+            v-else-if="neverSynced"
+            class="sync-message"
+          >
             {{ $tr('neverSynced') }}
           </span>
           <!-- Always show the last successful sync time when available -->
-          <span v-if="facility.last_successful_sync" class="sync-message">
+          <span
+            v-if="facility.last_successful_sync"
+            class="sync-message"
+          >
             {{ $tr('lastSync', { relativeTime: formattedTime(facility.last_successful_sync) }) }}
           </span>
         </template>
+        <KButton
+          :text="$tr('createSync')"
+          :disabled="isSyncing || isDeleting"
+          appearance="basic-link"
+          @click="manageSync"
+        />
       </span>
     </div>
   </div>
@@ -55,10 +78,11 @@
 
   import { now } from 'kolibri.utils.serverClock';
   import taskStrings from 'kolibri.coreVue.mixins.commonTaskStrings';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
     name: 'FacilityNameAndSyncStatus',
-    mixins: [taskStrings],
+    mixins: [taskStrings, commonCoreStrings],
     props: {
       facility: {
         type: Object,
@@ -75,6 +99,10 @@
       isDeleting: {
         type: Boolean,
         default: false,
+      },
+      goToRoute: {
+        type: Object,
+        required: true,
       },
     },
     data() {
@@ -101,9 +129,12 @@
     methods: {
       formattedTime(datetime) {
         if (this.now - new Date(datetime) < 10000) {
-          return this.$tr('justNow');
+          return this.coreString('justNow');
         }
         return this.$formatRelative(datetime, { now: this.now });
+      },
+      manageSync() {
+        this.$router.push(this.goToRoute);
       },
     },
     $trs: {
@@ -117,15 +148,17 @@
         context:
           'This is associated with the label "Last successful sync:", and the subject is the Facility.',
       },
-      lastSync: {
-        message: 'Last successful sync: {relativeTime}',
+      /* eslint-disable kolibri/vue-no-unused-translations */
+      nextSync: {
+        message: 'Next sync: {relativeTime}',
         context:
-          'Used to indicate a time period when the last successful sync took place. For example, the value of last successful sync could be something like "2 months ago".\'\n',
+          'Used to indicate the next scheduled sync of facility data. For example, "in 5 days".\'\n',
       },
-      justNow: {
-        message: 'Just now',
+      /* eslint-enable kolibri/vue-no-unused-translations */
+      lastSync: {
+        message: 'Last synced: {relativeTime}',
         context:
-          'This is used to indicate when an event occurred. It\'s associated with the label "Last successful sync:"',
+          'Used to indicate a time period when the last sync took place. For example, the value of last successful sync could be something like "2 months ago".\'\n',
       },
       syncFailed: {
         message: 'Most recent sync failed',
@@ -135,6 +168,10 @@
       syncing: {
         message: 'Syncing',
         context: 'Indicates when a syncing process between facilities is in progress.',
+      },
+      createSync: {
+        message: 'Create sync schedule',
+        context: 'Link to create sync schedule',
       },
     },
   };

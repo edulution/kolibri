@@ -1,5 +1,6 @@
 import re
 
+from six import raise_from
 from six.moves.urllib.parse import urlparse
 
 from . import errors
@@ -117,8 +118,12 @@ def parse_address_into_components(address):  # noqa C901
     if "://" not in address:
         address = "http://" + address
 
-    # parse out the URL into its components
-    parsed = urlparse(address)
+    # parse out the URL into its components. On python >= 3.11, this
+    # will throw a ValueError on invalid IP addresses.
+    try:
+        parsed = urlparse(address)
+    except ValueError as e:
+        raise_from(errors.InvalidHostname(address), e)
     p_scheme = parsed.scheme
     p_hostname = parsed.hostname
     p_path = parsed.path.rstrip("/") + "/"
@@ -150,7 +155,10 @@ def parse_address_into_components(address):  # noqa C901
 
 
 def get_normalized_url_variations(address):
-    """Takes a URL, hostname, or IP, validates it, and turns it into a list of possible URLs, varying the scheme, port, and path."""
+    """
+    Takes a URL, hostname, or IP, validates it, and turns it into a list of possible URLs,
+    varying the scheme, port, and path.
+    """
 
     p_scheme, p_hostname, p_port, p_path = parse_address_into_components(address)
 
@@ -161,8 +169,11 @@ def get_normalized_url_variations(address):
         schemes = ("http", "https") if p_scheme == "http" else ("https", "http")
         for scheme in schemes:
             ports = HTTP_PORTS if scheme == "http" else HTTPS_PORTS
+
+            # put parsed port first, and dedupe it from standard ports
             if p_port:
-                ports = (p_port,) + ports
+                ports = [p_port] + [p for p in ports if p != p_port]
+
             for port in ports:
                 if (scheme == "http" and port == 80) or (
                     scheme == "https" and port == 443

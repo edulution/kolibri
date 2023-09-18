@@ -23,28 +23,37 @@ Django ORM for these calculations).
 from __future__ import print_function
 
 import os
+import uuid
 from gettext import gettext as _
 
 from django.db import connection
 from django.db import models
+from django.db.models import Exists
 from django.db.models import F
 from django.db.models import Min
-from django.db.models import Q
+from django.db.models import OuterRef
 from django.db.models import QuerySet
 from django.utils.encoding import python_2_unicode_compatible
 from le_utils.constants import content_kinds
 from le_utils.constants import format_presets
+from morango.models.fields import UUIDField
 from mptt.managers import TreeManager
 from mptt.querysets import TreeQuerySet
 
 from .utils import paths
+from kolibri.core.auth.models import Facility
+from kolibri.core.auth.models import FacilityUser
 from kolibri.core.content import base_models
 from kolibri.core.content.errors import InvalidStorageFilenameError
 from kolibri.core.content.utils.search import bitmask_fieldnames
 from kolibri.core.content.utils.search import metadata_bitmasks
 from kolibri.core.device.models import ContentCacheKey
+from kolibri.core.fields import DateTimeTzField
 from kolibri.core.fields import JSONField
 from kolibri.core.mixins import FilterByUUIDQuerysetMixin
+from kolibri.utils.data import ChoicesEnum
+from kolibri.utils.time_utils import local_now
+
 
 PRESET_LOOKUP = dict(format_presets.choices)
 
@@ -100,7 +109,15 @@ class ContentNodeQueryset(TreeQuerySet, FilterByUUIDQuerysetMixin):
         annotations = {}
         for bitmask_fieldname, bits in bits.items():
             annotation_fieldname = "{}_{}".format(bitmask_fieldname, "masked")
-            filters[annotation_fieldname + "__gt"] = 0
+            # To get the correct result, i.e. an AND that all the labels are present,
+            # we need to check that the aggregated value is euqal to the bits.
+            # If we wanted an OR (which would check for any being present),
+            # we would have to use GREATER THAN 0 here.
+            filters[annotation_fieldname] = bits
+            # This ensures that the annotated value is the result of the AND operation
+            # so if all the values are present, the result will be the same as the bits
+            # but if any are missing, it will not be equal to the bits, but will only be
+            # 0 if none of the bits are present.
             annotations[annotation_fieldname] = F(bitmask_fieldname).bitand(bits)
 
         return self.annotate(**annotations).filter(**filters)
@@ -193,6 +210,15 @@ class ContentNode(base_models.ContentNode):
         default=[], null=True, blank=True, load_kwargs={"strict": False}
     )
 
+    # This resource has been added to Kolibri directly or
+    # indirectly by someone responsible for administering the device
+    # whether a device super admin, or via initial configuration.
+    # These nodes will not be subject to automatic garbage collection
+    # to manage space.
+    # Set as a NullBooleanField to limit migration time in creating the new column,
+    # needs a subsequent Kolibri upgrade step to backfill these values.
+    admin_imported = models.NullBooleanField()
+
     objects = ContentNodeManager()
 
     class Meta:
@@ -258,9 +284,13 @@ class File(base_models.File):
 
 class LocalFileQueryset(models.QuerySet, FilterByUUIDQuerysetMixin):
     def delete_unused_files(self):
-        for file in self.get_unused_files():
+        for file in self.get_unused_files().values("id", "extension"):
             try:
-                os.remove(paths.get_content_storage_file_path(file.get_filename()))
+                os.remove(
+                    paths.get_content_storage_file_path(
+                        paths.get_content_file_name(file)
+                    )
+                )
                 yield True, file
             except (IOError, OSError, InvalidStorageFilenameError):
                 yield False, file
@@ -273,13 +303,16 @@ class LocalFileQueryset(models.QuerySet, FilterByUUIDQuerysetMixin):
         return self.filter(files__isnull=True).delete()
 
     def get_unused_files(self):
-        ids = LocalFile.objects.filter(
-            Q(files__contentnode__available=False) | Q(files__isnull=True)
-        )
         return (
-            self.filter(id__in=ids)
-            .exclude(files__contentnode__available=True)
-            .filter(available=True)
+            self.filter(available=True)
+            .annotate(
+                has_available_contentnode=Exists(
+                    ContentNode.objects.filter(available=True)
+                    .filter(files__local_file=OuterRef("id"))
+                    .values("id")
+                )
+            )
+            .filter(has_available_contentnode=False)
         )
 
 
@@ -339,6 +372,9 @@ class ChannelMetadataQueryset(QuerySet, FilterByUUIDQuerysetMixin):
     pass
 
 
+BATCH_SIZE = 1000
+
+
 @python_2_unicode_compatible
 class ChannelMetadata(base_models.ChannelMetadata):
     """
@@ -353,6 +389,9 @@ class ChannelMetadata(base_models.ChannelMetadata):
     )
     order = models.PositiveIntegerField(default=0, null=True, blank=True)
     public = models.NullBooleanField()
+    # Has only a subset of this channel's metadata been imported?
+    # Use a null boolean field to avoid issues during metadata import
+    partial = models.NullBooleanField(default=False)
 
     objects = ChannelMetadataQueryset.as_manager()
 
@@ -367,5 +406,154 @@ class ChannelMetadata(base_models.ChannelMetadata):
 
     def delete_content_tree_and_files(self):
         # Use Django ORM to ensure cascading delete:
-        self.root.delete()
+        right_value = self.root.rght
+        # Disable MPTT updates during the deletion as everything
+        # is being deleted anyway, so no need to make any updates!
+        with ContentNode.objects.disable_mptt_updates():
+            if right_value // 2 > BATCH_SIZE:
+                # If there are more than 1000 nodes in the tree, delete in batches to limit memory usage
+                left_value = self.root.lft
+                while left_value < right_value:
+                    qs = ContentNode.objects.filter(
+                        lft__gt=left_value,
+                        rght__lt=left_value + BATCH_SIZE,
+                        tree_id=self.root.tree_id,
+                    )
+                    qs.delete()
+                    left_value += BATCH_SIZE
+            self.root.delete()
         ContentCacheKey.update_cache_key()
+
+
+class ContentRequestType(ChoicesEnum):
+    Download = "DOWNLOAD"
+    Removal = "REMOVAL"
+
+
+class ContentRequestReason(ChoicesEnum):
+    UserInitiated = "USER_INITIATED"
+    SyncInitiated = "SYNC_INITIATED"
+
+
+class ContentRequestStatus(ChoicesEnum):
+    Pending = "PENDING"
+    InProgress = "IN_PROGRESS"
+    Failed = "FAILED"
+    Completed = "COMPLETED"
+
+
+def _hex_uuid_str():
+    return str(uuid.uuid4().hex)
+
+
+class ContentRequest(models.Model):
+    """
+    Model representing requests for specific content, either through user interaction or as a
+    consequence of a sync. This stores their intermediate state as well as whether they've been
+    downloaded or removed
+    """
+
+    id = UUIDField(primary_key=True, default=_hex_uuid_str)
+    facility = models.ForeignKey(Facility, related_name="content_requests")
+
+    # the source model's `morango_model_name` that initiated the request:
+    # - for user-initiated requests it should be `facilityuser`
+    # - for sync-initiated requests it should the model that assigned the content (lesson, exam)
+    # and max_length=40 is the same value used in morango's Store.model_name
+    source_model = models.CharField(max_length=40)
+    # the source model's PK, could be the user's ID
+    source_id = UUIDField()
+    # the instance ID of the preferred device from which to source/download the content
+    source_instance_id = UUIDField(null=True, blank=True)
+
+    requested_at = DateTimeTzField(default=local_now)
+
+    type = models.CharField(choices=ContentRequestType.choices(), max_length=8)
+    reason = models.CharField(choices=ContentRequestReason.choices(), max_length=14)
+    status = models.CharField(choices=ContentRequestStatus.choices(), max_length=11)
+
+    contentnode_id = UUIDField()
+    metadata = JSONField(null=True)
+
+    class Meta:
+        unique_together = ("type", "source_model", "source_id", "contentnode_id")
+        ordering = ("requested_at",)
+
+    def save(self, *args, **kwargs):
+        """
+        Save override to set type for the proxy models
+        """
+        self.type = getattr(self.__class__.objects, "request_type", None)
+        return super(ContentRequest, self).save(*args, **kwargs)
+
+    @classmethod
+    def build_for_user(cls, user):
+        """
+        :type user: FacilityUser
+        :return: A ContentRequest
+        :rtype: ContentRequest
+        """
+        return cls(
+            facility_id=user.facility_id,
+            source_model=FacilityUser.morango_model_name,
+            source_id=user.id,
+            type=getattr(cls.objects, "request_type", None),
+            reason=ContentRequestReason.UserInitiated,
+            status=ContentRequestStatus.Pending,
+        )
+
+    def update_progress(self, progress, total_progress):
+        self.metadata = self.metadata or {}
+        self.metadata["progress"] = progress
+        self.metadata["total_progress"] = total_progress
+        self.save()
+
+    @property
+    def progress(self):
+        return self.metadata.get("progress", 0) if self.metadata else 0
+
+    @property
+    def total_progress(self):
+        return self.metadata.get("total_progress", 0) if self.metadata else 0
+
+
+class ContentRequestManager(models.Manager):
+    request_type = None
+
+    def get_queryset(self):
+        """
+        Automatically filters on the request type for use with proxy models
+        :rtype: django.db.models.QuerySet
+        """
+        queryset = super(ContentRequestManager, self).get_queryset()
+        return queryset.filter(type=self.request_type)
+
+
+class ContentDownloadRequestManager(ContentRequestManager):
+    request_type = ContentRequestType.Download
+
+
+class ContentDownloadRequest(ContentRequest):
+    """
+    Proxy model for the Download content request type
+    """
+
+    objects = ContentDownloadRequestManager()
+
+    class Meta:
+        proxy = True
+
+
+class ContentRemovalRequestManager(ContentRequestManager):
+    request_type = ContentRequestType.Removal
+
+
+class ContentRemovalRequest(ContentRequest):
+    """
+    Proxy model for the Removal content request type
+    """
+
+    objects = ContentRemovalRequestManager()
+
+    class Meta:
+        proxy = True

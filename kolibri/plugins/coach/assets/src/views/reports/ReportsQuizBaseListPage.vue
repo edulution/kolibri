@@ -1,14 +1,10 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
 
     <KGrid gutter="16">
       <KGridItem>
@@ -28,6 +24,9 @@
         </QuizLessonDetailsHeader>
       </KGridItem>
       <KGridItem :layout12="{ span: $isPrint ? 12 : 4 }">
+        <h2 class="visuallyhidden">
+          {{ coachString('generalInformationLabel') }}
+        </h2>
         <QuizStatus
           :className="className"
           :avgScore="avgScore"
@@ -36,6 +35,9 @@
         />
       </KGridItem>
       <KGridItem :layout12="{ span: $isPrint ? 12 : 8 }">
+        <h2 class="visuallyhidden">
+          {{ coachString('detailsLabel') }}
+        </h2>
         <KPageContainer :topMargin="$isPrint ? 0 : 16">
           <ReportsControls @export="$emit('export')" />
           <HeaderTabs :enablePrint="true">
@@ -58,7 +60,7 @@
         </KPageContainer>
       </KGridItem>
     </KGrid>
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -67,12 +69,14 @@
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
+  import CoachAppBarPage from '../CoachAppBarPage';
   import QuizOptionsDropdownMenu from '../plan/QuizSummaryPage/QuizOptionsDropdownMenu';
   import ReportsControls from './ReportsControls';
 
   export default {
     name: 'ReportsQuizBaseListPage',
     components: {
+      CoachAppBarPage,
       ReportsControls,
       QuizOptionsDropdownMenu,
     },

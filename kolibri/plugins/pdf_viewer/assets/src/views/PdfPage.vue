@@ -1,6 +1,8 @@
 <template>
 
   <div
+    :id="`pdf-page-${pageNum}`"
+    ref="pageContainer"
     class="pdf-page"
     role="region"
     :aria-label="$tr('numPage', { number: pageNum, total: totalPages })"
@@ -10,7 +12,7 @@
       background: $themeTokens.surface,
     }"
   >
-    <span class="loading">{{ $formatNumber(pageNum) }}</span>
+    <span class="loading" aria-hidden="true">{{ $formatNumber(pageNum) }}</span>
     <canvas
       v-show="rendered"
       ref="canvas"
@@ -27,8 +29,7 @@
         height: `${scaledHeight}px`,
         width: `${scaledWidth}px`
       }"
-    >
-    </div>
+    ></div>
   </div>
 
 </template>
@@ -36,8 +37,11 @@
 
 <script>
 
+  import { AnnotationMode } from 'pdfjs-dist/legacy/build/pdf';
   import TextLayerBuilder from '../utils/text_layer_builder';
   import StrucTreeLayerBuilder from '../utils/struct_tree_layer_builder';
+  import { AnnotationLayerBuilder } from '../utils/annotation_layer_builder';
+  import { SimpleLinkService } from '../utils/pdf_link_service';
 
   export default {
     name: 'PdfPage',
@@ -83,29 +87,19 @@
       };
     },
     computed: {
-      actualHeight() {
-        if (!this.pageReady) {
-          return null;
-        }
-        return this.pdfPage.view[3];
-      },
-      actualWidth() {
-        if (!this.pageReady) {
-          return null;
-        }
-        return this.pdfPage.view[2];
-      },
-      heightToWidthRatio() {
-        return this.actualHeight / this.actualWidth || this.firstPageHeight / this.firstPageWidth;
-      },
       scaledHeight() {
-        return this.firstPageHeight * this.scale;
+        if (!this.pdfPage) {
+          return this.firstPageHeight * this.scale;
+        }
+        const viewport = this.getViewport();
+        return viewport.height;
       },
       scaledWidth() {
-        return this.scaledHeight / this.heightToWidthRatio;
-      },
-      pageScale() {
-        return this.scaledHeight / this.actualHeight || this.scale;
+        if (!this.pdfPage) {
+          return this.firstPageWidth * this.scale;
+        }
+        const viewport = this.getViewport();
+        return viewport.width;
       },
     },
     watch: {
@@ -125,7 +119,7 @@
     methods: {
       getViewport() {
         // Get viewport, which contains directions to be passed into render function
-        return this.pdfPage.getViewport({ scale: this.pageScale });
+        return this.pdfPage.getViewport({ scale: this.scale || 1 });
       },
       renderPage(newVal, oldVal) {
         if (typeof newVal === 'number' && typeof oldVal === 'number' && newVal !== oldVal) {
@@ -133,14 +127,17 @@
           this.cancelRender();
         }
         if (this.pdfPage && this.pageReady && !this.renderTask && !this.rendered) {
-          this.createTextLayer();
-          this.createStructTreeLayer();
+          this.createTextLayerBuilder();
+          this.createStructTreeLayerBuilder();
+          this.createAnnotationLayerBuilder();
           const canvasContext = this.$refs.canvas.getContext('2d');
           const viewport = this.getViewport();
 
           this.renderTask = this.pdfPage.render({
             canvasContext,
             viewport,
+            annotationMode: AnnotationMode.ENABLE_FORMS,
+            annotationCanvasMap: this.annotationCanvasMap,
           });
           this.renderTask.promise.then(
             () => {
@@ -152,7 +149,13 @@
                 this.textLayer.setTextContentStream(readableStream);
                 this.textLayer.render();
               }
+              if (this.annotationLayer) {
+                this.annotationLayer.render(viewport, 'display');
+              }
               this.rendered = true;
+              this.eventBus.emit('pageRendered', {
+                pageNumber: this.pageNum,
+              });
             },
             () => {
               delete this.renderTask;
@@ -185,7 +188,7 @@
         canvasContext.clearRect(0, 0, this.scaledHeight, this.scaledWidth);
         this.rendered = false;
       },
-      createTextLayer() {
+      createTextLayerBuilder() {
         this.textLayer = new TextLayerBuilder({
           textLayerDiv: this.$refs.textLayer,
           viewport: this.getViewport(),
@@ -194,8 +197,19 @@
           eventBus: this.eventBus,
         });
       },
-      createStructTreeLayer() {
+      createStructTreeLayerBuilder() {
         this.structTreeLayer = new StrucTreeLayerBuilder(this.$refs.textLayer);
+      },
+      createAnnotationLayerBuilder() {
+        if (!this.annotationLayer) {
+          this.annotationCanvasMap = new Map();
+          this.annotationLayer = new AnnotationLayerBuilder({
+            pageDiv: this.$refs.pageContainer,
+            pdfPage: this.pdfPage,
+            annotationCanvasMap: this.annotationCanvasMap,
+            linkService: new SimpleLinkService(),
+          });
+        }
       },
       onTextLayerRendered(event) {
         if (event.pageNumber !== this.pageNum) {
@@ -234,6 +248,7 @@
   $page-margin: 8px;
 
   @import url('../utils/text_layer_builder.scss');
+  @import url('../utils/annotation_layer_builder.scss');
 
   .pdf-page {
     position: relative;

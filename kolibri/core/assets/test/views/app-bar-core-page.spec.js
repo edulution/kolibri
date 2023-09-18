@@ -1,12 +1,16 @@
 import { createLocalVue, mount } from '@vue/test-utils';
 import Vuex from 'vuex';
+import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
 import AppBarPage from '../../src/views/CorePage/AppBarPage';
+
+jest.mock('kolibri-design-system/lib/useKResponsiveWindow');
 
 const localVue = createLocalVue();
 localVue.use(Vuex);
 const store = new Vuex.Store({
   getters: {
     isUserLoggedIn: jest.fn(),
+    isAppContext: jest.fn(),
   },
 });
 
@@ -25,6 +29,11 @@ function createWrapper({ propsData = {}, slots = {} } = {}) {
 }
 
 describe('AppBarPage', () => {
+  beforeAll(() => {
+    useKResponsiveWindow.mockImplementation(() => ({
+      windowIsSmall: false,
+    }));
+  });
   describe('AppBar & optional sub-nav slot display', () => {
     it('should render the AppBar component with the given title prop', () => {
       const wrapper = createWrapper({ propsData: { title: 'Test Title' } });

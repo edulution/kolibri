@@ -1,10 +1,14 @@
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from .serializers import LessonSerializer
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
 from kolibri.core.auth.api import KolibriAuthPermissionsFilter
 from kolibri.core.auth.constants.collection_kinds import ADHOCLEARNERSGROUP
+from kolibri.core.content.models import ContentNode
+from kolibri.core.content.utils.annotation import total_file_size
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.lessons.models import LessonAssignment
 from kolibri.core.query import annotate_array_aggregate
@@ -42,7 +46,7 @@ def _map_lesson_classroom(item):
 class LessonViewset(ValuesViewset):
     serializer_class = LessonSerializer
     filter_backends = (KolibriAuthPermissionsFilter, DjangoFilterBackend)
-    filter_fields = ("collection",)
+    filter_fields = ("collection", "id")
     permission_classes = (LessonPermissions,)
     queryset = Lesson.objects.all().order_by("-date_created")
 
@@ -97,3 +101,17 @@ class LessonViewset(ValuesViewset):
         return annotate_array_aggregate(
             queryset, lesson_assignment_collections="lesson_assignments__collection"
         )
+
+    @action(detail=False)
+    def size(self, request, **kwargs):
+        lessons = self.filter_queryset(self.get_queryset())
+        lessons_set = []
+        for lesson in lessons:
+            lesson_size = {}
+            resource_nodes = ContentNode.objects.filter(
+                id__in=[r["contentnode_id"] for r in lesson.resources]
+            )
+            lesson_size[lesson.id] = total_file_size(resource_nodes)
+            lessons_set.append(lesson_size)
+
+        return Response(lessons_set)

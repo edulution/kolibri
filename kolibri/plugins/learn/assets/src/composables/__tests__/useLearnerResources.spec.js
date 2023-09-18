@@ -1,9 +1,8 @@
 import cloneDeep from 'lodash/cloneDeep';
 
 import { ContentNodeResource } from 'kolibri.resources';
-import { PageNames, ClassesPageNames } from '../../constants';
+import { ClassesPageNames } from '../../constants';
 import { LearnerClassroomResource } from '../../apiResources';
-import { normalizeContentNode } from '../../modules/coreLearn/utils';
 import useLearnerResources from '../useLearnerResources';
 
 const {
@@ -20,8 +19,6 @@ const {
   getClassActiveQuizzes,
   getClassLessonLink,
   getClassQuizLink,
-  getClassResourceLink,
-  getTopicContentNodeLink,
   fetchClasses,
   fetchResumableContentNodes,
 } = useLearnerResources();
@@ -622,38 +619,6 @@ describe(`useLearnerResources`, () => {
     });
   });
 
-  describe(`getClassResourceLink`, () => {
-    it(`returns a vue-router link to a class resource page`, () => {
-      expect(
-        getClassResourceLink({
-          contentNodeId: 'resource-1-in-progress',
-          lessonId: 'class-2-active-lesson-1',
-          classId: 'class-2',
-        })
-      ).toEqual({
-        name: PageNames.TOPICS_CONTENT,
-        params: {
-          id: 'resource-1-in-progress',
-        },
-        query: {
-          classId: 'class-2',
-          lessonId: 'class-2-active-lesson-1',
-        },
-      });
-    });
-  });
-
-  describe(`getTopicContentNodeLink`, () => {
-    it(`returns a vue-router link to a topic content node page`, () => {
-      expect(getTopicContentNodeLink('resource-9-in-progress')).toEqual({
-        name: PageNames.TOPICS_CONTENT,
-        params: {
-          id: 'resource-9-in-progress',
-        },
-      });
-    });
-  });
-
   describe('fetchResumableContentNodes', () => {
     it('should set resumable content nodes and the more value', async () => {
       const more = { test: 1 };
@@ -661,9 +626,7 @@ describe(`useLearnerResources`, () => {
         .fn()
         .mockResolvedValue({ results: TEST_RESUMABLE_CONTENT_NODES, more });
       await fetchResumableContentNodes();
-      expect(resumableContentNodes.value).toEqual(
-        TEST_RESUMABLE_CONTENT_NODES.map(normalizeContentNode)
-      );
+      expect(resumableContentNodes.value).toEqual(TEST_RESUMABLE_CONTENT_NODES);
       expect(moreResumableContentNodes.value).toEqual(more);
     });
   });

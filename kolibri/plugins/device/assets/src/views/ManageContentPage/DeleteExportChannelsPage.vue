@@ -3,8 +3,9 @@
   <ImmersivePage
     :appBarTitle="appBarTitle"
     :route="backRoute"
+    :loading="loading"
   >
-    <KPageContainer class="device-container">
+    <KPageContainer v-if="!loading" class="device-container">
       <FilteredChannelListContainer
         :channels="allChannels"
         :selectedChannels.sync="selectedChannels"
@@ -133,14 +134,9 @@
       },
     },
     beforeMount() {
-      this.setAppBarTitle();
       this.fetchData();
     },
     methods: {
-      setAppBarTitle() {
-        const title = this.exportMode ? 'exportAppBarTitle' : 'deleteAppBarTitle';
-        this.$store.commit('coreBase/SET_APP_BAR_TITLE', this.$tr(title));
-      },
       fetchData() {
         return DeviceChannelResource.fetchCollection({
           getParams: {

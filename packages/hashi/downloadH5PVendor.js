@@ -2,10 +2,8 @@ var fs = require('fs');
 var https = require('https');
 var path = require('path');
 var url = require('url');
-const mkdirp = require('mkdirp');
 var JSZip = require('jszip');
 var { PurgeCSS } = require('purgecss');
-var rimraf = require('rimraf');
 
 const purger = new PurgeCSS();
 
@@ -61,7 +59,7 @@ function downloadFiles() {
                     targetFolder,
                     file.name.replace(/h5p-php-library-[^/]+\//, '')
                   );
-                  mkdirp.sync(path.dirname(outputPath));
+                  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
                   return new Promise(resolve => {
                     if (outputPath.endsWith('css')) {
                       file.async('string').then(text => {
@@ -106,9 +104,9 @@ function downloadFiles() {
   });
 }
 
-rimraf(targetFolder, { glob: false }, err => {
+fs.rm(targetFolder, { recursive: true, force: true }, err => {
   if (!err) {
-    rimraf(h5pStaticFolder, { glob: false }, err => {
+    fs.rm(h5pStaticFolder, { recursive: true, force: true }, err => {
       if (!err) {
         downloadFiles();
       }

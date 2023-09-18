@@ -3,19 +3,21 @@ import client from 'kolibri.client';
 import urls from 'kolibri.urls';
 import store from 'kolibri.coreVue.vuex.store';
 import router from 'kolibri.coreVue.router';
+import useUser from 'kolibri.coreVue.composables.useUser';
+import logger from 'kolibri.lib.logging';
 import useChannels from '../composables/useChannels';
-import useUser from '../composables/useUser';
 import { setClasses, setResumableContentNodes } from '../composables/useLearnerResources';
 import { setContentNodeProgress } from '../composables/useContentNodeProgress';
 import { showTopicsTopic, showTopicsContent } from '../modules/topicsTree/handlers';
 import { showLibrary } from '../modules/recommended/handlers';
-import { PageNames, ClassesPageNames } from '../constants';
+import { PageNames, ClassesPageNames, KolibriStudioId } from '../constants';
 import LibraryPage from '../views/LibraryPage';
 import HomePage from '../views/HomePage';
 import TopicsPage from '../views/TopicsPage';
 import TopicsContentPage from '../views/TopicsContentPage';
 import ContentUnavailablePage from '../views/ContentUnavailablePage';
 import BookmarkPage from '../views/BookmarkPage.vue';
+import ExploreLibrariesPage from '../views/ExploreLibrariesPage';
 import classesRoutes from './classesRoutes';
 
 const { channels, channelsMap } = useChannels();
@@ -27,8 +29,7 @@ function unassignedContentGuard() {
     // If there are no memberships and it is allowed, redirect to topics page
     return router.replace({ name: ClassesPageNames.ALL_CLASSES });
   }
-  // Otherwise return nothing
-  return;
+  return false;
 }
 
 function hydrateHomePage() {
@@ -38,18 +39,20 @@ function hydrateHomePage() {
       response.data.resumable_resources.results || [],
       response.data.resumable_resources.more || null
     );
-    for (let progress of response.data.resumable_resources_progress) {
+    for (const progress of response.data.resumable_resources_progress) {
       setContentNodeProgress(progress);
     }
   });
 }
+
+const optionalDeviceIdPathSegment = `/:deviceId([a-f0-9]{32}|${KolibriStudioId})?`;
 
 export default [
   {
     name: PageNames.ROOT,
     path: '/',
     handler: () => {
-      if (get(isUserLoggedIn)) {
+      if (get(isUserLoggedIn) && get(channels).length) {
         return router.replace({ name: PageNames.HOME });
       }
       return router.replace({ name: PageNames.LIBRARY });
@@ -93,18 +96,27 @@ export default [
   }),
   {
     name: PageNames.LIBRARY,
-    path: '/library',
+    path: '/library' + optionalDeviceIdPathSegment,
     handler: to => {
-      if (!get(channels) || !get(channels).length) {
+      if ((!get(channels) || !get(channels).length) && !get(isUserLoggedIn)) {
         router.replace({ name: PageNames.CONTENT_UNAVAILABLE });
         return;
       }
+
       if (unassignedContentGuard()) {
-        return unassignedContentGuard();
+        return;
       }
-      showLibrary(store, to.query);
+      showLibrary(store, to.query, to.params.deviceId).catch(e => {
+        logger.error(e);
+        router.replace({ name: PageNames.ROOT });
+      });
     },
     component: LibraryPage,
+    props: route => {
+      return {
+        deviceId: route.params.deviceId,
+      };
+    },
   },
   {
     name: PageNames.CONTENT_UNAVAILABLE,
@@ -133,74 +145,86 @@ export default [
   },
   {
     // Handle redirect for links without the /folder appended
-    path: '/topics/t/:id',
-    redirect: '/topics/t/:id/:subtopic?/folders',
-    handler: (toRoute, fromRoute) => {
-      if (unassignedContentGuard()) {
-        return unassignedContentGuard();
-      }
-      // If navigation is triggered by a custom navigation updating the
-      // context query param, do not run the handler
-      if (toRoute.params.id === fromRoute.params.id) {
-        return;
-      }
-      showTopicsTopic(store, { id: toRoute.params.id, pageName: toRoute.name });
-    },
-    component: TopicsPage,
+    path: `/topics${optionalDeviceIdPathSegment}/t/:id`,
+    redirect: `/topics${optionalDeviceIdPathSegment}/t/:id/:subtopic?/folders`,
   },
   // Have to put TOPICS_TOPIC_SEARCH before TOPICS_TOPIC to ensure
   // search gets picked up before being interpreted as a subtopic id.
   {
     name: PageNames.TOPICS_TOPIC_SEARCH,
-    path: '/topics/t/:id/search',
+    path: `/topics${optionalDeviceIdPathSegment}/t/:id/search`,
     handler: (toRoute, fromRoute) => {
       if (unassignedContentGuard()) {
-        return unassignedContentGuard();
+        return;
       }
       // If navigation is triggered by a custom navigation updating the
       // context query param, do not run the handler
       if (toRoute.params.id === fromRoute.params.id) {
         return;
       }
-      showTopicsTopic(store, { id: toRoute.params.id, pageName: toRoute.name });
+      showTopicsTopic(store, toRoute).catch(e => {
+        logger.error(e);
+        router.replace({ name: PageNames.ROOT });
+      });
     },
     component: TopicsPage,
+    props: true,
   },
   {
     name: PageNames.TOPICS_TOPIC,
-    path: '/topics/t/:id/:subtopic?/folders',
+    path: `/topics${optionalDeviceIdPathSegment}/t/:id/:subtopic?/folders`,
     handler: (toRoute, fromRoute) => {
       if (unassignedContentGuard()) {
-        return unassignedContentGuard();
+        return;
       }
       // If navigation is triggered by a custom navigation updating the
       // context query param, do not run the handler
       if (toRoute.params.id === fromRoute.params.id) {
         return;
       }
-      showTopicsTopic(store, { id: toRoute.params.id, pageName: toRoute.name });
+      showTopicsTopic(store, toRoute).catch(e => {
+        logger.error(e);
+        router.replace({ name: PageNames.ROOT });
+      });
     },
     component: TopicsPage,
+    props: true,
   },
   {
     name: PageNames.TOPICS_CONTENT,
-    path: '/topics/c/:id',
+    path: `/topics${optionalDeviceIdPathSegment}/c/:id`,
     handler: toRoute => {
-      showTopicsContent(store, toRoute.params.id);
+      showTopicsContent(store, toRoute.params.id, toRoute.params.deviceId).catch(e => {
+        logger.error(e);
+        router.replace({ name: PageNames.ROOT });
+      });
     },
     component: TopicsContentPage,
+    props: true,
   },
   {
     name: PageNames.BOOKMARKS,
     path: '/bookmarks',
     handler: () => {
       if (unassignedContentGuard()) {
-        return unassignedContentGuard();
+        return;
       }
       store.commit('SET_PAGE_NAME', PageNames.BOOKMARKS);
       store.commit('CORE_SET_PAGE_LOADING', false);
     },
     component: BookmarkPage,
+  },
+  {
+    name: PageNames.EXPLORE_LIBRARIES,
+    path: '/explore_libraries',
+    component: ExploreLibrariesPage,
+    handler: () => {
+      if (!get(isUserLoggedIn)) {
+        router.replace({ name: PageNames.LIBRARY });
+        return;
+      }
+      unassignedContentGuard();
+    },
   },
   {
     path: '*',

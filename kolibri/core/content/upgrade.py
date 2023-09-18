@@ -13,10 +13,13 @@ from sqlalchemy import Integer
 from sqlalchemy import select
 from sqlalchemy.exc import DatabaseError
 
+from kolibri.core.auth.models import FacilityDataset
 from kolibri.core.content.apps import KolibriContentConfig
 from kolibri.core.content.constants.kind_to_learningactivity import kind_activity_map
+from kolibri.core.content.kolibri_plugin import synchronize_content_requests
 from kolibri.core.content.models import ChannelMetadata
 from kolibri.core.content.models import ContentNode
+from kolibri.core.content.tasks import automatic_resource_import
 from kolibri.core.content.utils.annotation import set_channel_ancestors
 from kolibri.core.content.utils.annotation import set_content_visibility_from_disk
 from kolibri.core.content.utils.channel_import import FutureSchemaError
@@ -31,7 +34,6 @@ from kolibri.core.content.utils.sqlalchemybridge import Bridge
 from kolibri.core.content.utils.tree import get_channel_node_depth
 from kolibri.core.device.models import ContentCacheKey
 from kolibri.core.upgrade import version_upgrade
-
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +165,7 @@ def update_num_coach_contents():
     )
 
     # Expression to capture all available child nodes of a contentnode
-    available_nodes = select([child.c.available]).where(
+    available_nodes = select(child.c.available).where(
         and_(
             child.c.available == True,  # noqa
             ContentNodeTable.c.id == child.c.parent_id,
@@ -172,7 +174,7 @@ def update_num_coach_contents():
 
     # Expression that sums the total number of coach contents for each child node
     # of a contentnode
-    coach_content_num = select([func.sum(child.c.num_coach_contents)]).where(
+    coach_content_num = select(func.sum(child.c.num_coach_contents)).where(
         and_(
             child.c.available == True,  # noqa
             ContentNodeTable.c.id == child.c.parent_id,
@@ -199,7 +201,7 @@ def update_num_coach_contents():
                 # Because we have set availability to False on all topics as a starting point
                 # we only need to make updates to topics with available children.
                 .where(exists(available_nodes))
-                .values(num_coach_contents=coach_content_num)
+                .values(num_coach_contents=coach_content_num.scalar_subquery())
             )
 
     # commit the transaction
@@ -242,7 +244,7 @@ def update_on_device_resources():
     )
 
     # Expression to capture all available child nodes of a contentnode
-    available_nodes = select([child.c.available]).where(
+    available_nodes = select(child.c.available).where(
         and_(
             child.c.available == True,  # noqa
             ContentNodeTable.c.id == child.c.parent_id,
@@ -251,7 +253,7 @@ def update_on_device_resources():
 
     # Expression that sums the total number of coach contents for each child node
     # of a contentnode
-    on_device_num = select([func.sum(child.c.on_device_resources)]).where(
+    on_device_num = select(func.sum(child.c.on_device_resources)).where(
         and_(
             child.c.available == True,  # noqa
             ContentNodeTable.c.id == child.c.parent_id,
@@ -309,3 +311,34 @@ def metadata_annotation_update():
     for channel_id in ChannelMetadata.objects.values_list("id", flat=True):
         set_channel_ancestors(channel_id)
     ContentCacheKey.update_cache_key()
+
+
+# This was introduced in 0.16.0, so only annotate
+# when upgrading from versions prior to this.
+@version_upgrade(old_version="<0.16.0")
+def admin_imported_flag():
+    """
+    Function to set the admin_imported flag to True for any currently
+    available resources, as resources could only be imported by admins
+    until now!
+    """
+    ContentNode.objects.filter(available=True).exclude(kind=content_kinds.TOPIC).update(
+        admin_imported=True
+    )
+
+    ContentCacheKey.update_cache_key()
+
+
+@version_upgrade(old_version="<0.16.0")
+def synchronize_content_requests_upgrade():
+    """
+    Synchronizes content requests for each dataset on the device, excluding datasets with a transfer_session_id.
+    """
+
+    dataset_ids = FacilityDataset.objects.values_list("id", flat=True)
+
+    # Synchronize content requests for each dataset
+    for dataset_id in dataset_ids:
+        synchronize_content_requests(dataset_id, None)
+
+    automatic_resource_import.enqueue_if_not()

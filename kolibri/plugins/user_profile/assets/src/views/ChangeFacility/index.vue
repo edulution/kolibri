@@ -4,6 +4,7 @@
     <ImmersivePage
       :appBarTitle="coreString('changeLearningFacility')"
       :route="$router.getRoute('PROFILE')"
+      :appearanceOverrides="wrapperStyles"
     >
       <KPageContainer>
         <router-view />
@@ -23,24 +24,16 @@
   import { interpret } from 'xstate';
   import { mapGetters } from 'vuex';
   import { changeFacilityMachine } from '../../machines/changeFacilityMachine';
-  import plugin_data from 'plugin_data';
 
   export default {
     name: 'ChangeFacility',
     metaInfo() {
       return {
-        title: this.$tr('documentTitle'),
+        title: this.coreString('changeLearningFacility'),
       };
     },
     components: { NotificationsRoot, ImmersivePage },
     mixins: [commonCoreStrings],
-    setup() {
-      const { isSubsetOfUsersDevice } = plugin_data;
-      return {
-        isSubsetOfUsersDevice,
-      };
-    },
-
     data() {
       return {
         service: interpret(changeFacilityMachine),
@@ -60,6 +53,14 @@
 
     computed: {
       ...mapGetters(['session', 'getUserKind']),
+      wrapperStyles() {
+        return {
+          maxWidth: '1064px',
+          margin: '0px auto auto',
+          padding: '96px 32px 72px',
+          backgroundColor: this.$themePalette.grey.v_100,
+        };
+      },
     },
 
     beforeRouteUpdate(to, from, next) {
@@ -75,7 +76,7 @@
         }
         const stateID = Object.keys(state.meta)[0];
         if (state.meta[stateID] !== undefined) {
-          let newRoute = state.meta[stateID].route;
+          const newRoute = state.meta[stateID].route;
           if (newRoute != this.$router.currentRoute.name) {
             if ('path' in state.meta[stateID]) {
               this.internalNavigation = true;
@@ -125,12 +126,6 @@
         );
         this.service.send('RESET');
         this.previousMachineStateName = machineState.value;
-      },
-    },
-    $trs: {
-      documentTitle: {
-        message: 'Change Facility',
-        context: 'Title of the change facility page.',
       },
     },
   };

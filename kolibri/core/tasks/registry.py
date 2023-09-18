@@ -12,8 +12,9 @@ from kolibri.core.tasks.job import Job
 from kolibri.core.tasks.job import Priority
 from kolibri.core.tasks.main import job_storage
 from kolibri.core.tasks.permissions import BasePermission
-from kolibri.core.tasks.utils import stringify_func
+from kolibri.core.tasks.utils import callable_to_import_path
 from kolibri.core.tasks.validation import JobValidator
+
 
 logger = logging.getLogger(__name__)
 
@@ -99,13 +100,13 @@ class _registry(dict):
                 pass
 
     def _register_task(self, registered_task):
-        funcstring = stringify_func(registered_task)
+        funcstring = callable_to_import_path(registered_task)
         self[funcstring] = registered_task
         logger.debug("Successfully registered '%s' as task.", funcstring)
 
     def __setitem__(self, key, value):
         if not isinstance(value, RegisteredTask):
-            raise TypeError("Value must be an instance of RegisteredJob")
+            raise TypeError("Value must be an instance of RegisteredTask")
         return super(_registry, self).__setitem__(key, value)
 
     def update(self, other):
@@ -147,7 +148,7 @@ class RegisteredTask(object):
         Look at each method's docstring for more info.
     """
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         func,
         job_id=None,
@@ -158,6 +159,7 @@ class RegisteredTask(object):
         track_progress=False,
         permission_classes=None,
         long_running=False,
+        status_fn=None,
     ):
         """
         :param func: Function to be wrapped as a Registered task
@@ -184,6 +186,10 @@ class RegisteredTask(object):
         :param long_running: In regular operation should this task finish in under ten minutes,
         defaults to False
         :type long_running: bool
+        :param status_fn: A function that takes a job object as its only argument and returns
+        text describing the status of the job to an end user. Should use string wrapping, as it will
+        usually be invoked in a context where internationalization is being used.
+        :type status_fn: function
         """
         if permission_classes is None:
             permission_classes = []
@@ -201,6 +207,16 @@ class RegisteredTask(object):
             raise TypeError("track_progress must be of bool type.")
         if not isinstance(long_running, bool):
             raise TypeError("long_running must be of bool type.")
+        if status_fn is not None and not callable(status_fn):
+            raise TypeError("status_fn must be callable.")
+        if long_running and status_fn is None:
+            raise ValueError(
+                "When long_running is set to True, status_fn must be defined"
+            )
+        if priority <= Priority.HIGH and status_fn is None:
+            raise ValueError(
+                "High priority tasks must specify a status_fn to inform the user of why it is important"
+            )
 
         self.func = func
         self.validator = validator
@@ -213,6 +229,7 @@ class RegisteredTask(object):
         self.cancellable = cancellable
         self.track_progress = track_progress
         self.long_running = long_running
+        self._status_fn = status_fn
 
         # Make this wrapper object look seamlessly like the wrapped function
         update_wrapper(self, func)
@@ -222,6 +239,10 @@ class RegisteredTask(object):
 
     def __repr__(self):
         return "<RegisteredJob: {func}>".format(func=self.func)
+
+    @property
+    def func_string(self):
+        return callable_to_import_path(self)
 
     def _validate_permissions_classes(self, permission_classes):
         for permission_class in permission_classes:
@@ -246,20 +267,25 @@ class RegisteredTask(object):
     def validate_job_data(self, user, data):
         # Run validator with `user` and `data` as its argument.
         if "type" not in data:
-            data["type"] = stringify_func(self)
+            data["type"] = self.func_string
         validator = self.validator(data=data, context={"user": user})
         validator.is_valid(raise_exception=True)
+        validated_data = validator.validated_data
+        enqueue_args_validated_data = validated_data.pop("enqueue_args")
 
         try:
-            job = self._ready_job(**validator.validated_data)
+            job = self._ready_job(**validated_data)
         except TypeError:
             raise serializers.ValidationError(
                 "Invalid job data returned from validator."
             )
 
-        return job
+        return job, enqueue_args_validated_data
 
-    def enqueue(self, job=None, retry_interval=None, **job_kwargs):
+    def cancel_all(self):
+        return job_storage.cancel_jobs(func=self.func_string)
+
+    def enqueue(self, job=None, retry_interval=None, priority=None, **job_kwargs):
         """
         Enqueue the function with arguments passed to this method.
 
@@ -268,7 +294,22 @@ class RegisteredTask(object):
         return job_storage.enqueue_job(
             job or self._ready_job(**job_kwargs),
             queue=self.queue,
-            priority=self.priority,
+            priority=priority or self.priority,
+            retry_interval=retry_interval,
+        )
+
+    def enqueue_if_not(
+        self, job=None, retry_interval=None, priority=None, **job_kwargs
+    ):
+        """
+        Enqueue the function with arguments passed to this method if a job of this type is not already enqueued.
+
+        :return: enqueued job's id.
+        """
+        return job_storage.enqueue_job_if_not_enqueued(
+            job or self._ready_job(**job_kwargs),
+            queue=self.queue,
+            priority=priority or self.priority,
             retry_interval=retry_interval,
         )
 
@@ -279,6 +320,7 @@ class RegisteredTask(object):
         repeat=0,
         retry_interval=None,
         job=None,
+        priority=None,
         **job_kwargs
     ):
         """
@@ -294,7 +336,7 @@ class RegisteredTask(object):
             delta_time,
             job or self._ready_job(**job_kwargs),
             queue=self.queue,
-            priority=self.priority,
+            priority=priority or self.priority,
             interval=interval,
             repeat=repeat,
             retry_interval=retry_interval,
@@ -307,6 +349,7 @@ class RegisteredTask(object):
         repeat=0,
         retry_interval=None,
         job=None,
+        priority=None,
         **job_kwargs
     ):
         """
@@ -322,7 +365,7 @@ class RegisteredTask(object):
             datetime,
             job or self._ready_job(**job_kwargs),
             queue=self.queue,
-            priority=self.priority,
+            priority=priority or self.priority,
             interval=interval,
             repeat=repeat,
             retry_interval=retry_interval,
@@ -341,3 +384,14 @@ class RegisteredTask(object):
             **job_kwargs
         )
         return job_obj
+
+    def generate_status(self, job):
+        """
+        Takes a job object and returns text describing the current status for a user.
+        Relies on the task having registered a status_fn, otherwise this will
+        return None.
+
+        Otherwise it should return an object of type JobStatus, defined in the job module.
+        """
+        if self._status_fn:
+            return self._status_fn(job)

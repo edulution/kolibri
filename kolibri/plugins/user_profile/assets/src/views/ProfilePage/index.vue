@@ -12,13 +12,13 @@
             <h1>{{ coreString('profileLabel') }}</h1>
           </KGridItem>
           <KGridItem
-            v-if="!isSubsetOfUsersDevice"
+            v-if="!isLearnerOnlyImport"
             :layout8="{ span: 4, alignment: 'right' }"
             :layout12="{ span: 6, alignment: 'right' }"
           >
             <h1>
               <KRouterLink
-                :text="$tr('editAction')"
+                :text="coreString('editAction')"
                 appearance="raised-button"
                 :primary="true"
                 :to="profileEditRoute"
@@ -107,7 +107,7 @@
             </td>
           </tr>
 
-          <tr v-if="canEditPassword">
+          <tr v-if="!isLearnerOnlyImport && canEditPassword">
             <th>{{ coreString('passwordLabel') }}</th>
             <td>
               <KButton
@@ -149,7 +149,7 @@
             <span>{{ $tr('changeLearningFacilityDescription') }}</span>
             <span><KButton
               appearance="basic-link"
-              :text="$tr('learn')"
+              :text="$tr('learnMore')"
               class="learn"
               @click="showLearnModal = true"
             /></span>
@@ -158,7 +158,7 @@
 
 
         <ChangeUserPasswordModal
-          v-if="showPasswordModal"
+          v-if="!isLearnerOnlyImport && showPasswordModal"
           @cancel="showPasswordModal = false"
         />
 
@@ -196,13 +196,13 @@
   import PermissionsIcon from 'kolibri.coreVue.components.PermissionsIcon';
   import UserTypeDisplay from 'kolibri.coreVue.components.UserTypeDisplay';
   import { PermissionTypes } from 'kolibri.coreVue.vuex.constants';
+  import useUser from 'kolibri.coreVue.composables.useUser';
   import GenderDisplayText from 'kolibri.coreVue.components.GenderDisplayText';
   import BirthYearDisplayText from 'kolibri.coreVue.components.BirthYearDisplayText';
   import { RoutesMap } from '../../constants';
   import useCurrentUser from '../../composables/useCurrentUser';
   import useOnMyOwnSetup from '../../composables/useOnMyOwnSetup';
   import ChangeUserPasswordModal from './ChangeUserPasswordModal';
-  import plugin_data from 'plugin_data';
 
   export default {
     name: 'ProfilePage',
@@ -226,12 +226,12 @@
       const showPasswordModal = ref(false);
       const showLearnModal = ref(false);
       const { currentUser } = useCurrentUser();
-      const { isSubsetOfUsersDevice } = plugin_data;
+      const { isLearnerOnlyImport } = useUser();
       const { onMyOwnSetup } = useOnMyOwnSetup();
       return {
         currentUser,
         onMyOwnSetup,
-        isSubsetOfUsersDevice,
+        isLearnerOnlyImport,
         showLearnModal,
         showPasswordModal,
       };
@@ -254,7 +254,7 @@
       },
       facilityName() {
         const match = find(this.$store.getters.facilities, {
-          id: this.$store.getters.currentFacilityId,
+          id: this.$store.getters.userFacilityId,
         });
         return match ? match.name : '';
       },
@@ -301,14 +301,10 @@
         message: 'Move your account and progress data to another learning facility.',
         context: 'Explanation of what change a learning facility means',
       },
-      learn: {
-        message: 'Learn',
+      learnMore: {
+        message: 'Learn more',
         context:
           'Link to open a modal window explaining what changing to another learning facility represents.',
-      },
-      editAction: {
-        message: 'Edit',
-        context: 'Button which allows the user to modify some information on their profile.',
       },
       isSuperuser: {
         message: 'Super admin permissions ',
@@ -354,7 +350,7 @@
       },
       learnModalLine2: {
         message:
-          'Moving your account to another learning facility means your data will be accessible to other administrators of that facility.',
+          'Moving your account to another learning facility means administrators of that facility will be able to access your data.',
         context:
           'Second line of text in the modal explaining what changing to another learning facility means.',
       },

@@ -1,15 +1,11 @@
-from django.conf.urls import include
-from django.conf.urls import url
 from rest_framework import routers
 
 from .api import FacilityImportViewSet
-from .api import SetupWizardRestartZeroconf
+from .api import SetupWizardResource
 
-router = routers.DefaultRouter()
+router = routers.SimpleRouter()
 
 router.register(r"facilityimport", FacilityImportViewSet, basename="facilityimport")
-router.register(
-    r"restartzeroconf", SetupWizardRestartZeroconf, basename="restartzeroconf"
-)
+router.register(r"setupwizard", SetupWizardResource, basename="setupwizard")
 
-urlpatterns = [url(r"^", include(router.urls))]
+urlpatterns = router.urls

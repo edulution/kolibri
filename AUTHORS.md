@@ -1,6 +1,6 @@
 # Contributors
 
-Kolibri is copyrighted by Learning Equality under the MIT License.
+Kolibri is copyright Learning Equality and other contributors, and is released under the MIT License.
 
 If you have contributed to Kolibri, feel free to add your name and Github account to this list:
 
@@ -38,7 +38,7 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Geoff Rich | geoffrey1218 |
 | Hans Gamboa | HansGam |
 | Devon Rueckner | indirectlylit |
-| inflrscns | inflrscns |
+| - | inflrscns |
 | Ivan Savov | ivanistheone |
 | Jamie Alexandre | jamalex |
 | Jason Tame | JasonTame |
@@ -55,7 +55,7 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Paul Luna | luna215 |
 | Lingyi Wang | lyw07 |
 | Magali Boizot-Roche | magali-br |
-| manuq | manuq |
+| - | manuq |
 | Marcella Maki | marcellamaki |
 | Maureen Hernandez | MauHernandez |
 | Michael Gallaspy | MCGallaspy |
@@ -72,6 +72,7 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Jacob Pierce | nucleogenesis |
 | Paul Bussé | paulbusse |
 | Petar Cenov | pcenov |
+| Philip Withnall | pwithnall |
 | Radina Matic | radinamatic |
 | Rafael Aguayo | ralphiee22 |
 | Hyun Ahn | rationality6 |
@@ -79,7 +80,7 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Richard Tibbles | rtibbles |
 | Sairina Merino Tsui | sairina |
 | Shanavas M | shanavas786 |
-| shivangtripathi | shivangtripathi |
+| - | shivangtripathi |
 | Udith Prabhu | udithprabhu |
 | Vivek Agrawal | vkWeb |
 | Whitney Zhu | whitzhu |
@@ -89,3 +90,12 @@ If you have contributed to Kolibri, feel free to add your name and Github accoun
 | Jaideep Sharma | camperjett |
 | Allan Otodi | AllanOXDi |
 | Liana Harris | LianaHarris360 |
+| Rishi Kejriwal | Kej-r03 |
+| Siddhanth Rathod | siddhanthrathod |
+| Akila Induranga | akila-i |
+| Sahajpreet Singh | photon0205 |
+| Nishant Shrivastva | shrinishant  |
+| Amelia Breault | thanksameeelian |
+| Vikramaditya Singh | Ghat0tkach |
+| Kris Katkus | katkuskris |
+| Garvit Singhal | GarvitSinghal47 |

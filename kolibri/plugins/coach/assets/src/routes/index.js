@@ -8,6 +8,7 @@ import CoachPrompts from '../views/CoachPrompts';
 import HomeActivityPage from '../views/home/HomeActivityPage';
 import StatusTestPage from '../views/common/status/StatusTestPage';
 import { ClassesPageNames } from '../../../../learn/assets/src/constants';
+import { PageNames } from '../constants';
 import reportRoutes from './reportRoutes';
 import planRoutes from './planRoutes';
 
@@ -26,7 +27,10 @@ export default [
     component: CoachClassListPage,
     handler(toRoute) {
       store.dispatch('loading');
-      store.dispatch('setClassList', toRoute.query.facility_id).then(
+      // if user only has access to one facility, facility_id will not be accessible from URL,
+      // but always defaulting to userFacilityId would cause problems for multi-facility admins
+      const facilityId = toRoute.query.facility_id || store.getters.userFacilityId;
+      store.dispatch('setClassList', facilityId).then(
         () => {
           if (!store.getters.classListPageEnabled) {
             // If no class list page, redirect to
@@ -47,6 +51,7 @@ export default [
     },
   },
   {
+    name: PageNames.HOME_PAGE,
     path: '/:classId/home',
     component: HomePage,
     handler() {

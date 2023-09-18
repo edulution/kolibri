@@ -147,7 +147,7 @@
       </UiAlert>
       <p>
         <KButton
-          :text="$tr('close')"
+          :text="coreString('closeAction')"
           appearance="raised-button"
           primary
           @click="$emit('done')"
@@ -182,6 +182,7 @@
 
   import { mapState, mapActions } from 'vuex';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { CSVImportStatuses } from '../../constants';
 
   export default {
@@ -189,6 +190,7 @@
     components: {
       UiAlert,
     },
+    mixins: [commonCoreStrings],
     computed: {
       isError() {
         return this.status === CSVImportStatuses.ERRORS;
@@ -232,7 +234,10 @@
         message: 'The import succeeded',
         context: 'Success notification when import CSV works correctly.',
       },
-      changesMade: 'The following changes were made:',
+      changesMade: {
+        message: 'The following changes were made:',
+        context: 'Heading for the outcome report for the import from CSV operation.',
+      },
       summary: {
         message: 'Summary of changes if you choose to import:',
         context: "Description on the 'Import users' preview page.",
@@ -264,8 +269,16 @@
         message: 'Classes',
         context: 'Refers to the summary of changes in classes produced by a CSV import.',
       },
-      someSkipped: 'These rows were skipped:',
-      someRowErrors: 'These rows have errors and will be skipped if you continue:',
+      someSkipped: {
+        message: 'These rows were skipped:',
+        context:
+          'During the import operation of users and classes from the CSV file, some rows may be skipped because of improper formatting.',
+      },
+      someRowErrors: {
+        message: 'These rows have errors and will be skipped if you continue:',
+        context:
+          'During the import operation of users and classes from the CSV file, some rows may be skipped because of improper formatting.',
+      },
       rowNumber: {
         message: 'Row number',
         context: 'Refers to rows in the CSV file.\n',
@@ -282,10 +295,6 @@
       error: {
         message: 'Error',
         context: 'Title of error message in the CSV file.',
-      },
-      close: {
-        message: 'Close',
-        context: 'Generic button used to close an open window.',
       },
       back: {
         message: 'Back',

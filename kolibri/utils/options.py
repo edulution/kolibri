@@ -5,7 +5,7 @@ The settings can be changed through environment variables or sections and keys
 in the options.ini file.
 """
 import ast
-import logging.config
+import logging
 import os
 import sys
 from functools import update_wrapper
@@ -38,6 +38,9 @@ from kolibri.deployment.default.sqlite_db_names import (
     ADDITIONAL_SQLITE_DATABASES,
 )
 from kolibri.utils.system import get_fd_limit
+
+
+logger = logging.getLogger(__name__)
 
 
 CACHE_SHARDS = 8
@@ -570,6 +573,8 @@ base_option_spec = {
                 When zipcontent is being served from a completely separate domain, you can set an
                 absolute origin (full protocol plus domain, e.g. 'https://myzipcontent.com/')
                 to be used for all zipcontent origin requests.
+                It is strongly recommended that zipcontent is served from a different origin from the main Kolibri app,
+                either by port or domain, to allow for proper sandboxing.
             """,
         },
         "ZIP_CONTENT_PORT": {
@@ -580,6 +585,8 @@ base_option_spec = {
                 is used to serve all content for the zipcontent endpoint, so as to provide safe IFrame sandboxing
                 but avoiding issues with null origins.
                 This is the alternate origin server equivalent of HTTP_PORT.
+                It is strongly recommended that zipcontent is served from a different origin from the main Kolibri app,
+                either by port or domain, to allow for proper sandboxing.
             """,
         },
         "ZIP_CONTENT_URL_PATH_PREFIX": {
@@ -684,14 +691,6 @@ base_option_spec = {
                 The file to use for the job storage database. This is only used in the case that the database backend being used is SQLite.
             """,
         },
-        "SCHEDULE_HOOKS": {
-            "type": "lazy_import_callback_list",
-            "description": """
-                A lsit of module paths for function callbacks that will be called when a job is scheduled in the storage class.
-                This is intended to allow an external task runner to be used to execute Kolibri tasks. The default is empty,
-                as the internal handling is sufficient for Kolibri's task running.
-            """,
-        },
     },
 }
 
@@ -710,21 +709,6 @@ def _get_validator():
             "lazy_import_callback_list": lazy_import_callback_list,
         }
     )
-
-
-def _get_logger():
-    """
-    We define a minimal default logger config here, since we can't yet
-    load up Django settings.
-
-    NB! Since logging can be defined by options, the logging from some
-    of the functions in this module do not use fully customized logging.
-    """
-    from kolibri.utils.conf import LOG_ROOT
-    from kolibri.utils.logger import get_default_logging_config
-
-    logging.config.dictConfig(get_default_logging_config(LOG_ROOT))
-    return logging.getLogger(__name__)
 
 
 def _get_option_spec():
@@ -797,7 +781,6 @@ def _set_from_envvars(conf):
     """
     Set the configuration from environment variables.
     """
-    logger = _get_logger()
     # keep track of which options were overridden using environment variables, to support error reporting
     using_env_vars = {}
 
@@ -844,7 +827,6 @@ def _set_from_deprecated_aliases(conf):
     """
     Set the configuration from deprecated aliases.
     """
-    logger = _get_logger()
     # keep track of which options were overridden using environment variables, to support error reporting
     using_deprecated_alias = {}
 
@@ -872,8 +854,6 @@ def _set_from_deprecated_aliases(conf):
 def read_options_file(ini_filename="options.ini"):
 
     from kolibri.utils.conf import KOLIBRI_HOME
-
-    logger = _get_logger()
 
     ini_path = os.path.join(KOLIBRI_HOME, ini_filename)
 
@@ -970,8 +950,6 @@ def update_options_file(section, key, value, ini_filename="options.ini"):
     in-memory conf.OPTIONS as it can contain temporary in-memory values
     that are not intended to be stored.
     """
-
-    logger = _get_logger()
 
     # load the current conf from disk into memory
     conf = read_options_file(ini_filename=ini_filename)

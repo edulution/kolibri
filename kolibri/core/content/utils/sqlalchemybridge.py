@@ -17,14 +17,14 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import operators
 from sqlalchemy.sql.elements import UnaryExpression
 
-from .check_schema_db import db_matches_schema
-from .check_schema_db import DBSchemaError
 from kolibri.core.content.constants.schema_versions import CONTENT_DB_SCHEMA_VERSIONS
 from kolibri.core.content.constants.schema_versions import CURRENT_SCHEMA_VERSION
 from kolibri.core.mixins import UUIDValidationError
 from kolibri.core.mixins import validate_uuids
 from kolibri.core.sqlite.pragmas import CONNECTION_PRAGMAS
 from kolibri.core.sqlite.pragmas import START_PRAGMAS
+from kolibri.utils.sql_alchemy import db_matches_schema
+from kolibri.utils.sql_alchemy import DBSchemaError
 
 
 def set_sqlite_connection_pragma(dbapi_connection, connection_record):
@@ -82,7 +82,9 @@ class SharingPool(NullPool):
 
 def sqlite_connection_string(db_path):
     # Call normpath to ensure that Windows paths are properly formatted
-    return "sqlite:///{db_path}".format(db_path=os.path.normpath(db_path))
+    return "sqlite://{db_path}".format(
+        db_path="" if db_path == ":memory:" else "/" + os.path.normpath(db_path)
+    )
 
 
 def get_engine(connection_string):
@@ -99,10 +101,13 @@ def get_engine(connection_string):
     else:
         engine_kwargs["pool_pre_ping"] = True
 
+    is_default_sqlite = (
+        connection_string == get_default_db_string()
+        and connection_string.startswith("sqlite")
+    )
+
     engine = create_engine(connection_string, **engine_kwargs)
-    if connection_string == get_default_db_string() and connection_string.startswith(
-        "sqlite"
-    ):
+    if is_default_sqlite:
         event.listen(engine, "connect", set_sqlite_connection_pragma)
         connection = engine.connect()
         connection.execute(START_PRAGMAS)
@@ -192,7 +197,7 @@ class LazyBases(object):
 
     def __getitem__(self, name):
         if name not in self._valid_bases:
-            raise AttributeError
+            raise AttributeError("Unknown content schema {} requested".format(name))
         if name not in self._loaded_bases:
             try:
                 metadata = load_metadata(name)
@@ -205,26 +210,13 @@ class LazyBases(object):
                 )
                 self._loaded_bases[name] = None
         if self._loaded_bases[name] is None:
-            raise AttributeError
+            raise AttributeError(
+                "Known content schema requested, but the schema failed to import"
+            )
         return self._loaded_bases[name]
 
 
 BASES = LazyBases()
-
-
-def get_model_from_cls(cls):
-    return next(
-        (
-            m
-            for m in apps.get_models(include_auto_created=True)
-            if m._meta.db_table == cls.__table__.name
-        ),
-        None,
-    )
-
-
-def get_field_from_model_by_column(model, column):
-    return next((f for f in model._meta.fields if f.column == column), None)
 
 
 def prepare_base(metadata, name=None):
@@ -304,7 +296,7 @@ class Bridge(object):
             for version in CONTENT_DB_SCHEMA_VERSIONS:
                 self.schema_version = version
                 try:
-                    db_matches_schema(BASES[self.schema_version], self.engine)
+                    db_matches_schema(BASES[self.schema_version].classes, self.engine)
                     break
                 except DBSchemaError as e:
                     logging.debug(e)

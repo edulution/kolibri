@@ -254,6 +254,12 @@ EXTRA_LANG_INFO = {
         "name": "Hausa",
         "name_local": "Hausa",
     },
+    "ht": {
+        "bidi": False,
+        "code": "ht",
+        "name": "Haitian Creole",
+        "name_local": "Kreyòl Ayisyen",
+    },
     "id": {
         "bidi": False,
         "code": "id",
@@ -440,3 +446,6 @@ MORANGO_DESERIALIZE_OPERATIONS = (
 MORANGO_CLEANUP_OPERATIONS = (
     SYNC_OPERATIONS + morango_settings.MORANGO_CLEANUP_OPERATIONS
 )
+
+# whether Kolibri is running within tests
+TESTING = False

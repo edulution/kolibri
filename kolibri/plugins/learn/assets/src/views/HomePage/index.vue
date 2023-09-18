@@ -1,10 +1,8 @@
 <template>
 
-  <LearnAppBarPage
-    :appBarTitle="learnString('learnLabel')"
-    :loading="loading"
-  >
+  <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
     <div v-if="!loading" id="main" role="main">
+      <MissingResourceAlert v-if="missingResources" />
       <YourClasses
         v-if="displayClasses"
         class="section"
@@ -58,10 +56,11 @@
 
   import { computed } from 'kolibri.lib.vueCompositionApi';
   import { get } from '@vueuse/core';
+  import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
+  import useUser from 'kolibri.coreVue.composables.useUser';
   import useChannels from '../../composables/useChannels';
   import useDeviceSettings from '../../composables/useDeviceSettings';
   import useLearnerResources from '../../composables/useLearnerResources';
-  import useUser from '../../composables/useUser';
   import AssignedLessonsCards from '../classes/AssignedLessonsCards';
   import AssignedQuizzesCards from '../classes/AssignedQuizzesCards';
   import YourClasses from '../YourClasses';
@@ -85,6 +84,7 @@
       ContinueLearning,
       ExploreChannels,
       LearnAppBarPage,
+      MissingResourceAlert,
     },
     mixins: [commonLearnStrings],
     setup() {
@@ -141,6 +141,13 @@
         return get(isUserLoggedIn) && (get(classes).length || !get(canAccessUnassignedContent));
       });
 
+      const missingResources = computed(() => {
+        return (
+          get(activeClassesLessons).some(l => l.missing_resource) ||
+          get(activeClassesQuizzes).some(q => q.missing_resource)
+        );
+      });
+
       return {
         isUserLoggedIn,
         channels,
@@ -153,6 +160,7 @@
         continueLearning,
         displayExploreChannels,
         displayClasses,
+        missingResources,
       };
     },
     props: {
@@ -169,7 +177,11 @@
 <style lang="scss" scoped>
 
   .section:not(:first-child) {
-    margin-top: 42px;
+    margin-top: 32px;
+  }
+
+  .section:first-child {
+    margin-top: 16px;
   }
 
 </style>

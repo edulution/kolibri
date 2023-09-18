@@ -1,6 +1,13 @@
 <template>
 
-  <OnboardingStepBase :title="$tr('header')" @continue="handleContinue">
+  <OnboardingStepBase
+    :title="$tr('header')"
+    :footerMessageType="footerMessageType"
+    :step="3"
+    :steps="5"
+    :eventOnGoBack="backEvent"
+    @continue="handleContinue"
+  >
 
     <KRadioButton
       ref="yesRadio"
@@ -17,8 +24,9 @@
       :value="false"
     />
     <p class="description">
-      {{ $tr('changeLater') }}
+      {{ getCommonSyncString('changeLater') }}
     </p>
+
   </OnboardingStepBase>
 
 </template>
@@ -26,27 +34,35 @@
 
 <script>
 
+  import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
   import OnboardingStepBase from '../OnboardingStepBase';
-  import { Presets } from '../../constants';
+  import { Presets, FooterMessageTypes } from '../../constants';
 
   export default {
     name: 'CreateLearnerAccountForm',
     components: {
       OnboardingStepBase,
     },
+    mixins: [commonSyncElements],
     data() {
-      let setting;
-      const { preset } = this.$store.state.onboardingData;
-      if (preset === Presets.NONFORMAL) {
-        setting = true;
-      } else {
-        setting = false;
+      let setting = this.wizardService.state.context['learnerCanCreateAccount'];
+      if (setting === null) {
+        // Set default for the setting if one isn't selected; depends on the preset selected
+        const preset = this.wizardService.state.context['formalOrNonformal'];
+        setting = preset === Presets.NONFORMAL;
       }
+      const footerMessageType = FooterMessageTypes.NEW_FACILITY;
       return {
+        footerMessageType,
         setting,
       };
     },
     inject: ['wizardService'],
+    computed: {
+      backEvent() {
+        return { type: 'BACK', value: Boolean(this.setting) };
+      },
+    },
     methods: {
       handleContinue() {
         this.wizardService.send({ type: 'CONTINUE', value: this.setting });
@@ -64,13 +80,9 @@
           "Possible answer to the 'Allow anyone to create their own learner account?' question.",
       },
       noOptionLabel: {
-        message: 'No. Admins must create all accounts',
+        message: 'No. Admins must create an account for them to join this facility.',
         context:
           "Possible answer to the 'Allow anyone to create their own learner account?' question.",
-      },
-      changeLater: {
-        message: 'You can change this in your learning facility settings later',
-        context: '',
       },
     },
   };

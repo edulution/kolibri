@@ -29,7 +29,7 @@
         return [
           {
             title: this.coreString('classHome'),
-            link: this.navRoute('HomePage'),
+            link: this.navRoute(PageNames.HOME_PAGE),
             icon: 'dashboard',
             color: this.$themeTokens.textInverted,
           },
@@ -40,7 +40,7 @@
             color: this.$themeTokens.textInverted,
           },
           {
-            title: this.$tr('plan'),
+            title: this.coachString('planLabel'),
             link: this.navRoute(PageNames.PLAN_PAGE),
             icon: 'edit',
             color: this.$themeTokens.textInverted,
@@ -51,13 +51,6 @@
     methods: {
       navRoute(name) {
         return this.classId ? { name, params: { classId: this.classId } } : { name };
-      },
-    },
-    $trs: {
-      plan: {
-        message: 'Plan',
-        context:
-          "Translate as a VERB. Refers to the 'Plan' tab where coaches manage lessons, quizzes, and groups.",
       },
     },
   };

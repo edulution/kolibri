@@ -1,6 +1,7 @@
 from django.http.request import QueryDict
 from django.urls import reverse
 
+from kolibri.core.content.utils import settings
 from kolibri.plugins.app.kolibri_plugin import App
 from kolibri.plugins.registry import registered_plugins
 
@@ -9,9 +10,12 @@ SHARE_FILE = "share_file"
 
 GET_OS_USER = "get_os_user"
 
+CHECK_IS_METERED = "check_is_metered"
+
 CAPABILITES = (
     SHARE_FILE,
     GET_OS_USER,
+    CHECK_IS_METERED,
 )
 
 
@@ -28,6 +32,9 @@ class AppInterface(object):
         for capability in CAPABILITES:
             if capability in kwargs:
                 self._capabilities[capability] = kwargs[capability]
+                # override the settings module with the function
+                if capability == CHECK_IS_METERED:
+                    settings.using_metered_connection = kwargs[capability]
 
     def get_initialize_url(self, next_url=None, auth_token=None):
         if not self.enabled:
@@ -63,6 +70,13 @@ class AppInterface(object):
         if SHARE_FILE not in self._capabilities:
             raise NotImplementedError("Sharing files is not supported on this platform")
         return self._capabilities[SHARE_FILE](filename=filename, message=message)
+
+    def check_is_metered(self):
+        if CHECK_IS_METERED not in self._capabilities:
+            raise NotImplementedError(
+                "Checking if the connection is metered is not supported on this platform"
+            )
+        return self._capabilities[CHECK_IS_METERED]()
 
     def get_os_user(self, auth_token):
         if GET_OS_USER not in self._capabilities:

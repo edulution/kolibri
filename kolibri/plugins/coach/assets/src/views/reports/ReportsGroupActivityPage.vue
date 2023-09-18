@@ -1,27 +1,29 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
 
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
-
     <KPageContainer>
 
-      <ReportsGroupHeader :enablePrint="true" />
-
-      <ActivityList
-        embeddedPageName="ReportsGroupActivityPage"
-        :noActivityString="coachString('activityListEmptyState')"
+      <ReportsGroupHeader
+        :activeTabId="ReportsGroupTabs.ACTIVITY"
+        :enablePrint="true"
       />
+      <KTabsPanel
+        :tabsId="REPORTS_GROUP_TABS_ID"
+        :activeTabId="ReportsGroupTabs.ACTIVITY"
+      >
+        <ActivityList
+          embeddedPageName="ReportsGroupActivityPage"
+          :noActivityString="coachString('activityListEmptyState')"
+        />
+      </KTabsPanel>
 
     </KPageContainer>
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -29,6 +31,8 @@
 <script>
 
   import commonCoach from '../common';
+  import { REPORTS_GROUP_TABS_ID, ReportsGroupTabs } from '../../constants/tabsConstants';
+  import CoachAppBarPage from '../CoachAppBarPage';
   import ActivityList from '../common/notifications/ActivityList';
   import ReportsGroupHeader from './ReportsGroupHeader';
 
@@ -36,9 +40,16 @@
     name: 'ReportsGroupActivityPage',
     components: {
       ActivityList,
+      CoachAppBarPage,
       ReportsGroupHeader,
     },
     mixins: [commonCoach],
+    data() {
+      return {
+        REPORTS_GROUP_TABS_ID,
+        ReportsGroupTabs,
+      };
+    },
   };
 
 </script>

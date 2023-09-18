@@ -1,4 +1,9 @@
 import store from 'kolibri.coreVue.vuex.store';
+import router from 'kolibri.coreVue.router';
+import VueRouter from 'vue-router';
+import ManageSyncSchedule from 'kolibri-common/components/SyncSchedule/ManageSyncSchedule';
+import EditDeviceSyncSchedule from 'kolibri-common/components/SyncSchedule/EditDeviceSyncSchedule';
+import { SyncPageNames } from 'kolibri-common/components/SyncSchedule/constants';
 import ClassEditPage from './views/ClassEditPage';
 import CoachClassAssignmentPage from './views/CoachClassAssignmentPage';
 import LearnerClassEnrollmentPage from './views/LearnerClassEnrollmentPage';
@@ -20,12 +25,32 @@ import {
 } from './modules/classAssignMembers/handlers';
 import { PageNames } from './constants';
 
+function facilityParamRequiredGuard(toRoute, subtopicName) {
+  const { isNavigationFailure, NavigationFailureType } = VueRouter;
+  if (store.getters.userIsMultiFacilityAdmin && !toRoute.params.facility_id) {
+    router
+      .replace({
+        name: 'ALL_FACILITIES_PAGE',
+        query: { subtopicName },
+        params: { subtopicName },
+      })
+      .catch(e => {
+        if (!isNavigationFailure(e, NavigationFailureType.duplicated)) {
+          console.debug(e);
+          throw Error(e);
+        }
+      });
+    return true;
+  }
+}
+
 export default [
   // Routes for multi-facility case
   {
     name: PageNames.ALL_FACILITIES_PAGE,
-    path: '/facilities',
+    path: '/:subtopicName?/facilities',
     component: AllFacilitiesPage,
+    props: true,
     handler() {
       store.dispatch('preparePage', { isAsync: false });
     },
@@ -38,6 +63,9 @@ export default [
     path: '/:facility_id?/classes',
     component: ManageClassPage,
     handler: toRoute => {
+      if (facilityParamRequiredGuard(toRoute, ManageClassPage.name)) {
+        return;
+      }
       showClassesPage(store, toRoute);
     },
   },
@@ -70,6 +98,9 @@ export default [
     component: UserPage,
     path: '/:facility_id?/users',
     handler: (toRoute, fromRoute) => {
+      if (facilityParamRequiredGuard(toRoute, UserPage.name)) {
+        return;
+      }
       showUserPage(store, toRoute, fromRoute);
     },
   },
@@ -93,7 +124,10 @@ export default [
     name: PageNames.DATA_EXPORT_PAGE,
     component: DataPage,
     path: '/:facility_id?/data',
-    handler: () => {
+    handler: toRoute => {
+      if (facilityParamRequiredGuard(toRoute, DataPage.name)) {
+        return;
+      }
       store.dispatch('preparePage', { isAsync: false });
     },
   },
@@ -110,6 +144,9 @@ export default [
     component: FacilitiesConfigPage,
     path: '/:facility_id?/settings',
     handler: toRoute => {
+      if (facilityParamRequiredGuard(toRoute, FacilitiesConfigPage.name)) {
+        return;
+      }
       showFacilityConfigPage(store, toRoute);
     },
   },
@@ -122,6 +159,45 @@ export default [
       } else {
         next(store.getters.facilityPageLinks.ManageClassPage);
       }
+    },
+  },
+  {
+    path: '/:facility_id?/managesync',
+    props: route => {
+      const facilityId = route.params.facility_id || store.getters.userFacilityId;
+      return {
+        facilityId,
+        goBackRoute: {
+          name: PageNames.DATA_EXPORT_PAGE,
+          params: { facility_id: route.params.facility_id },
+        },
+        editSyncRoute: function(deviceId) {
+          return {
+            name: SyncPageNames.EDIT_SYNC_SCHEDULE,
+            params: {
+              deviceId,
+              facility_id: facilityId,
+            },
+          };
+        },
+      };
+    },
+    component: ManageSyncSchedule,
+    name: SyncPageNames.MANAGE_SYNC_SCHEDULE,
+  },
+  {
+    path: '/:facility_id?/editdevice/:deviceId/',
+    component: EditDeviceSyncSchedule,
+    name: SyncPageNames.EDIT_SYNC_SCHEDULE,
+    props: route => {
+      return {
+        facilityId: route.params.facility_id || store.getters.userFacilityId,
+        deviceId: route.params.deviceId,
+        goBackRoute: {
+          name: SyncPageNames.MANAGE_SYNC_SCHEDULE,
+          params: { facility_id: route.params.facility_id },
+        },
+      };
     },
   },
 ];

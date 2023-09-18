@@ -232,12 +232,15 @@
         this.storeVisitedSlide(this.currentSlideIndex);
         this.updateProgress();
         this.updateContentState();
+        if (this.currentSlideIndex >= this.slides.length - 1) {
+          this.$emit('finished');
+        }
       },
       slideTextId(id) {
         return 'descriptive-text-' + id;
       },
       storeVisitedSlide(currentSlideNum) {
-        let visited = this.savedVisitedSlides;
+        const visited = this.savedVisitedSlides;
         visited[currentSlideNum] = true;
         this.savedVisitedSlides = visited;
       },

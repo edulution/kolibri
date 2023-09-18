@@ -55,7 +55,7 @@
               {{ $tr('signIn') }}
             </UiAlert>
             <div
-              v-else
+              v-else-if="!wasComplete"
               class="stats"
             >
               <div class="points">
@@ -104,8 +104,8 @@
               >
                 <KGrid :style="{ marginTop: '6px' }">
                   <KGridItem
-                    v-for="contentNode in recommendedContentNodes"
-                    :key="contentNode.id"
+                    v-for="node in recommendedContentNodes"
+                    :key="node.id"
                     :layout12="{ span: 6 }"
                     :layout8="{ span: 4 }"
                     :layout4="{ span: 4 }"
@@ -113,13 +113,10 @@
                   >
                     <ResourceItem
                       data-test="recommended-resource"
-                      :contentNode="contentNode"
-                      :contentNodeRoute="genContentLink(
-                        contentNode.id,
-                        null,
-                        contentNode.is_leaf,
-                        $route.query.last,
-                        $route.query
+                      :contentNode="node"
+                      :contentNodeRoute="genContentLinkKeepCurrentBackLink(
+                        node.id,
+                        node.is_leaf,
                       )"
                       :size="recommendedResourceItemSize"
                     />
@@ -133,8 +130,8 @@
             ref="closeButton"
             class="close-button"
             icon="close"
-            :ariaLabel="$tr('close')"
-            :tooltip="$tr('close')"
+            :ariaLabel="coreString('closeAction')"
+            :tooltip="coreString('closeAction')"
             @click="$emit('close')"
           />
         </FocusTrap>
@@ -153,9 +150,11 @@
   import FocusTrap from 'kolibri.coreVue.components.FocusTrap';
   import PointsIcon from 'kolibri.coreVue.components.PointsIcon';
   import { ContentNodeResource } from 'kolibri.resources';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import useDevices from '../../composables/useDevices';
   import useDeviceSettings from '../../composables/useDeviceSettings';
   import useLearnerResources from '../../composables/useLearnerResources';
-  import genContentLink from '../../utils/genContentLink';
+  import useContentLink from '../../composables/useContentLink';
   import commonLearnStrings from '../commonLearnStrings';
   import CompletionModalSection from './CompletionModalSection';
   import ResourceItem from './ResourceItem';
@@ -179,11 +178,18 @@
       ResourceItem,
       UiAlert,
     },
-    mixins: [KResponsiveWindowMixin, commonLearnStrings],
+    mixins: [KResponsiveWindowMixin, commonLearnStrings, commonCoreStrings],
     setup() {
       const { canAccessUnassignedContent } = useDeviceSettings();
       const { fetchLesson } = useLearnerResources();
-      return { canAccessUnassignedContent, fetchLesson };
+      const { genContentLinkKeepCurrentBackLink } = useContentLink();
+      const { baseurl } = useDevices();
+      return {
+        baseurl,
+        canAccessUnassignedContent,
+        fetchLesson,
+        genContentLinkKeepCurrentBackLink,
+      };
     },
     props: {
       /**
@@ -195,8 +201,8 @@
         type: Boolean,
         required: true,
       },
-      contentNodeId: {
-        type: String,
+      contentNode: {
+        type: Object,
         required: true,
       },
       lessonId: {
@@ -208,6 +214,10 @@
         default: false,
       },
       isSurvey: {
+        type: Boolean,
+        default: false,
+      },
+      wasComplete: {
         type: Boolean,
         default: false,
       },
@@ -234,6 +244,9 @@
       };
     },
     computed: {
+      contentNodeId() {
+        return this.contentNode && this.contentNode.id;
+      },
       staySectionDescription() {
         if (this.isQuiz) {
           return this.$tr('reviewQuizDescription');
@@ -298,12 +311,9 @@
         }
       },
       nextContentNodeRoute() {
-        return this.genContentLink(
+        return this.genContentLinkKeepCurrentBackLink(
           this.nextContentNode.id,
-          null,
-          this.nextContentNode.is_leaf,
-          this.$route.query.last,
-          this.$route.query
+          this.nextContentNode.is_leaf
         );
       },
     },
@@ -319,7 +329,6 @@
       }
       Promise.all(promises).then(() => {
         this.loading = false;
-        this.$nextTick(this.$refs.modal.focus());
       });
     },
     beforeMount() {
@@ -347,14 +356,37 @@
         this.$el.querySelector('.close-button').focus();
       },
       loadNextContent() {
-        return ContentNodeResource.fetchNextContent(this.contentNodeId).then(data => {
-          this.nextContentNode = data;
+        const fetchGrandparent = this.contentNode.ancestors.length > 1;
+        const treeParams = {
+          id: fetchGrandparent
+            ? this.contentNode.ancestors.slice(-2)[0].id
+            : this.contentNode.parent,
+          params: {
+            include_coach_content:
+              this.$store.getters.isAdmin ||
+              this.$store.getters.isCoach ||
+              this.$store.getters.isSuperuser,
+            depth: fetchGrandparent ? 2 : 1,
+            baseurl: this.baseurl,
+          },
+        };
+        return ContentNodeResource.fetchTree(treeParams).then(ancestor => {
+          let parent;
+          if (fetchGrandparent) {
+            parent = ancestor.children.results.find(c => c.id === this.contentNode.parent);
+          } else {
+            parent = ancestor;
+          }
+          const contentIndex = parent.children.results.findIndex(c => c.id === this.contentNode.id);
+          this.nextContentNode = parent.children.results.slice(contentIndex + 1)[0] || null;
         });
       },
       loadRecommendedContent() {
-        return ContentNodeResource.fetchRecommendationsFor(this.contentNodeId).then(data => {
-          this.recommendedContentNodes = data;
-        });
+        if (!this.baseurl) {
+          return ContentNodeResource.fetchRecommendationsFor(this.contentNodeId).then(data => {
+            this.recommendedContentNodes = data;
+          });
+        }
       },
       loadNextLessonContent() {
         return this.fetchLesson({ lessonId: this.lessonId }).then(lesson => {
@@ -364,7 +396,6 @@
             : null;
         });
       },
-      genContentLink,
       emitCloseEvent() {
         this.$emit('close');
       },
@@ -425,10 +456,6 @@
         message: 'Keep up the great progress!',
         context: 'Message of encouragement which displays when learner has completed a resource.',
       },
-      close: {
-        message: 'Close',
-        context: "Indicates the 'X' button to close the window.",
-      },
       moveOnTitle: {
         message: 'Keep going',
         context: 'Message to the user after completing a resource, to select the next resource.',
@@ -479,7 +506,7 @@
         context: 'Message to the user after completing a resource with additional suggestions.',
       },
       helpfulResourcesDescription: {
-        message: 'Here are some related resources we think you’ll find helpful',
+        message: "Here are some related resources we think you'll find helpful",
         context: "Description on the 'Resource completed' window.",
       },
     },

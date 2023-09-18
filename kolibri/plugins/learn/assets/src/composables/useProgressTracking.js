@@ -11,6 +11,7 @@ import isNumber from 'lodash/isNumber';
 import isPlainObject from 'lodash/isPlainObject';
 import isUndefined from 'lodash/isUndefined';
 import { diff } from 'deep-object-diff';
+import Modalities from 'kolibri-constants/Modalities';
 import client from 'kolibri.client';
 import logger from 'kolibri.lib.logging';
 import urls from 'kolibri.urls';
@@ -62,7 +63,7 @@ const replaceBlocklist = {
 };
 
 function clearObject(obj) {
-  for (let key in obj) {
+  for (const key in obj) {
     delete obj[key];
   }
 }
@@ -151,7 +152,7 @@ export default function useProgressTracking(store) {
       const data = response.data;
       set(context, valOrNull(data.context));
       set(complete, valOrNull(data.complete));
-      set(progress_state, threeDecimalPlaceRoundup(valOrNull(data.progress)));
+      set(progress_state, valOrNull(data.progress));
       set(progress_delta, 0);
       set(time_spent, valOrNull(data.time_spent));
       set(time_spent_delta, 0);
@@ -175,12 +176,12 @@ export default function useProgressTracking(store) {
    * Initialize a content session for progress tracking
    * To be called on page load for content renderers
    */
-  function initContentSession({ nodeId, lessonId, quizId, repeat = false } = {}) {
+  function initContentSession({ node, lessonId, quizId, repeat = false } = {}) {
     const data = {};
-    if (!nodeId && !quizId) {
-      throw TypeError('Must define either nodeId or quizId');
+    if (!node && !quizId) {
+      throw TypeError('Must define either node or quizId');
     }
-    if ((nodeId || lessonId) && quizId) {
+    if ((node || lessonId) && quizId) {
       throw TypeError('quizId must be the only defined parameter if defined');
     }
     let sessionStarted = false;
@@ -190,12 +191,53 @@ export default function useProgressTracking(store) {
       data.quiz_id = quizId;
     }
 
-    if (nodeId) {
-      sessionStarted = get(context) && get(context).node_id === nodeId;
-      data.node_id = nodeId;
+    if (node) {
+      if (!node.id) {
+        throw TypeError('node must have id property');
+      }
+      if (!node.content_id) {
+        throw TypeError('node must have content_id property');
+      }
+      if (!node.channel_id) {
+        throw TypeError('node must have channel_id property');
+      }
+      if (!node.kind) {
+        throw TypeError('node must have kind property');
+      }
+      sessionStarted = get(context) && get(context).node_id === node.id;
+      data.node_id = node.id;
+      data.content_id = node.content_id;
+      data.channel_id = node.channel_id;
+      data.kind = node.kind;
       if (lessonId) {
         sessionStarted = sessionStarted && get(context) && get(context).lesson_id === lessonId;
         data.lesson_id = lessonId;
+      }
+      if (node.kind === 'exercise') {
+        if (!node.assessmentmetadata) {
+          throw new TypeError('node must have assessmentmetadata property');
+        }
+        if (!node.assessmentmetadata.mastery_model) {
+          throw new TypeError(
+            'node must have assessmentmetadata property with mastery_model property'
+          );
+        }
+        if (!isPlainObject(node.assessmentmetadata.mastery_model)) {
+          throw new TypeError(
+            'node must have assessmentmetadata property with plain object mastery_model property'
+          );
+        }
+        if (!node.assessmentmetadata.mastery_model.type) {
+          throw new TypeError(
+            'node must have assessmentmetadata property with mastery_model property with type property'
+          );
+        }
+        data.mastery_model = node.assessmentmetadata.mastery_model;
+        if (node.options && node.options.modality === Modalities.QUIZ) {
+          // The mastery model and the modalities have different
+          // casing, so we don't reuse it here.
+          data.mastery_model = { type: 'quiz' };
+        }
       }
     }
 
@@ -220,9 +262,8 @@ export default function useProgressTracking(store) {
         );
         Object.assign(nowSavedInteraction, interaction);
         pastattemptMap[nowSavedInteraction.id] = nowSavedInteraction;
-        set(totalattempts, get(totalattempts) + 1);
       } else {
-        for (let key in interaction) {
+        for (const key in interaction) {
           if (!blocklist[key]) {
             pastattemptMap[interaction.id][key] = interaction[key];
           }
@@ -239,12 +280,13 @@ export default function useProgressTracking(store) {
       data,
     }).then(response => {
       if (response.data.attempts) {
-        for (let attempt of response.data.attempts) {
+        for (const attempt of response.data.attempts) {
           updateAttempt(attempt);
         }
       }
       if (response.data.complete) {
         set(complete, true);
+        set(progress_state, 1);
         if (store.getters.isUserLoggedIn && !wasComplete) {
           store.commit('INCREMENT_TOTAL_PROGRESS', 1);
         }
@@ -257,7 +299,7 @@ export default function useProgressTracking(store) {
   // so we can always just chain from this promise for subsequent saves.
   let savingPromise = Promise.resolve();
 
-  let updateContentSessionResolveRejectStack = [];
+  const updateContentSessionDeferredStack = [];
   let updateContentSessionTimeout;
   let forceSessionUpdate = false;
 
@@ -310,30 +352,33 @@ export default function useProgressTracking(store) {
         data.extra_fields = extraFields;
       }
       // Don't try to make a new save until the previous save
-      // has completed.
-      savingPromise = savingPromise.then(() => {
-        return makeRequestWithRetry(makeSessionUpdateRequest, data);
-      });
+      // has completed or there's no data to sent because the quiz has already
+      // been completed.
+      if (Object.keys(data).length !== 0) {
+        savingPromise = savingPromise.then(() => {
+          return makeRequestWithRetry(makeSessionUpdateRequest, data);
+        });
+      }
     }
+    // Splice all the resolve/reject handlers off the stack
+    // so that only those that have already been added by the time of this
+    // invocation are called, and none that are added subsequently, while
+    // this invocation is still in progress.
+    const deferredStack = updateContentSessionDeferredStack.splice(0);
     return savingPromise
       .then(result => {
         // If it is successful call all of the resolve functions that we have stored
         // from all the Promises that have been returned while this specific debounce
         // has been active.
-        for (let [resolve] of updateContentSessionResolveRejectStack) {
+        for (const { resolve } of deferredStack) {
           resolve(result);
         }
-        // Reset the stack for resolve/reject functions, so that future invocations
-        // do not call these now consumed functions.
-        updateContentSessionResolveRejectStack = [];
       })
       .catch(err => {
         // If there is an error call reject for all previously returned promises.
-        for (let [, reject] of updateContentSessionResolveRejectStack) {
+        for (const { reject } of deferredStack) {
           reject(err);
         }
-        // Likewise reset the stack.
-        updateContentSessionResolveRejectStack = [];
       });
   }
 
@@ -350,6 +395,7 @@ export default function useProgressTracking(store) {
     // Used to ensure state is always saved when a session closes.
     force = false,
   } = {}) {
+    const wasComplete = get(progress_state) >= 1;
     if (get(session_id) === null) {
       throw ReferenceError(noSessionErrorText);
     }
@@ -363,8 +409,9 @@ export default function useProgressTracking(store) {
       progress = _zeroToOne(progress);
       progress = threeDecimalPlaceRoundup(progress);
       if (get(progress_state) < progress) {
-        const newProgressDelta =
-          get(progress_delta) + threeDecimalPlaceRoundup(progress - get(progress_state));
+        const newProgressDelta = _zeroToOne(
+          threeDecimalPlaceRoundup(get(progress_delta) + progress - get(progress_state))
+        );
         set(progress_delta, newProgressDelta);
         set(progress_state, progress);
       }
@@ -375,7 +422,10 @@ export default function useProgressTracking(store) {
       }
       progressDelta = _zeroToOne(progressDelta);
       progressDelta = threeDecimalPlaceRoundup(progressDelta);
-      set(progress_delta, threeDecimalPlaceRoundup(get(progress_delta) + progressDelta));
+      set(
+        progress_delta,
+        _zeroToOne(threeDecimalPlaceRoundup(get(progress_delta) + progressDelta))
+      );
       set(
         progress_state,
         Math.min(threeDecimalPlaceRoundup(get(progress_state) + progressDelta), 1)
@@ -402,7 +452,7 @@ export default function useProgressTracking(store) {
           a => !a.id && a.item === interaction.item
         );
         if (unsavedInteraction) {
-          for (let key in interaction) {
+          for (const key in interaction) {
             set(unsavedInteraction, key, interaction[key]);
           }
         } else {
@@ -421,7 +471,8 @@ export default function useProgressTracking(store) {
       set(time_spent_delta, threeDecimalPlaceRoundup(get(time_spent_delta) + elapsedTime));
     }
 
-    immediate = (!isUndefined(interaction) && !interaction.id) || immediate;
+    const completed = !wasComplete && get(progress_state) >= 1;
+    immediate = (!isUndefined(interaction) && !interaction.id) || completed || immediate;
     forceSessionUpdate = forceSessionUpdate || force;
     // Logic for promise returning debounce vendored and modified from:
     // https://github.com/sindresorhus/p-debounce/blob/main/index.js
@@ -432,7 +483,7 @@ export default function useProgressTracking(store) {
       // Any subsequent calls will then also revoke this timeout.
       clearTimeout(updateContentSessionTimeout);
       // Add the resolve and reject handlers for this promise to the stack here.
-      updateContentSessionResolveRejectStack.push([resolve, reject]);
+      updateContentSessionDeferredStack.push({ resolve, reject });
       if (immediate) {
         // If immediate invocation is required immediately call the handler
         // rather than using a timeout delay.

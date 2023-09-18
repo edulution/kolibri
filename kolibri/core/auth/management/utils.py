@@ -25,7 +25,8 @@ from kolibri.core.auth.constants.morango_sync import State
 from kolibri.core.auth.models import dataset_cache
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
-from kolibri.core.auth.sync_event_hook_utils import register_sync_event_handlers
+from kolibri.core.auth.sync_event_hook_utils import post_transfer_handler
+from kolibri.core.auth.sync_event_hook_utils import pre_transfer_handler
 from kolibri.core.device.models import DevicePermissions
 from kolibri.core.device.utils import device_provisioned
 from kolibri.core.device.utils import provision_device
@@ -159,27 +160,27 @@ def is_portal_sync(baseurl):
     return baseurl == DATA_PORTAL_SYNCING_BASE_URL
 
 
-def get_baseurl(baseurl):
+def get_baseurl(address):
     # if url matches data portal, no need to validate it
-    if is_portal_sync(baseurl):
-        return baseurl
+    if is_portal_sync(address):
+        return address
 
     # validate base url
     try:
-        return NetworkClient(address=baseurl).base_url
+        return NetworkClient.build_for_address(address).base_url
     except URLParseError:
         raise CommandError(
             "Base URL/IP: {} is not valid. Please retry command and enter a valid URL/IP.".format(
-                baseurl
+                address
             )
         )
     except NetworkLocationNotFound:
-        raise CommandError("Unable to connect to: {}".format(baseurl))
+        raise CommandError("Unable to connect to: {}".format(address))
 
 
-def get_network_connection(baseurl):
+def get_network_connection(address):
     controller = MorangoProfileController(PROFILE_FACILITY_DATA)
-    network_connection = controller.create_network_connection(get_baseurl(baseurl))
+    network_connection = controller.create_network_connection(get_baseurl(address))
 
     # validate instance IDs are differemt, which would mean this device is trying to sync with itself
     if (
@@ -400,7 +401,6 @@ class MorangoSyncCommand(AsyncCommand):
         )
 
         client_cert = sync_session_client.sync_session.client_certificate
-        register_sync_event_handlers(sync_session_client.controller)
 
         filter_scope, scope_params = get_sync_filter_scope(client_cert, user_id=user_id)
         dataset_id = scope_params.get("dataset_id")
@@ -507,6 +507,10 @@ class MorangoSyncCommand(AsyncCommand):
         :type sync_filter: Filter
         """
         sync_client = sync_session_client.get_pull_client()
+
+        # note this is the CompositeSessionContext
+        pre_transfer_handler(sync_client.context)
+
         sync_client.signals.queuing.connect(self._raise_cancel)
         sync_client.signals.transferring.connect(self._raise_cancel)
 
@@ -540,6 +544,9 @@ class MorangoSyncCommand(AsyncCommand):
         with self._lock():
             sync_client.finalize()
 
+        # note this is the CompositeSessionContext
+        post_transfer_handler(sync_client.context)
+
     def _push(
         self,
         sync_session_client,
@@ -552,6 +559,10 @@ class MorangoSyncCommand(AsyncCommand):
         :type sync_filter: Filter
         """
         sync_client = sync_session_client.get_push_client()
+
+        # note this is the CompositeSessionContext
+        pre_transfer_handler(sync_client.context)
+
         sync_client.signals.transferring.connect(self._raise_cancel)
 
         self._queueing_tracker_adapter(
@@ -590,6 +601,9 @@ class MorangoSyncCommand(AsyncCommand):
         # allow server timeout since remotely integrating data can take a while and the request
         # could timeout. In that case, we'll assume everything is good.
         sync_client.finalize()
+
+        # note this is the CompositeSessionContext
+        post_transfer_handler(sync_client.context)
 
     def _update_all_progress(self, progress_fraction, progress):
         """
@@ -635,7 +649,7 @@ class MorangoSyncCommand(AsyncCommand):
         :type sync_state: str
         :type noninteractive: bool
         """
-        tracker = self.start_progress(total=100)
+        tracker = self.start_progress(total=100).progresstracker
 
         def stats_msg(transfer_session):
             transfer_total = (
@@ -664,7 +678,7 @@ class MorangoSyncCommand(AsyncCommand):
             else:
                 progress = 100
 
-            tracker.update_progress(
+            self.update_progress(
                 increment=math.ceil(progress - tracker.progress),
                 message=stats_msg(transfer_session),
                 extra_data=dict(
@@ -691,7 +705,7 @@ class MorangoSyncCommand(AsyncCommand):
         :type sync_state: str
         :type noninteractive: bool
         """
-        tracker = self.start_progress(total=2)
+        tracker = self.start_progress(total=2).progresstracker
 
         def started(transfer_session):
             dataset_cache.clear()
@@ -705,7 +719,7 @@ class MorangoSyncCommand(AsyncCommand):
                     logger.info("No records transferred")
 
         def handler(transfer_session):
-            tracker.update_progress(
+            self.update_progress(
                 message=message, extra_data=dict(sync_state=sync_state)
             )
 

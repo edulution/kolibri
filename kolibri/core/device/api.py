@@ -1,9 +1,10 @@
+import logging
 from datetime import timedelta
 from sys import version_info
 
-import requests
 from django.conf import settings
 from django.contrib.auth import login
+from django.db.models import Exists
 from django.db.models import Max
 from django.db.models import OuterRef
 from django.db.models.expressions import Subquery
@@ -22,40 +23,53 @@ from rest_framework import mixins
 from rest_framework import status
 from rest_framework import views
 from rest_framework import viewsets
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 import kolibri
 from .models import DevicePermissions
 from .models import DeviceSettings
+from .models import DeviceStatus
+from .models import LearnerDeviceStatus
+from .models import StatusSentiment
 from .models import UserSyncStatus
 from .permissions import NotProvisionedCanPost
 from .permissions import UserHasAnyDevicePermissions
 from .serializers import DevicePermissionsSerializer
 from .serializers import DeviceProvisionSerializer
 from .serializers import DeviceSettingsSerializer
+from kolibri.core.analytics.tasks import schedule_ping
 from kolibri.core.api import ReadOnlyValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
 from kolibri.core.auth.api import KolibriAuthPermissionsFilter
 from kolibri.core.auth.models import Collection
+from kolibri.core.auth.models import FacilityUser
+from kolibri.core.content.models import ContentDownloadRequest
+from kolibri.core.content.models import ContentRemovalRequest
+from kolibri.core.content.models import ContentRequestReason
 from kolibri.core.content.permissions import CanManageContent
 from kolibri.core.content.utils.channels import get_mounted_drive_by_id
 from kolibri.core.content.utils.channels import get_mounted_drives_with_channel_info
-from kolibri.core.device.permissions import IsNotAnonymous
 from kolibri.core.device.permissions import IsSuperuser
 from kolibri.core.device.utils import get_device_setting
 from kolibri.core.discovery.models import DynamicNetworkLocation
+from kolibri.core.fields import DateTimeTzField
 from kolibri.core.public.constants.user_sync_options import DELAYED_SYNC
+from kolibri.core.public.constants.user_sync_statuses import INSUFFICIENT_STORAGE
 from kolibri.core.public.constants.user_sync_statuses import NOT_RECENTLY_SYNCED
 from kolibri.core.public.constants.user_sync_statuses import QUEUED
 from kolibri.core.public.constants.user_sync_statuses import RECENTLY_SYNCED
 from kolibri.core.public.constants.user_sync_statuses import SYNCING
 from kolibri.core.public.constants.user_sync_statuses import UNABLE_TO_SYNC
-from kolibri.core.utils.urls import reverse_remote
+from kolibri.core.utils.drf_utils import swagger_auto_schema_available
 from kolibri.plugins.utils import initialize_kolibri_plugin
 from kolibri.plugins.utils import iterate_plugins
 from kolibri.plugins.utils import PluginDoesNotExist
+from kolibri.utils.android import ANDROID_PLATFORM_SYSTEM_VALUE
+from kolibri.utils.android import on_android
 from kolibri.utils.conf import OPTIONS
+from kolibri.utils.filesystem import check_is_directory
+from kolibri.utils.filesystem import get_path_permission
+from kolibri.utils.filesystem import resolve_path
 from kolibri.utils.server import get_status_from_pid_file
 from kolibri.utils.server import get_urls
 from kolibri.utils.server import installation_type
@@ -63,6 +77,9 @@ from kolibri.utils.server import restart
 from kolibri.utils.server import STATUS_RUNNING
 from kolibri.utils.system import get_free_space
 from kolibri.utils.time_utils import local_now
+
+
+logger = logging.getLogger(__name__)
 
 
 class DevicePermissionsViewSet(viewsets.ModelViewSet):
@@ -83,7 +100,17 @@ class DeviceProvisionView(viewsets.GenericViewSet):
         if data["superuser"]:
             login(request, data["superuser"])
         output_serializer = self.get_serializer(data)
-        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+        response_data = output_serializer.data
+
+        # Restart zeroconf before moving along when we're a SoUD
+        if response_data["is_soud"]:
+            logger.info("Updating our Kolibri instance on the Zeroconf network now")
+            from kolibri.utils.server import update_zeroconf_broadcast
+
+            update_zeroconf_broadcast()
+
+        schedule_ping()  # Trigger telemetry pingback after we've provisioned
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class FreeSpaceView(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -139,7 +166,9 @@ class DeviceInfoView(views.APIView):
         instance_model = InstanceIDModel.get_or_create_current_instance()[0]
 
         info["device_id"] = instance_model.id
-        info["os"] = instance_model.platform
+        info["os"] = (
+            ANDROID_PLATFORM_SYSTEM_VALUE if on_android() else instance_model.platform
+        )
 
         info["content_storage_free_space"] = get_free_space(
             OPTIONS["Paths"]["CONTENT_DIR"]
@@ -225,28 +254,36 @@ class SyncStatusFilter(FilterSet):
 sync_diff = timedelta(seconds=DELAYED_SYNC)
 
 
-def map_status(status):
+def map_status(record):
     """
     Summarize the current state of the sync into a constant for use by
     the frontend.
     """
-    transfer_status = status.pop("transfer_status", None)
-    queued = status.pop("queued", None)
-    recent = status["last_synced"] and (
-        timezone.now() - status["last_synced"] < sync_diff
+    transfer_status = record.pop("transfer_status", None)
+    device_status = record.get("device_status")
+    device_status_sentiment = record.get("device_status_sentiment")
+    queued = record.pop("queued", None)
+    recent = record["last_synced"] and (
+        timezone.now() - record["last_synced"] < sync_diff
     )
-    if (
-        transfer_status == transfer_statuses.STARTED
-        or transfer_status == transfer_statuses.PENDING
-    ):
+    if transfer_status in transfer_statuses.IN_PROGRESS_STATES:
         return SYNCING
     elif transfer_status == transfer_statuses.ERRORED:
         return UNABLE_TO_SYNC
     elif recent:
+        # when recent sync was successful, check device status
+        if device_status == DeviceStatus.InsufficientStorage[0]:
+            return INSUFFICIENT_STORAGE
+        # if we receive unknown status, show error if sentiment is negative
+        elif (
+            device_status is not None
+            and device_status_sentiment == StatusSentiment.Negative
+        ):
+            return UNABLE_TO_SYNC
         return RECENTLY_SYNCED
     elif queued:
         return QUEUED
-    elif status["last_synced"] and not recent:
+    elif record["last_synced"] and not recent:
         return NOT_RECENTLY_SYNCED
 
 
@@ -260,7 +297,11 @@ class UserSyncStatusViewSet(ReadOnlyValuesViewset):
         "queued",
         "last_synced",
         "transfer_status",
+        "device_status",
+        "device_status_sentiment",
         "user",
+        "has_downloads",
+        "last_download_removed",
     )
 
     field_map = {
@@ -285,18 +326,47 @@ class UserSyncStatusViewSet(ReadOnlyValuesViewset):
             last_synced=Max("sync_session__last_activity_timestamp")
         )
 
-        most_recent_active_transfer_session_status = (
+        most_recent_sync_status = (
             TransferSession.objects.filter(
                 sync_session=OuterRef("sync_session"), active=True
             )
             .values_list("transfer_stage_status", flat=True)
             .order_by("-last_activity_timestamp")[:1]
         )
-
-        queryset = queryset.annotate(
-            transfer_status=Subquery(most_recent_active_transfer_session_status)
+        most_recent_synced_device_status = LearnerDeviceStatus.objects.filter(
+            user_id=OuterRef("user_id"),
+            instance_id=OuterRef("sync_session__client_instance_id"),
         )
 
+        has_download = Exists(
+            ContentDownloadRequest.objects.filter(
+                source_id=OuterRef("user_id"),
+                source_model=FacilityUser.morango_model_name,
+                reason=ContentRequestReason.UserInitiated,
+            )
+        )
+
+        last_download_removal = Subquery(
+            ContentRemovalRequest.objects.filter(
+                source_id=OuterRef("user_id"),
+                source_model=FacilityUser.morango_model_name,
+                reason=ContentRequestReason.SyncInitiated,
+            )
+            .annotate(last_removal=Max("requested_at"))
+            .values("last_removal"),
+            output_field=DateTimeTzField(),
+        )
+        queryset = queryset.annotate(
+            transfer_status=Subquery(most_recent_sync_status),
+            device_status=Subquery(
+                most_recent_synced_device_status.values("status")[:1]
+            ),
+            device_status_sentiment=Subquery(
+                most_recent_synced_device_status.values("status_sentiment")[:1]
+            ),
+            has_downloads=has_download,
+            last_download_removed=last_download_removal,
+        )
         return queryset
 
 
@@ -378,23 +448,19 @@ class DriveInfoViewSet(viewsets.ViewSet):
         return Response(get_mounted_drive_by_id(pk)._asdict())
 
 
-class RemoteFacilitiesViewset(views.APIView):
-    """
-    Api to retrieve facilities information from a remote device
-    :param str baseurl: url of the server, including port to connect
-    :return : json object containing the list of facilities of the device, with their id, name, learner_can_sign_up and learner_can_login_with_no_password info
-    """
+class PathPermissionView(views.APIView):
 
-    permission_classes = (IsNotAnonymous,)
+    permission_classes = (UserHasAnyDevicePermissions,)
 
+    @swagger_auto_schema_available(
+        [("path", "path to check permissions for", "string")]
+    )
     def get(self, request):
-        baseurl = request.query_params.get("baseurl", request.build_absolute_uri("/"))
-        url = reverse_remote(baseurl, "kolibri:core:publicfacility-list")
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                return Response(response.json())
-            else:
-                return Response({})
-        except Exception as e:
-            raise ValidationError(detail=str(e))
+        pathname = request.query_params.get("path", OPTIONS["Paths"]["CONTENT_DIR"])
+        return Response(
+            {
+                "writable": get_path_permission(pathname),
+                "directory": check_is_directory(pathname),
+                "path": resolve_path(pathname),
+            }
+        )

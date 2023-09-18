@@ -1,32 +1,38 @@
 <template>
 
   <div
-    v-if="!loading"
     ref="mainWrapper"
     class="main-wrapper"
   >
 
     <div v-if="blockDoubleClicks" class="click-mask"></div>
+
     <SkipNavigationLink />
     <LearningActivityBar
+      ref="activityBar"
       :resourceTitle="resourceTitle"
-      :learningActivities="content.learning_activities"
+      :learningActivities="contentLearningActivities"
       :isLessonContext="lessonContext"
       :isQuiz="practiceQuiz"
       :showingReportState="contentProgress >= 1"
-      :duration="content.duration"
+      :duration="contentDuration"
       :timeSpent="timeSpent"
       :isBookmarked="bookmark ? true : bookmark"
       :isCoachContent="isCoachContent"
       :contentProgress="contentProgress"
       :allowMarkComplete="allowMarkComplete"
-      :contentKind="content.kind"
-      :showBookmark="isUserLoggedIn"
+      :contentKind="contentKind"
+      :showBookmark="allowBookmark"
+      :showDownloadButton="allowRemoteDownload"
+      :isDownloading="isDownloading"
+      :downloadingLoaderTooltip="downloadRequestsTranslator.$tr('downloadStartedLabel')"
       data-test="learningActivityBar"
       @navigateBack="navigateBack"
       @toggleBookmark="toggleBookmark"
+      @download="handleRemoteDownloadRequest"
       @viewResourceList="toggleResourceList"
       @viewInfo="openSidePanel"
+      @completionModal="openCompletionModal"
     />
     <KLinearLoader
       v-if="loading"
@@ -34,6 +40,7 @@
       type="indeterminate"
       :delay="false"
     />
+
     <KPageContainer v-if="notAuthorized">
       <AuthMessage
         :authorizedRole="authorizedRole"
@@ -46,7 +53,7 @@
     </KPageContainer>
 
     <div
-      v-else
+      v-else-if="!loading && content"
       id="main"
       role="main"
       tabindex="-1"
@@ -58,8 +65,13 @@
         data-test="contentPage"
         :content="content"
         :lessonId="lessonId"
-        :style="{ backgroundColor: ( content.assessment ? '' : $themeTokens.textInverted ) }"
+        :style="{
+          backgroundColor: ( content.assessmentmetadata ? '' : $themeTokens.textInverted )
+        }"
+        :allowMarkComplete="allowMarkComplete"
         @mounted="contentPageMounted = true"
+        @finished="$refs.activityBar && $refs.activityBar.animateNextSteps()"
+        @error="onError"
       />
     </div>
 
@@ -95,7 +107,7 @@
       </template>
       <CurrentlyViewedResourceMetadata
         :content="sidePanelContent"
-        :canDownloadContent="canDownload"
+        :canDownloadExternally="canDownloadExternally"
       />
     </SidePanelModal>
 
@@ -120,9 +132,20 @@
         :nextContent="nextContent"
         :isLesson="lessonContext"
         :loading="resourcesSidePanelLoading"
+        :currentResourceID="currentResourceID"
+        :missingLessonResources="missingLessonResources"
       />
     </SidePanelModal>
-
+    <KModal
+      v-if="showConnectionErrorModal"
+      :title="deviceFormTranslator.$tr('errorCouldNotConnect')"
+      :submitText="coreString('goBackAction')"
+      @submit="goToAllLibraries"
+    >
+      <p>
+        {{ learnString('cannotConnectToLibrary', { deviceName }) }}
+      </p>
+    </KModal>
   </div>
 
 </template>
@@ -133,30 +156,33 @@
   import { mapGetters, mapState } from 'vuex';
   import get from 'lodash/get';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import Modalities from 'kolibri-constants/Modalities';
 
   import AuthMessage from 'kolibri.coreVue.components.AuthMessage';
-  import SidePanelModal from 'kolibri.coreVue.components.SidePanelModal';
   import { ContentNodeResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { AddDeviceForm } from 'kolibri.coreVue.componentSets.sync';
+  import { ContentNodeKinds, ContentErrorConstants } from 'kolibri.coreVue.vuex.constants';
+  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import client from 'kolibri.client';
   import urls from 'kolibri.urls';
-  import GlobalSnackbar from '../../../../../../kolibri/core/assets/src/views/GlobalSnackbar';
+  import AppError from 'kolibri-common/components/AppError';
+  import GlobalSnackbar from 'kolibri-common/components/GlobalSnackbar';
+  import { PageNames, ClassesPageNames } from '../constants';
   import SkipNavigationLink from '../../../../../../kolibri/core/assets/src/views/SkipNavigationLink';
-  import AppError from '../../../../../../kolibri/core/assets/src/views/AppError';
+  import useContentLink from '../composables/useContentLink';
   import useCoreLearn from '../composables/useCoreLearn';
   import useContentNodeProgress from '../composables/useContentNodeProgress';
+  import useDevices from '../composables/useDevices';
   import useLearnerResources from '../composables/useLearnerResources';
-  import { PageNames } from '../constants';
+  import useDownloadRequests from '../composables/useDownloadRequests';
+  import commonLearnStrings from './commonLearnStrings';
+  import SidePanelModal from './SidePanelModal';
   import LearningActivityChip from './LearningActivityChip';
-  import LessonResourceViewer from './classes/LessonResourceViewer';
   import CurrentlyViewedResourceMetadata from './CurrentlyViewedResourceMetadata';
   import ContentPage from './ContentPage';
   import LearningActivityBar from './LearningActivityBar';
   import AlsoInThis from './AlsoInThis';
-
-  const lessonStrings = crossComponentTranslator(LessonResourceViewer);
 
   export default {
     name: 'TopicsContentPage',
@@ -189,29 +215,42 @@
       CurrentlyViewedResourceMetadata,
       SkipNavigationLink,
     },
-    mixins: [responsiveWindowMixin, commonCoreStrings],
+    mixins: [responsiveWindowMixin, commonCoreStrings, commonLearnStrings],
     setup() {
-      const { canDownload } = useCoreLearn();
+      const { canDownloadExternally } = useCoreLearn();
       const {
         fetchContentNodeProgress,
         fetchContentNodeTreeProgress,
         contentNodeProgressMap,
       } = useContentNodeProgress();
       const { fetchLesson } = useLearnerResources();
+      const { back, genExternalBackURL } = useContentLink();
+      const { baseurl, deviceName } = useDevices();
+      const {
+        addDownloadRequest,
+        isDownloadedByLearner,
+        isDownloadingByLearner,
+        downloadRequestsTranslator,
+      } = useDownloadRequests();
+      const deviceFormTranslator = crossComponentTranslator(AddDeviceForm);
       return {
-        canDownload,
+        baseurl,
+        deviceName,
+        canDownloadExternally,
         contentNodeProgressMap,
         fetchContentNodeProgress,
         fetchContentNodeTreeProgress,
         fetchLesson,
+        back,
+        genExternalBackURL,
+        addDownloadRequest,
+        isDownloadedByLearner,
+        isDownloadingByLearner,
+        downloadRequestsTranslator,
+        deviceFormTranslator,
       };
     },
     props: {
-      loading: {
-        type: Boolean,
-        required: false,
-        default: true,
-      },
       // AUTHORIZATION SPECIFIC
       authorized: {
         type: Boolean,
@@ -219,6 +258,10 @@
         default: true,
       },
       authorizedRole: {
+        type: String,
+        default: null,
+      },
+      deviceId: {
         type: String,
         default: null,
       },
@@ -233,6 +276,8 @@
         resourcesSidePanelFetched: false,
         resourcesSidePanelLoading: false,
         contentPageMounted: false,
+        lesson: null,
+        showConnectionErrorModal: false,
       };
     },
     computed: {
@@ -243,13 +288,25 @@
       }),
       ...mapState('topicsTree', ['content']),
       ...mapState('topicsTree', {
-        isCoachContent: state => (state.content.coach_content ? 1 : 0),
+        isCoachContent: state => (state.content && state.content.coach_content ? 1 : 0),
       }),
+      contentProgress() {
+        return this.content ? this.contentNodeProgressMap[this.content.content_id] : null;
+      },
+      contentKind() {
+        return this.content ? this.content.kind : null;
+      },
+      contentDuration() {
+        return this.content ? this.content.duration : null;
+      },
+      contentLearningActivities() {
+        return this.content ? this.content.learning_activities : [];
+      },
+      loading() {
+        return this.$store.state.core.loading;
+      },
       practiceQuiz() {
         return get(this, ['content', 'options', 'modality']) === Modalities.QUIZ;
-      },
-      contentProgress() {
-        return this.contentNodeProgressMap[this.content.content_id];
       },
       notAuthorized() {
         // catch "not authorized" error, display AuthMessage
@@ -278,54 +335,40 @@
       viewResourcesTitle() {
         /* eslint-disable kolibri/vue-no-undefined-string-uses */
         return this.lessonContext
-          ? lessonStrings.$tr('nextInLesson')
+          ? this.$tr('nextInLesson')
           : this.content && this.content.ancestors.slice(-1)[0].title;
         /* eslint-enable */
       },
       timeSpent() {
         return this.contentPageMounted ? this.$refs.contentPage.time_spent : 0;
       },
-      back() {
-        if (!this.$route) {
-          return null;
-        }
-        const query = { ...this.$route.query };
-        const lastPage = (this.$route.query || {}).last;
-        delete query.last;
-        delete query.topicId;
-        // returning to a topic page requires an id
-        if (lastPage === PageNames.TOPICS_TOPIC_SEARCH || lastPage === PageNames.TOPICS_TOPIC) {
-          const lastId = this.$route.query.topicId
-            ? this.$route.query.topicId
-            : this.content.parent;
-          // Need to guard for parent being non-empty to avoid console errors
-          return this.$router.getRoute(
-            lastPage,
-            {
-              id: lastId,
-            },
-            query
-          );
-        } else if (lastPage === PageNames.LIBRARY) {
-          return this.$router.getRoute(lastPage, {}, query);
-        } else if (lastPage) {
-          return this.$router.getRoute(lastPage, query);
-        } else {
-          return this.$router.getRoute(PageNames.HOME);
-        }
+      currentResourceID() {
+        return this.content ? this.content.content_id : '';
+      },
+      missingLessonResources() {
+        return this.lesson && this.lesson.resources.some(c => !c.contentnode);
+      },
+      isRemoteContent() {
+        return Boolean(this.deviceId);
+      },
+      isDownloading() {
+        return this.isDownloadingByLearner(this.content);
+      },
+      isDownloaded() {
+        if (!this.content) return false;
+        return this.content.admin_imported || this.isDownloadedByLearner(this.content);
+      },
+      allowRemoteDownload() {
+        return this.isUserLoggedIn && this.isRemoteContent && !this.isDownloaded;
+      },
+      allowBookmark() {
+        return this.isUserLoggedIn && (!this.isRemoteContent || this.isDownloaded);
       },
     },
     watch: {
       content(newContent, oldContent) {
         if ((newContent && !oldContent) || newContent.id !== oldContent.id) {
-          this.resetSidebarInfo();
-          client({
-            method: 'get',
-            url: urls['kolibri:core:bookmarks-list'](),
-            params: { contentnode_id: this.content.id },
-          }).then(response => {
-            this.bookmark = response.data[0] || false;
-          });
+          this.initializeState();
         }
       },
       showViewResourcesSidePanel(newVal, oldVal) {
@@ -334,13 +377,32 @@
         }
       },
     },
+    created() {
+      this.initializeState();
+    },
     methods: {
-      resetSidebarInfo() {
+      initializeState() {
+        this.bookmark = null;
         this.showViewResourcesSidePanel = false;
         this.nextContent = null;
         this.viewResourcesContents = [];
         this.resourcesSidePanelFetched = false;
         this.resourcesSidePanelLoading = false;
+        if (this.content) {
+          const id = this.content.id;
+          client({
+            method: 'get',
+            url: urls['kolibri:core:bookmarks-list'](),
+            params: { contentnode_id: this.content.id },
+          }).then(response => {
+            // As the component never gets fully torn down
+            // this request could be stale. Only set bookmark
+            // data in the case that the ids still match.
+            if (this.content && this.content.id === id) {
+              this.bookmark = response.data[0] || false;
+            }
+          });
+        }
       },
       getSidebarInfo() {
         if (!this.resourcesSidePanelFetched && !this.resourcesSidePanelLoading) {
@@ -372,10 +434,11 @@
         // Get the lesson and then assign its resources to this.viewResourcesContents
         // fetchLesson also handles fetching the progress data for this lesson and
         // the content node data for the resources
-        this.fetchLesson({ lessonId: this.lessonId }).then(lesson => {
+        return this.fetchLesson({ lessonId: this.lessonId }).then(lesson => {
           // Filter out this.content
+          this.lesson = lesson;
           this.viewResourcesContents = lesson.resources
-            .filter(n => n.contentnode && n.contentnode_id !== this.content.id)
+            .filter(n => n.contentnode)
             .map(n => n.contentnode);
         });
       },
@@ -393,45 +456,57 @@
        * is logged in
        */
       fetchSiblings() {
-        // Fetch the next content
-        const nextPromise = ContentNodeResource.fetchNextContent(this.content.parent, {
-          topicOnly: true,
-        }).then(nextContent => {
-          // This may return the immediate parent if nothing else is found so let's be sure
-          // not to assign that
-          if (nextContent && this.content.parent !== nextContent.id) {
-            this.nextContent = nextContent;
-          }
-        });
+        if (!this.content) {
+          return Promise.resolve();
+        }
+        const fetchGrandparent = this.content.ancestors.length > 1;
         const treeParams = {
-          id: this.content.parent,
+          id: fetchGrandparent ? this.content.ancestors.slice(-2)[0].id : this.content.parent,
           params: {
             include_coach_content:
               this.$store.getters.isAdmin ||
               this.$store.getters.isCoach ||
               this.$store.getters.isSuperuser,
-            depth: 1,
+            depth: fetchGrandparent ? 2 : 1,
+            baseurl: this.baseurl,
           },
         };
         // Fetch and map the progress for the nodes if logged in
-        if (this.$store.getters.isUserLoggedIn) {
+        if (this.$store.getters.isUserLoggedIn && !this.baseurl) {
           this.fetchContentNodeTreeProgress(treeParams);
         }
-        const treePromise = ContentNodeResource.fetchTree(treeParams).then(parent => {
-          // Filter out this.content
-          this.viewResourcesContents = parent.children.results.filter(
-            n => n.id !== this.content.id
-          );
+        return ContentNodeResource.fetchTree(treeParams).then(ancestor => {
+          let parent;
+          let nextContents;
+          if (fetchGrandparent) {
+            const parentIndex = ancestor.children.results.findIndex(
+              c => c.id === this.content.parent
+            );
+            parent = ancestor.children.results[parentIndex];
+            nextContents = ancestor.children.results.slice(parentIndex + 1);
+          } else {
+            parent = ancestor;
+            const contentIndex = ancestor.children.results.findIndex(c => c.id === this.content.id);
+            nextContents = ancestor.children.results.slice(contentIndex + 1);
+          }
+          this.nextContent = nextContents.find(c => c.kind === ContentNodeKinds.TOPIC) || null;
+          this.viewResourcesContents = parent.children.results.filter(n => n.id);
         });
-        return Promise.all([nextPromise, treePromise]);
       },
       navigateBack() {
-        this.$router.push(this.back);
+        if (PageNames[this.back.name] || ClassesPageNames[this.back.name]) {
+          this.$router.push(this.back);
+        } else {
+          window.location.replace(this.genExternalBackURL());
+        }
       },
       openSidePanel() {
         this.sidePanelContent = this.content;
       },
       toggleBookmark() {
+        if (!this.content) {
+          return;
+        }
         if (this.bookmark) {
           client({
             method: 'delete',
@@ -440,15 +515,20 @@
             this.bookmark = false;
           });
         } else if (this.bookmark === false) {
+          const id = this.content.id;
           client({
             method: 'post',
             url: urls['kolibri:core:bookmarks-list'](),
             data: {
-              contentnode_id: this.content.id,
+              contentnode_id: id,
               user: this.currentUserId,
             },
           }).then(response => {
-            this.bookmark = response.data;
+            if (this.content && this.content.id === id) {
+              // Don't set a stale response if a user
+              // navigated away before the bookmark finished.
+              this.bookmark = response.data;
+            }
           });
         }
       },
@@ -462,6 +542,22 @@
           this.$refs.resourcePanel.focusFirstEl();
         }
       },
+      openCompletionModal() {
+        if (this.$refs.contentPage) {
+          this.$refs.contentPage.displayCompletionModal();
+        }
+      },
+      handleRemoteDownloadRequest() {
+        this.addDownloadRequest(this.content);
+      },
+      onError(error) {
+        if (error && error.error === ContentErrorConstants.LOADING_ERROR && this.deviceId) {
+          this.showConnectionErrorModal = true;
+        }
+      },
+      goToAllLibraries() {
+        this.$router.push({ name: PageNames.EXPLORE_LIBRARIES });
+      },
     },
     $trs: {
       kolibriTitleMessage: {
@@ -472,6 +568,10 @@
         message: 'Error',
         context:
           "When Kolibri throws an error, this is the text that's used as the title of the error page. The description of the error follows below.",
+      },
+      nextInLesson: {
+        message: 'Next in lesson',
+        context: 'Refers to the next learning resource in a lesson.',
       },
     },
   };
@@ -517,6 +617,8 @@
   }
 
   .also-in-this-side-panel {
+    overflow: hidden;
+
     /deep/ .side-panel {
       padding-bottom: 0;
     }

@@ -13,12 +13,12 @@
           <slot name="actions"></slot>
         </KGridItem>
         <KGridItem
-          :layout12="{ span: 10, alignment: 'left' }"
-          :layout8="{ span: 6, alignment: 'left' }"
+          :layout12="{ span: 9, alignment: 'left' }"
+          :layout8="{ span: 5, alignment: 'left' }"
           :layout4="{ span: 4, alignment: 'left' }"
         >
           <div>
-            <h1 class="title">
+            <h1 v-if="userId" class="title">
               <KLabeledIcon icon="person" :label="userName" />
             </h1>
             <KLabeledIcon :icon="titleIcon" :label="title" />
@@ -39,7 +39,12 @@
             :isSurvey="isSurvey"
           />
         </KGridItem>
-        <KGridItem v-if="!windowIsSmall" :layout="{ span: 2, alignment: 'right' }">
+        <KGridItem
+          v-if="!windowIsSmall"
+          :layout12="{ span: 3, alignment: 'right' }"
+          :layout8="{ span: 3, alignment: 'right' }"
+          :layout="{ span: 2, alignment: 'right' }"
+        >
           <slot name="actions"></slot>
         </KGridItem>
       </KGrid>
@@ -91,6 +96,7 @@
           @select="navigateToQuestion"
         />
         <div
+          v-if="exercise && exercise.available"
           class="exercise-container"
           :class="windowIsSmall ? 'mobile-exercise-container' : ''"
           :style="{ backgroundColor: $themeTokens.surface }"
@@ -122,7 +128,6 @@
             />
           </div>
           <KContentRenderer
-            v-if="exercise"
             :itemId="renderableItemId"
             :allowHints="false"
             :kind="exercise.kind"
@@ -135,6 +140,7 @@
             :showCorrectAnswer="showCorrectAnswer"
           />
         </div>
+        <MissingResourceAlert v-else :multiple="false" />
       </template>
 
       <p v-else>
@@ -159,6 +165,7 @@
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import { MasteryLogResource } from 'kolibri.resources';
   import { now } from 'kolibri.utils.serverClock';
+  import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
   import AttemptLogList from '../AttemptLogList';
   import AttemptTextDiff from './AttemptTextDiff';
   import AttemptIconDiff from './AttemptIconDiff';
@@ -175,6 +182,7 @@
       AttemptTextDiff,
       TriesOverview,
       CurrentTryOverview,
+      MissingResourceAlert,
     },
     mixins: [commonCoreStrings, responsiveWindowMixin],
     props: {
@@ -195,9 +203,11 @@
         default: null,
       },
       // The user id of the user for the report
+      // Let it be null to handle anonymous users
+      // with just the title and action bar.
       userId: {
         type: String,
-        required: true,
+        default: null,
       },
       // The name of the user for the report
       userName: {
@@ -226,10 +236,10 @@
         default: 0,
       },
       // An object containing all of the content metadata for the item.
-      // TODO: Add general purpose content node validator here.
+      // We allow this to be empty to accommodate missing resources
       exercise: {
         type: Object,
-        required: true,
+        default: null,
       },
       // A function that has the signature tryIndex, questionNumber, interactionIndex
       // this should handle changes to the three parameters above.
@@ -329,13 +339,15 @@
       },
       pastTriesOptions() {
         return this.pastTries.map((quizTry, index) => {
-          const score = Math.floor((quizTry.correct / this.questions.length) * 100);
+          const rawScore = quizTry.correct / this.questions.length;
+          const score = this.$formatNumber(rawScore, { style: 'percent' });
           const time = this.$formatRelative(quizTry.completion_timestamp || quizTry.end_timestamp, {
             now: this.now,
           });
+
           return {
             value: index,
-            label: this.isSurvey ? time : `(${score}%) ${time}`,
+            label: this.isSurvey ? time : `(${score}) ${time}`,
           };
         });
       },
@@ -382,8 +394,10 @@
       },
     },
     created() {
-      this.loadAttempts();
-      this.loadAllTries();
+      if (this.userId) {
+        this.loadAttempts();
+        this.loadAllTries();
+      }
     },
     methods: {
       navigateToQuestion(questionNumber) {
@@ -427,13 +441,14 @@
         MasteryLogResource.fetchMostRecentDiff(this.getParams())
           .then(currentTry => {
             this.currentTry = currentTry;
+            this.loading = false;
           })
           .catch(err => {
             if (err.response && err.response.status_code === 404) {
               this.$emit('noCompleteTries');
             }
-          })
-          .finally(() => (this.loading = false));
+            this.loading = false;
+          });
       },
       loadAllTries() {
         MasteryLogResource.fetchCollection({ getParams: this.getParams(), force: true }).then(
@@ -453,11 +468,13 @@
             const questionNumber = index + 1;
             const noattempt = !attempt;
             let num_coach_contents;
+            let missing_resource = true;
             if (this.exerciseContentNodes.length) {
               const exerciseId = this.questions[questionNumber - 1].exercise_id;
               const exerciseMatch = find(this.exerciseContentNodes, { id: exerciseId });
               if (exerciseMatch) {
                 num_coach_contents = exerciseMatch.num_coach_contents;
+                missing_resource = false;
               }
             }
             return {
@@ -465,6 +482,7 @@
               noattempt,
               questionNumber,
               num_coach_contents,
+              missing_resource,
             };
           }),
           'questionNumber'
@@ -476,17 +494,20 @@
           .map(attempt => {
             const questionNumber = this.questions.findIndex(q => q.item === attempt.item) + 1;
             let num_coach_contents;
+            let missing_resource = true;
             if (this.exerciseContentNodes.length) {
               const exerciseId = this.questions[questionNumber - 1].exercise_id;
               const exerciseMatch = find(this.exerciseContentNodes, { id: exerciseId });
               if (exerciseMatch) {
                 num_coach_contents = exerciseMatch.num_coach_contents;
+                missing_resource = false;
               }
             }
             return {
               ...attempt,
               questionNumber,
               num_coach_contents,
+              missing_resource,
             };
           });
       },

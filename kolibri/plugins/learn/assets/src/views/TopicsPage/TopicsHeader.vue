@@ -5,7 +5,6 @@
     class="header"
     :style="{
       backgroundColor: $themeTokens.surface,
-      borderBottom: `1px solid ${$themeTokens.fineLine}`
     }"
   >
     <KGrid gutter="0">
@@ -29,45 +28,43 @@
       >
         <h1 class="title" data-test="header-title">
           <TextTruncator
-            :text="topic.title"
+            :text="title"
             :maxHeight="60"
           />
         </h1>
       </KGridItem>
 
       <KGridItem
-        v-if="topic.thumbnail"
+        v-if="thumbnail"
         class="thumbnail"
         :layout4="{ span: 1 }"
         :layout8="{ span: 2 }"
         :layout12="{ span: 2 }"
       >
-        <CardThumbnail
+        <ChannelThumbnail
           class="thumbnail"
-          :thumbnail="topic.thumbnail"
+          :thumbnail="thumbnail"
           :isMobile="windowIsSmall"
-          :showTooltip="false"
-          kind="channel"
-          :showContentIcon="false"
         />
       </KGridItem>
 
       <!-- tagline or description -->
       <KGridItem
-        v-if="topic.description"
+        v-if="description"
         class="text"
-        :layout4="{ span: topic.thumbnail ? 3 : 4, alignment: 'auto' }"
-        :layout8="{ span: topic.thumbnail ? 6 : 8, alignment: 'auto' }"
-        :layout12="{ span: topic.thumbnail ? 10 : 12, alignment: 'auto' }"
+        :layout4="{ span: thumbnail ? 3 : 4, alignment: 'auto' }"
+        :layout8="{ span: thumbnail ? 6 : 8, alignment: 'auto' }"
+        :layout12="{ span: thumbnail ? 10 : 12, alignment: 'auto' }"
       >
         <TextTruncator
-          :text="topic.description"
+          :text="description"
           :maxHeight="110"
         />
       </KGridItem>
     </KGrid>
-
-
+    <div>
+      <slot name="sticky-sidebar"></slot>
+    </div>
   </div>
 
 </template>
@@ -79,21 +76,29 @@
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
   import TextTruncator from 'kolibri.coreVue.components.TextTruncator';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import CardThumbnail from '../ContentCard/CardThumbnail';
+  import ChannelThumbnail from '../ChannelThumbnail';
   import commonLearnStrings from './../commonLearnStrings';
 
   export default {
     name: 'TopicsHeader',
     components: {
-      CardThumbnail,
+      ChannelThumbnail,
       KBreadcrumbs,
       TextTruncator,
     },
     mixins: [responsiveWindowMixin, commonCoreStrings, commonLearnStrings],
     props: {
-      topic: {
-        type: Object,
+      title: {
+        type: String,
         required: true,
+      },
+      description: {
+        type: String,
+        default: null,
+      },
+      thumbnail: {
+        type: String,
+        default: null,
       },
       breadcrumbs: {
         type: Array,
@@ -109,7 +114,7 @@
 
   @import '~kolibri-design-system/lib/styles/definitions';
 
-  $header-height: 324px;
+  $header-height: 274px;
   $toolbar-height: 70px;
 
   .header {

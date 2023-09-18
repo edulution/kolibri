@@ -1,8 +1,31 @@
 const fs = require('fs');
 const path = require('path');
 const glob = require('glob');
-const parseCsvSync = require('csv-parse/lib/sync');
+const intersection = require('lodash/intersection');
+const { parse } = require('csv-parse/sync');
 const { lint } = require('kolibri-tools/lib/lint');
+const { addAliases, resetAliases } = require('kolibri-tools/lib/alias_import_resolver');
+const logging = require('../logging');
+
+/*
+ * A function that compares two message objects, and ensure that they do not share any messageIds
+ * unless the text of the message is an exact match.
+ */
+function checkForDuplicateIds(obj1, obj2) {
+  const potentialDuplicates = intersection(Object.keys(obj1), Object.keys(obj2));
+  const actualDuplicates = [];
+  for (const potentialDuplicate of potentialDuplicates) {
+    const message1 = obj1[potentialDuplicate].message;
+    const message2 = obj2[potentialDuplicate].message;
+    if (message1 !== message1) {
+      logging.error(
+        `${potentialDuplicate} messageId is repeated with different strings '${message1}' and '${message2}'`
+      );
+      actualDuplicates.push(potentialDuplicate);
+    }
+  }
+  return Boolean(actualDuplicates.length);
+}
 
 function writeSourceToFile(filePath, fileSource) {
   fs.writeFileSync(filePath, fileSource, { encoding: 'utf-8' });
@@ -25,15 +48,15 @@ function parseCSVDefinitions(dir, intlLangCode = null) {
   return glob.sync(path.join(dir, intlLangCode, 'LC_MESSAGES', '*.csv')).reduce((acc, filePath) => {
     const csvFile = fs.readFileSync(filePath).toString();
 
-    return [...acc, ...parseCsvSync(csvFile, { skip_empty_lines: true, columns: true })];
+    return [...acc, ...parse(csvFile, { skip_empty_lines: true, columns: true })];
   }, []);
 }
 
 // Turn a language name (en-us) into a locale name (en_US).
 // This is converted from the equivalent Django function.
 function toLocale(language) {
-  let [lang, ...country] = language.toLowerCase().split('-');
-  country = country.join('-');
+  const [lang, ...countryFromLanguage] = language.toLowerCase().split('-');
+  let country = countryFromLanguage.join('-');
   if (!country) {
     return language.slice(0, 3).toLowerCase() + language.slice(3);
   }
@@ -55,8 +78,20 @@ function toLocale(language) {
   return lang + '_' + country;
 }
 
+function forEachPathInfo(pathInfo, callback) {
+  for (const pathData of pathInfo) {
+    if (pathData.aliases) {
+      addAliases(pathData.aliases);
+    }
+    callback(pathData);
+    resetAliases();
+  }
+}
+
 module.exports = {
   parseCSVDefinitions,
   toLocale,
   writeSourceToFile,
+  forEachPathInfo,
+  checkForDuplicateIds,
 };

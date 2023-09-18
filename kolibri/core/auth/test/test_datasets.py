@@ -57,7 +57,7 @@ class FacilityDatasetTestCase(TestCase):
         )
 
     def test_datasets_equal(self):
-        self.assertTrue(self.facility.dataset is not None)
+        self.assertIsNotNone(self.facility.dataset)
         self.assertEqual(self.facility.dataset, self.classroom.dataset)
         self.assertEqual(self.classroom.dataset, self.learner_group.dataset)
         self.assertEqual(self.learner_group.dataset, self.facility_user.dataset)
@@ -105,7 +105,7 @@ class FacilityDatasetTestCase(TestCase):
         self.assertEqual(str(new_dataset), "FacilityDataset (no associated Facility)")
 
     def test_exam_lesson_dataset(self):
-        self.assertTrue(self.facility.dataset is not None)
+        self.assertIsNotNone(self.facility.dataset)
         self.assertEqual(self.exam.infer_dataset(), self.lesson.infer_dataset())
 
         # Check current implementation of infer_dataset on Lesson and Exam
@@ -134,6 +134,10 @@ class FacilityDatasetTestCase(TestCase):
             FacilityDataset.objects.create(
                 learner_can_edit_password=True, learner_can_login_with_no_password=True
             )
+
+    def test_null_pin_code(self):
+        facility_dataset = FacilityDataset(extra_fields={"pin_code": None})
+        facility_dataset.clean_fields()
 
 
 class MultipleDatasetAssignmentTestCase(TestCase):

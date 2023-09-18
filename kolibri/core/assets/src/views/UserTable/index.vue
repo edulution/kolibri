@@ -17,7 +17,7 @@
       data-test="selectAllCheckbox"
       @change="selectAll($event)"
     />
-    <CoreTable>
+    <CoreTable :emptyMessage="emptyMessage" :dataLoading="dataLoading">
       <template #headers>
         <th data-test="fullNameHeader" :style="{ minWidth: '32px' }">
           <span v-if="selectable" class="visuallyhidden">
@@ -140,6 +140,7 @@
                 <KLabeledIcon
                   :icon="isCoach ? 'coach' : 'person'"
                   :label="user.full_name"
+                  :style="{ color: $themeTokens.text }"
                   data-test="fullName"
                 />
                 <UserTypeDisplay
@@ -158,17 +159,16 @@
             <td class="visuallyhidden" data-test="userRoleLabel">
               {{ typeDisplayMap[user.kind] }}
             </td>
-            <td data-test="username">
+            <td data-test="username" :style="{ color: $themeTokens.text }">
               <span dir="auto">
                 {{ user.username }}
               </span>
             </td>
             <template v-if="showDemographicInfo">
               <td class="id-col">
-                <span v-if="user.id_number">
-                  {{ user.id_number }}
-                </span>
-                <KEmptyPlaceholder v-else />
+                <KOptionalText
+                  :text="user.id_number ? user.id_number : ''"
+                />
               </td>
               <td>
                 <GenderDisplayText :gender="user.gender" />
@@ -187,13 +187,6 @@
         </tbody>
       </template>
     </CoreTable>
-
-    <p
-      v-if="!users || !users.length"
-      class="empty-message"
-    >
-      {{ emptyMessage }}
-    </p>
 
   </div>
 
@@ -270,6 +263,10 @@
         type: String,
         default: '',
       },
+      dataLoading: {
+        type: Boolean,
+        default: false,
+      },
     },
     computed: {
       showSelectAllCheckbox() {
@@ -297,7 +294,10 @@
       selectAll(checked) {
         const currentUsers = this.users.map(user => user.id);
         if (checked) {
-          return this.$emit('input', [...this.value, ...currentUsers]);
+          return this.$emit(
+            'input',
+            this.value.concat(currentUsers.filter(item => this.value.indexOf(item) < 0))
+          );
         }
         return this.$emit('input', difference(this.value, currentUsers));
       },

@@ -30,13 +30,11 @@ class Command(AsyncCommand):
 
         with transfer.FileCopy(src, dest, cancel_check=self.is_cancelled) as copy:
 
-            with self.start_progress(total=copy.total_size) as progress_update:
+            with self.start_progress(total=copy.transfer_size) as progress_update:
                 try:
-                    for block in copy:
-                        progress_update(len(block))
-
+                    copy.run(progress_update=progress_update)
                 except transfer.TransferCanceled:
                     pass
 
-                if self.is_cancelled():
-                    self.cancel()
+                # Reraise any cancellation
+                self.check_for_cancel()

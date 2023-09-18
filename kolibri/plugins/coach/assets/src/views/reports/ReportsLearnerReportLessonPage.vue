@@ -1,15 +1,10 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
 
     <KPageContainer>
       <p>
@@ -37,7 +32,7 @@
             {{ coachString('statusLabel') }}
           </template>
           <!--           <template #value>
-            <LessonActive :active="lesson.active" />
+            <LessonActive :active="lesson.is_active" />
           </template> -->
         </HeaderTableRow>
         <HeaderTableRow v-show="!$isPrint">
@@ -61,8 +56,14 @@
           <th>{{ coreString('timeSpentLabel') }}</th>
         </template>
         <template #tbody>
-          <transition-group tag="tbody" name="list">
-            <tr v-for="tableRow in table" :key="tableRow.node_id">
+          <transition-group
+            tag="tbody"
+            name="list"
+          >
+            <tr
+              v-for="tableRow in table"
+              :key="tableRow.node_id"
+            >
               <td>
                 <KLabeledIcon :icon="tableRow.kind">
                   <KRouterLink
@@ -76,19 +77,19 @@
                 </KLabeledIcon>
               </td>
               <td>
-                <StatusSimple :status="tableRow.statusObj.status" />
+                <StatusSimple v-if="tableRow.statusObj" :status="tableRow.statusObj.status" />
+                <KEmptyPlaceholder v-else />
               </td>
               <td>
-                <TimeDuration
-                  :seconds="showTime(tableRow)"
-                />
+                <TimeDuration v-if="tableRow.statusObj" :seconds="showTime(tableRow)" />
+                <KEmptyPlaceholder v-else />
               </td>
             </tr>
           </transition-group>
         </template>
       </CoreTable>
     </KPageContainer>
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -98,6 +99,7 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { PageNames } from '../../constants';
   import commonCoach from '../common';
+  import CoachAppBarPage from '../CoachAppBarPage';
   import CSVExporter from '../../csv/exporter';
   import * as csvFields from '../../csv/fields';
   import ReportsControls from './ReportsControls';
@@ -105,6 +107,7 @@
   export default {
     name: 'ReportsLearnerReportLessonPage',
     components: {
+      CoachAppBarPage,
       ReportsControls,
     },
     mixins: [commonCoach, commonCoreStrings],
@@ -120,7 +123,10 @@
       },
       table() {
         const contentArray = this.lesson.node_ids.map(node_id => this.contentNodeMap[node_id]);
-        return contentArray.map(content => {
+        return contentArray.map((content, index) => {
+          if (!content) {
+            return this.missingResourceObj(index);
+          }
           const tableRow = {
             statusObj: this.getContentStatusObjForLearner(content.content_id, this.learner.id),
             link: this.classRoute(PageNames.REPORTS_LEARNER_REPORT_LESSON_EXERCISE_PAGE_ROOT, {

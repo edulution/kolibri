@@ -17,10 +17,10 @@
       :value="Options.IMPORT"
       class="radio-button"
     />
-    <SelectAddressModalGroup
+    <SelectDeviceModalGroup
       v-if="showSelectAddressModal"
       @cancel="showSelectAddressModal = false"
-      @submit="handleAddressSubmit"
+      @submit="handleContinueImport"
     />
   </OnboardingStepBase>
 
@@ -29,53 +29,48 @@
 
 <script>
 
-  import { SelectAddressModalGroup } from 'kolibri.coreVue.componentSets.sync';
+  import { SelectDeviceModalGroup } from 'kolibri.coreVue.componentSets.sync';
   import OnboardingStepBase from '../OnboardingStepBase';
-
-  const Options = Object.freeze({
-    IMPORT: 'IMPORT',
-    NEW: 'NEW',
-  });
+  import { FacilityTypePresets as Options } from '../../constants';
 
   export default {
     name: 'SetUpLearningFacilityForm',
     components: {
       OnboardingStepBase,
-      SelectAddressModalGroup,
+      SelectDeviceModalGroup,
     },
     inject: ['wizardService'],
     data() {
+      const selected = this.wizardService.state.context['importOrNew'] || Options.NEW;
       return {
         Options,
-        selected: Options.NEW,
+        selected,
         showSelectAddressModal: false,
       };
     },
     methods: {
-      handleAddressSubmit(address) {
-        this.$router.push({
-          path: '/import_facility/1',
-          query: {
-            deviceId: address.id,
-          },
+      handleContinueImport(address) {
+        this.wizardService.send({
+          type: 'CONTINUE',
+          value: { importOrNew: Options.IMPORT, importDeviceId: address.id },
         });
       },
       handleContinue() {
         if (this.selected === Options.IMPORT) {
           this.showSelectAddressModal = true;
         } else {
-          this.wizardService.send({ type: 'CONTINUE', value: this.selected });
+          this.wizardService.send({ type: 'CONTINUE', value: { importOrNew: Options.NEW } });
         }
       },
     },
     $trs: {
       setUpFacilityTitle: {
-        message: 'Set up learning facility for this full device',
+        message: 'Set up the learning facility for this full device',
         context: '',
       },
       setUpFacilityDescription: {
         message:
-          'Learning facility represents the location where you are installing Kolibri, such as a school, training center, or a home',
+          'A learning facility is the location where you use Kolibri, such as a school, training center, or your home.',
         context: '',
       },
       createFacilityLabel: {

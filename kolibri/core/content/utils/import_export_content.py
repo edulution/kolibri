@@ -1,4 +1,3 @@
-import hashlib
 from math import ceil
 
 from django.db.models import Max
@@ -17,6 +16,7 @@ from kolibri.core.content.utils.importability_annotation import (
 from kolibri.core.content.utils.importability_annotation import (
     get_channel_stats_from_peer,
 )
+from kolibri.core.discovery.well_known import CENTRAL_CONTENT_BASE_INSTANCE_ID
 
 
 CHUNKSIZE = 10000
@@ -84,7 +84,7 @@ def filter_by_file_availability(nodes_to_include, channel_id, drive_id, peer_id)
             channel_id, drive_id
         ).keys()
 
-    if peer_id:
+    if peer_id and peer_id != CENTRAL_CONTENT_BASE_INSTANCE_ID:
         file_based_node_id_list = get_channel_stats_from_peer(
             channel_id, peer_id
         ).keys()
@@ -104,6 +104,7 @@ def get_import_export_data(
     peer_id=None,
     renderable_only=True,
     topic_thumbnails=True,
+    all_thumbnails=False,
 ):
     """
     Helper function that calls get_import_export_nodes followed by
@@ -124,6 +125,7 @@ def get_import_export_data(
         nodes_queries_list,
         available=available,
         topic_thumbnails=topic_thumbnails,
+        all_thumbnails=all_thumbnails,
     )
 
 
@@ -196,13 +198,17 @@ def get_import_export_nodes(  # noqa: C901
         # Only bother with this query if there were any resources returned above.
 
         if nodes_query.count() > 0:
-            nodes_queries_list.append(nodes_query)
+            nodes_queries_list.append(nodes_query.distinct())
 
     return nodes_queries_list
 
 
-def get_content_nodes_data(
-    channel_id, nodes_queries_list, available=None, topic_thumbnails=True
+def get_content_nodes_data(  # noqa: C901
+    channel_id,
+    nodes_queries_list,
+    available=None,
+    topic_thumbnails=True,
+    all_thumbnails=False,
 ):
     """
     Returns a set of resources, file names, and a total size in bytes for all
@@ -212,6 +218,16 @@ def get_content_nodes_data(
     queried_file_objects = {}
     number_of_resources = 0
 
+    if all_thumbnails:
+        file_objects = LocalFile.objects.filter(
+            files__thumbnail=True,
+            files__contentnode__channel_id=channel_id,
+        ).values("id", "file_size", "extension")
+        if available is not None:
+            file_objects = file_objects.filter(available=available)
+        for f in file_objects:
+            queried_file_objects[f["id"]] = f
+
     for nodes_query in nodes_queries_list:
         number_of_resources = number_of_resources + nodes_query.count()
 
@@ -220,10 +236,12 @@ def get_content_nodes_data(
         ).values("id", "file_size", "extension")
         if available is not None:
             file_objects = file_objects.filter(available=available)
+        if all_thumbnails:
+            file_objects = file_objects.filter(files__thumbnail=False)
         for f in file_objects:
             queried_file_objects[f["id"]] = f
 
-        if topic_thumbnails:
+        if topic_thumbnails and not all_thumbnails:
             # Do a query to get all the descendant and ancestor topics for this segment
             segment_boundaries = nodes_query.aggregate(
                 min_boundary=Min("lft"), max_boundary=Max("rght")
@@ -253,13 +271,3 @@ def get_content_nodes_data(
 
     total_bytes_to_transfer = sum(map(lambda x: x["file_size"] or 0, files_to_download))
     return number_of_resources, files_to_download, total_bytes_to_transfer
-
-
-def compare_checksums(file_name, file_id):
-    hasher = hashlib.md5()
-    with open(file_name, "rb") as f:
-        # Read chunks of 4096 bytes for memory efficiency
-        for chunk in iter(lambda: f.read(4096), b""):
-            hasher.update(chunk)
-    checksum = hasher.hexdigest()
-    return checksum == file_id

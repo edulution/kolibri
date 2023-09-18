@@ -12,10 +12,8 @@ import flatMapDepth from 'lodash/flatMapDepth';
 
 import { ContentNodeResource } from 'kolibri.resources';
 import { deduplicateResources } from '../utils/contentNode';
-import genContentLink from '../utils/genContentLink';
 import { LearnerClassroomResource, LearnerLessonResource } from '../apiResources';
-import { PageNames, ClassesPageNames } from '../constants';
-import { normalizeContentNode } from '../modules/coreLearn/utils';
+import { ClassesPageNames } from '../constants';
 import useContentNodeProgress, { setContentNodeProgress } from './useContentNodeProgress';
 
 // The refs are defined in the outer scope so they can be used as a shared store
@@ -25,19 +23,19 @@ const classes = ref([]);
 const { fetchContentNodeProgress } = useContentNodeProgress();
 
 export function setResumableContentNodes(nodes, more = null) {
-  set(_resumableContentNodes, nodes.map(normalizeContentNode));
+  set(_resumableContentNodes, nodes);
   set(moreResumableContentNodes, more);
   ContentNodeResource.cacheData(nodes);
 }
 
 function addResumableContentNodes(nodes, more = null) {
-  set(_resumableContentNodes, [...get(_resumableContentNodes), ...nodes.map(normalizeContentNode)]);
+  set(_resumableContentNodes, [...get(_resumableContentNodes), ...nodes]);
   set(moreResumableContentNodes, more);
   ContentNodeResource.cacheData(nodes);
 }
 
 function _cacheLessonResources(lesson) {
-  for (let resource of lesson.resources) {
+  for (const resource of lesson.resources) {
     if (resource.contentnode && resource.contentnode.content_id) {
       ContentNodeResource.cacheData(resource.contentnode);
       setContentNodeProgress({
@@ -49,14 +47,14 @@ function _cacheLessonResources(lesson) {
 }
 
 function setClassData(classroom) {
-  for (let lesson of classroom.assignments.lessons) {
+  for (const lesson of classroom.assignments.lessons) {
     _cacheLessonResources(lesson);
   }
 }
 
 export function setClasses(classData) {
   set(classes, classData);
-  for (let classroom of classData) {
+  for (const classroom of classData) {
     setClassData(classroom);
   }
 }
@@ -102,24 +100,6 @@ export default function useLearnerResources() {
   });
 
   /**
-   * @param {Object} resource { contentNodeId, lessonId, classId }
-   * @returns {Number} Index of a resource in a class lesson
-   * @private
-   */
-  function _getLessonResourceIdx(resource) {
-    const lesson = get(activeClassesLessons).find(
-      l => l.collection === resource.classId && l.id === resource.lessonId
-    );
-    if (!lesson) {
-      return undefined;
-    }
-    const lessonResourceIdx = lesson.resources.findIndex(
-      r => r.contentnode_id === resource.contentNodeId
-    );
-    return lessonResourceIdx === -1 ? undefined : lessonResourceIdx;
-  }
-
-  /**
    * @returns {Array} - All active quizzes assigned to a learner in all their classes
    * @public
    */
@@ -143,7 +123,7 @@ export default function useLearnerResources() {
    */
   const resumableClassesResources = computed(() => {
     return get(_classesResources).filter(resource => {
-      return resource.progress && resource.progress < 1;
+      return resource.progress && resource.progress < 1 && resource.contentNode;
     });
   });
 
@@ -248,34 +228,6 @@ export default function useLearnerResources() {
   }
 
   /**
-   * @param {Object} resource { contentNodeId, lessonId, classId }
-   * @returns {Object} vue-router link to a resource page
-   * @public
-   */
-  function getClassResourceLink(resource) {
-    const lessonResourceIdx = _getLessonResourceIdx(resource);
-    if (lessonResourceIdx === undefined) {
-      return undefined;
-    }
-    return genContentLink(resource.contentNodeId, null, true, undefined, {
-      lessonId: resource.lessonId,
-      classId: resource.classId,
-    });
-  }
-
-  /**
-   * @returns {Object} - A vue-router link to a topic content node page
-   */
-  function getTopicContentNodeLink(contentNodeId) {
-    return {
-      name: PageNames.TOPICS_CONTENT,
-      params: {
-        id: contentNodeId,
-      },
-    };
-  }
-
-  /**
    * Fetches a class by its ID and saves data
    * to this composable's store
    *
@@ -371,8 +323,6 @@ export default function useLearnerResources() {
     getClassActiveQuizzes,
     getClassLessonLink,
     getClassQuizLink,
-    getClassResourceLink,
-    getTopicContentNodeLink,
     fetchClass,
     fetchClasses,
     fetchLesson,

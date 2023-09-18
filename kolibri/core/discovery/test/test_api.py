@@ -2,15 +2,18 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import uuid
+
 import mock
 import requests
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.status import HTTP_200_OK
+from rest_framework.status import HTTP_201_CREATED
 from rest_framework.test import APITestCase
 
 from .. import models
 from ..utils.network import connections
-from .helpers import info as mock_device_info
 from .helpers import mock_request
 from kolibri.core.auth.test.helpers import create_superuser
 from kolibri.core.auth.test.helpers import DUMMY_PASSWORD
@@ -19,8 +22,7 @@ from kolibri.core.auth.test.test_api import FacilityFactory
 from kolibri.core.auth.test.test_api import FacilityUserFactory
 
 
-@mock.patch.object(requests.Session, "get", mock_request)
-@mock.patch.object(connections, "check_connection_info", mock_device_info)
+@mock.patch.object(requests.Session, "request", mock_request)
 @mock.patch.object(connections, "check_if_port_open", lambda *a: True)
 class NetworkLocationAPITestCase(APITestCase):
     @classmethod
@@ -43,6 +45,31 @@ class NetworkLocationAPITestCase(APITestCase):
         self.client.login(
             username=user.username, password=DUMMY_PASSWORD, facility=user.facility
         )
+
+    def test_get__pk(self):
+        self.login(self.superuser)
+        response = self.client.get(
+            reverse(
+                "kolibri:core:staticnetworklocation-detail",
+                kwargs={"pk": self.existing_happy_netloc.pk},
+            )
+        )
+        self.assertEqual(response.status_code, HTTP_200_OK)
+        self.assertEqual(response.data["base_url"], self.existing_happy_netloc.base_url)
+
+    def test_get__instance_id(self):
+        self.login(self.superuser)
+        self.existing_happy_netloc.instance_id = uuid.uuid4().hex
+        self.existing_happy_netloc.save()
+
+        response = self.client.get(
+            reverse(
+                "kolibri:core:staticnetworklocation-detail",
+                kwargs={"pk": self.existing_happy_netloc.instance_id},
+            )
+        )
+        self.assertEqual(response.status_code, HTTP_200_OK)
+        self.assertEqual(response.data["base_url"], self.existing_happy_netloc.base_url)
 
     def test_creating_good_address(self):
         self.login(self.superuser)
@@ -104,3 +131,56 @@ class NetworkLocationAPITestCase(APITestCase):
         )
         for location in response.data:
             self.assertFalse(location["subset_of_users_device"])
+
+
+class PinnedDeviceAPITestCase(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        provision_device()
+        cls.facility = FacilityFactory.create()
+        cls.user = FacilityUserFactory(facility=cls.facility)
+        cls.network_location = models.NetworkLocation.objects.create(
+            base_url="https://kolibrihappyurl.qqq/"
+        )
+        cls.network_location2 = models.NetworkLocation.objects.create(
+            base_url="https://anotherone.moc"
+        )
+
+    def setUp(self):
+        self.client.login(
+            username=self.user.username, password=DUMMY_PASSWORD, facility=self.facility
+        )
+
+    def test_add_pinned_device(self):
+        """
+        Tests the API for adding Pinned Devices
+        """
+        response = self.client.post(
+            reverse("kolibri:core:pinned_devices-list"),
+            data={"user": self.user.id, "instance_id": self.network_location.id},
+        )
+        self.assertEqual(response.status_code, HTTP_201_CREATED)
+
+    def test_fetch_pinned_devices(self):
+        """
+        Tests the API for fetching Pinned Devices
+        """
+        my_pin = models.PinnedDevice.objects.create(
+            user=self.user, instance_id=self.network_location.id
+        )
+        my_second_pin = models.PinnedDevice.objects.create(
+            user=self.user, instance_id=self.network_location2.id
+        )
+
+        pin_ids = sorted([my_pin.instance_id, my_second_pin.instance_id])
+
+        response = self.client.get(
+            reverse("kolibri:core:pinned_devices-list"),
+        )
+        self.assertEqual(response.status_code, HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        # TODO - Get this working
+        #      - Discuss & write any more tasks
+        #      - Start onto the frontend
+        response_ids = sorted([item["instance_id"].hex for item in response.data])
+        self.assertEqual(response_ids, pin_ids)

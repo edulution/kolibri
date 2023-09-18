@@ -1,9 +1,10 @@
 import store from 'kolibri.coreVue.vuex.store';
+import ManageSyncSchedule from 'kolibri-common/components/SyncSchedule/ManageSyncSchedule';
+import EditDeviceSyncSchedule from 'kolibri-common/components/SyncSchedule/EditDeviceSyncSchedule';
 import { showDeviceInfoPage } from '../modules/deviceInfo/handlers';
 import { showManagePermissionsPage } from '../modules/managePermissions/handlers';
 import { showManageContentPage } from '../modules/manageContent/handlers';
 import { showUserPermissionsPage } from '../modules/userPermissions/handlers';
-import { PageNames } from '../constants';
 import DeleteExportChannelsPage from '../views/ManageContentPage/DeleteExportChannelsPage';
 import DeviceInfoPage from '../views/DeviceInfoPage';
 import DeviceSettingsPage from '../views/DeviceSettingsPage';
@@ -16,10 +17,11 @@ import NewChannelVersionPage from '../views/ManageContentPage/NewChannelVersionP
 import RearrangeChannelsPage from '../views/RearrangeChannelsPage';
 import UserPermissionsPage from '../views/UserPermissionsPage';
 import withAuthMessage from '../views/withAuthMessage';
+import { PageNames } from '../constants';
 import wizardTransitionRoutes from './wizardTransitionRoutes';
 
 function hideLoadingScreen() {
-  store.commit('CORE_SET_PAGE_LOADING', false);
+  store.dispatch('notLoading');
 }
 
 function defaultHandler(toRoute) {
@@ -76,6 +78,42 @@ const routes = [
     },
   },
   {
+    name: PageNames.MANAGE_SYNC_SCHEDULE,
+    component: withAuthMessage(ManageSyncSchedule, 'superuser'),
+    path: '/facilities/:facilityId/managesync',
+    props: route => {
+      const facilityId = route.params.facilityId || store.getters.userFacilityId;
+      return {
+        goBackRoute: { name: PageNames.FACILITIES_PAGE },
+        facilityId,
+        editSyncRoute: function(deviceId) {
+          return {
+            name: PageNames.EDIT_SYNC_SCHEDULE,
+            params: {
+              device_id: deviceId,
+              facilityId: facilityId,
+            },
+          };
+        },
+      };
+    },
+  },
+  {
+    name: PageNames.EDIT_SYNC_SCHEDULE,
+    component: withAuthMessage(EditDeviceSyncSchedule, 'superuser'),
+    path: '/facilities/:device_id/:facilityId/editdevice',
+    props: route => {
+      return {
+        goBackRoute: { name: PageNames.MANAGE_SYNC_SCHEDULE },
+        facilityId: route.params.facilityId || store.getters.userFacilityId,
+        deviceId: route.params.device_id,
+      };
+    },
+    handler: ({ name }) => {
+      store.dispatch('preparePage', { name, isAsync: false });
+    },
+  },
+  {
     name: PageNames.USER_PERMISSIONS_PAGE,
     component: withAuthMessage(UserPermissionsPage, 'superuser'),
     path: '/permissions/:userId',
@@ -97,7 +135,12 @@ const routes = [
     name: PageNames.DEVICE_SETTINGS_PAGE,
     component: withAuthMessage(DeviceSettingsPage, 'admin'),
     path: '/settings',
-    handler: defaultHandler,
+    handler: ({ name }) => {
+      store.dispatch('preparePage', { name });
+      if (store.getters['deviceInfo/getDeviceOS'] === undefined) {
+        showDeviceInfoPage(store).then(hideLoadingScreen);
+      }
+    },
   },
   {
     name: PageNames.DELETE_CHANNELS,

@@ -19,6 +19,11 @@ export const TaskTypes = {
   SYNCPEERFULL: 'kolibri.core.auth.tasks.peerfacilitysync',
   SYNCPEERPULL: 'kolibri.core.auth.tasks.peerfacilityimport',
   DELETEFACILITY: 'kolibri.core.auth.tasks.deletefacility',
+  EXPORTSESSIONLOGCSV: 'kolibri.core.logger.tasks.exportsessionlogcsv',
+  EXPORTSUMMARYLOGCSV: 'kolibri.core.logger.tasks.exportsummarylogcsv',
+  IMPORTUSERSFROMCSV: 'kolibri.core.auth.tasks.importusersfromcsv',
+  EXPORTUSERSTOCSV: 'kolibri.core.auth.tasks.exportuserstocsv',
+  IMPORTLODUSER: 'kolibri.core.auth.tasks.peeruserimport',
 };
 
 // identical to facility constants.js
@@ -211,6 +216,19 @@ export function importFacilityTaskDisplayInfo(task) {
     info.isRunning = false;
   } else {
     info.deviceNameMsg = '';
+  }
+  info.canRetry = false;
+  info.canClear = false;
+  return info;
+}
+
+export function importLodTaskDisplayInfo(task) {
+  const info = syncFacilityTaskDisplayInfo(task);
+  if (task.status === TaskStatuses.COMPLETED) {
+    info.statusMsg = getTaskString('taskLODFinishedByLabel', {
+      facilityname: task.extra_metadata.facility_name,
+      fullname: task.extra_metadata.username,
+    });
   }
   info.canRetry = false;
   info.canClear = false;

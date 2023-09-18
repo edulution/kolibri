@@ -1,3 +1,5 @@
+import json
+
 from django.db import models
 from django.db.utils import IntegrityError
 from django.utils import timezone
@@ -9,8 +11,19 @@ from kolibri.core.auth.models import AbstractFacilityDataModel
 from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.permissions.base import RoleBasedPermissions
+from kolibri.core.content.utils.assignment import ContentAssignmentManager
 from kolibri.core.fields import JSONField
 from kolibri.core.notifications.models import LearnerProgressNotification
+
+
+def exam_assignment_lookup(question_sources):
+    """
+    Lookup function for the ContentAssignmentManager
+    :param question_sources: a list of dicts from an Exam
+    :return: a tuple of contentnode_id and metadata
+    """
+    for question_source in question_sources:
+        yield (question_source["exercise_id"], None)
 
 
 class Exam(AbstractFacilityDataModel):
@@ -38,6 +51,35 @@ class Exam(AbstractFacilityDataModel):
 
     """
     The `question_sources` field contains different values depending on the 'data_model_version' field.
+
+    V3:
+        Represents a list of questions of V2 objects each of which are now a "Exam/Quiz Section"
+        and extends it with an additional description field. The `learners_see_fixed_order` field
+        will now be persisted within each section itself, rather than for the whole quiz.
+
+        # Exam
+        [
+            # Section 1
+            {
+                  "section_id": <a uuid unique to this section>,
+                  "section_title": <section title>,
+                  "description": <section description>,
+                  "resource_pool": [ <contentnode_ids of pool of resources> ],
+                  "question_count": <number of questions in section>,
+                  "learners_see_fixed_order": <bool>,
+                  "questions": [
+                    {
+                        "exercise_id": <exercise_pk>,
+                        "question_id": <item_id_within_exercise>,
+                        "title": <title of question>,
+                        "counter_in_exercise": <unique_count_for_question>,
+                    },
+                  ]
+            },
+
+            # Section 2
+            {...}
+        ]
 
     V2:
         Similar to V1, but with a `counter_in_exercise` field
@@ -114,6 +156,15 @@ class Exam(AbstractFacilityDataModel):
     archive = models.BooleanField(default=False)
     date_archived = models.DateTimeField(default=None, null=True, blank=True)
 
+    content_assignments = ContentAssignmentManager(
+        # one exam can contain multiple questions from multiple exercises,
+        # hence multiple content nodes
+        one_to_many=True,
+        filters=dict(active=True),
+        lookup_field="question_sources",
+        lookup_func=exam_assignment_lookup,
+    )
+
     def delete(self, using=None, keep_parents=False):
         """
         We delete all notifications objects whose quiz is this exam id.
@@ -154,7 +205,7 @@ class Exam(AbstractFacilityDataModel):
     Certain fields that are only relevant for older model versions get prefixed
     with their version numbers.
     """
-    data_model_version = models.SmallIntegerField(default=2)
+    data_model_version = models.SmallIntegerField(default=3)
 
     def infer_dataset(self, *args, **kwargs):
         return self.cached_related_dataset_lookup("collection")
@@ -234,6 +285,19 @@ class ExamAssignment(AbstractFacilityDataModel):
         return self.dataset_id
 
 
+def individual_exam_assignment_lookup(serialized_exam):
+    """
+    Lookup function for the ContentAssignmentManager
+    :param serialized_exam: the exam in form of a dictionary
+    :return: a tuple of contentnode_id and metadata
+    """
+    try:
+        question_sources = json.loads(serialized_exam.get("question_sources", "[]"))
+        return exam_assignment_lookup(question_sources)
+    except json.JSONDecodeError:
+        return []
+
+
 class IndividualSyncableExam(AbstractFacilityDataModel):
     """
     Represents a Exam and its assignment to a particular user
@@ -252,6 +316,14 @@ class IndividualSyncableExam(AbstractFacilityDataModel):
     exam_id = models.UUIDField()
 
     serialized_exam = JSONField()
+
+    content_assignments = ContentAssignmentManager(
+        # one exam can contain multiple questions from multiple exercises,
+        # hence multiple content nodes
+        one_to_many=True,
+        lookup_field="serialized_exam",
+        lookup_func=individual_exam_assignment_lookup,
+    )
 
     def infer_dataset(self, *args, **kwargs):
         return self.cached_related_dataset_lookup("user")

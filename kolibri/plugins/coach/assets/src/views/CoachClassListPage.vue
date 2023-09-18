@@ -1,50 +1,45 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :appBarTitle="appBarTitle"
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
-    :showSubNav="false"
   >
-
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
-
     <KPageContainer>
-
       <p>
         <KRouterLink
           v-if="userIsMultiFacilityAdmin"
           :to="{ name: 'AllFacilitiesPage' }"
-          :text="coreString('allFacilitiesLabel')"
+          :text="coreString('changeLearningFacility')"
           icon="back"
         />
       </p>
       <h1>{{ coreString('classesLabel') }}</h1>
       <p>{{ $tr('classPageSubheader') }}</p>
 
-      <p v-if="classList.length === 0">
+      <p v-if="classList.length === 0 && !dataLoading">
         <KExternalLink
           v-if="isAdmin && createClassUrl"
           :text="$tr('noClassesDetailsForAdmin')"
           :href="createClassUrl"
         />
-        <span v-else>
-          {{ emptyStateDetails }}
-        </span>
       </p>
 
-      <CoreTable v-else>
+      <CoreTable v-else :dataLoading="dataLoading" :emptyMessage="emptyStateDetails">
         <template #headers>
           <th>{{ coreString('classNameLabel') }}</th>
           <th>{{ coreString('coachesLabel') }}</th>
           <th>{{ coreString('learnersLabel') }}</th>
         </template>
         <template #tbody>
-          <transition-group tag="tbody" name="list">
-            <tr v-for="classObj in classList" :key="classObj.id">
+          <transition-group
+            tag="tbody"
+            name="list"
+          >
+            <tr
+              v-for="classObj in classList"
+              :key="classObj.id"
+            >
               <td>
                 <KRouterLink
                   :text="classObj.name"
@@ -63,8 +58,7 @@
         </template>
       </CoreTable>
     </KPageContainer>
-
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -75,14 +69,18 @@
   import find from 'lodash/find';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import urls from 'kolibri.urls';
+  import CoachAppBarPage from './CoachAppBarPage';
   import commonCoach from './common';
 
   export default {
     name: 'CoachClassListPage',
+    components: {
+      CoachAppBarPage,
+    },
     mixins: [commonCoach, commonCoreStrings],
     computed: {
       ...mapGetters(['isAdmin', 'isClassCoach', 'isFacilityCoach', 'userIsMultiFacilityAdmin']),
-      ...mapState(['classList']),
+      ...mapState(['classList', 'dataLoading']),
       // Message that shows up when state.classList is empty
       emptyStateDetails() {
         if (this.isClassCoach) {

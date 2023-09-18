@@ -2,7 +2,7 @@
 
   <ImmersivePage
     icon="back"
-    :appBarTitle="$tr('selectContent', { channelName: transferredChannel.name })"
+    :appBarTitle="appBarTitle"
     :route="backRoute"
   >
     <KPageContainer class="device-container">
@@ -12,9 +12,7 @@
       />
 
       <template v-else>
-        <TaskProgress
-          v-if="!onDeviceInfoIsReady"
-        />
+        <TaskProgress v-if="!onDeviceInfoIsReady" />
 
         <template v-if="onDeviceInfoIsReady">
           <section
@@ -54,7 +52,7 @@
             :dismissible="false"
             type="error"
           >
-            {{ spaceTranslator.$tr('notEnoughSpaceForChannelsWarning') }}
+            {{ deviceString('notEnoughSpaceForChannelsWarning') }}
           </UiAlert>
           <ContentTreeViewer
             v-if="!newVersionAvailable"
@@ -80,15 +78,15 @@
 
 <script>
 
-  import { mapState, mapActions, mapMutations, mapGetters } from 'vuex';
+  import { mapState, mapActions, mapGetters } from 'vuex';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
   import isEmpty from 'lodash/isEmpty';
-  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
-  import { TaskTypes, PageNames } from 'kolibri.utils.syncTaskUtils';
+  import { TaskTypes } from 'kolibri.utils.syncTaskUtils';
   import find from 'lodash/find';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import { TaskResource } from 'kolibri.resources';
+  import commonDeviceStrings from '../commonDeviceStrings';
   import TaskProgress from '../ManageContentPage/TaskProgress';
   import useContentTasks from '../../composables/useContentTasks';
   import SelectionBottomBar from '../ManageContentPage/SelectionBottomBar';
@@ -96,8 +94,7 @@
   import { updateTreeViewTopic } from '../../modules/wizard/handlers';
   import { getChannelWithContentSizes } from '../../modules/wizard/apiChannelMetadata';
   import NewChannelVersionBanner from '../ManageContentPage/NewChannelVersionBanner';
-  import { ContentWizardPages, ContentWizardErrors } from '../../constants';
-  import AvailableChannelsPage from '../AvailableChannelsPage';
+  import { ContentWizardPages, ContentWizardErrors, PageNames } from '../../constants';
   import ChannelContentsSummary from './ChannelContentsSummary';
   import ContentTreeViewer from './ContentTreeViewer';
   import ContentWizardUiAlert from './ContentWizardUiAlert';
@@ -121,7 +118,7 @@
       TaskProgress,
       UiAlert,
     },
-    mixins: [responsiveWindowMixin, taskNotificationMixin],
+    mixins: [commonDeviceStrings, responsiveWindowMixin, taskNotificationMixin],
     setup() {
       useContentTasks();
     },
@@ -152,6 +149,29 @@
         'transferResourceCount',
         'availableSpace',
       ]),
+      appBarTitle() {
+        let title;
+        if (this.wholePageError) {
+          title = this.$tr('pageLoadError');
+        } else {
+          // Set app bar labels based on what kind of import/export the user is engaged in.
+          if (this.inRemoteImportMode) {
+            if (this.$route.query.last === PageNames.MANAGE_CHANNEL) {
+              title = this.transferredChannel.name;
+            } else {
+              title = this.$tr('kolibriStudioLabel');
+            }
+          } else if (this.inPeerImportMode) {
+            title = this.$tr('importingFromPeer', {
+              deviceName: this.selectedPeer.device_name,
+              url: this.selectedPeer.base_url,
+            });
+          } else if (this.inLocalImportMode) {
+            title = this.$tr('importingFromDrive', { driveName: this.selectedDrive.name });
+          }
+        }
+        return title;
+      },
       backRoute() {
         return { name: ContentWizardPages.AVAILABLE_CHANNELS };
       },
@@ -213,50 +233,13 @@
         },
         immediate: true,
       },
-      transferredChannel(val) {
-        if (val.name) {
-          this.setAppBarTitle(this.$tr('selectContent', { channelName: val.name }));
-        }
-      },
     },
     beforeRouteLeave(to, from, next) {
       this.cancelMetadataDownloadTask();
       this.$store.commit('manageContent/wizard/RESET_NODE_LISTS');
       next();
     },
-    created() {
-      this.spaceTranslator = crossComponentTranslator(AvailableChannelsPage);
-    },
-    mounted() {
-      let title;
-      if (this.wholePageError) {
-        title = this.$tr('pageLoadError');
-      } else {
-        // Set app bar labels based on what kind of import/export the user is engaged in.
-        if (this.inRemoteImportMode) {
-          if (this.$route.query.last === PageNames.MANAGE_CHANNEL) {
-            title = this.transferredChannel.name;
-          } else {
-            title = this.$tr('kolibriStudioLabel');
-          }
-        } else if (this.inPeerImportMode) {
-          title = this.$tr('importingFromPeer', {
-            deviceName: this.selectedPeer.device_name,
-            url: this.selectedPeer.base_url,
-          });
-        } else if (this.inLocalImportMode) {
-          title = this.$tr('importingFromDrive', { driveName: this.selectedDrive.name });
-        }
-
-        if (title) {
-          this.setAppBarTitle(title);
-        }
-      }
-    },
     methods: {
-      ...mapMutations('coreBase', {
-        setAppBarTitle: 'SET_APP_BAR_TITLE',
-      }),
       ...mapActions('manageContent', ['cancelTask']),
       cancelMetadataDownloadTask() {
         if (this.metadataDownloadTaskId) {

@@ -1,73 +1,71 @@
 <template>
 
-  <CoreBase
-    :immersivePage="false"
+  <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
-    <template #sub-nav>
-      <TopNavbar />
-    </template>
-
     <KPageContainer>
-      <PlanHeader />
-      <div class="ta-r">
-        <KButton
-          :text="$tr('newGroupAction')"
-          :primary="true"
-          @click="openCreateGroupModal"
+      <PlanHeader :activeTabId="PlanTabs.GROUPS" />
+      <KTabsPanel
+        :tabsId="PLAN_TABS_ID"
+        :activeTabId="PlanTabs.GROUPS"
+      >
+        <div class="ta-r">
+          <KButton
+            :text="$tr('newGroupAction')"
+            :primary="true"
+            @click="openCreateGroupModal"
+          />
+        </div>
+
+        <CoreTable
+          :dataLoading="groupsAreLoading"
+          :emptyMessage="$tr('noGroups')"
+        >
+          <template #headers>
+            <th>{{ coachString('nameLabel') }}</th>
+            <th>{{ coreString('learnersLabel') }}</th>
+            <th></th>
+          </template>
+          <template #tbody>
+            <tbody>
+              <GroupRowTr
+                v-for="group in sortedGroups"
+                :key="group.id"
+                :group="group"
+                @rename="openRenameGroupModal"
+                @delete="openDeleteGroupModal"
+              />
+            </tbody>
+          </template>
+        </CoreTable>
+
+        <CreateGroupModal
+          v-if="showCreateGroupModal"
+          :groups="sortedGroups"
+          @submit="handleSuccessCreateGroup"
+          @cancel="closeModal"
         />
-      </div>
 
-      <CoreTable>
-        <template #headers>
-          <th>{{ coachString('nameLabel') }}</th>
-          <th>{{ coreString('learnersLabel') }}</th>
-          <th></th>
-        </template>
-        <template #tbody>
-          <tbody>
-            <GroupRowTr
-              v-for="group in sortedGroups"
-              :key="group.id"
-              :group="group"
-              @rename="openRenameGroupModal"
-              @delete="openDeleteGroupModal"
-            />
-          </tbody>
-        </template>
-      </CoreTable>
+        <RenameGroupModal
+          v-if="showRenameGroupModal"
+          :groupName="selectedGroup.name"
+          :groupId="selectedGroup.id"
+          :groups="sortedGroups"
+          @cancel="closeModal"
+        />
 
-      <p v-if="!sortedGroups.length">
-        {{ $tr('noGroups') }}
-      </p>
-
-      <CreateGroupModal
-        v-if="showCreateGroupModal"
-        :groups="sortedGroups"
-        @submit="handleSuccessCreateGroup"
-        @cancel="closeModal"
-      />
-
-      <RenameGroupModal
-        v-if="showRenameGroupModal"
-        :groupName="selectedGroup.name"
-        :groupId="selectedGroup.id"
-        :groups="sortedGroups"
-        @cancel="closeModal"
-      />
-
-      <DeleteGroupModal
-        v-if="showDeleteGroupModal"
-        :groupName="selectedGroup.name"
-        :groupId="selectedGroup.id"
-        @submit="handleSuccessDeleteGroup"
-        @cancel="closeModal"
-      />
-
+        <DeleteGroupModal
+          v-if="showDeleteGroupModal"
+          :groupName="selectedGroup.name"
+          :groupId="selectedGroup.id"
+          @submit="handleSuccessDeleteGroup"
+          @cancel="closeModal"
+        />
+      </KTabsPanel>
     </KPageContainer>
-  </CoreBase>
+  </CoachAppBarPage>
 
 </template>
 
@@ -80,8 +78,11 @@
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../../common';
+  import { useGroups } from '../../../composables/useGroups';
+  import CoachAppBarPage from '../../CoachAppBarPage';
   import PlanHeader from '../../plan/PlanHeader';
   import { GroupModals } from '../../../constants';
+  import { PLAN_TABS_ID, PlanTabs } from '../../../constants/tabsConstants';
   import CreateGroupModal from './CreateGroupModal';
   import GroupRowTr from './GroupRow';
   import RenameGroupModal from './RenameGroupModal';
@@ -90,6 +91,7 @@
   export default {
     name: 'GroupsPage',
     components: {
+      CoachAppBarPage,
       CoreTable,
       PlanHeader,
       GroupRowTr,
@@ -99,16 +101,20 @@
     },
     mixins: [commonCoach, commonCoreStrings],
     setup() {
+      const { groupsAreLoading } = useGroups();
       const selectedGroup = ref({
         name: '',
         id: '',
       });
 
       return {
+        PLAN_TABS_ID,
+        PlanTabs,
         selectedGroup,
         setSelectedGroup(name, id) {
           selectedGroup.value = { name, id };
         },
+        groupsAreLoading,
       };
     },
     computed: {

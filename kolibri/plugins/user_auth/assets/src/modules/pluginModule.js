@@ -41,7 +41,7 @@ export default {
       if (selectedFacility) {
         return selectedFacility;
       } else {
-        return getters.facilities.find(f => f.id === getters.currentFacilityId) || null;
+        return getters.facilities.find(f => f.id === getters.userFacilityId) || null;
       }
     },
   },
@@ -52,9 +52,6 @@ export default {
     SET_FACILITY_ID(state, facilityId) {
       Lockr.set('facilityId', facilityId);
       state.facilityId = facilityId;
-    },
-    SET_APPBAR_TITLE(state, appBarTitle) {
-      state.appBarTitle = appBarTitle;
     },
   },
   modules: {

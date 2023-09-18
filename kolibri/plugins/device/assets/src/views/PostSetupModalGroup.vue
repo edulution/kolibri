@@ -4,6 +4,7 @@
     <WelcomeModal
       v-if="step === Steps.WELCOME"
       :importedFacility="importedFacility"
+      :isOnMyOwnUser="isOnMyOwnUser"
       @submit="handleSubmit"
     />
 
@@ -12,10 +13,9 @@
       newRole="superadmin"
     />
 
-    <SelectAddressForm
+    <SelectDeviceForm
       v-else-if="step === Steps.SELECT_SOURCE_FACILITY_PEER"
       :title="getCommonSyncString('selectSourceTitle')"
-      hideSavedAddresses
       @submit="handleSubmit"
       @cancel="$emit('cancel')"
     >
@@ -26,7 +26,7 @@
           @click="startNormalImportWorkflow"
         />
       </template>
-    </SelectAddressForm>
+    </SelectDeviceForm>
   </div>
 
 </template>
@@ -35,7 +35,7 @@
 <script>
 
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import { SelectAddressForm } from 'kolibri.coreVue.componentSets.sync';
+  import { SelectDeviceForm } from 'kolibri.coreVue.componentSets.sync';
   import { availableChannelsPageLink } from './ManageContentPage/manageContentLinks';
   import WelcomeModal from './WelcomeModal';
   import PermissionsChangeModal from './PermissionsChangeModal';
@@ -52,9 +52,15 @@
     components: {
       PermissionsChangeModal,
       WelcomeModal,
-      SelectAddressForm,
+      SelectDeviceForm,
     },
     mixins: [commonSyncElements],
+    props: {
+      isOnMyOwnUser: {
+        type: Boolean,
+        required: false,
+      },
+    },
     data() {
       return {
         step: Steps.WELCOME,
@@ -87,7 +93,7 @@
           }
         } else if (this.step === Steps.SELECT_SOURCE_FACILITY_PEER) {
           this.$emit('cancel');
-          let newRoute = availableChannelsPageLink({ addressId: data.id });
+          const newRoute = availableChannelsPageLink({ addressId: data.id });
           newRoute.query.setup = true;
           this.$router.push(newRoute);
         }

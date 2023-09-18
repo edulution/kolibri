@@ -346,7 +346,7 @@
           // Log out of Facility Page if and Admin demotes themselves to non-Admin
           this.$store.dispatch('kolibriLogout');
         } else {
-          this.$store.dispatch('createSnackbar', this.$tr('userUpdateNotification'));
+          this.$store.dispatch('createSnackbar', this.coreString('changesSavedNotification'));
           this.goToUserManagementPage();
         }
       },
@@ -378,10 +378,9 @@
         message: 'Go to Device permissions to change this',
         context: 'Refers to admin permissions.',
       },
-      viewInDeviceTabPrompt: 'View details in Device permissions',
-      userUpdateNotification: {
-        message: 'Changes saved',
-        context: 'Notification.',
+      viewInDeviceTabPrompt: {
+        message: 'View details in Device permissions',
+        context: 'Reminder for the admin that they can review permissions in the Device page.',
       },
       forceLogoutWarning: {
         message:

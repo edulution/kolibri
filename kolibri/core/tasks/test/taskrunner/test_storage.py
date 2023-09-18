@@ -1,18 +1,24 @@
 # -*- coding: utf-8 -*-
+import datetime
 import time
 
 import pytest
+import pytz
 from mock import patch
 
+from kolibri.core.tasks.constants import DEFAULT_QUEUE
 from kolibri.core.tasks.decorators import register_task
+from kolibri.core.tasks.exceptions import JobAlreadyRetrying
 from kolibri.core.tasks.exceptions import JobNotRestartable
+from kolibri.core.tasks.exceptions import JobNotRunning
 from kolibri.core.tasks.job import Job
 from kolibri.core.tasks.job import Priority
 from kolibri.core.tasks.job import State
 from kolibri.core.tasks.registry import TaskRegistry
 from kolibri.core.tasks.storage import Storage
 from kolibri.core.tasks.test.base import connection
-from kolibri.core.tasks.utils import stringify_func
+from kolibri.core.tasks.utils import callable_to_import_path
+from kolibri.utils.time_utils import local_now
 
 
 QUEUE = "pytest"
@@ -52,7 +58,7 @@ class TestBackend:
         new_job = defaultbackend.get_job(job_id)
 
         # Does the returned job record the function we set to run?
-        assert str(new_job.func) == stringify_func(func)
+        assert str(new_job.func) == callable_to_import_path(func)
 
         # Does the job have the right state (QUEUED)?
         assert new_job.state == State.QUEUED
@@ -166,3 +172,159 @@ class TestBackend:
 
                 assert restarted_job_id == job_id
                 assert restarted_job.state == State.QUEUED
+
+    def test_get_all_jobs(self, defaultbackend, simplejob):
+        tz_aware_now = datetime.datetime.now(tz=pytz.utc)
+        # 3 repeating tasks.
+        simplejob.job_id = "1"
+        defaultbackend.enqueue_at(tz_aware_now, simplejob, repeat=2, interval=1)
+        simplejob.job_id = "2"
+        defaultbackend.enqueue_at(tz_aware_now, simplejob, repeat=1, interval=1)
+        simplejob.job_id = "3"
+        defaultbackend.enqueue_at(
+            tz_aware_now, simplejob, queue="forever", repeat=None, interval=1
+        )
+        # 1 non-repeating task.
+        simplejob.job_id = "4"
+        defaultbackend.enqueue_at(tz_aware_now, simplejob)
+
+        assert len(defaultbackend.get_all_jobs()) == 4
+        assert len(defaultbackend.get_all_jobs(queue="forever")) == 1
+        assert len(defaultbackend.get_all_jobs(repeating=True)) == 3
+        assert len(defaultbackend.get_all_jobs(repeating=False)) == 1
+        assert len(defaultbackend.get_all_jobs(repeating=True, queue="forever")) == 1
+
+    def test_get_running_jobs(self, defaultbackend):
+        # Schedule jobs
+        schedule_time = local_now() + datetime.timedelta(hours=1)
+        job1 = defaultbackend.schedule(schedule_time, Job(id))
+        job2 = defaultbackend.schedule(schedule_time, Job(id))
+        job3 = defaultbackend.schedule(schedule_time, Job(id), QUEUE)
+
+        # mark jobs as running
+        defaultbackend.mark_job_as_running(job1)
+        defaultbackend.mark_job_as_running(job2)
+        defaultbackend.mark_job_as_running(job3)
+
+        # don't mark this as running to test the method only returns running jobs
+        defaultbackend.schedule(schedule_time, Job(id))
+
+        assert len(defaultbackend.get_running_jobs()) == 3
+        assert len(defaultbackend.get_running_jobs(queues=[DEFAULT_QUEUE])) == 2
+        assert len(defaultbackend.get_running_jobs(queues=[QUEUE])) == 1
+        assert len(defaultbackend.get_running_jobs(queues=[DEFAULT_QUEUE, QUEUE])) == 3
+
+    def test_get_canceling_jobs(self, defaultbackend):
+        # Schedule jobs
+        schedule_time = local_now() + datetime.timedelta(hours=1)
+        job1 = defaultbackend.schedule(schedule_time, Job(id))
+        job2 = defaultbackend.schedule(schedule_time, Job(id))
+        job3 = defaultbackend.schedule(schedule_time, Job(id), QUEUE)
+
+        # mark jobs as canceling
+        defaultbackend.mark_job_as_canceling(job1)
+        defaultbackend.mark_job_as_canceling(job2)
+        defaultbackend.mark_job_as_canceling(job3)
+
+        # don't mark this as canceling to test the method only returns canceling jobs
+        defaultbackend.schedule(schedule_time, Job(id))
+
+        assert len(defaultbackend.get_canceling_jobs()) == 3
+        assert len(defaultbackend.get_canceling_jobs(queues=[DEFAULT_QUEUE])) == 2
+        assert len(defaultbackend.get_canceling_jobs(queues=[QUEUE])) == 1
+        assert (
+            len(defaultbackend.get_canceling_jobs(queues=[DEFAULT_QUEUE, QUEUE])) == 3
+        )
+
+    def test_get_jobs_by_state(self, defaultbackend):
+        # Schedule jobs
+        schedule_time = local_now() + datetime.timedelta(hours=1)
+        defaultbackend.schedule(schedule_time, Job(id))
+        job2 = defaultbackend.schedule(schedule_time, Job(id))
+        job3 = defaultbackend.schedule(schedule_time, Job(id), QUEUE)
+
+        # mark jobs status
+        defaultbackend.mark_job_as_canceling(job2)
+        defaultbackend.mark_job_as_running(job3)
+
+        assert len(defaultbackend.get_jobs_by_state(state=State.QUEUED)) == 1
+        assert len(defaultbackend.get_jobs_by_state(state=State.RUNNING)) == 1
+        assert len(defaultbackend.get_jobs_by_state(state=State.CANCELING)) == 1
+        assert (
+            len(defaultbackend.get_jobs_by_state(state=State.RUNNING, queues=[QUEUE]))
+            == 1
+        )
+        assert (
+            len(
+                defaultbackend.get_jobs_by_state(state=State.RUNNING, queues=["random"])
+            )
+            == 0
+        )
+
+    def test_schedule_error_on_wrong_repeat(self, defaultbackend, simplejob):
+        tz_aware_now = datetime.datetime.now(tz=pytz.utc)
+        with pytest.raises(ValueError):
+            defaultbackend.enqueue_at(tz_aware_now, simplejob, repeat=-1, interval=1)
+
+    def test_can_retry_running_job(self, defaultbackend, simplejob):
+        job_id = defaultbackend.enqueue_job(simplejob, QUEUE)
+        defaultbackend.mark_job_as_running(job_id)
+
+        job = defaultbackend.get_job(job_id)
+
+        # is the job marked as running?
+        assert job.state == State.RUNNING
+
+        defaultbackend.retry_job_in(simplejob.job_id, datetime.timedelta(seconds=5))
+        requeued_job = defaultbackend.get_orm_job(job_id)
+
+        assert requeued_job.repeat == 1
+        assert requeued_job.interval == 5
+
+    def test_cant_retry_queued_job(self, defaultbackend, simplejob):
+        job_id = defaultbackend.enqueue_job(simplejob, QUEUE)
+
+        job = defaultbackend.get_job(job_id)
+
+        assert job.state == State.QUEUED
+        with pytest.raises(JobNotRunning):
+            defaultbackend.retry_job_in(simplejob.job_id, datetime.timedelta(seconds=5))
+
+    def test_cant_retry_already_retrying_job(self, defaultbackend, simplejob):
+        job_id = defaultbackend.enqueue_job(simplejob, QUEUE, retry_interval=5)
+        defaultbackend.mark_job_as_running(job_id)
+
+        job = defaultbackend.get_job(job_id)
+
+        # is the job marked as running?
+        assert job.state == State.RUNNING
+        with pytest.raises(JobAlreadyRetrying):
+            defaultbackend.retry_job_in(simplejob.job_id, datetime.timedelta(seconds=5))
+
+    def test_cant_retry_already_indefinitely_repeating_job(
+        self, defaultbackend, simplejob
+    ):
+        job_id = defaultbackend.enqueue_in(
+            datetime.timedelta(seconds=5), simplejob, QUEUE, repeat=None, interval=30
+        )
+        defaultbackend.mark_job_as_running(job_id)
+
+        job = defaultbackend.get_job(job_id)
+
+        # is the job marked as running?
+        assert job.state == State.RUNNING
+        with pytest.raises(JobAlreadyRetrying):
+            defaultbackend.retry_job_in(simplejob.job_id, datetime.timedelta(seconds=5))
+
+    def test_cant_retry_already_finitely_repeating_job(self, defaultbackend, simplejob):
+        job_id = defaultbackend.enqueue_in(
+            datetime.timedelta(seconds=5), simplejob, QUEUE, repeat=3, interval=30
+        )
+        defaultbackend.mark_job_as_running(job_id)
+
+        job = defaultbackend.get_job(job_id)
+
+        # is the job marked as running?
+        assert job.state == State.RUNNING
+        with pytest.raises(JobAlreadyRetrying):
+            defaultbackend.retry_job_in(simplejob.job_id, datetime.timedelta(seconds=5))

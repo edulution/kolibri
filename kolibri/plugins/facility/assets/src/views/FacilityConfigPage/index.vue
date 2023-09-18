@@ -1,8 +1,21 @@
 <template>
 
   <FacilityAppBarPage>
-    <KPageContainer>
-
+    <KPageContainer
+      data-test="page-container"
+      :style="{ marginBottom: '42px' }"
+    >
+      <p>
+        <KRouterLink
+          v-if="userIsMultiFacilityAdmin"
+          :to="{
+            name: facilityPageLinks.AllFacilitiesPage.name,
+            params: { subtopicName: 'FacilitiesConfigPage' }
+          }"
+          icon="back"
+          :text="coreString('changeLearningFacility')"
+        />
+      </p>
       <div class="mb">
         <h1>{{ $tr('pageHeader') }}</h1>
         <p>
@@ -19,13 +32,17 @@
         <div class="mb">
           <h2>{{ coreString('facilityLabel') }}</h2>
           <p class="current-facility-name">
-            {{ coreString('facilityNameWithId', { facilityName: facilityName, id: lastPartId }) }}
-            <KButton
-              appearance="basic-link"
-              :text="coreString('editAction')"
-              name="edit-facilityname"
-              @click="showEditFacilityModal = true"
-            />
+            <KCircularLoader v-if="getFacilityDataLoading" class="facility-loader" />
+            <span v-else>
+              {{ coreString('facilityNameWithId', { facilityName: facilityName, id: lastPartId }) }}
+              <KButton
+                appearance="basic-link"
+                :text="coreString('editAction')"
+                :disabled="getFacilityDataLoading"
+                name="edit-facilityname"
+                @click="showEditFacilityModal = true"
+              />
+            </span>
 
           </p>
         </div>
@@ -67,28 +84,61 @@
           </div>
 
           <div>
-            <KButtonGroup style="margin-top: 8px;">
-              <KButton
-                :primary="false"
-                appearance="raised-button"
-                :text="$tr('resetToDefaultSettings')"
 
-                name="reset-settings"
-                @click="showModal = true"
-              />
-
-              <KButton
-                :primary="true"
-                :class="windowIsSmall ? 'mobile-button' : ''"
-                appearance="raised-button"
-                :text="coreString('saveChangesAction')"
-                name="save-settings"
-
-                :disabled="!settingsHaveChanged"
-                @click="saveConfig()"
-              />
-            </KButtonGroup>
           </div>
+        </div>
+
+        <div class="">
+          <h2>{{ $tr('deviceManagementPin') }}</h2>
+
+          <p>{{ $tr('deviceManagementDescription') }}</p>
+          <KButton
+            v-show="!isPinSet"
+            @click="handleCreatePin"
+          >
+            {{ $tr('createPinBtn') }}
+          </KButton>
+
+          <KButton
+            v-show="isPinSet"
+            hasDropdown
+            :text="coreString('optionsLabel')"
+          >
+            <template #menu>
+              <KDropdownMenu
+                :options="dropdownOption"
+                class="options-btn"
+                @select="handleSelect"
+              />
+            </template>
+          </KButton>
+        </div>
+
+        <div
+          v-if="isAppContext"
+          :style="{
+            marginTop: '32px',
+            borderTop: '1px solid',
+            borderTopColor: $themeTokens.fineLine
+          }"
+        >
+          <KButtonGroup :style="{ marginTop: '24px', marginLeft: '-8px' }">
+            <KButton
+              :primary="true"
+              appearance="raised-button"
+              :text="coreString('saveChangesAction')"
+              name="save-settings"
+              :disabled="!settingsHaveChanged"
+              @click="saveConfig()"
+            />
+            <KButton
+              :primary="false"
+              appearance="flat-button"
+              :text="$tr('resetToDefaultSettings')"
+              name="reset-settings"
+              @click="showModal = true"
+            />
+          </KButtonGroup>
         </div>
       </template>
 
@@ -106,7 +156,55 @@
         @submit="sendFacilityName"
         @cancel="showEditFacilityModal = false"
       />
+
+      <CreateManagementPinModal
+        v-if="createPinShow"
+        @submit="createPinShow = false"
+        @cancel="createPinShow = false"
+      />
+
+      <ViewPinModal
+        v-if="handleViewModal"
+        @cancel="handleViewModal = false"
+      />
+      <ChangePinModal
+        v-if="handleChangePinModal"
+        @submit="handleChangePinModal = false"
+        @cancel="handleChangePinModal = false"
+      />
+
+      <RemovePinModal
+        v-if="handleRemovePinModal"
+        @submit="handleRemovePinModal = false"
+        @cancel="handleRemovePinModal = false"
+      />
+
     </KPageContainer>
+
+    <BottomAppBar data-test="bottom-bar">
+      <KButtonGroup
+        v-if="!isAppContext"
+        style="margin-top: 8px;"
+      >
+        <KButton
+          :primary="false"
+          appearance="flat-button"
+          :text="$tr('resetToDefaultSettings')"
+          name="reset-settings"
+          @click="showModal = true"
+        />
+
+        <KButton
+          :primary="true"
+          :class="windowIsSmall ? 'mobile-button' : ''"
+          appearance="raised-button"
+          :text="coreString('saveChangesAction')"
+          name="save-settings"
+          :disabled="!settingsHaveChanged"
+          @click="saveConfig()"
+        />
+      </KButtonGroup>
+    </BottomAppBar>
   </FacilityAppBarPage>
 
 </template>
@@ -116,14 +214,37 @@
 
   import { mapActions, mapGetters, mapState } from 'vuex';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import { createTranslator } from 'kolibri.utils.i18n';
 
   import camelCase from 'lodash/camelCase';
   import isEqual from 'lodash/isEqual';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import urls from 'kolibri.urls';
+  import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import FacilityAppBarPage from '../FacilityAppBarPage';
   import ConfirmResetModal from './ConfirmResetModal';
   import EditFacilityNameModal from './EditFacilityNameModal';
+  import CreateManagementPinModal from './CreateManagementPinModal';
+  import ViewPinModal from './ViewPinModal';
+  import ChangePinModal from './ChangePinModal';
+  import RemovePinModal from './RemovePinModal';
+
+  /**
+   * Using the createTranslator to aid concatenation
+   * of strings missed before string freeze. This only a workaround
+   */
+  const deviceSettingsPageStrings = createTranslator('DeviceSettingsPage', {
+    changeLocation: {
+      message: 'Change',
+      context: 'Label to change primary storage location',
+    },
+  });
+  const pinAuthenticationModalStrings = createTranslator('PinAuthenticationModal', {
+    pinPlaceholder: {
+      message: 'PIN',
+      context: 'Placeholder label for a PIN input',
+    },
+  });
 
   // See FacilityDataset in core.auth.models for details
   const settingsList = [
@@ -146,6 +267,11 @@
       FacilityAppBarPage,
       ConfirmResetModal,
       EditFacilityNameModal,
+      BottomAppBar,
+      CreateManagementPinModal,
+      ViewPinModal,
+      ChangePinModal,
+      RemovePinModal,
     },
     mixins: [commonCoreStrings, responsiveWindowMixin],
     data() {
@@ -153,6 +279,10 @@
         showModal: false,
         showEditFacilityModal: false,
         settingsCopy: {},
+        createPinShow: false,
+        handleViewModal: false,
+        handleChangePinModal: false,
+        handleRemovePinModal: false,
       };
     },
     computed: {
@@ -163,10 +293,27 @@
         'facilityNameSaved',
         'facilityNameError',
       ]),
-      ...mapGetters(['isSuperuser']),
+      ...mapGetters([
+        'isAppContext',
+        'isSuperuser',
+        'userIsMultiFacilityAdmin',
+        'facilityPageLinks',
+      ]),
+      ...mapGetters('facilityConfig', ['getFacilityDataLoading']),
       settingsList: () => settingsList,
       settingsHaveChanged() {
         return !isEqual(this.settings, this.settingsCopy);
+      },
+      isPinSet() {
+        if (
+          this.settings &&
+          this.settings['extra_fields'] &&
+          this.settings['extra_fields']['pin_code']
+        ) {
+          return this.settings['extra_fields']['pin_code'];
+        } else {
+          return null;
+        }
       },
       deviceSettingsUrl() {
         const getUrl = urls['kolibri:kolibri.plugins.device:device_management'];
@@ -180,6 +327,26 @@
       },
       enableChangePassword() {
         return this.settings['learner_can_login_with_no_password'];
+      },
+      dropdownOption() {
+        return [
+          { label: this.viewPINLabel, value: 'VIEW' },
+          { label: this.changePINLabel, value: 'CHANGE' },
+          { label: this.coreString('removePinPlacholder'), value: 'REMOVE' },
+        ];
+      },
+      changePINLabel() {
+        /* eslint-disable kolibri/vue-no-undefined-string-uses */
+        return `${deviceSettingsPageStrings.$tr('changeLocation')} ${this.pinPlaceholder}`;
+        /* eslint-enable */
+      },
+      viewPINLabel() {
+        return `${this.coreString('viewAction')} ${this.pinPlaceholder}`;
+      },
+      pinPlaceholder() {
+        /* eslint-disable kolibri/vue-no-undefined-string-uses */
+        return pinAuthenticationModalStrings.$tr('pinPlaceholder');
+        /* eslint-enable */
       },
     },
     watch: {
@@ -247,6 +414,18 @@
       copySettings() {
         this.settingsCopy = Object.assign({}, this.settings);
       },
+      handleCreatePin() {
+        this.createPinShow = true;
+      },
+      handleSelect(option) {
+        if (option.value === 'VIEW') {
+          this.handleViewModal = true;
+        } else if (option.value === 'CHANGE') {
+          this.handleChangePinModal = true;
+        } else if (option.value === 'REMOVE') {
+          this.handleRemovePinModal = true;
+        }
+      },
     },
     $trs: {
       // These are not going to be picked up by the linter because snake cased versions
@@ -277,8 +456,14 @@
         context: "Option on 'Facility settings' page.\n",
       },
       /* eslint-enable kolibri/vue-no-unused-translations */
-      saveFailure: 'There was a problem saving your settings',
-      saveSuccess: 'Facility settings updated',
+      saveFailure: {
+        message: 'There was a problem saving your settings',
+        context: 'Status report after the facility change operation.',
+      },
+      saveSuccess: {
+        message: 'Facility settings updated',
+        context: 'Status report after the facility change operation.',
+      },
       pageDescription: {
         message: 'Configure facility settings here.',
         context: 'Interpret as "[You can] configure facility settings here"',
@@ -299,6 +484,25 @@
         message: 'Facility Settings',
         context: 'Title of page where user can configure facility settings.',
       },
+      deviceManagementPin: {
+        message: 'Device management PIN',
+        context: 'The title for the device management PIN',
+      },
+      deviceManagementDescription: {
+        message:
+          'This 4-digit PIN allows users to manage content and other settings on learn-only devices',
+        context: 'Description for the device management',
+      },
+      createPinBtn: {
+        message: 'Create PIN',
+        context: 'Button for the create PIN',
+      },
+      /* eslint-disable kolibri/vue-no-unused-translations */
+      optionBtn: {
+        message: 'option',
+        context: 'Options button for the create PIN page',
+      },
+      /* eslint-enable kolibri/vue-no-unused-translations */
     },
   };
 
@@ -323,6 +527,11 @@
 
   .mobile-button {
     margin-top: 16px;
+  }
+
+  .facility-loader {
+    display: inline-block;
+    margin-bottom: -0.5em; // To align with the text
   }
 
 </style>

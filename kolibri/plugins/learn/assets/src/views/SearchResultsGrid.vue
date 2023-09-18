@@ -5,7 +5,7 @@
     <!-- for interacting or updating the results   -->
     <h2 class="results-title" data-test="search-results-title">
       {{ more ?
-        coreString('overCertainNumberOfSearchResults', { num: results.length }) :
+        coreString('uncountedAdditionalResults', { num: results.length }) :
         $tr('results', { results: results.length })
       }}
     </h2>
@@ -39,6 +39,7 @@
     <!-- Grid of search results  -->
     <LibraryAndChannelBrowserMainContent
       :contents="results"
+      :allowDownloads="allowDownloads"
       data-test="search-results-card-grid"
       :currentCardViewStyle="currentCardViewStyle"
       :gridType="1"
@@ -59,7 +60,6 @@
     <CopiesModal
       v-if="displayedCopies.length"
       :copies="displayedCopies"
-      :genContentLink="genContentLink"
       @submit="displayedCopies = []"
     />
   </div>
@@ -72,7 +72,6 @@
   import { ref } from 'kolibri.lib.vueCompositionApi';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import genContentLink from '../utils/genContentLink';
   import CopiesModal from './CopiesModal';
   import SearchChips from './SearchChips';
   import LibraryAndChannelBrowserMainContent from './LibraryAndChannelBrowserMainContent';
@@ -86,7 +85,7 @@
     },
     mixins: [commonCoreStrings, responsiveWindowMixin],
     setup() {
-      var sidePanelContent = ref(null);
+      const sidePanelContent = ref(null);
       const toggleInfoPanel = content => (sidePanelContent.value = content);
 
       return {
@@ -95,6 +94,10 @@
       };
     },
     props: {
+      allowDownloads: {
+        type: Boolean,
+        default: false,
+      },
       currentCardViewStyle: {
         type: String,
         default: 'card',
@@ -141,18 +144,7 @@
         displayedCopies: [],
       };
     },
-    computed: {
-      backRoute() {
-        return this.$route.name;
-      },
-    },
     methods: {
-      genContentLink(content) {
-        return genContentLink(content.id, this.topicId, content.is_leaf, this.backRoute, {
-          ...this.context,
-          ...this.$route.query,
-        });
-      },
       toggleCardView(value) {
         this.$emit('setCardStyle', value);
       },

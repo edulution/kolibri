@@ -104,6 +104,7 @@
           <NextButton
             v-if="contentIsRtl"
             v-show="!isAtEnd"
+            :disabled="!locationsAreReady"
             :color="navigationButtonColor"
             :isRtl="contentIsRtl"
             :style="{ backgroundColor }"
@@ -112,6 +113,7 @@
           <PreviousButton
             v-else
             v-show="!isAtStart"
+            :disabled="!locationsAreReady"
             :color="navigationButtonColor"
             :isRtl="contentIsRtl"
             :style="{ backgroundColor }"
@@ -130,6 +132,7 @@
           <PreviousButton
             v-if="contentIsRtl"
             v-show="!isAtStart"
+            :disabled="!locationsAreReady"
             :color="navigationButtonColor"
             :isRtl="contentIsRtl"
             :style="{ backgroundColor }"
@@ -138,6 +141,7 @@
           <NextButton
             v-else
             v-show="!isAtEnd"
+            :disabled="!locationsAreReady"
             :color="navigationButtonColor"
             :isRtl="contentIsRtl"
             :style="{ backgroundColor }"
@@ -148,7 +152,7 @@
 
       <BottomBar
         class="bottom-bar"
-        :locationsAreReady="locations.length > 0"
+        :locationsAreReady="locationsAreReady"
         :heading="bottomBarHeading"
         :sliderValue="sliderValue"
         :sliderStep="sliderStep"
@@ -270,7 +274,7 @@
         },
       },
       epubURL() {
-        return this.defaultFile.storage_url;
+        return new URL(this.defaultFile.storage_url, window.location).href;
       },
       backgroundColor() {
         return this.theme.backgroundColor;
@@ -284,7 +288,7 @@
           color: `${this.textColor}!important`,
         };
         const alignmentStyle = {
-          'text-align': `${this.isRtl ? 'right' : 'left'}!important`,
+          'text-align': `${this.isRtl ? 'right' : 'left'}`,
         };
         const fontSizeStyle = this.fontSize ? { 'font-size': `${this.fontSize}!important` } : {};
 
@@ -367,6 +371,9 @@
         return seconds;
       },
       /* eslint-enable kolibri/vue-no-unused-properties */
+      locationsAreReady() {
+        return this.locations && this.locations.length > 0;
+      },
     },
     watch: {
       sideBarOpen(newSideBar, oldSideBar) {
@@ -406,6 +413,10 @@
     beforeMount() {
       global.ePub = Epub;
       this.book = new Epub(this.epubURL);
+      this.book.on(EVENTS.BOOK.OPEN_FAILED, err => {
+        this.errorLoading = true;
+        this.reportLoadingError(err);
+      });
 
       const { theme = this.theme, fontSize = this.fontSize } =
         Lockr.get(EPUB_RENDERER_SETTINGS_KEY) || {};
@@ -477,12 +488,10 @@
             }
           );
 
-        this.rendition.on(EVENTS.RENDITION.DISPLAY_ERROR, () => {
+        this.rendition.on(EVENTS.RENDITION.DISPLAY_ERROR, err => {
           this.errorLoading = true;
+          this.reportLoadingError(err);
         });
-      });
-      this.book.on(EVENTS.BOOK.OPEN_FAILED, () => {
-        this.errorLoading = true;
       });
     },
     beforeDestroy() {
@@ -512,7 +521,7 @@
       },
       storeVisitedPage(currentLocation) {
         if (currentLocation) {
-          let visited = this.savedVisitedPages;
+          const visited = this.savedVisitedPages;
           visited[currentLocation] = true;
           this.savedVisitedPages = visited;
         }
@@ -742,6 +751,9 @@
         ) {
           this.storeVisitedPage(this.locations[locationIndex]);
         }
+        if (location.end.percentage >= 1) {
+          this.finish();
+        }
         this.updateProgress();
         this.updateContentState();
       },
@@ -767,6 +779,9 @@
           };
         }
         this.$emit('updateContentState', contentState);
+      },
+      finish() {
+        this.$emit('finished');
       },
     },
   };

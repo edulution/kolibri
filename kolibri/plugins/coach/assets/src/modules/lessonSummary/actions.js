@@ -13,10 +13,15 @@ export function addToResourceCache(store, { node }) {
 }
 
 export function updateCurrentLesson(store, lessonId) {
-  return LessonResource.fetchModel({
-    id: lessonId,
-  }).then(
-    lesson => {
+  return Promise.all([
+    LessonResource.fetchModel({
+      id: lessonId,
+    }),
+    LessonResource.fetchLessonsSizes({ id: lessonId }),
+  ]).then(
+    ([lesson, lessonSizes]) => {
+      const size = lessonSizes[0] && lessonSizes[0][lessonId];
+      lesson.size = size;
       store.commit('SET_CURRENT_LESSON', lesson);
       return lesson;
     },
@@ -43,14 +48,16 @@ export function getResourceCache(store, resourceIds) {
     return ContentNodeResource.fetchCollection({
       getParams: {
         ids: nonCachedResourceIds,
+        no_available_filtering: true,
       },
     }).then(contentNodes => {
-      contentNodes.forEach(contentNode =>
+      contentNodes.forEach(contentNode => {
+        const channel = store.getters.getChannelForNode(contentNode);
         store.commit('ADD_TO_RESOURCE_CACHE', {
           node: contentNode,
-          channelTitle: store.getters.getChannelForNode(contentNode).title,
-        })
-      );
+          channelTitle: channel ? channel.title : '',
+        });
+      });
       return { ...resourceCache };
     });
   } else {

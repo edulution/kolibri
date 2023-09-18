@@ -6,9 +6,12 @@
       <p>
         <KRouterLink
           v-if="userIsMultiFacilityAdmin"
-          :to="facilityPageLinks.AllFacilitiesPage"
+          :to="{
+            name: facilityPageLinks.AllFacilitiesPage.name,
+            params: { subtopicName: 'ManageClassPage' }
+          }"
           icon="back"
-          :text="coreString('allFacilitiesLabel')"
+          :text="coreString('changeLearningFacility')"
         />
       </p>
       <KGrid>
@@ -33,7 +36,7 @@
         </KGridItem>
       </KGrid>
 
-      <CoreTable>
+      <CoreTable :dataLoading="dataLoading" :emptyMessage="$tr('noClassesExist')">
         <caption class="visuallyhidden">
           {{ $tr('tableCaption') }}
         </caption>
@@ -62,10 +65,9 @@
               </td>
               <td>
                 <span :ref="`coachNames${classroom.id}`">
-                  <template v-if="coachNames(classroom).length">
-                    {{ formattedCoachNames(classroom) }}
-                  </template>
-                  <KEmptyPlaceholder v-else />
+                  <KOptionalText
+                    :text="coachNames(classroom).length ? formattedCoachNames(classroom) : ''"
+                  />
                 </span>
                 <KTooltip
                   v-if="formattedCoachNamesTooltip(classroom)"
@@ -90,10 +92,6 @@
           </transition-group>
         </template>
       </CoreTable>
-
-      <p v-if="noClassesExist">
-        {{ $tr('noClassesExist') }}
-      </p>
 
       <ClassDeleteModal
         v-if="Boolean(classToDelete)"
@@ -150,11 +148,8 @@
       };
     },
     computed: {
-      ...mapState('classManagement', ['modalShown', 'classes']),
+      ...mapState('classManagement', ['modalShown', 'classes', 'dataLoading']),
       ...mapGetters(['userIsMultiFacilityAdmin', 'facilityPageLinks']),
-      noClassesExist() {
-        return this.classes.length === 0;
-      },
       Modals: () => Modals,
       sortedClassrooms() {
         return orderBy(this.classes, [classroom => classroom.name.toUpperCase()], ['asc']);
@@ -222,7 +217,10 @@
         message: 'Delete class',
         context: 'Option to delete a class.',
       },
-      tableCaption: 'List of classes',
+      tableCaption: {
+        message: 'List of classes',
+        context: 'Caption for the table containing the list of classes.',
+      },
       twoCoachNames: {
         message: '{name1}, {name2}',
         context: 'DO NOT TRANSLATE\nCopy the source string.',

@@ -2,7 +2,7 @@
 
   <div>
 
-    <CoreTable :emptyMessage="emptyMessage">
+    <CoreTable :emptyMessage="emptyMessage" :dataLoading="dataLoading">
       <template #headers>
         <th>{{ coreString('fullNameLabel') }}</th>
         <th>{{ coreString('usernameLabel') }}</th>
@@ -39,7 +39,7 @@
               <KButton
                 appearance="flat-button"
                 :text="permissionsButtonText(user)"
-                style="margin-top: 6px;"
+                style="margin: 6px;"
                 @click="goToUserPermissionsPage(user.id)"
               />
             </td>
@@ -81,6 +81,11 @@
       userPermissions: {
         type: Function,
         default: () => null,
+      },
+      dataLoading: {
+        type: Boolean,
+        default: false,
+        required: false,
       },
     },
     computed: {

@@ -2,6 +2,9 @@
 
   <OnboardingStepBase
     :title="$tr('learningEnvironmentHeader')"
+    :footerMessageType="footerMessageType"
+    :step="1"
+    :steps="5"
     @continue="handleContinue"
   >
     <KRadioButton
@@ -15,6 +18,7 @@
     <FacilityNameTextbox
       v-if="selected === Presets.NONFORMAL"
       ref="facility-name"
+      v-model="facilityName"
       class="textbox"
     />
     <KRadioButton
@@ -27,6 +31,7 @@
     <FacilityNameTextbox
       v-if="selected === Presets.FORMAL"
       ref="facility-name"
+      v-model="facilityName"
       class="textbox"
     />
 
@@ -37,7 +42,7 @@
 
 <script>
 
-  import { Presets } from '../../constants';
+  import { Presets, FooterMessageTypes } from '../../constants';
   import OnboardingStepBase from '../OnboardingStepBase';
   import FacilityNameTextbox from './FacilityNameTextbox';
 
@@ -48,14 +53,15 @@
       OnboardingStepBase,
     },
     data() {
-      let selected;
-      const { preset } = this.$store.state.onboardingData;
-      if (preset === null || preset === Presets.NONFORMAL) {
-        selected = Presets.NONFORMAL;
-      } else {
-        selected = Presets.FORMAL;
-      }
+      const preset = this.wizardService.state.context['formalOrNonformal'];
+      // preset inits to null, so either it'll be what the user selected or default to nonformal
+      const selected = preset || Presets.NONFORMAL;
+
+      const facilityName = this.wizardService.state.context['facilityName'];
+      const footerMessageType = FooterMessageTypes.NEW_FACILITY;
       return {
+        footerMessageType,
+        facilityName,
         selected,
         Presets,
       };
@@ -66,7 +72,10 @@
     inject: ['wizardService'],
     methods: {
       handleContinue() {
-        this.wizardService.send({ type: 'CONTINUE', value: this.selected });
+        this.wizardService.send({
+          type: 'CONTINUE',
+          value: { selected: this.selected, facilityName: this.facilityName },
+        });
       },
       focusOnTextbox() {
         if (this.$refs && this.$refs['facility-name']) {
@@ -84,7 +93,7 @@
         context: 'Label for the radio button option in the facility setup.',
       },
       formalDescription: {
-        message: 'Schools and other formal learning contexts',
+        message: 'Schools and other formal learning contexts.',
         context: "Option description text for 'Formal' facility types.",
       },
       nonFormalLabel: {
@@ -93,7 +102,7 @@
       },
       nonFormalDescription: {
         message:
-          'Libraries, orphanages, correctional facilities, youth centers, computer labs, and other non-formal learning contexts',
+          'Libraries, orphanages, youth centers, computer labs, and other non-formal learning contexts.',
 
         context: "Option description text for 'Non-formal' facility types.",
       },

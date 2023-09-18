@@ -3,9 +3,20 @@
   <div>
     <!-- header link to folder -->
     <h2>
+      <template v-for="prefixTitle in (topic.prefixTitles || [])">
+        <span :key="prefixTitle" :style="{ color: $themeTokens.annotation }">
+          {{ prefixTitle }}
+        </span>
+        <KIcon
+          :key="topic.title + prefixTitle"
+          icon="chevronRight"
+          :color="$themeTokens.annotation"
+          :style="{ top: '4px' }"
+        />
+      </template>
       <KRouterLink
         :text="topic.title"
-        :to="genContentLink(topic)"
+        :to="genContentLinkKeepCurrentBackLink(topic.id, false)"
         class="folder-header-link"
         :appearanceOverrides="{ color: $themeTokens.text }"
       >
@@ -22,8 +33,9 @@
       v-if="topic.children && topic.children.length"
       data-test="children-cards-grid"
       :contents="topic.children"
+      :allowDownloads="allowDownloads"
       currentCardViewStyle="card"
-      :gridType="2"
+      :keepCurrentBackLink="true"
       @toggleInfoPanel="$emit('toggleInfoPanel', $event)"
     />
     <KButton
@@ -33,10 +45,10 @@
       appearance="basic-link"
       @click="$emit('showMore', topic.id)"
     >
-      {{ $tr('showMore') }}
+      {{ coreString('showMoreAction') }}
     </KButton>
     <KRouterLink v-else-if="topic.viewAll" class="more-after-grid" :to="topic.viewAll">
-      {{ $tr('viewAll') }}
+      {{ coreString('viewAll') }}
     </KRouterLink>
     <KButton
       v-else-if="topic.viewMore && topic.id !== subTopicLoading"
@@ -56,14 +68,22 @@
 <script>
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import genContentLink from '../../utils/genContentLink';
+  import useContentLink from '../../composables/useContentLink';
   import LibraryAndChannelBrowserMainContent from '../LibraryAndChannelBrowserMainContent';
 
   export default {
     name: 'TopicSubsection',
     components: { LibraryAndChannelBrowserMainContent },
     mixins: [commonCoreStrings],
+    setup() {
+      const { genContentLinkKeepCurrentBackLink } = useContentLink();
+      return { genContentLinkKeepCurrentBackLink };
+    },
     props: {
+      allowDownloads: {
+        type: Boolean,
+        default: false,
+      },
       topic: {
         type: Object,
         required: true,
@@ -72,27 +92,6 @@
         type: Boolean,
         default: false,
         required: false,
-      },
-    },
-    data() {
-      return {};
-    },
-    methods: {
-      genContentLink(topic) {
-        return genContentLink(topic.id, this.topicId, topic.is_leaf, this.backRoute, {
-          ...this.context,
-          ...this.$route.query,
-        });
-      },
-    },
-    $trs: {
-      showMore: {
-        message: 'Show more',
-        context: 'Clickable link which allows to load more resources.',
-      },
-      viewAll: {
-        message: 'View all',
-        context: 'Clickable link which allows to display all resources in a topic.',
       },
     },
   };

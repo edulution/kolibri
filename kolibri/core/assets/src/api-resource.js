@@ -4,11 +4,8 @@ import matches from 'lodash/matches';
 import isEqual from 'lodash/isEqual';
 import urls from 'kolibri.urls';
 import cloneDeep from './cloneDeep';
-import plugin_data from 'plugin_data';
 
 export const logging = logger.getLogger(__filename);
-
-const contentCacheKey = plugin_data.contentCacheKey;
 
 /** Class representing a single API resource object */
 export class Model {
@@ -581,19 +578,12 @@ export class Resource {
   /**
    * Create a resource with a Django REST API name corresponding to the name parameter.
    */
-  constructor({
-    name,
-    idKey = 'id',
-    namespace = 'core',
-    useContentCacheKey = false,
-    ...options
-  } = {}) {
+  constructor({ name, idKey = 'id', namespace = 'core', ...options } = {}) {
     if (!name) {
       throw ReferenceError('Resource must be instantiated with a name property');
     }
     this.name = `kolibri:${namespace}:${name}`;
     this.idKey = idKey;
-    this.useContentCacheKey = useContentCacheKey;
     const optionsDefinitions = Object.getOwnPropertyDescriptors(options);
     Object.keys(optionsDefinitions).forEach(key => {
       Object.defineProperty(this, key, optionsDefinitions[key]);
@@ -1035,12 +1025,6 @@ export class Resource {
 
   client(options) {
     const client = require('./core-app/client').default;
-    // Add in content cache parameter if relevant
-    if (this.useContentCacheKey && !options.data) {
-      options.params = options.params || {};
-      options.params['contentCacheKey'] = contentCacheKey;
-      options.cacheBust = false;
-    }
     return client(options);
   }
 
@@ -1054,13 +1038,13 @@ export class Resource {
       'color: red'
     );
     console.log(`Error occured for ${this.name} resource on page ${window.location.href}`);
-    if (store.state.route) {
+    if (store?.state?.route) {
       console.group('Vue Router');
       console.log(`fullPath: ${store.state.route.fullPath}`);
       console.log(`Route name: ${store.state.route.name}`);
       if (Object.keys(store.state.route.params).length) {
         console.group('Vue router params');
-        for (let [k, v] of Object.entries(store.state.route.params)) {
+        for (const [k, v] of Object.entries(store.state.route.params)) {
           console.log(`${k}: ${v}`);
         }
         console.groupEnd();
@@ -1069,7 +1053,7 @@ export class Resource {
     }
     if (Object.keys(err.config.params).length) {
       console.group('Query parameters');
-      for (let [k, v] of Object.entries(err.config.params)) {
+      for (const [k, v] of Object.entries(err.config.params)) {
         console.log(`${k}: ${v}`);
       }
       console.groupEnd();
@@ -1079,7 +1063,7 @@ export class Resource {
         const data = JSON.parse(err.config.data);
         if (Object.keys(data).length) {
           console.group('Data');
-          for (let [k, v] of Object.entries(data)) {
+          for (const [k, v] of Object.entries(data)) {
             console.log(`${k}: ${v}`);
           }
           console.groupEnd();
@@ -1088,7 +1072,7 @@ export class Resource {
     }
     if (Object.keys(err.config.headers).length) {
       console.group('Headers');
-      for (let [k, v] of Object.entries(err.config.headers)) {
+      for (const [k, v] of Object.entries(err.config.headers)) {
         console.log(`${k}: ${v}`);
       }
       console.groupEnd();
