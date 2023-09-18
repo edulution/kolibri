@@ -1,7 +1,8 @@
-import { Resource } from '../api-resource';
+import { Resource } from 'kolibri.lib.apiResource';
 
-export default class LessonResource extends Resource {
-  static resourceName() {
-    return 'lesson';
-  }
-}
+export default new Resource({
+  name: 'lesson',
+  fetchLessonsSizes(getParams = {}) {
+    return this.fetchListCollection('size', getParams);
+  },
+});

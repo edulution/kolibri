@@ -1,122 +1,220 @@
 <template>
 
-  <div>
-    <section class="lesson-details">
-      <div>
-        <content-icon
-          kind="lesson"
-          class="lesson-icon"
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+  >
+    <div v-if="!$store.state.core.loading" id="main" role="main">
+      <KBreadcrumbs :items="breadcrumbs" :ariaLabel="learnString('classesAndAssignmentsLabel')" />
+      <section class="lesson-details">
+        <div>
+          <ContentIcon
+            kind="lesson"
+            class="lesson-icon"
+          />
+          <h1 dir="auto" class="title">
+            {{ currentLesson.title }}
+            <ProgressIcon
+              v-if="lessonHasResources"
+              class="progress-icon"
+              :progress="lessonProgress"
+            />
+          </h1>
+        </div>
+        <div v-if="currentLesson.description !== ''">
+          <h3>{{ $tr('teacherNote') }}</h3>
+          <p dir="auto">
+            {{ currentLesson.description }}
+          </p>
+        </div>
+        <MissingResourceAlert v-if="lessonResources.length > contentNodes.length" />
+      </section>
+
+      <section v-if="lessonHasResources" class="content-cards">
+        <HybridLearningLessonCard
+          v-for="content in contentNodes"
+          :key="content.id"
+          :content="content"
+          class="content-card"
+          :isMobile="windowIsSmall"
+          :link="genContentLinkBackLinkCurrentPage(content.id, true)"
         />
-        <h1 class="title">
-          {{ currentLesson.title }}
-          <progress-icon v-if="lessonHasResources" :progress="lessonProgress" />
-        </h1>
-      </div>
-      <div v-if="currentLesson.description!==''">
-        <h3>{{ $tr('teacherNote') }}</h3>
-        <p> {{ currentLesson.description }}</p>
-      </div>
-    </section>
-
-    <section class="content-cards">
-      <content-card
-        v-for="(c, idx) in contentNodes"
-        :key="c.pk"
-        class="content-card"
-        :isMobile="true"
-        :kind="c.kind"
-        :link="lessonResourceViewerLink(idx)"
-        :progress="c.progress_fraction"
-        :numCoachContents="c.coach_content ? 1 : 0"
-        :thumbnail="getContentNodeThumbnail(c)"
-        :title="c.title"
-      />
-
-      <p v-if="!lessonHasResources" class="no-resources-message">
+      </section>
+      <p v-else class="no-resources-message">
         {{ $tr('noResourcesInLesson') }}
       </p>
-    </section>
-  </div>
+    </div>
+  </LearnAppBarPage>
 
 </template>
 
 
 <script>
 
-  import sumBy from 'lodash/sumBy';
-  import ProgressIcon from 'kolibri.coreVue.components.progressIcon';
-  import ContentIcon from 'kolibri.coreVue.components.contentIcon';
-  import { getContentNodeThumbnail } from 'kolibri.utils.contentNode';
-  import ContentCard from '../content-card';
-  import { lessonResourceViewerLink } from './classPageLinks';
+  import { mapMutations, mapState } from 'vuex';
+  import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
+  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import ProgressIcon from 'kolibri.coreVue.components.ProgressIcon';
+  import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
+  import useContentLink from '../../composables/useContentLink';
+  import useContentNodeProgress from '../../composables/useContentNodeProgress';
+  import { PageNames, ClassesPageNames } from '../../constants';
+  import commonLearnStrings from './../commonLearnStrings';
+  import LearnAppBarPage from './../LearnAppBarPage';
+  import HybridLearningLessonCard from './../HybridLearningLessonCard';
 
   export default {
-    name: 'lessonPlaylistPage',
+    name: 'LessonPlaylistPage',
+    metaInfo() {
+      return {
+        title: this.currentLesson.title,
+      };
+    },
     components: {
-      ContentCard,
+      KBreadcrumbs,
+      HybridLearningLessonCard,
       ContentIcon,
       ProgressIcon,
+      LearnAppBarPage,
+      MissingResourceAlert,
+    },
+    mixins: [commonCoreStrings, commonLearnStrings, responsiveWindowMixin],
+    setup() {
+      const { genContentLinkBackLinkCurrentPage } = useContentLink();
+      const { contentNodeProgressMap } = useContentNodeProgress();
+      return { contentNodeProgressMap, genContentLinkBackLinkCurrentPage };
     },
     computed: {
+      ...mapState('lessonPlaylist', ['contentNodesMap', 'currentLesson']),
+      contentNodes() {
+        return this.lessonResources
+          .map(r => {
+            return this.contentNodesMap[r.contentnode_id] || null;
+          })
+          .filter(Boolean);
+      },
+      lessonResources() {
+        return (this.currentLesson && this.currentLesson.resources) || [];
+      },
       lessonHasResources() {
+        return this.lessonResources.length > 0;
+      },
+      lessonHasResourcesAvailable() {
         return this.contentNodes.length > 0;
       },
       lessonProgress() {
-        if (this.lessonHasResources) {
+        if (this.lessonHasResourcesAvailable) {
           // HACK: Infer the Learner's progress by summing the progress_fractions
           // on all the ContentNodes
-          const total = sumBy(this.contentNodes, cn => cn.progress_fraction || 0);
+          const total = Object.values(this.contentNodesMap).reduce(
+            (tot, node) => tot + (this.contentNodeProgressMap[node.content_id] || 0),
+            0
+          );
           if (total === 0) {
             return null;
           }
           return total / this.contentNodes.length;
         }
+
+        return undefined;
       },
+      breadcrumbs() {
+        return this.currentLesson && this.currentLesson.classroom
+          ? [
+              {
+                text: this.coreString('homeLabel'),
+                link: { name: PageNames.HOME },
+              },
+              {
+                text: this.coreString('classesLabel'),
+                link: { name: ClassesPageNames.ALL_CLASSES },
+              },
+              {
+                text: this.currentLesson.classroom.name,
+                link: {
+                  name: ClassesPageNames.CLASS_ASSIGNMENTS,
+                  params: { classId: this.currentLesson.classroom.id },
+                },
+              },
+              {
+                text: this.currentLesson.title,
+              },
+            ]
+          : [];
+      },
+    },
+    beforeDestroy() {
+      /* If we are going anywhere except for content we unset the lesson */
+
+      if (this.$route.name !== PageNames.TOPICS_CONTENT) {
+        this.SET_CURRENT_LESSON({});
+      }
     },
     methods: {
-      getContentNodeThumbnail,
-      lessonResourceViewerLink,
-    },
-    vuex: {
-      getters: {
-        contentNodes: state => state.pageState.contentNodes,
-        currentLesson: state => state.pageState.currentLesson,
-      },
+      ...mapMutations('lessonPlaylist', ['SET_CURRENT_LESSON']),
     },
     $trs: {
-      noResourcesInLesson: 'There are no resources in this lesson',
-      teacherNote: 'Coach note',
+      noResourcesInLesson: {
+        message: 'There are no resources in this lesson',
+        context:
+          "This text displays in the learner's 'Lessons' section if the coach has not added any resources to the lesson.",
+      },
+      teacherNote: {
+        message: 'Coach note',
+        context:
+          'Label for the field where the coach can add notes for their learners regarding the resource.',
+      },
     },
   };
 
 </script>
 
 
-<style lang="stylus" scoped>
+<style lang="scss" scoped>
 
-  .lesson-details
-    margin-bottom: 32px
+  .lesson-details {
+    margin-bottom: 32px;
+  }
 
-  .title
-    display: inline-block
+  .title {
+    display: inline-block;
+  }
 
-  .content-cards
-    max-width: 800px
+  .content-cards {
+    max-width: 100%;
+  }
 
-  .content-card
-    margin-bottom: 16px
+  .content-card {
+    margin-bottom: 16px;
+  }
 
-  .no-resources-message
-    text-align: center
-    font-weight: bold
-    padding: 48px 0
+  .no-resources-message {
+    padding: 48px 0;
+    font-weight: bold;
+    text-align: center;
+  }
 
-  // Copied from LessonSummaryPage
-  .lesson-icon
-    display: inline-block
-    font-size: 1.8em
-    margin-right: 0.5em
-    >>>.ui-icon
-      vertical-align: bottom
+  .lesson-icon {
+    display: inline-block;
+    margin-right: 0.5em;
+    font-size: 1.8em;
+
+    /deep/ .ui-icon {
+      margin-bottom: 12px;
+      vertical-align: middle;
+    }
+  }
+
+  .progress-icon {
+    display: inline-block;
+    margin-right: 0.5em;
+    font-size: 1.8em;
+
+    /deep/ .ui-icon {
+      margin-top: 4px;
+      vertical-align: middle;
+    }
+  }
 
 </style>

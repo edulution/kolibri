@@ -1,36 +1,43 @@
-from kolibri.auth.permissions.general import DenyAll
 from rest_framework.permissions import BasePermission
 
-
-class UserCanManageDevicePermissions(DenyAll):
-
-    def user_can_read_object(self, user, obj):
-        return user.is_superuser
-
-    def readable_by_user_filter(self, user, queryset):
-        if user.is_superuser:
-            return queryset
-        return queryset.none()
-
-    def user_can_create_object(self, user, obj):
-        return user.is_superuser
-
-    def user_can_update_object(self, user, obj):
-        # Superuser cannot commit superuser-suicide
-        return user.is_superuser and obj.user != user
-
-    def user_can_delete_object(self, user, obj):
-        # Superuser cannot commit superuser-suicide
-        return user.is_superuser and obj.user != user
+from kolibri.core.auth.permissions.general import DenyAll
 
 
 class NotProvisionedCanPost(BasePermission):
     def has_permission(self, request, view):
         from .utils import device_provisioned
-        return not device_provisioned() and request.method == 'POST'
+
+        return not device_provisioned() and request.method == "POST"
+
+
+class NotProvisionedHasPermission(BasePermission):
+    def has_permission(self, request, view):
+        from .utils import device_provisioned
+
+        if device_provisioned():
+            return False
+        return (
+            request.method == "GET"
+            or request.method == "POST"
+            or request.method == "DELETE"
+        )
 
 
 class UserHasAnyDevicePermissions(DenyAll):
     def has_permission(self, request, view):
         from .models import device_permissions_fields
+
         return any(getattr(request.user, field) for field in device_permissions_fields)
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
+
+
+class IsSuperuser(DenyAll):
+    def has_permission(self, request, view):
+        return request.user.is_superuser
+
+
+class IsNotAnonymous(DenyAll):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated

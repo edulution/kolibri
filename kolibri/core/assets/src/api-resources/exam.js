@@ -1,14 +1,13 @@
-import { Resource } from '../api-resource';
+import { Resource } from 'kolibri.lib.apiResource';
 
 /**
- * @example <caption>Get a Collection of Exams for a given class</caption>
- * ExamResource.getCollection({ collection: classId })
+ * @example Get a Collection of Exams for a given class
+ * ExamResource.fetchCollection({ getParams: { collection: classId } })
  */
-export default class ExamResource extends Resource {
-  static resourceName() {
-    return 'exam';
-  }
-  static idKey() {
-    return 'id';
-  }
-}
+export default new Resource({
+  name: 'exam',
+  idKey: 'id',
+  fetchQuizzesSizes(getParams = {}) {
+    return this.fetchListCollection('size', getParams);
+  },
+});

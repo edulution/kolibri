@@ -1,26 +1,33 @@
-import heartbeat from 'kolibri.heartbeat';
-import RootVue from './views';
-import { initialState, mutations } from './state/store'; // attaching store to the root element
+import logger from 'kolibri.lib.logging';
+import { TaskResource } from 'kolibri.resources';
+import RootVue from './views/SetupWizardIndex';
+import pluginModule from './modules/pluginModule';
+import routes from './routes';
 import KolibriApp from 'kolibri_app';
 
-class OnboardingApp extends KolibriApp {
+const logging = logger.getLogger(__filename);
+
+class SetupWizardModule extends KolibriApp {
   get RootVue() {
     return RootVue;
   }
-  get initialState() {
-    return initialState;
+  get routes() {
+    return routes;
   }
-  get mutations() {
-    return mutations;
+  get pluginModule() {
+    return pluginModule;
   }
   ready() {
-    return super.ready().then(() => {
-      // Fix for https://github.com/learningequality/kolibri/issues/3852
-      // Don't call beat because it may cause a save in the session endpoint
-      // while the device provisioning is in progress
-      heartbeat.stop();
-    });
+    // Fix for https://github.com/learningequality/kolibri/issues/3852
+    // Override the base ready method, so that we don't start the session
+    // heartbeat checks.
+    // Don't call beat because it may cause a save in the session endpoint
+    // while the device provisioning is in progress
+    this.setupVue();
+    logging.info('Clearing facility tasks created in previous sessions...');
+    TaskResource.clearAll('facility_task');
+    this.startRootVue();
   }
 }
 
-export default new OnboardingApp();
+export default new SetupWizardModule();

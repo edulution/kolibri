@@ -1,39 +1,77 @@
-// include global styles
-require('purecss/build/base-min.css');
-require('purecss/build/grids-min.css');
-require('../styles/font-NotoSans.css');
-require('../styles/main.styl');
+/**
+ * Provides the public API for the Kolibri FrontEnd core app.
+ * @module Facade
+ */
+import 'core-js';
+import urls from 'kolibri.urls';
+import logging from 'kolibri.lib.logging';
+import store from 'kolibri.coreVue.vuex.store';
+import Vue from 'vue';
+import VueMeta from 'vue-meta';
+import VueRouter from 'vue-router';
+import Vuex from 'vuex';
+import VueCompositionApi from '@vue/composition-api';
+import KThemePlugin from 'kolibri-design-system/lib/KThemePlugin';
+import heartbeat from 'kolibri.heartbeat';
+import KContentRenderer from '../views/ContentRenderer/KContentRenderer';
+import initializeTheme from '../styles/initializeTheme';
+import { i18nSetup } from '../utils/i18n';
+import setupPluginMediator from './pluginMediator';
+import apiSpec from './apiSpec';
 
-// Required to setup Keen UI, should be imported only once in your project
-require('keen-ui/src/bootstrap');
+// Do this before any async imports to ensure that public paths
+// are set correctly
+urls.setUp();
 
-// configure Keen
-const KeenUiConfig = require('keen-ui/src/config').default;
-KeenUiConfig.set(require('../keen-config/options.json'));
-
-// polyfill for older browsers
-// TODO: rtibbles whittle down these polyfills to only what is needed for the application
-require('core-js');
-
-// Shim Array includes for ES7 spec compliance
-require('array-includes').shim();
+// Shim window.location.origin for IE.
+if (!window.location.origin) {
+  window.location.origin = `${window.location.protocol}//${window.location.hostname}${
+    window.location.port ? `:${window.location.port}` : ''
+  }`;
+}
 
 // set up logging
-const logging = require('kolibri.lib.logging').default;
-
 logging.setDefaultLevel(process.env.NODE_ENV === 'production' ? 2 : 0);
 
-// Create an instance of the global app object.
-// This is exported by webpack as the kolibriGlobal object, due to the 'output.library' flag
+/**
+ * Object that forms the public API for the Kolibri
+ * core app.
+ */
+const coreApp = {
+  // Assign API spec
+  ...apiSpec,
+  version: __version,
+};
+
+setupPluginMediator(coreApp);
+
+// set up theme
+initializeTheme();
+
+// monitor page visibility
+document.addEventListener('visibilitychange', function() {
+  store.dispatch('setPageVisibility');
+});
+
+// Register Vue plugins and components
+Vue.use(Vuex);
+Vue.use(VueRouter);
+Vue.use(VueMeta);
+Vue.use(VueCompositionApi);
+
+// - Installs helpers on Vue instances: $themeBrand, $themeTokens, $themePalette
+// - Set up global state, listeners, and styles
+// - Register KDS components
+Vue.use(KThemePlugin);
+
+Vue.component('KContentRenderer', KContentRenderer);
+
+// Start the heartbeat polling here, as any URL needs should be set by now
+heartbeat.startPolling();
+
+i18nSetup().then(coreApp.ready);
+
+// This is exported by webpack as the kolibriCoreAppGlobal object, due to the 'output.library' flag
 // which exports the coreApp at the bottom of this file as a named global variable:
 // https://webpack.github.io/docs/configuration.html#output-library
-//
-// This is achieved by setting the `src_file` attribute in the core
-// kolibri_plugin.py which tells the webpack build scripts to set the export of this file
-// to a global variable.
-const CoreAppConstructor = require('./constructor').default;
-
-const coreApp = new CoreAppConstructor();
-
-// Use a module.exports here to be compatible with webpack library output
-module.exports = coreApp;
+export default coreApp;

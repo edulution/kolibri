@@ -1,12 +1,14 @@
-from __future__ import absolute_import, print_function, unicode_literals
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import unicode_literals
 
 import logging
 
-import kolibri
 from django.core.management.base import BaseCommand
-from kolibri.utils import server
 
+import kolibri
 from ...utils import dbbackup
+from kolibri.utils import server
 
 logger = logging.getLogger(__name__)
 
@@ -24,24 +26,26 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            'dest_folder',
-            nargs='?',
+            "dest_folder",
+            nargs="?",
             type=str,
             help=(
                 "Specifies which folder to create the dump in, otherwise it "
                 "is created in the default location ~/.kolibri/backups"
-            )
+            ),
         )
 
     def handle(self, *args, **options):
 
         try:
             server.get_status()
-            self.stderr.write(self.style.ERROR(
-                "Cannot restore while Kolibri is running, please run:\n"
-                "\n"
-                "    kolibri stop\n"
-            ))
+            self.stderr.write(
+                self.style.ERROR(
+                    "Cannot restore while Kolibri is running, please run:\n"
+                    "\n"
+                    "    kolibri stop\n"
+                )
+            )
             raise SystemExit()
         except server.NotRunning:
             # Great, it's not running!
@@ -50,6 +54,6 @@ class Command(BaseCommand):
         dest_folder = options.get("dest_folder", None)
 
         backup = dbbackup(kolibri.__version__, dest_folder=dest_folder)
-        self.stdout.write(self.style.SUCCESS(
-            "Backed up database to: {path}".format(path=backup)
-        ))
+        self.stdout.write(
+            self.style.SUCCESS("Backed up database to: {path}".format(path=backup))
+        )

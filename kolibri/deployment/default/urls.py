@@ -2,7 +2,7 @@
 """kolibri URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/1.8/topics/http/urls/
+    https://docs.djangoproject.com/en/1.11/topics/http/urls/
 Examples:
 Function views
     1. Add an import:  from my_app import views
@@ -17,43 +17,28 @@ Including another URLconf
 .. moduleauthor:: Learning Equality <info@learningequality.org>
 
 """
-from __future__ import absolute_import, print_function, unicode_literals
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import unicode_literals
 
-from django.conf import settings
-from django.conf.urls import include, url
+from django.conf.urls import include
+from django.conf.urls import url
 from django.contrib import admin
 from morango import urls as morango_urls
 
-from .views import RootURLRedirectView
+from kolibri.plugins.utils.urls import get_root_urls
+from kolibri.utils.conf import OPTIONS
 
-urlpatterns = [
-    url(r'^$', RootURLRedirectView.as_view()),
-    url(r'^admin/', include(admin.site.urls)),
-    url(r'', include('kolibri.core.urls')),
-    url(r'', include('kolibri.content.urls')),
-    url(r'^api/', include('kolibri.auth.api_urls')),
-    url(r'^api/', include('kolibri.content.api_urls')),
-    url(r'^api/', include('kolibri.logger.api_urls')),
-    url(r'^api/', include('kolibri.tasks.api_urls')),
-    url(r'^api/', include('kolibri.core.exams.api_urls')),
-    url(r'^api/', include('kolibri.core.device.api_urls')),
-    url(r'^api/', include('kolibri.core.lessons.api_urls')),
-    url(r'^api-auth/', include('rest_framework.urls', namespace='rest_framework')),
-    url(r'', include(morango_urls)),
+path_prefix = OPTIONS["Deployment"]["URL_PATH_PREFIX"]
+
+if path_prefix == "/":
+    path_prefix = ""
+
+url_patterns_prefixed = [
+    url(r"^admin/", admin.site.urls),
+    url(r"", include(morango_urls)),
+    url(r"", include("kolibri.core.urls")),
+    url(r"", include(get_root_urls())),
 ]
 
-if getattr(settings, 'DEBUG_PANEL_ACTIVE', False):
-
-    import debug_toolbar
-    urlpatterns = [
-        url(r'^__debug__/', include(debug_toolbar.urls)),
-    ] + urlpatterns
-
-if getattr(settings, 'REST_SWAGGER', False):
-    from rest_framework_swagger.views import get_swagger_view
-
-    schema_view = get_swagger_view(title='Kolibri API')
-
-    urlpatterns += [
-        url(r'^api_explorer/', schema_view)
-    ]
+urlpatterns = [url(path_prefix, include(url_patterns_prefixed))]

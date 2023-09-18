@@ -1,9 +1,9 @@
-from django.conf.urls import include
 from django.conf.urls import url
+
 from .views import LearnView
-from .api_urls import urlpatterns
+from .views import MyDownloadsView
 
 urlpatterns = [
-    url('^api/', include(urlpatterns)),
-    url('^$', LearnView.as_view(), name='learn'),
+    url(r"^$", LearnView.as_view(), name="learn"),
+    url(r"^my-downloads$", MyDownloadsView.as_view(), name="my_downloads"),
 ]

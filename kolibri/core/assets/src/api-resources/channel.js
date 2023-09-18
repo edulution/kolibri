@@ -1,17 +1,15 @@
-import { Resource } from '../api-resource';
+import { Resource } from 'kolibri.lib.apiResource';
 
 /**
- * @example <caption>Delete a channel</caption>
- * ChannelResource.getModel(channel_id).delete()
+ * @example Delete a channel
+ * ChannelResource.deleteModel({ id: channel_id })
  *
  * @example Only get the channels that are "available" (i.e. with resources on device)
- * ChannelResource.getCollection().fetch({ available: true })
+ * ChannelResource.fetchCollection({ getParams: { available: true } })
  */
-export default class ChannelResource extends Resource {
-  static resourceName() {
-    return 'channel';
-  }
-  static usesContentCacheKey() {
-    return true;
-  }
-}
+export default new Resource({
+  name: 'channel',
+  fetchFilterOptions(id) {
+    return this.getListEndpoint('filter_options', { id });
+  },
+});

@@ -1,4 +1,5 @@
 import datetime
+import json
 import re
 
 import pytz
@@ -6,26 +7,30 @@ from django.db.backends.utils import typecast_timestamp
 from django.db.models.fields import Field
 from django.utils import timezone
 from django.utils.six import string_types
+from jsonfield import JSONField as JSONFieldBase
+
 
 date_time_format = "%Y-%m-%d %H:%M:%S.%f"
 tz_format = "({tz})"
-tz_regex = re.compile("\(([^\)]+)\)")
+tz_regex = re.compile(r"\(([^\)]+)\)")
 db_storage_string = "{date_time_string}{tz_string}"
+
 
 def parse_timezonestamp(value):
     if tz_regex.search(value):
         tz = pytz.timezone(tz_regex.search(value).groups()[0])
     else:
         tz = timezone.get_current_timezone()
-    utc_value = tz_regex.sub('', value)
+    utc_value = tz_regex.sub("", value)
     value = typecast_timestamp(utc_value)
     if value.tzinfo is None:
         # Naive datetime, make aware
         value = timezone.make_aware(value, pytz.utc)
     return value.astimezone(tz)
 
+
 def create_timezonestamp(value):
-    if value.tzinfo and hasattr(value.tzinfo, 'zone'):
+    if value.tzinfo and hasattr(value.tzinfo, "zone"):
         # We have a pytz timezone, we can work with this
         tz = value.tzinfo.zone
     elif value.tzinfo:
@@ -40,8 +45,11 @@ def create_timezonestamp(value):
         value = timezone.make_aware(value, timezone.get_current_timezone())
     date_time_string = value.astimezone(pytz.utc).strftime(date_time_format)
     tz_string = tz_format.format(tz=tz)
-    value = db_storage_string.format(date_time_string=date_time_string, tz_string=tz_string)
+    value = db_storage_string.format(
+        date_time_string=date_time_string, tz_string=tz_string
+    )
     return value
+
 
 class DateTimeTzField(Field):
     """
@@ -89,3 +97,23 @@ class DateTimeTzField(Field):
     def value_from_object_json_compatible(self, obj):
         if self.value_from_object(obj):
             return create_timezonestamp(self.value_from_object(obj))
+
+
+class JSONField(JSONFieldBase):
+    def from_db_value(self, value, expression, connection, context):
+        if isinstance(value, string_types):
+            try:
+                return json.loads(value, **self.load_kwargs)
+            except ValueError:
+                pass
+
+        return value
+
+    def to_python(self, value):
+        if isinstance(value, string_types):
+            try:
+                return json.loads(value, **self.load_kwargs)
+            except ValueError:
+                pass
+
+        return value

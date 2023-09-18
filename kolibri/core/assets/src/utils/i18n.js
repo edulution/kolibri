@@ -1,32 +1,15 @@
-import vue from 'kolibri.lib.vue';
-import logger from '../logging';
+import has from 'lodash/has';
+import Vue from 'kolibri.lib.vue';
+import logger from 'kolibri.lib.logging';
 import importIntlLocale from './intl-locale-data';
 import importVueIntlLocaleData from './vue-intl-locale-data';
-
-const logging = logger.getLogger(__filename);
-
-function $trWrapper(nameSpace, defaultMessages, formatter, messageId, args) {
-  if (args) {
-    if (!Array.isArray(args) && typeof args !== 'object') {
-      logging.error(`The $tr functions take either an array of positional
-                      arguments or an object of named options.`);
-    }
-  }
-  const defaultMessageText = defaultMessages[messageId];
-  const message = {
-    id: `${nameSpace}.${messageId}`,
-    defaultMessage: defaultMessageText,
-  };
-
-  return formatter(message, args);
-}
+import setupAndLoadFonts from './setupAndLoadFonts';
+import plugin_data from 'plugin_data';
 
 export const languageDirections = {
   LTR: 'ltr',
   RTL: 'rtl',
 };
-
-const defaultLocale = 'en';
 
 export const defaultLanguage = {
   id: 'en',
@@ -38,26 +21,60 @@ export const languageValidator = language => {
   return ['id', 'lang_name', 'lang_direction'].reduce((valid, key) => valid && language[key], true);
 };
 
-export const availableLanguages = {
-  en: defaultLanguage,
-};
-
-export let currentLanguage = defaultLocale;
-
-// Default to ltr
-export let languageDirection = languageDirections.LTR;
-
 export const getContentLangDir = language => {
   return (language || {}).lang_direction || languageDirections.LTR;
 };
 
-export const getLangDir = id => {
-  return (availableLanguages[id] || {}).lang_direction || languageDirections.LTR;
+const logging = logger.getLogger(__filename);
+
+const languageGlobals = plugin_data['languageGlobals'] || {};
+
+let _i18nReady = false;
+
+function $trWrapper(nameSpace, defaultMessages, formatter, messageId, args) {
+  if (!_i18nReady) {
+    throw 'Translator used before i18n is ready';
+  }
+  if (args) {
+    if (!Array.isArray(args) && typeof args !== 'object') {
+      logging.error(`The $tr functions take either an array of positional
+                      arguments or an object of named options.`);
+    }
+  }
+
+  // Handle the possibility that the message is defined with an object including context.
+  const messageValue = defaultMessages[messageId];
+  const defaultMessageText =
+    typeof messageValue === 'object' && has(messageValue, 'message')
+      ? messageValue.message
+      : messageValue;
+
+  const message = {
+    id: `${nameSpace}.${messageId}`,
+    defaultMessage: defaultMessageText,
+  };
+
+  return formatter(message, args);
+}
+
+const defaultLocale = defaultLanguage.id;
+
+export const availableLanguages = {
+  ...(languageGlobals.languages || { [defaultLocale]: defaultLanguage }),
 };
 
-export const isRtl = id => {
+export const currentLanguage = languageGlobals.languageCode || defaultLocale;
+
+// Default to ltr
+export const languageDirection = languageGlobals.languageDir || languageDirections.LTR;
+
+export function getLangDir(id) {
+  return (availableLanguages[id] || {}).lang_direction || languageDirections.LTR;
+}
+
+export function isRtl(id) {
   return getLangDir(id) === languageDirections.RTL;
-};
+}
 
 export const languageDensities = {
   englishLike: 'english_like',
@@ -92,7 +109,7 @@ const languageDensityMapping = {
   zh: languageDensities.dense,
 };
 
-function languageIdToCode(id) {
+export function languageIdToCode(id) {
   return id.split('-')[0].toLowerCase();
 }
 
@@ -122,26 +139,26 @@ class Translator {
     return $trWrapper(
       this.nameSpace,
       this.defaultMessages,
-      vue.prototype.$formatMessage,
+      Vue.prototype.$formatMessage,
       messageId,
       args
     );
   }
   // For convenience, also proxy all vue intl translation methods on this object
   $formatDate(date, options = {}) {
-    return vue.prototype.$formatDate(date, options);
+    return Vue.prototype.$formatDate(date, options);
   }
   $formatTime(time, options = {}) {
-    return vue.prototype.$formatTime(time, options);
+    return Vue.prototype.$formatTime(time, options);
   }
   $formatRelative(date, options = {}) {
-    return vue.prototype.$formatRelative(date, options);
+    return Vue.prototype.$formatRelative(date, options);
   }
   $formatNumber(number, options = {}) {
-    return vue.prototype.$formatNumber(number, options);
+    return Vue.prototype.$formatNumber(number, options);
   }
   $formatPlural(plural, options = {}) {
-    return vue.prototype.$formatPlural(plural, options);
+    return Vue.prototype.$formatPlural(plural, options);
   }
 }
 
@@ -154,68 +171,77 @@ export function createTranslator(nameSpace, defaultMessages) {
   return new Translator(nameSpace, defaultMessages);
 }
 
-export function setUpVueIntl() {
+/**
+ * Returns a Translator instance that can grab strings from another component.
+ * WARNINGS:
+ *  - Cannot be used across plugin boundaries
+ *  - Use sparingly, e.g. to bypass string freeze
+ *  - Try to remove post-string-freeze
+ * @param {Component} Component - An imported component.
+ */
+export function crossComponentTranslator(Component) {
+  return new Translator(Component.name, Component.$trs);
+}
+
+function _setUpVueIntl() {
   /**
    * Use the vue-intl plugin.
+   *
+   * Note that this _must_ be called after i18nSetup because this function sets up
+   * the currentLanguage module variable which is referenced inside of here.
    **/
   const VueIntl = require('vue-intl');
+  Vue.use(VueIntl, { defaultLocale });
+  Vue.prototype.isRtl = languageDirection === 'rtl';
 
-  vue.use(VueIntl, { defaultLocale });
-
-  vue.prototype.isRtl = global.languageDir === 'rtl';
-
-  languageDirection = global.languageDir || languageDirection;
-
-  if (global.languages) {
-    Object.assign(availableLanguages, global.languages);
-  }
-
-  vue.prototype.$tr = function $tr(messageId, args) {
+  Vue.prototype.$tr = function $tr(messageId, args) {
     const nameSpace = this.$options.name || this.$options.$trNameSpace;
     return $trWrapper(nameSpace, this.$options.$trs, this.$formatMessage, messageId, args);
   };
 
-  if (global.languageCode) {
-    currentLanguage = global.languageCode;
-    vue.setLocale(currentLanguage);
-    setLanguageDensity(currentLanguage);
-
-    if (global.coreLanguageMessages) {
-      vue.registerMessages(currentLanguage, global.coreLanguageMessages);
-    }
-    return importVueIntlLocaleData(currentLanguage).then(localeData => {
-      VueIntl.addLocaleData(localeData);
-    });
+  Vue.setLocale(currentLanguage);
+  if (languageGlobals.coreLanguageMessages) {
+    Vue.registerMessages(currentLanguage, languageGlobals.coreLanguageMessages);
   }
-  return Promise.resolve();
+  importVueIntlLocaleData().forEach(localeData => VueIntl.addLocaleData(localeData));
+
+  _i18nReady = true;
 }
 
-export function setUpIntl() {
+export function i18nSetup(skipPolyfill = false) {
   /**
-   * If the browser doesn't support the Intl polyfill, we retrieve that and
-   * the modules need to wait until that happens.
+   * Load fonts, app strings, and Intl polyfills
    **/
+
+  // Set up typography
+  setLanguageDensity(currentLanguage);
+  setupAndLoadFonts();
+
+  // If the browser doesn't support the Intl polyfill, we retrieve that and
+  // the modules need to wait until that happens.
   return new Promise((resolve, reject) => {
-    if (!Object.prototype.hasOwnProperty.call(global, 'Intl')) {
+    if (Object.prototype.hasOwnProperty.call(global, 'Intl') || skipPolyfill) {
+      _setUpVueIntl();
+      resolve();
+    } else {
       Promise.all([
-        new Promise(resolve => {
+        new Promise(res => {
           require.ensure(
             ['intl'],
             require => {
-              resolve(() => require('intl'));
+              res(() => require('intl'));
             },
             'intl'
           );
         }),
-        importIntlLocale(global.languageCode),
+        importIntlLocale(currentLanguage),
       ]).then(
         // eslint-disable-line
-        requires => {
-          // Executes function that requires 'intl'
-          requires[0]();
-          // Executes function that requires intl locale data - needs intl to have run
-          requires[1]();
-          setUpVueIntl().then(() => resolve());
+        ([requireIntl, requireIntlLocaleData]) => {
+          requireIntl(); // requireIntl must run before requireIntlLocaleData
+          requireIntlLocaleData();
+          _setUpVueIntl();
+          resolve();
         },
         error => {
           logging.error(error);
@@ -223,8 +249,6 @@ export function setUpIntl() {
           reject();
         }
       );
-    } else {
-      setUpVueIntl().then(() => resolve());
     }
   });
 }
@@ -236,5 +260,15 @@ export function localeCompare(str1, str2) {
     return String(str1).localeCompare(String(str2), 'default', { usage: 'search' });
   } catch (e) {
     return String(str1).localeCompare(String(str2));
+  }
+}
+
+// Wrapper to Intl.ListFormat
+export function formatList(array) {
+  if (Intl.ListFormat) {
+    const formatter = new Intl.ListFormat(currentLanguage, { style: 'short', type: 'unit' });
+    return formatter.format(array);
+  } else {
+    return array.join(', ');
   }
 }

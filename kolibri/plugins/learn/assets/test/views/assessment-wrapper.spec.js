@@ -1,56 +1,50 @@
-/* eslint-env mocha */
-import Vue from 'vue-test'; // eslint-disable-line
-import Vuex from 'vuex';
-import { expect } from 'chai';
-import assessmentWrapper from '../../src/views/assessment-wrapper';
+import Vue from 'vue';
+import makeStore from '../makeStore';
+import assessmentWrapper from '../../src/views/AssessmentWrapper';
+
+jest.mock('plugin_data', () => {
+  return {
+    __esModule: true,
+    default: {
+      channels: [],
+    },
+  };
+});
 
 const createComponent = (totalattempts, pastattempts, masteryModel) => {
   const propsData = {
     id: 'test',
     kind: 'test',
+    assessmentIds: [],
+    masteryModel: masteryModel || {},
+    randomize: false,
+    totalattempts,
+    pastattempts,
   };
-  const store = new Vuex.Store({
-    state: {
-      core: {
-        logging: {
-          mastery: {
-            totalattempts,
-            pastattempts,
-          },
-        },
-        session: {
-          user_id: 'test',
-        },
-      },
-      pageState: {
-        content: {
-          assessmentIds: [],
-          masteryModel: masteryModel || {},
-          randomize: false,
-        },
-      },
+  const store = makeStore();
+  store.state.core = {
+    session: {
+      user_id: 'test',
     },
-  });
+  };
   const Component = Vue.extend(assessmentWrapper);
   return new Component({ propsData, store });
 };
 
 describe('assessmentWrapper Component', function() {
-  beforeEach(function() {
-    this.kind = 'test';
-    this.files = [
-      {
-        available: true,
-        extension: 'tst',
-      },
-    ];
-    this.id = 'testing';
+  // Mock the console so all the TypeErrors don't clutter the test report
+  let consoleMock;
+  beforeAll(() => {
+    consoleMock = jest.spyOn(console, 'error').mockImplementation();
+  });
+  afterAll(() => {
+    consoleMock.mockRestore();
   });
   describe('computed property', function() {
     describe('exerciseProgress', function() {
       it('should be 0 when there are no past attempts', function() {
         this.vm = createComponent(0, [], { type: 'm_of_n', m: 5, n: 5 });
-        expect(this.vm.exerciseProgress).to.equal(0);
+        expect(this.vm.exerciseProgress()).toEqual(0);
       });
       let numCorrect;
       let m;
@@ -73,7 +67,7 @@ describe('assessmentWrapper Component', function() {
                   .concat(Array(numCorrect).fill({ correct: 1 }))
                   .concat(Array(totalattempts - m).fill({ correct: 0 }));
                 this.vm = createComponent(totalattempts, pastattempts, masteryModel);
-                expect(this.vm.exerciseProgress).to.equal(numCorrect / m);
+                expect(this.vm.exerciseProgress()).toEqual(numCorrect / m);
               });
               /* eslint-enable no-loop-func */
             }

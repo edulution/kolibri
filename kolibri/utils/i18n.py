@@ -1,18 +1,13 @@
+# -*- coding: utf-8 -*-
 import importlib
+import io
+import json
+import locale
 import os
 
-EXTERNAL_PLUGINS_PREFIX = "kolibri_"
+from django.utils.translation.trans_real import to_language
 
-
-def is_external_plugin(appname):
-    '''
-    Returns true when the given app is an external plugin.
-
-    Implementation note: does a simple check on the name to see if it's
-    prefixed with "kolibri\_". If so, we think it's a plugin.
-    '''
-
-    return appname.startswith(EXTERNAL_PLUGINS_PREFIX)
+import kolibri
 
 
 def get_installed_app_locale_path(appname):
@@ -21,21 +16,77 @@ def get_installed_app_locale_path(appname):
 
     Note that the module is imported to determine its location.
     """
+    try:
+        m = importlib.import_module(appname)
+        module_path = os.path.dirname(m.__file__)
+        module_locale_path = os.path.abspath(os.path.join(module_path, "locale"))
 
-    m = importlib.import_module(appname)
-    module_path = os.path.dirname(m.__file__)
-    module_locale_path = os.path.join(module_path, "locale")
+        if os.path.isdir(module_locale_path):
+            return module_locale_path
+    except (ImportError, TypeError):
+        pass
+    return None
 
-    if os.path.isdir(module_locale_path):
-        return module_locale_path
+
+def _get_language_info():
+    file_path = os.path.abspath(
+        os.path.join(os.path.dirname(kolibri.__file__), "locale", "language_info.json")
+    )
+    with io.open(file_path, encoding="utf-8") as f:
+        languages = json.load(f)
+        output = {}
+        for language in languages:
+            output[language["intl_code"]] = language
+        return output
 
 
-def parse_supported_languages(language_list):
-    languages = []
-    for language in language_list:
-        lang = language.get("language_code", "")
-        for key in ["language_script", "script_code", "territory_code"]:
-            if key in language:
-                lang += "-" + language[key]
-        languages.append((lang, language["language_name"]))
-    return languages
+# Kolibri format
+KOLIBRI_LANGUAGE_INFO = _get_language_info()
+
+# List of intl codes that Kolibri officially supports
+KOLIBRI_SUPPORTED_LANGUAGES = {
+    "ar",
+    "bg-bg",
+    "bn-bd",
+    "de",
+    "el",
+    "en",
+    "es-es",
+    "es-419",
+    "fa",
+    "fr-fr",
+    "ff-cm",
+    "gu-in",
+    "ha",
+    "hi-in",
+    "ht",
+    "id",
+    "it",
+    "ka",
+    "km",
+    "ko",
+    "mr",
+    "my",
+    "nyn",
+    "pt-br",
+    "pt-mz",
+    "sw-tz",
+    "te",
+    "uk",
+    "ur-pk",
+    "vi",
+    "yo",
+    "zh-hans",
+}
+
+
+def get_system_default_language():
+    for loc in (locale.getlocale()[0], locale.getdefaultlocale()[0]):
+        if loc:
+            lang = to_language(loc)
+            for lang_code in (lang, lang.split("-")[0]):
+                if lang_code in KOLIBRI_SUPPORTED_LANGUAGES:
+                    return lang_code
+
+    # If all else fails we fall back to "en"
+    return "en"

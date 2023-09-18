@@ -1,10 +1,6 @@
-import { Resource } from '../api-resource';
+import { Resource } from 'kolibri.lib.apiResource';
 
-export default class FacilityUsernameResource extends Resource {
-  static resourceName() {
-    return 'facilityusername';
-  }
-  static idKey() {
-    return 'username';
-  }
-}
+export default new Resource({
+  name: 'facilityusername',
+  idKey: 'username',
+});

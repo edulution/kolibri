@@ -1,28 +1,53 @@
 steps:
-  - label: Build the docker environment
-    command: make dockerenvbuild
+  - label: Build Python packages
+    command:
+     - mkdir -p dist
+     - .buildkite/build_whl.sh
 
   - wait
 
-  - label: Build the python packages
-    command: mkdir -p dist && .buildkite/build_whl.sh && docker container prune -f
+  - label: ":android:"
+    trigger: "kolibri-android-installer"
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
 
-  - wait
+  - trigger: "kolibri-debian"
+    label: ":debian:"
+    key: deb-build
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        # Determines whether build will be autoblocked or not.
+        # Autoblock unless there's a tag associated with the commit. Usually a release.
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
 
-  - label: Build kolibri windows installer
-    command: .buildkite/build_windows_installer.sh
+  - trigger: "kolibri-windows"
+    label: ":windows:"
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      branch: "v1.5.1"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        # Determines whether build will be autoblocked or not.
+        # Autoblock unless there's a tag associated with the commit. Usually a release.
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
 
-  - wait
-
-  # - label: Build the Android APK file
-  #   command: mkdir -p dist && .buildkite/build_apk.sh
-
-  # - wait
-
-  - label: Upload artifacts
-    command: .buildkite/setup_and_upload_artifact.sh && docker image prune -f -a
-
-  - label: Sign Windows installer
-    command: .buildkite/sign_windows_installer.bat
-    agents:
-      queue: "windows-sign"
+  - trigger: "kolibri-raspbian-image"
+    label: ":raspberry-pi:"
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      env:
+        LE_TRIGGERED_FROM_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        LE_TRIGGERED_FROM_JOB_ID: "${BUILDKITE_JOB_ID}"
+        # Determines whether build will be autoblocked or not.
+        # Autoblock unless there's a tag associated with the commit. Usually a release.
+        LE_KOLIBRI_RELEASE: "${BUILDKITE_TAG:-false}"
+    depends_on:
+      - deb-build

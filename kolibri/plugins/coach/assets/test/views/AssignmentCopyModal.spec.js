@@ -1,25 +1,24 @@
-/* eslint-env mocha */
-import Vue from 'vue-test'; // eslint-disable-line
 import Vuex from 'vuex';
-import sinon from 'sinon';
-import { expect } from 'chai';
 import { mount } from '@vue/test-utils';
-import AssignmentCopyModal from '../../src/views/assignments/AssignmentCopyModal';
+import AssignmentCopyModal from '../../src/views/plan/assignments/AssignmentCopyModal';
 
 const defaultProps = {
   modalTitle: '',
   copyExplanation: '',
   assignmentQuestion: '',
   classId: 'class_2',
-  classList: [{ id: 'class_1', name: 'Class One' }, { id: 'class_2', name: 'Class Two' }],
+  classList: [
+    { id: 'class_1', name: 'Class One' },
+    { id: 'class_2', name: 'Class Two' },
+  ],
 };
 
 // prettier-ignore
 function makeWrapper(options) {
   const wrapper = mount(AssignmentCopyModal, options)
   const els = {
-    selectClassroomForm: () => wrapper.find('form#select-classroom'),
-    selectLearnerGroupForm: () => wrapper.find('form#select-learnergroup'),
+    selectClassroomForm: () => wrapper.find('#select-classroom'),
+    selectLearnerGroupForm: () => wrapper.find('#select-learnergroup'),
     submitButton: () => wrapper.find('button[type="submit"]')
   };
   return { wrapper, els }
@@ -36,8 +35,8 @@ describe('AssignmentCopyModal', () => {
       propsData: { ...defaultProps },
       store,
     });
-    expect(els.selectClassroomForm().exists()).to.be.true;
-    expect(els.selectLearnerGroupForm().exists()).to.be.false;
+    expect(els.selectClassroomForm().exists()).toEqual(true);
+    expect(els.selectLearnerGroupForm().exists()).toEqual(false);
   });
 
   it('shows one radio button for each classroom', () => {
@@ -45,8 +44,8 @@ describe('AssignmentCopyModal', () => {
       propsData: { ...defaultProps },
       store,
     });
-    const classroomRadios = els.selectClassroomForm().findAll({ name: 'kRadioButton' });
-    expect(classroomRadios.length).to.equal(2);
+    const classroomRadios = els.selectClassroomForm().findAll('[data-test="radio-button"]');
+    expect(classroomRadios.length).toEqual(2);
   });
 
   it('first classroom radio button is the current class and has special label', () => {
@@ -56,9 +55,9 @@ describe('AssignmentCopyModal', () => {
     });
     const currentClassroomRadio = els
       .selectClassroomForm()
-      .findAll({ name: 'kRadioButton' })
+      .findAll('[data-test="radio-button"]')
       .at(0);
-    expect(currentClassroomRadio.props().label).to.equal('Class Two (current class)');
+    expect(currentClassroomRadio.props().label).toEqual('Class Two (current class)');
   });
 
   it('clicking continue on Select Classroom form goes to Select Learner Group form', () => {
@@ -67,16 +66,18 @@ describe('AssignmentCopyModal', () => {
       propsData: { ...defaultProps },
       store,
     });
-    sinon.stub(wrapper.vm, 'getLearnerGroupsForClassroom').returns(Promise.resolve(groups));
+    wrapper.vm.getLearnerGroupsForClassroom = jest.fn().mockResolvedValue(groups);
     return wrapper.vm.goToAvailableGroups().then(() => {
-      expect(els.selectLearnerGroupForm().exists()).to.be.true;
+      expect(els.selectLearnerGroupForm().exists()).toEqual(true);
       // Explanations should reflect the selection of Class Two (current class)
       // prettier-ignore
       const explanation = wrapper.find('p').text();
-      expect(explanation).to.equal(`Will be copied to 'Class Two'`);
+      expect(explanation).toEqual(`Will be copied to 'Class Two'`);
       // Recipient selector gets all of the groups
-      const recipientSelector = els.selectLearnerGroupForm().find({ name: 'recipientSelector' });
-      expect(recipientSelector.props().groups).to.deep.equal(groups);
+      const RecipientSelector = els
+        .selectLearnerGroupForm()
+        .find('[data-test="recipient-selector"]');
+      expect(RecipientSelector.props().groups).toEqual(groups);
     });
   });
 
@@ -85,11 +86,11 @@ describe('AssignmentCopyModal', () => {
       propsData: { ...defaultProps },
       store,
     });
-    sinon.stub(wrapper.vm, 'getLearnerGroupsForClassroom').returns(Promise.resolve([]));
+    wrapper.vm.getLearnerGroupsForClassroom = jest.fn().mockResolvedValue([]);
     return wrapper.vm.goToAvailableGroups().then(() => {
       els.selectLearnerGroupForm().trigger('submit');
       // By default, this will copy the Assignment to the same class, and the entire class
-      expect(wrapper.emitted().copy[0]).to.deep.equal(['class_2', ['class_2']]);
+      expect(wrapper.emitted().submit[0]).toEqual(['class_2', ['class_2'], []]);
     });
   });
 

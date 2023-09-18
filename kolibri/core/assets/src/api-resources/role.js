@@ -1,7 +1,5 @@
-import { Resource } from '../api-resource';
+import { Resource } from 'kolibri.lib.apiResource';
 
-export default class RoleResource extends Resource {
-  static resourceName() {
-    return 'role';
-  }
-}
+export default new Resource({
+  name: 'role',
+});

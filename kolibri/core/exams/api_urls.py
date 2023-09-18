@@ -1,13 +1,10 @@
-from django.conf.urls import include, url
+from django.conf.urls import include
+from django.conf.urls import url
 from rest_framework import routers
 
-from .api import ExamAssignmentViewset, ExamViewset, UserExamViewset
+from .api import ExamViewset
 
 router = routers.SimpleRouter()
-router.register(r'exam', ExamViewset, base_name='exam')
-router.register(r'examassignment', ExamAssignmentViewset, base_name='examassignment')
-router.register(r'userexam', UserExamViewset, base_name='userexam')
+router.register(r"exam", ExamViewset, basename="exam")
 
-urlpatterns = [
-    url(r'^', include(router.urls)),
-]
+urlpatterns = [url(r"^", include(router.urls))]

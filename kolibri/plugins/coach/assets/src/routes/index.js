@@ -1,217 +1,114 @@
 import store from 'kolibri.coreVue.vuex.store';
 import router from 'kolibri.coreVue.router';
-import { showClassListPage, shouldRedirectToClassRootPage } from '../state/actions/main';
-import { showGroupsPage } from '../state/actions/group';
-import {
-  showChannelListForReports,
-  showLearnerReportsForItem,
-  showChannelRootReport,
-  showItemListReports,
-  showLearnerChannels,
-  showLearnerItemDetails,
-  showLearnerList,
-  showRecentItemsForChannel,
-  showRecentLearnerItemDetails,
-  showTopicLearnerItemDetails,
-} from '../state/actions/reports';
+import AllFacilitiesPage from '../views/AllFacilitiesPage';
+import CoachClassListPage from '../views/CoachClassListPage';
+import ClassLearnersListPage from '../views/ClassLearnersListPage';
+import HomePage from '../views/home/HomePage';
+import CoachPrompts from '../views/CoachPrompts';
+import HomeActivityPage from '../views/home/HomeActivityPage';
+import StatusTestPage from '../views/common/status/StatusTestPage';
+import { ClassesPageNames } from '../../../../learn/assets/src/constants';
 import { PageNames } from '../constants';
-import examRoutes from './examRoutes';
-import lessonsRoutes from './lessonsRoutes';
+import reportRoutes from './reportRoutes';
+import planRoutes from './planRoutes';
+import { classIdParamRequiredGuard } from './utils';
 
 export default [
-  ...lessonsRoutes,
-  ...examRoutes,
+  ...planRoutes,
+  ...reportRoutes,
   {
-    name: PageNames.CLASS_LIST,
-    path: '/',
-    handler: () => {
-      return shouldRedirectToClassRootPage().then(classId => {
-        if (classId) {
-          return router.replace({
-            name: PageNames.CLASS_ROOT,
-            params: {
-              classId,
-            },
-          });
-        }
-        return showClassListPage(store);
-      });
+    name: 'AllFacilitiesPage',
+    path: '/facilities/:subtopicName?',
+    component: AllFacilitiesPage,
+    props: true,
+    handler() {
+      store.dispatch('notLoading');
     },
   },
   {
-    name: PageNames.CLASS_ROOT,
-    path: '/:classId/',
-    redirect: '/:classId/learners/',
-  },
-  {
-    name: PageNames.RECENT_CHANNELS,
-    path: '/:classId/recent',
-    handler: to => {
-      const showRecentOnly = true;
-      showChannelListForReports(store, to.params.classId, showRecentOnly);
-    },
-  },
-  {
-    name: PageNames.RECENT_ITEMS_FOR_CHANNEL,
-    path: '/:classId/recent/:channelId',
-    handler: to => {
-      showRecentItemsForChannel(store, to.params.classId, to.params.channelId);
-    },
-  },
-  {
-    name: PageNames.RECENT_LEARNERS_FOR_ITEM,
-    path: '/:classId/recent/:channelId/:contentId',
-    handler: to => {
-      const showRecentOnly = true;
-      showLearnerReportsForItem(
-        store,
-        to.params.classId,
-        to.params.channelId,
-        to.params.contentId,
-        showRecentOnly
+    path: '/:facility_id?/classes/:subtopicName?',
+    component: CoachClassListPage,
+    props: true,
+    handler(toRoute) {
+      // loading state is handled locally
+      store.dispatch('notLoading');
+      // if user only has access to one facility, facility_id will not be accessible from URL,
+      // but always defaulting to userFacilityId would cause problems for multi-facility admins
+      const facilityId = toRoute.params.facility_id || store.getters.userFacilityId;
+      store.dispatch('setClassList', facilityId).then(
+        () => {
+          if (!store.getters.classListPageEnabled) {
+            // If no class list page, redirect to the first (and only) class and
+            // to the originally-selected subtopic, if available
+            router.replace({
+              name: toRoute.params.subtopicName || HomePage.name,
+              params: { classId: store.state.classList[0].id },
+            });
+            return;
+          }
+        },
+        error => store.dispatch('handleApiError', { error, reloadOnReconnect: true })
       );
     },
-  },
-  {
-    name: PageNames.RECENT_LEARNER_ITEM_DETAILS_ROOT,
-    path: '/:classId/recent/:channelId/:contentId/:userId',
-    redirect: '/:classId/recent/:channelId/:contentId/:userId/0/0',
-  },
-  {
-    name: PageNames.RECENT_LEARNER_ITEM_DETAILS,
-    path: '/:classId/recent/:channelId/:contentId/:userId/:attemptLogIndex/:interactionIndex',
-    handler: to => {
-      showRecentLearnerItemDetails(
-        store,
-        to.params.classId,
-        to.params.userId,
-        to.params.channelId,
-        to.params.contentId,
-        Number(to.params.attemptLogIndex),
-        Number(to.params.interactionIndex)
-      );
+    meta: {
+      titleParts: ['classesLabel'],
     },
   },
   {
-    name: PageNames.TOPIC_CHANNELS,
-    path: '/:classId/topics',
-    handler: to => {
-      const showRecentOnly = false;
-      showChannelListForReports(store, to.params.classId, showRecentOnly);
+    name: PageNames.HOME_PAGE,
+    path: '/:classId?/home',
+    component: HomePage,
+    handler: toRoute => {
+      if (classIdParamRequiredGuard(toRoute, HomePage.name)) {
+        return;
+      }
+      store.dispatch('notLoading');
+    },
+    meta: {
+      titleParts: ['CLASS_NAME'],
     },
   },
   {
-    name: PageNames.TOPIC_CHANNEL_ROOT,
-    path: '/:classId/topics/:channelId',
-    handler: to => {
-      showChannelRootReport(store, to.params.classId, to.params.channelId);
+    path: '/:classId/home/activity',
+    component: HomeActivityPage,
+    handler() {
+      store.dispatch('notLoading');
+    },
+    meta: {
+      titleParts: ['activityLabel', 'CLASS_NAME'],
     },
   },
   {
-    name: PageNames.TOPIC_ITEM_LIST,
-    path: '/:classId/topics/:channelId/topic/:topicId',
-    handler: to => {
-      showItemListReports(store, to.params.classId, to.params.channelId, to.params.topicId);
-    },
-  },
-  {
-    name: PageNames.TOPIC_LEARNERS_FOR_ITEM,
-    path: '/:classId/topics/:channelId/item/:contentId',
-    handler: to => {
-      const showRecentOnly = false;
-      showLearnerReportsForItem(
-        store,
-        to.params.classId,
-        to.params.channelId,
-        to.params.contentId,
-        showRecentOnly
-      );
-    },
-  },
-  {
-    name: PageNames.TOPIC_LEARNER_ITEM_DETAILS_ROOT,
-    path: '/:classId/topics/:channelId/item/:contentId/:userId',
-    redirect: '/:classId/topics/:channelId/item/:contentId/:userId/0/0',
-  },
-  {
-    name: PageNames.TOPIC_LEARNER_ITEM_DETAILS,
-    path: '/:classId/topics/:channelId/item/:contentId/:userId/:attemptLogIndex/:interactionIndex',
-    handler: to => {
-      showTopicLearnerItemDetails(
-        store,
-        to.params.classId,
-        to.params.userId,
-        to.params.channelId,
-        to.params.contentId,
-        Number(to.params.attemptLogIndex),
-        Number(to.params.interactionIndex)
-      );
-    },
-  },
-  {
-    name: PageNames.LEARNER_LIST,
+    name: ClassesPageNames.CLASS_LEARNERS_LIST_VIEWER,
     path: '/:classId/learners',
-    handler: to => {
-      showLearnerList(store, to.params.classId);
+    component: ClassLearnersListPage,
+    handler() {
+      store.dispatch('notLoading');
     },
   },
   {
-    name: PageNames.LEARNER_CHANNELS,
-    path: '/:classId/learners/:userId',
-    handler: to => {
-      showLearnerChannels(store, to.params.classId, to.params.userId);
+    path: '/about/statuses',
+    component: StatusTestPage,
+    handler() {
+      store.dispatch('notLoading');
     },
   },
   {
-    name: PageNames.LEARNER_CHANNEL_ROOT,
-    path: '/:classId/learners/:userId/:channelId',
-    handler: to => {
-      showChannelRootReport(store, to.params.classId, to.params.channelId, to.params.userId);
+    path: '/coach-prompts',
+    component: CoachPrompts,
+    handler() {
+      store.dispatch('notLoading');
     },
   },
   {
-    name: PageNames.LEARNER_ITEM_LIST,
-    path: '/:classId/learners/:userId/:channelId/topic/:topicId',
-    handler: to => {
-      showItemListReports(
-        store,
-        to.params.classId,
-        to.params.channelId,
-        to.params.topicId,
-        to.params.userId
-      );
+    path: '/',
+    // Redirect to AllFacilitiesPage if a superuser and device has > 1 facility
+    beforeEnter(to, from, next) {
+      if (store.getters.userIsMultiFacilityAdmin) {
+        next({ name: 'AllFacilitiesPage', replace: true });
+      } else {
+        next({ name: 'CoachClassListPage', replace: true });
+      }
     },
-  },
-  {
-    name: PageNames.LEARNER_ITEM_DETAILS_ROOT,
-    path: '/:classId/learners/:userId/:channelId/item/:contentId',
-    redirect: '/:classId/learners/:userId/:channelId/item/:contentId/0/0',
-  },
-  {
-    name: PageNames.LEARNER_ITEM_DETAILS,
-    path:
-      '/:classId/learners/:userId/:channelId/item/:contentId/:attemptLogIndex/:interactionIndex',
-    handler: to => {
-      showLearnerItemDetails(
-        store,
-        to.params.classId,
-        to.params.userId,
-        to.params.channelId,
-        to.params.contentId,
-        Number(to.params.attemptLogIndex),
-        Number(to.params.interactionIndex)
-      );
-    },
-  },
-  {
-    name: PageNames.GROUPS,
-    path: '/:classId/groups',
-    handler: to => {
-      showGroupsPage(store, to.params.classId);
-    },
-  },
-  {
-    path: '*',
-    redirect: '/',
   },
 ];

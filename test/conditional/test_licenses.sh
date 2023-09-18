@@ -25,7 +25,16 @@ do
         continue
     fi
 
-    details=`pip show "$requirement"`
+
+    details=`pip show "$requirement" || echo ""`
+
+    # This check is not concerned with system level packages, so ignore
+    # anything found here.
+    if echo "$details" | grep -q "dist-packages" && true
+    then
+        continue
+    fi
+
     license=`echo "$details" | grep -i "License" || echo ""`
     if echo "$license" | grep -qi " gpl" && true
     then
@@ -34,5 +43,12 @@ do
         exit 14
     fi
 done
+
+if yarn licenses list | grep -iP '(?<!OR )(?<!L)GPL(?! OR)'
+# If any output from the above, then we have found something, use && true to coerce to boolean
+then
+    echo "Problem! Incompatible license found in Javascript dependencies"
+    exit 14
+fi
 
 exit 0

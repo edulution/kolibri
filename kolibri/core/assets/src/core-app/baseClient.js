@@ -3,12 +3,34 @@
  * the session fetching apparatus. Made as a separate module to avoid
  * circular dependencies and repeated code.
  */
-import rest from 'rest';
-import csrf from 'rest/interceptor/csrf';
-import errorCode from 'rest/interceptor/errorCode';
-import cookiejs from 'js-cookie';
+import axios from 'axios';
+import qs from 'qs';
 
-export default rest.wrap(errorCode).wrap(csrf, {
-  name: 'X-CSRFToken',
-  token: cookiejs.get('csrftoken'),
-});
+export default function clientFactory(options) {
+  const client = axios.create({
+    xsrfCookieName: 'kolibri_csrftoken',
+    xsrfHeaderName: 'X-CSRFToken',
+    paramsSerializer: {
+      serialize: function(params) {
+        // Do custom querystring stingifying to comma separate array params
+        return qs.stringify(params, { arrayFormat: 'comma' });
+      },
+    },
+    ...options,
+  });
+  client.interceptors.response.use(
+    response => response,
+    function(error) {
+      if (!error) {
+        error = {};
+      }
+      if (!error.response) {
+        error.response = {
+          status: 0,
+        };
+      }
+      return Promise.reject(error);
+    }
+  );
+  return client;
+}

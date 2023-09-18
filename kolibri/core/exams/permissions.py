@@ -1,48 +1,68 @@
 from django.db.models import Q
-from django.db.models.query import F
-from kolibri.auth.filters import HierarchyRelationsFilter
-from kolibri.auth.models import AnonymousUser
-from kolibri.auth.permissions.general import DenyAll
+
+from kolibri.core.auth.models import AnonymousUser
+from kolibri.core.auth.permissions.base import q_none
+from kolibri.core.auth.permissions.general import DenyAll
 
 
 class UserCanReadExamAssignmentData(DenyAll):
-
     def user_can_read_object(self, user, obj):
         if isinstance(user, AnonymousUser):
             return False
         # Import here to avoid circular import.
-        from kolibri.logger.models import ExamLog
+        from kolibri.core.logger.models import MasteryLog
+
         # If they are not a member of the assignment's collection, don't bother with any other checks
         return user.is_member_of(obj.collection) and (
-            obj.exam.active or ExamLog.objects.filter(exam=obj.exam, user=user).exists())
+            obj.exam.active
+            or MasteryLog.objects.filter(
+                summarylog__content_id=obj.exam_id, user=user
+            ).exists()
+        )
 
-    def readable_by_user_filter(self, user, queryset):
+    def readable_by_user_filter(self, user):
         if isinstance(user, AnonymousUser):
-            return queryset.none()
-        return HierarchyRelationsFilter(queryset).filter_by_hierarchy(
-            target_user=user,
-            ancestor_collection=F("collection"),
-        ).filter(Q(exam__active=True) | Q(exam__examlogs__user=user))
+            return q_none
+        from kolibri.core.logger.models import MasteryLog
+
+        user_masterylog_content_ids = MasteryLog.objects.filter(user=user).values(
+            "summarylog__content_id"
+        )
+        return Q(collection_id__in=user.memberships.all().values("collection_id")) & Q(
+            Q(exam__active=True) | Q(exam__id__in=user_masterylog_content_ids)
+        )
+
 
 class UserCanReadExamData(DenyAll):
-
     def user_can_read_object(self, user, obj):
         if isinstance(user, AnonymousUser):
             return False
         # Import here to avoid circular import.
-        from kolibri.logger.models import ExamLog
-        # If they are not a member of the assignment's collection, don't bother with any other checks
-        return HierarchyRelationsFilter(obj.assignments.all()).filter_by_hierarchy(
-            target_user=user,
-            ancestor_collection=F("collection")).exists() and (
-            obj.active or ExamLog.objects.filter(exam=obj, user=user).exists())
+        from kolibri.core.logger.models import MasteryLog
 
-    def readable_by_user_filter(self, user, queryset):
-        if isinstance(user, AnonymousUser):
-            return queryset.none()
-        from kolibri.core.exams.models import ExamAssignment
-        assignments = HierarchyRelationsFilter(ExamAssignment.objects.all()).filter_by_hierarchy(
-            target_user=user,
-            ancestor_collection=F("collection"),
+        # If they are not a member of the assignment's collection, don't bother with any other checks
+        return obj.assignments.objects.filter(
+            collection_id__in=user.memberships.all().values("collection_id")
+        ).exists() and (
+            obj.active
+            or MasteryLog.objects.filter(
+                summarylog__content_id=obj.id, user=user
+            ).exists()
         )
-        return queryset.filter(assignments__in=assignments).filter(Q(active=True) | Q(examlogs__user=user))
+
+    def readable_by_user_filter(self, user):
+        if isinstance(user, AnonymousUser):
+            return q_none
+        from kolibri.core.exams.models import ExamAssignment
+        from kolibri.core.logger.models import MasteryLog
+
+        user_masterylog_content_ids = MasteryLog.objects.filter(user=user).values(
+            "summarylog__content_id"
+        )
+
+        assignments = ExamAssignment.objects.filter(
+            collection_id__in=user.memberships.all().values("collection_id")
+        )
+        return Q(assignments__in=assignments) & Q(
+            Q(active=True) | Q(id__in=user_masterylog_content_ids)
+        )

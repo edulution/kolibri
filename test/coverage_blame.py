@@ -1,19 +1,21 @@
 #!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
 # Derived from http://scottlobdell.me/2015/04/gamifying-test-coverage-project/
-
 # Before running this script, first run tests with coverage using:
-#  tox -e py3.4
+#  tox -e py3.9
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import unicode_literals
 
-from subprocess import Popen, PIPE
 from collections import Counter
+from subprocess import PIPE
+from subprocess import Popen
 
 
 LINE_COUNT_THRESH = 50
 
 
 class ExcludeLineParser(object):
-
     @classmethod
     def get_missing_lines_for_filename(cls, filename):
         command = "coverage report -m %s" % filename
@@ -26,12 +28,18 @@ class ExcludeLineParser(object):
         excluded_line_numbers = []
         ignore_line_count = 2
         ignore_column_count = 6
-        lines = [line for line in coverage_output.split("\n")[ignore_line_count:] if line]
+        lines = [
+            line for line in coverage_output.split("\n")[ignore_line_count:] if line
+        ]
         for line in lines:
             exclude_line_strings = line.split()[ignore_column_count:]
             for exclude_line_string in exclude_line_strings:
-                exclude_line_string = exclude_line_string.replace(",", "").replace(" ", "")
-                exclude_lines = cls._convert_exclude_line_string_to_ints(exclude_line_string)
+                exclude_line_string = exclude_line_string.replace(",", "").replace(
+                    " ", ""
+                )
+                exclude_lines = cls._convert_exclude_line_string_to_ints(
+                    exclude_line_string
+                )
                 excluded_line_numbers.extend(exclude_lines)
 
         return excluded_line_numbers
@@ -49,7 +57,7 @@ class ExcludeLineParser(object):
             try:
                 line_number = int(exclude_line_string)
             except ValueError:
-                print "Error for values (%s)" % exclude_line_string
+                print("Error for values ({})".format(exclude_line_string))
                 return []
             return [line_number]
 
@@ -58,14 +66,20 @@ def _get_output_from_pipe_command(command_with_pipes):
     piped_commands = [command.strip() for command in command_with_pipes.split("|")]
     previous_process = None
     for command in piped_commands:
-        process = Popen(command.split(), stdin=previous_process and previous_process.stdout, stdout=PIPE)
+        process = Popen(
+            command.split(),
+            stdin=previous_process and previous_process.stdout,
+            stdout=PIPE,
+        )
         previous_process = process
     output, err = previous_process.communicate()
     return output
 
 
 def get_python_files():
-    full_command = "find kolibri | grep py | grep -v pyc | grep -v test | grep -v virtualenv"
+    full_command = (
+        "find kolibri | grep py | grep -v pyc | grep -v test | grep -v virtualenv"
+    )
     output = _get_output_from_pipe_command(full_command)
     filenames = [filename for filename in output.split("\n") if filename]
     return filenames
@@ -75,7 +89,9 @@ def git_blame_on_files(file_list):
     total_counter = Counter()
     miss_counter = Counter()
     for index, filename in enumerate(file_list):
-        full_command = "git blame --line-porcelain %s | grep author | grep -v author-" % filename
+        full_command = (
+            "git blame --line-porcelain %s | grep author | grep -v author-" % filename
+        )
         output = _get_output_from_pipe_command(full_command)
 
         git_scorer = GitScorer(output)
@@ -83,7 +99,9 @@ def git_blame_on_files(file_list):
 
         line_to_author = git_scorer.get_line_to_author()
         non_covered_lines = ExcludeLineParser.get_missing_lines_for_filename(filename)
-        miss_counter += attribute_missing_coverage_to_author(line_to_author, non_covered_lines)
+        miss_counter += attribute_missing_coverage_to_author(
+            line_to_author, non_covered_lines
+        )
 
         total_counter += counter
     return total_counter, miss_counter
@@ -107,7 +125,6 @@ def attribute_missing_coverage_to_author(line_to_author, non_covered_lines):
 
 
 class GitScorer(object):
-
     def __init__(self, gblame_output):
         self.counts_this_file = Counter()
         self.line_to_author = {}
@@ -152,8 +169,21 @@ if __name__ == "__main__":
     python_files = get_python_files()
     line_counter, miss_counter = git_blame_on_files(python_files)
     apply_threshold_to_counter(line_counter)
-    author_to_test_coverage = get_test_coverage_percent_per_author(line_counter, miss_counter)
+    author_to_test_coverage = get_test_coverage_percent_per_author(
+        line_counter, miss_counter
+    )
     rank = 1
-    for author, cov in sorted(author_to_test_coverage.items(), key=lambda t: t[1], reverse=True):
-        print "#%s. %s: %.2d%% coverage (%d out of %d lines)" % (rank, author, cov*100, line_counter[author]-miss_counter[author], line_counter[author])
+    for author, cov in sorted(
+        author_to_test_coverage.items(), key=lambda t: t[1], reverse=True
+    ):
+        print(
+            "#%s. %s: %.2d%% coverage (%d out of %d lines)"
+            % (
+                rank,
+                author,
+                cov * 100,
+                line_counter[author] - miss_counter[author],
+                line_counter[author],
+            )
+        )
         rank += 1

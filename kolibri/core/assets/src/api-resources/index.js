@@ -1,96 +1,39 @@
-import ClassroomResource from './classroom';
-import ContentNodeResource from './contentNode';
-import ContentNodeGranular from './contentNodeGranular';
-import ContentNodeSlim from './contentNodeSlim';
-import FacilityUserResource from './facilityUser';
-import FacilityUsernameResource from './facilityUsername';
-import LearnerGroupResource from './learnerGroup';
-import MembershipResource from './membership';
-import RoleResource from './role';
-import ContentSessionLogResource from './contentSessionLog';
-import ContentSummaryLogResource from './contentSummaryLog';
-import SessionResource from './session';
-import FacilityResource from './facility';
-import TaskResource from './task';
-import ChannelResource from './channel';
-import MasteryLogResource from './masteryLog';
-import AttemptLogResource from './attemptLog';
-import SignUpResource from './signUp';
-import ExamResource from './exam';
-import ExamAssignmentResource from './examassignment';
-import UserExamResource from './userexam';
-import ExamLogResource from './examLog';
-import ExamAttemptLogResource from './examAttemptLog';
-import FacilityDatasetResource from './facilityDataset';
-import UserProgressResource from './userProgress';
-import ContentNodeProgressResource from './contentNodeProgress';
-import DeviceProvisionResource from './deviceProvision';
-import DevicePermissionsResource, { NewDevicePermissionsResource } from './devicePermissions';
-import RemoteChannel from './remoteChannel';
-import Lesson from './lesson';
+import { Resource } from 'kolibri.lib.apiResource';
 
-const classroomResource = new ClassroomResource();
-const contentNodeResource = new ContentNodeResource();
-const facilityUserResource = new FacilityUserResource();
-const facilityUsernameResource = new FacilityUsernameResource();
-const learnerGroupResource = new LearnerGroupResource();
-const membershipResource = new MembershipResource();
-const roleResource = new RoleResource();
-const contentSessionLogResource = new ContentSessionLogResource();
-const contentSummaryLogResource = new ContentSummaryLogResource();
-const sessionResource = new SessionResource();
-const facilityResource = new FacilityResource();
-const taskResource = new TaskResource();
-const channelResource = new ChannelResource();
-const masteryLogResource = new MasteryLogResource();
-const attemptLogResource = new AttemptLogResource();
-const signUpResource = new SignUpResource();
-const examResource = new ExamResource();
-const examAssignmentResource = new ExamAssignmentResource();
-const userExamResource = new UserExamResource();
-const examLogResource = new ExamLogResource();
-const examAttemptLogResource = new ExamAttemptLogResource();
-const facilityDatasetResource = new FacilityDatasetResource();
-const userProgressResource = new UserProgressResource();
-const contentNodeProgressResource = new ContentNodeProgressResource();
-const deviceProvisionResource = new DeviceProvisionResource();
-const devicePermissionsResource = new DevicePermissionsResource();
-const newDevicePermissionsResource = new NewDevicePermissionsResource();
-const ContentNodeGranularResource = new ContentNodeGranular();
-const ContentNodeSlimResource = new ContentNodeSlim();
-const RemoteChannelResource = new RemoteChannel();
-const LessonResource = new Lesson();
+export const BookmarksResource = new Resource({
+  name: 'bookmarks',
+});
 
+export { default as ClassroomResource } from './classroom';
+export { default as ContentNodeResource } from './contentNode';
+export { default as ContentNodeGranularResource } from './contentNodeGranular';
+export { default as ContentNodeSearchResource } from './contentNodeSearch';
+export { default as FacilityUserResource } from './facilityUser';
+export { default as FacilityUsernameResource } from './facilityUsername';
+export { default as LearnerGroupResource } from './learnerGroup';
+export { default as MembershipResource } from './membership';
+export { default as RoleResource } from './role';
+export { default as FacilityResource } from './facility';
+export { default as TaskResource } from './task';
+export { default as ChannelResource } from './channel';
+export { default as MasteryLogResource } from './masteryLog';
+export { default as ExamResource } from './exam';
+export { default as FacilityDatasetResource } from './facilityDataset';
+export { default as UserProgressResource } from './userProgress';
+export { default as UserSyncStatusResource } from './userSyncStatus';
+export { default as ContentRequestResource } from './contentRequest';
+export { default as ContentNodeProgressResource } from './contentNodeProgress';
+export { default as DevicePermissionsResource } from './devicePermissions';
+export { default as RemoteChannelResource } from './remoteChannel';
+export { default as LessonResource } from './lesson';
+export { default as AttemptLogResource } from './attemptLog';
+export { default as PingbackNotificationResource } from './pingbackNotification';
+export { default as PingbackNotificationDismissedResource } from './pingbackNotificationDismissed';
+export { default as PinnedDeviceResource } from './pinnedDevice';
+export { default as PortalResource } from './portal';
+export { default as GenerateCSVLogRequestResource } from './generateCSVLogRequest';
 export {
-  classroomResource as ClassroomResource,
-  contentNodeResource as ContentNodeResource,
-  ContentNodeGranularResource,
-  ContentNodeSlimResource,
-  RemoteChannelResource,
-  LessonResource,
-  facilityUserResource as FacilityUserResource,
-  facilityUsernameResource as FacilityUsernameResource,
-  learnerGroupResource as LearnerGroupResource,
-  membershipResource as MembershipResource,
-  roleResource as RoleResource,
-  contentSessionLogResource as ContentSessionLogResource,
-  contentSummaryLogResource as ContentSummaryLogResource,
-  sessionResource as SessionResource,
-  facilityResource as FacilityResource,
-  taskResource as TaskResource,
-  channelResource as ChannelResource,
-  masteryLogResource as MasteryLogResource,
-  attemptLogResource as AttemptLogResource,
-  signUpResource as SignUpResource,
-  examResource as ExamResource,
-  examAssignmentResource as ExamAssignmentResource,
-  userExamResource as UserExamResource,
-  examLogResource as ExamLogResource,
-  examAttemptLogResource as ExamAttemptLogResource,
-  facilityDatasetResource as FacilityDatasetResource,
-  userProgressResource as UserProgressResource,
-  contentNodeProgressResource as ContentNodeProgressResource,
-  deviceProvisionResource as DeviceProvisionResource,
-  devicePermissionsResource as DevicePermissionsResource,
-  newDevicePermissionsResource as NewDevicePermissionsResource,
-};
+  NetworkLocationResource,
+  StaticNetworkLocationResource,
+  DynamicNetworkLocationResource,
+} from './networkLocation';

@@ -11,11 +11,10 @@ except ImportError:
     from functools import update_wrapper
     from threading import RLock
 
-    _CacheInfo = namedtuple(
-        "CacheInfo", ["hits", "misses", "maxsize", "currsize"])
+    _CacheInfo = namedtuple("CacheInfo", ["hits", "misses", "maxsize", "currsize"])
 
     class _HashedSeq(list):
-        __slots__ = 'hashvalue'
+        __slots__ = "hashvalue"
 
         def __init__(self, tup, hash=hash):  # NOQA @ReservedAssignment
             self[:] = tup
@@ -24,11 +23,20 @@ except ImportError:
         def __hash__(self):
             return self.hashvalue
 
-    def _make_key(args, kwds, typed,
-                  kwd_mark=(object(),),
-                  fasttypes={int, str, frozenset, type(None)},
-                  sorted=sorted, tuple=tuple, type=type, len=len):  # NOQA @ReservedAssignment
-        'Make a cache key from optionally typed positional and keyword arguments'
+    def _make_key(
+        args,
+        kwds,
+        typed,
+        kwd_mark=(object(),),
+        fasttypes=None,
+        sorted=sorted,
+        tuple=tuple,
+        type=type,
+        len=len,
+    ):
+        if fasttypes is None:
+            fasttypes = {int, str, frozenset, type(None)}
+        "Make a cache key from optionally typed positional and keyword arguments"
         key = args
         if kwds:
             sorted_items = sorted(kwds.items())
@@ -70,10 +78,10 @@ except ImportError:
 
         def decorating_function(user_function):
 
-            cache = dict()
+            cache = {}
             # make statistics updateable non-locally
             stats = [0, 0]
-            HITS, MISSES = 0, 1             # names for the stats fields
+            HITS, MISSES = 0, 1  # names for the stats fields
             make_key = _make_key
             # bound method to lookup key or return None
             cache_get = cache.get
@@ -87,7 +95,7 @@ except ImportError:
             root[:] = [root, root, None, None]
             # make updateable non-locally
             nonlocal_root = [root]
-            PREV, NEXT, KEY, RESULT = 0, 1, 2, 3    # names for the link fields
+            PREV, NEXT, KEY, RESULT = 0, 1, 2, 3  # names for the link fields
 
             if maxsize == 0:
 
@@ -117,14 +125,13 @@ except ImportError:
 
                 def wrapper(*args, **kwds):
                     # size limited caching that tracks accesses by recency
-                    key = make_key(
-                        args, kwds, typed) if kwds or typed else args
+                    key = make_key(args, kwds, typed) if kwds or typed else args
                     with lock:
                         link = cache_get(key)
                         if link is not None:
                             # record recent use of the key by moving it to the
                             # front of the list
-                            root, = nonlocal_root
+                            (root,) = nonlocal_root
                             link_prev, link_next, key, result = link
                             link_prev[NEXT] = link_next
                             link_next[PREV] = link_prev
@@ -136,7 +143,7 @@ except ImportError:
                             return result
                     result = user_function(*args, **kwds)
                     with lock:
-                        root, = nonlocal_root
+                        (root,) = nonlocal_root
                         if key in cache:
                             # getting here means that this same key was added to the
                             # cache while the lock was released.  since the link

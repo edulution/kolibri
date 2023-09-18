@@ -1,35 +1,35 @@
 <template>
 
-  <div class="info-icon-container">
-    <ui-icon
-      ref="info-icon"
+  <span class="pos-rel">
+    <UiIcon
+      ref="icon"
       class="info-icon"
+      :style="{ color: $themeTokens.primary }"
       :iconAriaLabel="iconAriaLabel"
     >
-      <mat-svg name="info" category="action" />
-    </ui-icon>
-    <ui-tooltip
-      trigger="info-icon"
-      class="info-icon-tooltip"
-      :position="tooltipPosition"
+      <KIcon icon="info" :style="{ fill: $themeTokens.primary }" />
+    </UiIcon>
+    <KTooltip
+      reference="icon"
+      :class="{ 'ltr': !isRtl }"
+      :refs="$refs"
+      :placement="tooltipPlacement"
     >
       {{ tooltipText }}
-    </ui-tooltip>
-  </div>
+    </KTooltip>
+  </span>
 
 </template>
 
 
 <script>
 
-  import uiIcon from 'keen-ui/src/UiIcon';
-  import uiTooltip from 'keen-ui/src/UiTooltip';
+  import UiIcon from 'kolibri-design-system/lib/keen/UiIcon';
 
   export default {
-    name: 'coreInfoIcon',
+    name: 'CoreInfoIcon',
     components: {
-      uiIcon,
-      uiTooltip,
+      UiIcon,
     },
     props: {
       iconAriaLabel: {
@@ -40,9 +40,9 @@
         type: String,
         required: true,
       },
-      tooltipPosition: {
+      tooltipPlacement: {
         type: String,
-        required: true,
+        default: 'bottom',
       },
     },
   };
@@ -50,17 +50,24 @@
 </script>
 
 
-<style lang="stylus" scoped>
+<style lang="scss" scoped>
 
-  @require '~kolibri.styles.definitions'
+  .info-icon {
+    display: inline-block;
+    font-size: 1.2em;
+    vertical-align: top;
+    cursor: pointer;
+  }
 
-  .info-icon-container
-    display: inline-block
+  // Overwrite KIcon styles to make it compatible with UIIcon
+  /deep/ svg {
+    top: 0;
+    width: 100%;
+    height: 100%;
+  }
 
-  .info-icon
-    font-size: 1.2em
-    vertical-align: top
-    color: $core-accent-color
-    cursor: pointer
+  .pos-rel {
+    position: relative;
+  }
 
 </style>

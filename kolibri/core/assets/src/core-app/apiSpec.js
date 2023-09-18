@@ -14,82 +14,121 @@
 
 import vue from 'vue';
 import vuex from 'vuex';
-import seededshuffle from 'seededshuffle';
-import uiAlert from 'keen-ui/src/UiAlert';
-import tetherDrop from 'tether-drop';
-import tetherTooltip from 'tether-tooltip';
+import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
+import responsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
+import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
+import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
+import UiIconButton from 'kolibri-design-system/lib/keen/UiIconButton'; // temp hack
+import * as vueCompositionApi from '@vue/composition-api';
 import logging from '../logging';
-import conditionalPromise from '../conditionalPromise';
 import * as apiResource from '../api-resource';
 import * as constants from '../constants';
-import * as getters from '../state/getters';
-import * as actions from '../state/actions';
-import * as store from '../state/store';
+import * as getters from '../state/modules/core/getters';
+import * as actions from '../state/modules/core/actions';
+import store from '../state/store';
 import * as mappers from '../state/mappers';
-import contentRenderer from '../views/content-renderer';
-import downloadButton from '../views/content-renderer/download-button';
-import progressBar from '../views/progress-bar';
-import contentIcon from '../views/content-icon';
-import progressIcon from '../views/progress-icon';
-import permissionsIcon from '../views/permissions-icon';
-import coreBase from '../views/core-base';
-import coreModal from '../views/core-modal';
-import sideNav from '../views/side-nav';
-import kButton from '../views/buttons-and-links/k-button';
-import kExternalLink from '../views/buttons-and-links/k-external-link';
-import kRouterLink from '../views/buttons-and-links/k-router-link';
-import kTextbox from '../views/k-textbox';
-import kNavbar from '../views/k-navbar';
-import kNavbarLink from '../views/k-navbar/link';
-import logo from '../views/logo';
-import languageSwitcherList from '../views/language-switcher/list.vue';
-import immersiveFullScreen from '../views/immersive-full-screen';
-import elapsedTime from '../views/elapsed-time';
-import pointsIcon from '../views/points-icon';
-import authMessage from '../views/auth-message';
-import kBreadcrumbs from '../views/k-breadcrumbs';
-import kCheckbox from '../views/k-checkbox';
-import kRadioButton from '../views/k-radio-button';
-import kFilterTextbox from '../views/k-filter-textbox';
-import kGrid from '../views/k-grid';
-import kGridItem from '../views/k-grid/item.vue';
-import kSelect from '../views/k-select';
+import DownloadButton from '../views/ContentRenderer/DownloadButton';
+import ProgressBar from '../views/ProgressBar';
+import ContentIcon from '../views/ContentIcon';
+import ProgressIcon from '../views/ProgressIcon';
+import PermissionsIcon from '../views/PermissionsIcon';
+import AppBarPage from '../views/CorePage/AppBarPage';
+import AppBar from '../views/AppBar';
+import ImmersivePage from '../views/CorePage/ImmersivePage';
+import ScrollingHeader from '../views/ScrollingHeader';
+import SideNav from '../views/SideNav';
+import Navbar from '../views/Navbar';
+import NavbarLink from '../views/Navbar/NavbarLink';
+import HorizontalNavBarWithOverflowMenu from '../views/HorizontalNavBarWithOverflowMenu';
+import CoreLogo from '../views/CoreLogo';
+import LanguageSwitcherList from '../views/language-switcher/LanguageSwitcherList';
+import LanguageSwitcherModal from '../views/language-switcher/LanguageSwitcherModal';
+import ElapsedTime from '../views/ElapsedTime';
+import PointsIcon from '../views/PointsIcon';
+import TotalPoints from '../views/TotalPoints';
+import AuthMessage from '../views/AuthMessage';
+import FilterTextbox from '../views/FilterTextbox';
+import KolibriLoadingSnippet from '../views/KolibriLoadingSnippet';
 import router from '../router';
-import responsiveWindow from '../mixins/responsive-window';
-import responsiveElement from '../mixins/responsive-element';
-import contentRendererMixin from '../mixins/contentRenderer';
-import fullscreen from '../views/fullscreen';
-import theme from '../styles/core-theme.styl';
-import definitions from '../styles/definitions.styl';
-import keenVars from '../keen-config/variables.scss';
+import commonCoreStrings from '../mixins/commonCoreStrings'; // eslint-disable-line import/no-duplicates
+import { coreStrings } from '../mixins/commonCoreStrings'; // eslint-disable-line import/no-duplicates
+import commonTaskStrings from '../mixins/taskStrings';
+import commonSyncElements from '../mixins/commonSyncElements';
+import translatedUserKinds from '../mixins/userKinds';
+import CoreFullscreen from '../views/CoreFullscreen';
 import * as exams from '../exams/utils';
 import * as validators from '../validators';
+import * as objectSpecs from '../objectSpecs';
 import * as serverClock from '../serverClock';
 import * as resources from '../api-resources';
 import * as i18n from '../utils/i18n';
-import * as browser from '../utils/browser';
-import appBar from '../views/app-bar';
-import coreSnackbar from '../views/core-snackbar';
-import coreMenu from '../views/core-menu';
-import coreMenuOption from '../views/core-menu/option';
+import * as browserInfo from '../utils/browserInfo';
+import redirectBrowser from '../utils/redirectBrowser';
+import * as licenseTranslations from '../utils/licenseTranslations';
+import bytesForHumans from '../utils/bytesForHumans';
+import UserType from '../utils/UserType';
+import * as syncTaskUtils from '../utils/syncTaskUtils';
+import samePageCheckGenerator from '../utils/samePageCheckGenerator';
+import Backdrop from '../views/Backdrop';
+import CoreSnackbar from '../views/CoreSnackbar';
+import CoreMenu from '../views/CoreMenu';
+import CoreMenuDivider from '../views/CoreMenu/CoreMenuDivider';
+import CoreMenuOption from '../views/CoreMenu/CoreMenuOption';
 import heartbeat from '../heartbeat';
-import coreTable from '../views/core-table';
-import kDropdownMenu from '../views/k-dropdown-menu';
-import coachContentLabel from '../views/coach-content-label';
+import CoreTable from '../views/CoreTable';
+import UserTable from '../views/UserTable';
+import CoachContentLabel from '../views/CoachContentLabel';
+import PrivacyInfoModal from '../views/PrivacyInfoModal';
+import UserTypeDisplay from '../views/UserTypeDisplay';
+import Draggable from '../views/sortable/Draggable';
+import DragHandle from '../views/sortable/DragHandle';
+import DragContainer from '../views/sortable/DragContainer';
+import DragSortWidget from '../views/sortable/DragSortWidget';
+import FocusTrap from '../views/FocusTrap';
+import BottomAppBar from '../views/BottomAppBar';
+import BaseToolbar from '../views/BaseToolbar';
+import GenderSelect from '../views/userAccounts/GenderSelect';
+import BirthYearSelect from '../views/userAccounts/BirthYearSelect';
+import FullNameTextbox from '../views/userAccounts/FullNameTextbox';
+import UsernameTextbox from '../views/userAccounts/UsernameTextbox';
+import PasswordTextbox from '../views/userAccounts/PasswordTextbox';
+import GenderDisplayText from '../views/userAccounts/GenderDisplayText';
+import BirthYearDisplayText from '../views/userAccounts/BirthYearDisplayText';
+import PrivacyLinkAndModal from '../views/userAccounts/PrivacyLinkAndModal.vue';
+import PaginatedListContainer from '../views/PaginatedListContainer';
+import MasteryModel from '../views/MasteryModel';
+import LearnOnlyDeviceNotice from '../views/LearnOnlyDeviceNotice';
+import themeConfig from '../styles/themeConfig';
+import sortLanguages from '../utils/sortLanguages';
+import * as sync from '../views/sync/syncComponentSet';
+import PageRoot from '../views/PageRoot';
+import NotificationsRoot from '../views/NotificationsRoot';
+import useMinimumKolibriVersion from '../composables/useMinimumKolibriVersion';
+import useUser from '../composables/useUser';
 
 // webpack optimization
-import buttonAndLinkStyles from '../views/buttons-and-links/buttons.styl';
 import CoreInfoIcon from '../views/CoreInfoIcon';
 import * as contentNode from '../utils/contentNodeUtils';
-import attemptLogList from '../views/attempt-log-list';
-import interactionList from '../views/interaction-list';
-import examReport from '../views/exam-report';
-import textTruncator from '../views/text-truncator';
-import kLinearLoader from '../views/k-linear-loader';
-import kCircularLoader from '../views/k-circular-loader';
+import InteractionList from '../views/InteractionList';
+import ExamReport from '../views/ExamReport';
+import SlotTruncator from '../views/SlotTruncator';
+import TextTruncator from '../views/TextTruncator';
+import TextTruncatorCss from '../views/TextTruncatorCss';
+import TimeDuration from '../views/TimeDuration';
+import SuggestedTime from '../views/SuggestedTime';
 
-import multiPaneLayout from '../views/multi-pane-layout';
+import MultiPaneLayout from '../views/MultiPaneLayout';
+import filterUsersByNames from '../utils/filterUsersByNames';
+import navComponents from '../utils/navComponents';
+import loginComponents from '../utils/loginComponents';
+import coreBannerContent from '../utils/coreBannerContent';
+import CatchErrors from '../utils/CatchErrors';
+import UiToolbar from '../views/KeenUiToolbar.vue';
+import shuffled from '../utils/shuffled';
+import * as appCapabilities from '../utils/appCapabilities';
 import * as client from './client';
+import clientFactory from './baseClient';
+
 import urls from './urls';
 
 export default {
@@ -99,11 +138,8 @@ export default {
     logging,
     vue,
     vuex,
-    conditionalPromise,
+    vueCompositionApi,
     apiResource,
-    seededshuffle,
-    tetherDrop,
-    tetherTooltip,
   },
   coreVue: {
     vuex: {
@@ -114,73 +150,116 @@ export default {
       mappers,
     },
     components: {
-      coachContentLabel,
-      contentRenderer,
-      downloadButton,
-      progressBar,
-      contentIcon,
-      progressIcon,
-      permissionsIcon,
-      coreBase,
-      coreModal,
-      sideNav,
-      kButton,
-      kExternalLink,
-      kRouterLink,
-      kTextbox,
-      kNavbar,
-      kNavbarLink,
-      languageSwitcherList,
-      logo,
-      immersiveFullScreen,
-      elapsedTime,
-      pointsIcon,
-      authMessage,
-      kBreadcrumbs,
-      kCheckbox,
-      kRadioButton,
-      kFilterTextbox,
-      kGrid,
-      kGridItem,
-      kSelect,
-      uiAlert,
-      appBar,
-      coreSnackbar,
-      coreMenu,
-      coreMenuOption,
-      coreTable,
-      kDropdownMenu,
+      ScrollingHeader,
+      Backdrop,
+      CoachContentLabel,
+      DownloadButton,
+      ProgressBar,
+      ContentIcon,
+      ProgressIcon,
+      PermissionsIcon,
+      AppBar,
+      AppBarPage,
+      ImmersivePage,
+      SideNav,
+      Navbar,
+      NavbarLink,
+      HorizontalNavBarWithOverflowMenu,
+      LanguageSwitcherModal,
+      LanguageSwitcherList,
+      ElapsedTime,
+      PointsIcon,
+      TotalPoints,
+      AuthMessage,
+      FilterTextbox,
+      CoreSnackbar,
+      CoreMenu,
+      CoreMenuDivider,
+      CoreMenuOption,
+      CoreTable,
+      UserTable,
       CoreInfoIcon,
-      attemptLogList,
-      interactionList,
-      examReport,
-      textTruncator,
-      kLinearLoader,
-      kCircularLoader,
-      multiPaneLayout,
-      fullscreen,
+      InteractionList,
+      ExamReport,
+      SlotTruncator,
+      TextTruncator,
+      TextTruncatorCss,
+      TimeDuration,
+      MultiPaneLayout,
+      CoreFullscreen,
+      CoreLogo,
+      UiAlert,
+      UiIconButton,
+      UiToolbar,
+      PrivacyInfoModal,
+      UserTypeDisplay,
+      Draggable,
+      DragHandle,
+      DragContainer,
+      DragSortWidget,
+      FocusTrap,
+      BottomAppBar,
+      BaseToolbar,
+      GenderSelect,
+      GenderDisplayText,
+      BirthYearSelect,
+      FullNameTextbox,
+      UsernameTextbox,
+      PasswordTextbox,
+      BirthYearDisplayText,
+      PaginatedListContainer,
+      PrivacyLinkAndModal,
+      LearnOnlyDeviceNotice,
+      SuggestedTime,
+      PageRoot,
+      MasteryModel,
+      NotificationsRoot,
+      KolibriLoadingSnippet,
+    },
+    componentSets: {
+      sync,
     },
     router,
     mixins: {
-      responsiveWindow,
-      responsiveElement,
-      contentRenderer: contentRendererMixin,
+      responsiveWindowMixin,
+      responsiveElementMixin,
+      commonCoreStrings,
+      commonTaskStrings,
+      commonSyncElements,
+      translatedUserKinds,
+    },
+    composables: {
+      useKResponsiveWindow,
+      useMinimumKolibriVersion,
+      useUser,
     },
   },
   resources,
-  styles: {
-    theme,
-    definitions,
-    keenVars,
-    buttonAndLinkStyles,
-  },
+  themeConfig,
   urls,
   utils: {
+    appCapabilities,
+    browserInfo,
+    bytesForHumans,
+    CatchErrors,
+    clientFactory,
     contentNode,
-    browser,
+    coreBannerContent,
     exams,
-    validators,
-    serverClock,
+    filterUsersByNames,
     i18n,
+    licenseTranslations,
+    loginComponents,
+    navComponents,
+    redirectBrowser,
+    samePageCheckGenerator,
+    serverClock,
+    shuffled,
+    sortLanguages,
+    syncTaskUtils,
+    UserType,
+    validators,
+    coreStrings,
+    objectSpecs,
   },
 };

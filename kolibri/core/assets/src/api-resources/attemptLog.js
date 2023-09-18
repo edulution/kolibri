@@ -1,10 +1,5 @@
-import { Resource } from '../api-resource';
+import { Resource } from 'kolibri.lib.apiResource';
 
-export default class AttemptLogResource extends Resource {
-  static resourceName() {
-    return 'attemptlog';
-  }
-  static idKey() {
-    return 'id';
-  }
-}
+export default new Resource({
+  name: 'attemptlog',
+});

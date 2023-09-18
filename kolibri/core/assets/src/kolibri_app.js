@@ -1,9 +1,13 @@
-import { getCurrentSession } from 'kolibri.coreVue.vuex.actions';
+import { sync } from 'vuex-router-sync';
+import forEach from 'lodash/forEach';
 import router from 'kolibri.coreVue.router';
+import logger from 'kolibri.lib.logging';
 import Vue from 'kolibri.lib.vue';
 import store from 'kolibri.coreVue.vuex.store';
 import heartbeat from 'kolibri.heartbeat';
 import KolibriModule from 'kolibri_module';
+
+export const logging = logger.getLogger(__filename);
 
 /*
  * A class for single page apps that control routing and vuex state.
@@ -18,20 +22,7 @@ export default class KolibriApp extends KolibriModule {
   get routes() {
     return [];
   }
-  /*
-   * @return {Object} An object of vuex mutations, with keys as the mutation name, and
-   *                  values that are methods that perform the store mutation.
-   */
-  get mutations() {
-    return {};
-  }
-  /*
-   * @return {Object} The initial state of the vuex store for this app, this will be merged with
-   *                  the core app initial state to instantiate the store.
-   */
-  get initialState() {
-    return {};
-  }
+
   /*
    * @return {Object} A component definition for the root component of this single page app.
    */
@@ -51,34 +42,69 @@ export default class KolibriApp extends KolibriModule {
    *                           Each function should return a promise that resolves when the state
    *                           has been set. These will be invoked after the current session has
    *                           been set in the vuex store, in order to allow these actions to
-   *                           reference getters that return data set by the getCurrentSession
-   *                           action. As this has always been bootstrapped into the base template
-   *                           this should not cause any real slow down in page loading.
+   *                           reference getters that return data set by the heartbeat.
    */
   get stateSetters() {
     return [];
   }
-  ready() {
-    this.store.registerModule({
-      state: this.initialState,
-      mutations: this.mutations,
+
+  // Vuex module for the plugin
+  get pluginModule() {
+    return {};
+  }
+
+  setupVue() {
+    // VueRouter instance needs to be defined to use vuex-router-sync
+    if (!router._vueRouter) {
+      router.initRouter();
+    }
+    sync(store, router);
+
+    // Add the plugin-level mutations, getters, actions, but leave core module alone
+    this.store.hotUpdate({
+      actions: this.pluginModule.actions || {},
+      getters: this.pluginModule.getters || {},
+      mutations: this.pluginModule.mutations || {},
     });
-    return getCurrentSession(store).then(() => {
+
+    if (typeof this.pluginModule.state !== 'function') {
+      throw TypeError('pluginModule.state must be a function returning a state object');
+    }
+
+    // Add the plugin state to the initial core module state
+    this.store.replaceState({
+      ...this.store.state,
+      ...this.pluginModule.state(),
+    });
+
+    // Register plugin sub-modules
+    forEach(this.pluginModule.modules, (module, name) => {
+      store.registerModule(name, module);
+    });
+  }
+
+  startRootVue() {
+    this.rootvue = new Vue(
+      Object.assign(
+        {
+          el: 'rootvue',
+          store: store,
+          router: router.initRoutes(this.routes),
+        },
+        this.RootVue
+      )
+    );
+  }
+
+  ready() {
+    this.setupVue();
+    return heartbeat.startPolling().then(() => {
+      this.store.dispatch('getNotifications');
       return Promise.all([
         // Invoke each of the state setters before initializing the app.
         ...this.stateSetters.map(setter => setter(this.store)),
       ]).then(() => {
-        heartbeat.start();
-        this.rootvue = new Vue(
-          Object.assign(
-            {
-              el: 'rootvue',
-              store: store,
-              router: router.init(this.routes),
-            },
-            this.RootVue
-          )
-        );
+        this.startRootVue();
       });
     });
   }

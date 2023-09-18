@@ -1,73 +1,66 @@
 <template>
 
-  <div>
-    <div v-if="isUserLoggedIn ">
-      <h2>{{ $tr('allClassesHeader') }}</h2>
-
-      <div class="classrooms">
-        <content-card
-          class="content-card"
-          v-for="c in classrooms"
-          :key="c.id"
-          :link="classAssignmentsLink(c.id)"
-          :showContentIcon="false"
-          :title="c.name"
-          :kind="CLASSROOM"
-          :isMobile="isMobile"
-        />
-      </div>
-    </div>
-    <auth-message authorizedRole="learner" v-else />
-  </div>
+  <LearnAppBarPage
+    :appBarTitle="learnString('learnLabel')"
+  >
+    <KBreadcrumbs :items="breadcrumbs" :ariaLabel="learnString('classesAndAssignmentsLabel')" />
+    <YourClasses
+      v-if="isUserLoggedIn"
+      :classes="classrooms"
+      :loading="loading"
+    />
+    <AuthMessage v-else authorizedRole="learner" />
+  </LearnAppBarPage>
 
 </template>
 
 
 <script>
 
-  import AuthMessage from 'kolibri.coreVue.components.authMessage';
-  import responsiveWindow from 'kolibri.coreVue.mixins.responsiveWindow';
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
-  import { isUserLoggedIn } from 'kolibri.coreVue.vuex.getters';
-  import ContentCard from '../content-card';
-  import { classAssignmentsLink } from './classPageLinks';
+  import { mapState, mapGetters } from 'vuex';
+  import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
+  import AuthMessage from 'kolibri.coreVue.components.AuthMessage';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import YourClasses from '../YourClasses';
+  import { PageNames } from '../../constants';
+  import commonLearnStrings from './../commonLearnStrings';
+  import LearnAppBarPage from './../LearnAppBarPage';
 
   export default {
-    name: 'allClassesPage',
+    name: 'AllClassesPage',
+    metaInfo() {
+      return {
+        title: this.coreString('classesLabel'),
+      };
+    },
     components: {
+      KBreadcrumbs,
       AuthMessage,
-      ContentCard,
+      YourClasses,
+      LearnAppBarPage,
     },
-    mixins: [responsiveWindow],
+    mixins: [commonCoreStrings, commonLearnStrings],
     computed: {
-      isMobile() {
-        return this.windowSize.breakpoint <= 1;
+      ...mapGetters(['isUserLoggedIn']),
+      ...mapState('classes', ['classrooms']),
+      ...mapState({
+        loading: state => state.core.loading,
+      }),
+      breadcrumbs() {
+        return [
+          {
+            text: this.coreString('homeLabel'),
+            link: { name: PageNames.HOME },
+          },
+          {
+            text: this.coreString('classesLabel'),
+          },
+        ];
       },
-      CLASSROOM() {
-        return ContentNodeKinds.CLASSROOM;
-      },
-    },
-    methods: {
-      classAssignmentsLink,
-    },
-    vuex: {
-      getters: {
-        classrooms: state => state.pageState.classrooms,
-        isUserLoggedIn,
-      },
-    },
-    $trs: {
-      allClassesHeader: 'Classes',
     },
   };
 
 </script>
 
 
-<style lang="stylus" scoped>
-
-  .content-card
-    margin-right: 16px
-    margin-bottom: 16px
-
-</style>
+<style lang="scss" scoped></style>
