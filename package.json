@@ -49,6 +49,7 @@
     "url": "https://github.com/learningequality/kolibri/issues"
   },
   "private": true,
+  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^29.5.5",
     "xhr-mock": "^2.5.1",
@@ -69,4 +70,3 @@
     "node": "16.18.0"
   }
 }
-
