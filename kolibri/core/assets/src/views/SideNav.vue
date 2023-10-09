@@ -194,7 +194,7 @@
             <span
               class="side-nav-header-name"
               :style="{ color: $themeTokens.textInverted }"
-            >{{ sideNavTitleText }}</span>
+            >EDULUTION</span>
           </div>
         </FocusTrap>
       </div>
