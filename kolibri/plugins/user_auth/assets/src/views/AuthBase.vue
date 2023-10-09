@@ -38,6 +38,13 @@
               :alt="themeConfig.signIn.topLogo.alt"
               :style="themeConfig.signIn.topLogo.style"
             />
+            <h1
+              v-if="themeConfig.signIn.showTitle"
+              class="kolibri-title"
+              :style="[ { color: $themeBrand.primary.v_300 }, themeConfig.signIn.titleStyle]"
+            >
+              {{ logoText }}
+            </h1>
             <p
               v-if="themeConfig.signIn.showPoweredBy"
               :style="themeConfig.signIn.poweredByStyle"

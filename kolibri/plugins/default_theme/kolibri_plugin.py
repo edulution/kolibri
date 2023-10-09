@@ -7,7 +7,6 @@ from django.templatetags.static import static
 from kolibri.core import theme_hook
 from kolibri.plugins import KolibriPluginBase
 from kolibri.plugins.hooks import register_hook
-from datetime import date
 
 
 class DefaultThemePlugin(KolibriPluginBase):
@@ -18,20 +17,9 @@ class DefaultThemePlugin(KolibriPluginBase):
 class DefaultThemeHook(theme_hook.ThemeHook):
     @property
     def theme(self):
-        # Get the current date
-        current_date = date.today()
-
-        # Get the day of the month as a zero-padded string (e.g., '04' for October 4th)
-        day_of_month = current_date.strftime('%d')
-
-        # Generate the background image URL with the day of the month
-        if int(day_of_month) >= 28:
-            background_image_url = static("background_28.jpg")
-        else:
-            background_image_url = static(f"background_{day_of_month}.jpg")
         return {
             "signIn": {
-                "background": background_image_url,
+                "background": static("background.jpg"),
                 "backgroundImgCredit": "Thomas Van Den Driessche",
                 "topLogo": {
                     "style": "padding-left: 64px; padding-right: 64px; margin-bottom: 8px; margin-top: 8px",
