@@ -603,6 +603,10 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Indicates to the coach how many questions the learner answered correctly compared to the previous attempt',
   },
+  subscribeAction: {
+    message: 'Subscribe to the channels',
+    context: 'context to subscribe channels'
+  }
 });
 
 // Strings for the Missing Content modals, tooltips, alerts, etc.

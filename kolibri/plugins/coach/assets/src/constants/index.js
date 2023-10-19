@@ -39,10 +39,17 @@ export const PageNames = {
   REPORTS_QUIZ_QUESTION_PAGE_ROOT: 'REPORTS_QUIZ_QUESTION_PAGE_ROOT',
 };
 
+// modal names
+export const Modals = {
+  COACH_CREATE_USER: 'COACH_CREATE_USER',
+  PREREQUISITES: 'PREREQUISITES',
+};
+
 export const GroupModals = {
   CREATE_GROUP: 'CREATE_GROUP',
   RENAME_GROUP: 'RENAME_GROUP',
   DELETE_GROUP: 'DELETE_GROUP',
+  CHOOSE_GROUP_SUBSCRIPTIONS: 'CHOOSE_GROUP_SUBSCRIPTIONS',
 };
 
 export const pageNameToModuleMap = {

@@ -105,6 +105,9 @@ import PageRoot from '../views/PageRoot';
 import NotificationsRoot from '../views/NotificationsRoot';
 import useMinimumKolibriVersion from '../composables/useMinimumKolibriVersion';
 import useUser from '../composables/useUser';
+import * as colour from '../utils/colour';
+import KModal from '../views/KModal.vue';
+import themeMixin from '../mixins/theme';
 
 // webpack optimization
 import CoreInfoIcon from '../views/CoreInfoIcon';
@@ -215,6 +218,7 @@ export default {
       MasteryModel,
       NotificationsRoot,
       KolibriLoadingSnippet,
+      KModal,
     },
     componentSets: {
       sync,
@@ -227,6 +231,7 @@ export default {
       commonTaskStrings,
       commonSyncElements,
       translatedUserKinds,
+      themeMixin,
     },
     composables: {
       useKResponsiveWindow,
@@ -261,5 +266,6 @@ export default {
     validators,
     coreStrings,
     objectSpecs,
+    colour,
   },
 };

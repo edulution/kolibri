@@ -15,6 +15,7 @@ import coachNotifications from './coachNotifications';
 import questionDetail from './questionDetail';
 import questionList from './questionList';
 import resourceDetail from './resourceDetail';
+import subscriptions from './subscriptions';
 
 const logging = logger.getLogger(__filename);
 
@@ -147,5 +148,6 @@ export default {
     questionDetail,
     questionList,
     resourceDetail,
+    subscriptions
   },
 };

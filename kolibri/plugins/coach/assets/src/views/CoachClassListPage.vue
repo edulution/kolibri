@@ -53,10 +53,16 @@
               <td>
                 {{ $formatNumber(classObj.learner_count) }}
               </td>
+              <td v-if="userIsAdminOrSuperuser">
+                <div class="button">
+                  <KButton :primary="false" :text="$tr('subscribeChannelsButton')" @click="openSubscribeModal(classObj)" />
+                </div>
+              </td>
             </tr>
           </transition-group>
         </template>
       </CoreTable>
+      <SubscribeModal v-if="subscriptionModalShown===Modals.CHOOSE_CLASS_SUBSCRIPTIONS" :collectionId="currentClass.id" :collectionName="currentClass.name" />
     </KPageContainer>
   </CoachAppBarPage>
 
@@ -69,9 +75,11 @@
   import find from 'lodash/find';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import urls from 'kolibri.urls';
+  import { SubscriptionModals } from '../constants/subscriptionsConstants';
   import { PageNames } from '../constants';
   import CoachAppBarPage from './CoachAppBarPage';
   import commonCoach from './common';
+  import SubscribeModal from './SubscribeModal';
 
   export default {
     name: 'CoachClassListPage',
@@ -114,6 +122,9 @@
 
         return '';
       },
+      userIsAdminOrSuperuser() {
+        return this.isAdmin || this.isSuperuser;
+      },
       getNextPageName() {
         return this.subtopicName || PageNames.HOME_PAGE;
       },
@@ -152,6 +163,10 @@
         message: 'Please consult your Kolibri administrator',
         context:
           'If the coach has no classes assigned to them by the admin, or if they are not themselves an admin themselves, this message displays in the Coach > Classes section.',
+      },
+      subscribeChannelsButton: {
+        message: 'SUBSCRIBE CHANNELS',
+        context: 'Some context',
       },
     },
   };
