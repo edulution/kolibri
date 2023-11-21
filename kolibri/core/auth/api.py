@@ -332,6 +332,7 @@ class PublicFacilityUserViewSet(ReadOnlyValuesViewset):
         "id_number",
         "gender",
         "birth_year",
+        "deleted",
     )
     field_map = {
         "is_superuser": lambda x: bool(x.pop("devicepermissions__is_superuser")),
@@ -397,6 +398,7 @@ class FacilityUserViewSet(ValuesViewset):
         "id_number",
         "gender",
         "birth_year",
+        "deleted",
     )
 
     field_map = {
@@ -677,6 +679,7 @@ class ClassroomViewSet(ValuesViewset):
         "role__user__devicepermissions__is_superuser",
         "role__user__full_name",
         "role__user__username",
+        "subscriptions"
     )
 
     def annotate_queryset(self, queryset):

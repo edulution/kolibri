@@ -49,6 +49,7 @@ class FacilityUserSerializer(serializers.ModelSerializer):
             "id_number",
             "gender",
             "birth_year",
+            "deleted"
         )
         read_only_fields = ("is_superuser",)
 
@@ -161,7 +162,7 @@ class PublicFacilitySerializer(serializers.ModelSerializer):
 class ClassroomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Classroom
-        fields = ("id", "name", "parent")
+        fields = ("id", "name", "parent", "subscriptions")
         read_only_fields = ("id",)
 
         validators = [

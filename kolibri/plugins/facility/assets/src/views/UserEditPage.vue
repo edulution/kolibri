@@ -58,6 +58,22 @@
               :options="userTypeOptions"
             />
 
+            <fieldset class="soft-delete">
+              <legend>Status</legend>
+              <KRadioButton
+                v-model="userStatusSelected"
+                :disabled="formDisabled"
+                :label="coreString('userStatusActivateLabel')"
+                :value="true"
+              />
+              <KRadioButton
+                v-model="userStatusSelected"
+                :disabled="formDisabled"
+                :label="coreString('userStatusDeactivateLabel')"
+                :value="false"
+              />
+            </fieldset>
+            
             <fieldset v-if="coachIsSelected" class="coach-selector">
               <KRadioButton
                 v-model="classCoachIsSelected"
@@ -176,6 +192,7 @@
         userCopy: {},
         caughtErrors: [],
         status: '',
+        userStatusSelected: false,
       };
     },
     computed: {
@@ -237,7 +254,7 @@
         return this.editingSelf && this.newUserKind && this.newUserKind !== UserKinds.ADMIN;
       },
     },
-    created() {
+    mounted() {
       FacilityUserResource.fetchModel({
         id: this.$route.params.id,
       })
@@ -250,9 +267,10 @@
           this.setKind(user);
           this.makeCopyOfUser(user);
           this.loading = false;
+          this.userStatusSelected = user?.deleted || false;
         })
         .catch(error => {
-          this.$store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          this.$store.dispatch('handleApiError', error);
         });
     },
     methods: {
@@ -301,6 +319,7 @@
             gender: this.gender,
             id_number: this.idNumber,
             username: this.username,
+            deleted: this.userStatusSelected,
           },
           (value, key) => {
             return value !== this.userCopy[key];
@@ -356,7 +375,7 @@
         if (this.caughtErrors.length > 0) {
           this.focusOnInvalidField();
         } else {
-          this.$store.dispatch('handleApiError', { error });
+          this.$store.dispatch('handleApiError', error);
         }
       },
       focusOnInvalidField() {
@@ -437,6 +456,12 @@
     max-width: 400px;
     margin-right: auto;
     margin-left: auto;
+  }
+
+  .soft-delete {
+    padding: 0;
+    margin: 0;
+    border: 0;
   }
 
 </style>

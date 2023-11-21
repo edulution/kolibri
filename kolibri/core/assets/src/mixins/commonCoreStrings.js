@@ -236,6 +236,14 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'Channels are collections of educational resources (video, audio, document files or interactive apps) prepared and organized by the channel curator for their use in Kolibri.\n\nA learner will see a set of channels available to them when they first open Kolibri.',
   },
+  subscribeChannel: {
+    message: 'SUBSCRIBE CHANNELS',
+    context: 'Used for button text in class list',
+  },
+  channelSubscriptionModalTitle: {
+    message: 'Channel subscriptions for ',
+    context: 'Used for title of channel subscription',
+  },
   channelLabel: {
     message: 'Channel',
     context:
@@ -358,6 +366,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   learnersLabel: {
     message: 'Learners',
     context: 'Plural of learner.',
+  },
+  attendanceLabel: {
+    message: 'Attendance',
+    context: 'Attendance label.',
   },
   levelLabel: {
     message: 'Level',
@@ -491,6 +503,14 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     message: 'User type',
     context:
       "'User type' is used to define what kind of permissions the user has in Kolibri.\n\n'User type' can be either Learner, Coach, Admin or Super admin.",
+  },
+  userStatusActivateLabel: {
+    message: 'Activate',
+    context: "This indicates user status is active"
+  },
+  userStatusDeactivateLabel: {
+    message: 'Deactivate',
+    context: "This indicates user status is inactive"
   },
   usernameLabel: {
     message: 'Username',

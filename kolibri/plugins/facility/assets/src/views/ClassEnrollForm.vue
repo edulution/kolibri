@@ -19,7 +19,11 @@
           :selectable="true"
           :emptyMessage="emptyMessageForItems(usersNotInClass)"
           :showDemographicInfo="true"
-        />
+        >
+          <template #activeStatus="userD">
+            <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+          </template>
+        </UserTable>
       </template>
     </PaginatedListContainerWithBackend>
     <SelectionBottomBar

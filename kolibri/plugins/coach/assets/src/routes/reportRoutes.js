@@ -14,13 +14,13 @@ import { generateQuestionListHandler } from '../modules/questionList/handlers';
 import { generateResourceHandler } from '../modules/resourceDetail/handlers';
 import LessonEditDetailsPage from '../views/plan/LessonEditDetailsPage';
 import QuizEditDetailsPage from '../views/plan/QuizEditDetailsPage';
-import { classIdParamRequiredGuard } from './utils';
 
 const ACTIVITY = '/activity';
-const CLASS = '/:classId?/reports';
+const CLASS = '/:classId/reports';
 const GROUPS = '/groups';
 const GROUP = '/groups/:groupId';
 const LEARNERS = '/learners';
+const ATTENDANCE = '/attendance';
 const LEARNER = '/learners/:learnerId';
 const LESSONS = '/lessons';
 const LESSON = '/lessons/:lessonId';
@@ -274,6 +274,14 @@ export default [
     },
   },
   {
+    path: path(CLASS, ATTENDANCE),
+    component: pages.ReportsAttendanceListPage,
+    handler: defaultHandler,
+    meta: {
+      titleParts: ['attendanceLabel', 'CLASS_NAME'],
+    },
+  },
+  {
     path: path(CLASS, LEARNER, LESSON, EXERCISE),
     name: PageNames.REPORTS_LEARNER_REPORT_LESSON_EXERCISE_PAGE_ROOT,
     beforeEnter: (to, from, next) => {
@@ -446,13 +454,7 @@ export default [
   {
     path: path(CLASS, LESSONS),
     component: pages.ReportsLessonListPage,
-    handler: (toRoute, fromRoute, next) => {
-      if (classIdParamRequiredGuard(toRoute, 'ReportsLessonListPage', next)) {
-        return;
-      }
-      defaultHandler();
-    },
-
+    handler: defaultHandler,
     meta: {
       titleParts: ['lessonsLabel', 'CLASS_NAME'],
     },

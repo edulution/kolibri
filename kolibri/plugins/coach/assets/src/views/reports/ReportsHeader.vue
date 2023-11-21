@@ -88,6 +88,11 @@
             label: this.coreString('learnersLabel'),
             to: this.classRoute('ReportsLearnerListPage'),
           },
+          {
+            id: ReportsTabs.ATTENDANCE,
+            label: this.coreString('attendanceLabel'),
+            to: this.classRoute('ReportsAttendanceListPage'),
+          },
         ];
       },
     },

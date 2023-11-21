@@ -4,6 +4,7 @@ export const ReportsTabs = {
   QUIZZES: 'tabQuizzes',
   GROUPS: 'tabGroups',
   LEARNERS: 'tabLearners',
+  ATTENDANCE: 'tabAttendance',
 };
 
 export const PLAN_TABS_ID = 'coachPlan';

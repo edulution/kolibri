@@ -65,6 +65,10 @@
             :emptyMessage="emptyMessageForItems(facilityUsers, search)"
             :showDemographicInfo="true"
           >
+            <template #activeStatus="userD">
+              <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+            </template>
+
             <template #action="userRow">
               <KButton
                 appearance="flat-button"

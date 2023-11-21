@@ -68,6 +68,10 @@
         :dataLoading="dataLoading"
         isCoach
       >
+        <template #activeStatus="userD">
+          <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+        </template>
+
         <!-- Don't need template in Vue 2.5+ -->
         <template #action="userRow">
           <KButton
@@ -104,6 +108,10 @@
         :dataLoading="dataLoading"
         :emptyMessage="$tr('noLearnersInClassMessage')"
       >
+        <template #activeStatus="userD">
+          <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+        </template>
+        
         <template #action="userRow">
           <KButton
             :text="coreString('removeAction')"

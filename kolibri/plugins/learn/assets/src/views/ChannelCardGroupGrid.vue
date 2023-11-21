@@ -7,13 +7,9 @@
       :layout="{ span: layoutSpan }"
     >
       <ChannelCard
-        :isMobile="windowIsSmall"
-        :title="content.title || content.name"
-        :thumbnail="content.thumbnail"
-        :tagline="getTagLine(content)"
-        :numCoachContents="content.num_coach_contents"
-        :link="genContentLinkBackLinkCurrentPage(content.id, false, deviceId)"
-        :isRemote="isRemote"
+        :channel="content"
+        :to="genContentLinkBackLinkCurrentPage(content.id, false, deviceId)"
+        :fullwidth="true"
       />
     </KGridItem>
     <slot></slot>
@@ -27,7 +23,7 @@
 
   import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
   import useContentLink from '../composables/useContentLink';
-  import ChannelCard from './ChannelCard';
+  import ChannelCard from './cards/ChannelCard';
 
   export default {
     name: 'ChannelCardGroupGrid',

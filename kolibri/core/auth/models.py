@@ -741,7 +741,7 @@ def validate_role_kinds(kinds):
         raise InvalidRoleKind("kinds argument must only contain valid role kind names")
     return kinds
 
-
+# from .permissions.general import AllowCoach
 @python_2_unicode_compatible
 class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
     """
@@ -773,6 +773,8 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
 
     is_facility_user = True
 
+    deleted = models.BooleanField(default=False)
+
     gender = models.CharField(
         max_length=16, choices=GENDER_CHOICES, default="", blank=True
     )
@@ -782,13 +784,24 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
     )
 
     id_number = models.CharField(max_length=64, default="", blank=True)
+    
+    @property
+    def is_deleted(self):
+        return self.deleted
 
+    @is_deleted.setter
+    def set_deleted(self, value):
+        self.deleted = value
+    
     @classmethod
     def deserialize(cls, dict_model):
         # be defensive against blank passwords, set to `NOT_SPECIFIED` if blank
         password = dict_model.get("password", "") or ""
         if len(password) == 0:
             dict_model.update(password=NOT_SPECIFIED)
+
+        # Ensure "deleted" field is present in dict_model
+        dict_model.setdefault("deleted", False)
 
         return super(FacilityUser, cls).deserialize(dict_model)
 
@@ -1021,6 +1034,7 @@ class Collection(AbstractFacilityDataModel):
 
     _KIND = None  # Should be overridden in subclasses to specify what "kind" they are
 
+    subscriptions = JSONField(default="[]")
     name = models.CharField(max_length=100)
     parent = models.ForeignKey(
         "self", null=True, blank=True, related_name="children", db_index=True

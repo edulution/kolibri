@@ -20,15 +20,14 @@
       </KFixedGridItem>
     </KFixedGrid>
 
-    <CardGrid :gridType="1">
-      <BaseChannelCard
+    <div class="content-grid grid">
+      <ChannelCard
         v-for="(channel, idx) in visibleChannels"
         :key="idx"
-        data-test="channelLink"
         :channel="channel"
         :to="getChannelLink(channel)"
       />
-    </CardGrid>
+    </div>
   </section>
 
 </template>
@@ -38,15 +37,13 @@
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { PageNames } from '../../../constants';
-  import CardGrid from '../../cards/CardGrid';
-  import BaseChannelCard from '../../cards/BaseChannelCard';
+  import ChannelCard from '../../cards/ChannelCard';
 
   export default {
     name: 'ExploreChannels',
     components: {
-      CardGrid,
-      BaseChannelCard,
-    },
+    ChannelCard,
+},
     mixins: [commonCoreStrings],
     props: {
       channels: {
@@ -102,3 +99,12 @@
   };
 
 </script>
+
+<style lang="scss" scoped>
+.grid {
+  margin-top: 24px;
+}
+.content-grid {
+  padding-left: 10.9%!important;
+}
+</style>

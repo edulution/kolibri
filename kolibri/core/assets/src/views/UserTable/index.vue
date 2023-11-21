@@ -35,6 +35,9 @@
         <th data-test="usernameHeader">
           {{ coreString('usernameLabel') }}
         </th>
+        <th v-if="$scopedSlots.activeStatus">
+          {{ $tr('activeStatus') }}
+        </th>
         <th v-if="$scopedSlots.info">
           {{ infoDescriptor }}
         </th>
@@ -163,6 +166,9 @@
               <span dir="auto">
                 {{ user.username }}
               </span>
+            </td>
+            <td v-if="$scopedSlots.activeStatus">
+              <slot name="activeStatus" :user="user"></slot>
             </td>
             <template v-if="showDemographicInfo">
               <td class="id-col">
@@ -330,6 +336,10 @@
         context:
           "Visually hidden part of the header of a column in a table of facility users to provide more context for people using screenreaders (it prepends 'Full name' string that can be rendered as a visible header). It is rendered when users can be selected from a table by checking associated checkboxes or a radio button displayed next to facility users' full names.",
       },
+      activeStatus: {
+        message: 'Active Status',
+        context: "Indicates the user's status"
+      }
     },
   };
 

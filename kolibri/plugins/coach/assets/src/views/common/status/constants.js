@@ -3,6 +3,8 @@ export const VERBS = {
   notStarted: 'notStarted',
   needHelp: 'needHelp',
   started: 'started',
+  active: 'active',
+  notActive: 'notActive',
 };
 
 export const ICONS = {
