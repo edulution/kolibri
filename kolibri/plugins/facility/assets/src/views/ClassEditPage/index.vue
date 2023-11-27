@@ -68,8 +68,8 @@
         :dataLoading="dataLoading"
         isCoach
       >
-        <template #activeStatus="userD">
-          <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+        <template #activeStatus="user">
+          <span>{{ user.user.deleted === true ? 'Inactive' : 'Active' }}</span>
         </template>
 
         <!-- Don't need template in Vue 2.5+ -->
@@ -108,8 +108,8 @@
         :dataLoading="dataLoading"
         :emptyMessage="$tr('noLearnersInClassMessage')"
       >
-        <template #activeStatus="userD">
-          <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+        <template #activeStatus="user">
+          <span>{{ user.user.deleted === true ? 'Inactive' : 'Active' }}</span>
         </template>
         
         <template #action="userRow">

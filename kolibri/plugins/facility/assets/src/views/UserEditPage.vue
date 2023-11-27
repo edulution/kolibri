@@ -61,16 +61,16 @@
             <fieldset class="soft-delete">
               <legend>Status</legend>
               <KRadioButton
-                v-model="userStatusSelected"
+                v-model="userStatusActive"
                 :disabled="formDisabled"
                 :label="coreString('userStatusActivateLabel')"
-                :value="true"
+                :value="false"
               />
               <KRadioButton
-                v-model="userStatusSelected"
+                v-model="userStatusActive"
                 :disabled="formDisabled"
                 :label="coreString('userStatusDeactivateLabel')"
-                :value="false"
+                :value="true"
               />
             </fieldset>
             
@@ -192,7 +192,7 @@
         userCopy: {},
         caughtErrors: [],
         status: '',
-        userStatusSelected: false,
+        userStatusActive: false,
       };
     },
     computed: {
@@ -267,7 +267,7 @@
           this.setKind(user);
           this.makeCopyOfUser(user);
           this.loading = false;
-          this.userStatusSelected = user?.deleted || false;
+          this.userStatusActive = user?.deleted;
         })
         .catch(error => {
           this.$store.dispatch('handleApiError', error);
@@ -319,7 +319,7 @@
             gender: this.gender,
             id_number: this.idNumber,
             username: this.username,
-            deleted: this.userStatusSelected,
+            deleted: this.userStatusActive,
           },
           (value, key) => {
             return value !== this.userCopy[key];

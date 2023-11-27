@@ -65,8 +65,8 @@
             :emptyMessage="emptyMessageForItems(facilityUsers, search)"
             :showDemographicInfo="true"
           >
-            <template #activeStatus="userD">
-              <span>{{ !userD.user.status ? '-' : userD.user.status ? 'Active' : 'Inactive' }}</span>
+            <template #activeStatus="user">
+              <span>{{ user.user.deleted === true ? 'Inactive' : 'Active' }}</span>
             </template>
 
             <template #action="userRow">
