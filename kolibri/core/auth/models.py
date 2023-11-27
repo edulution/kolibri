@@ -1034,7 +1034,7 @@ class Collection(AbstractFacilityDataModel):
 
     _KIND = None  # Should be overridden in subclasses to specify what "kind" they are
 
-    subscriptions = JSONField(default="[]")
+    subscriptions = JSONField(default="[]", blank=True)
     name = models.CharField(max_length=100)
     parent = models.ForeignKey(
         "self", null=True, blank=True, related_name="children", db_index=True

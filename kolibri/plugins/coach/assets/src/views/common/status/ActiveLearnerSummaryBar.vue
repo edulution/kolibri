@@ -26,9 +26,9 @@
     methods: {
       backgroundColor() {
         if (this.active == this.total) {
-          return this.$coreStatusCorrect;
+          return 'green';
         } else {
-          return this.$coreStatusProgress;
+          return 'orange';
         }
       },
     },

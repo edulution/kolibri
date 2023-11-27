@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :class="progressClassName">
     <KLabeledIcon nowrap>
       <template #icon>
         <CoachStatusIcon ref="status" :icon="icon" />
@@ -65,11 +65,30 @@
             total: this.total,
           });
         },
+        progressClassName() {
+          if (this.count === this.total) {
+            return 'progress-completed'
+          }
+          if (this.count < this.total) {
+            return 'progress-inprogress'
+          }
+          return 'progress-default'
+        }
       },
     };
   
   </script>
   
   
-  <style lang="scss" scoped></style>
+  <style lang="scss" scoped>
+  .progress-inprogress svg {
+    fill: orange !important;
+  }
+  .progress-completed svg {
+    fill: green !important;
+  }
+  .progress-default svg {
+    fill: #071d49 !important
+  }
+</style>
   

@@ -58,7 +58,7 @@
                 
                 <td>
                   <span>
-                    <span class="labeled-icon-wrapper" style="color: rgb(224, 224, 224);">
+                    <span class="labeled-icon-wrapper" :class="{ active: tableRow.isActiveLearner }">
                       <div class="icon">
                         <svg
                           role="presentation"
@@ -67,7 +67,6 @@
                           width="24"
                           height="24"
                           viewBox="0 0 24 24"
-                          style="fill: rgb(224, 224, 224);"
                         >
                           <circle
                             cx="12"
@@ -76,7 +75,8 @@
                           />
                         </svg>
                       </div>
-                      <div dir="auto" class="label">Inactive</div>
+                      <div v-if="tableRow.isActiveLearner" dir="auto" class="label">Active</div>
+                      <div v-else dir="auto" class="label">Inactive</div>
                     </span>
                   </span>
                 </td>
@@ -96,7 +96,6 @@
 
 <script>
 
-  import sortBy from 'lodash/sortBy';
   import FilterTextbox from 'kolibri.coreVue.components.FilterTextbox';
   import commonCoach from '../common';
   import { REPORTS_TABS_ID, ReportsTabs } from '../../constants/tabsConstants';
@@ -141,7 +140,10 @@
         ];
       },
       table() {
-        let sorted = this.learners;
+        let sorted = this.learners.map(l => ({
+          ...l,
+          isActiveLearner: this.activeLearners.includes(l.id)
+        }));
         
         if (this.filterInput) {
           const matchString = this.filterInput.toLowerCase();
@@ -153,6 +155,7 @@
             return false;
           })
         }
+
         return sorted;
       },
     },
@@ -187,12 +190,25 @@
         top: 0.125em;
         width: 1.125em;
         height: 1.125em;
+        fill: rgb(224, 224, 224) !important;
       }
     }
 
     .label {
       display: block;
       margin-left: 1.925em;
+      color: rgb(224, 224, 224);
+    }
+
+    &.active {
+      .icon {
+        svg {
+          fill: green !important;
+        }
+      }
+      .label {
+        color: rgb(33, 33, 33);
+      }
     }
   }
 </style>

@@ -39,8 +39,8 @@
     computed: {
       liveAttendance() {
         const tallies = {
-          active: this.activeLearners?.length || 1,
-          notActive: this.learners.length - this.activeLearners?.length || 0,
+          active: this.activeLearners?.length,
+          notActive: this.learners.length - this.activeLearners?.length,
         };
         return {
           tally: tallies,

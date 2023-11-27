@@ -90,6 +90,12 @@ function defaultState() {
      * }
      */
     lessonMap: {},
+    /*
+     * activeLearnersMap := [
+     *   learner_id, ...
+     * ]
+     */
+    activeLearnersMap: [],
   };
 }
 
@@ -348,6 +354,14 @@ export default {
         contentNodes: state.contentNodeMap,
       };
     },
+    /*
+     * activeLearners := [
+     *   learner_id ...
+     * ]
+     */
+    activeLearners(state) {
+      return state.activeLearnersMap;
+    },
   },
   mutations: {
     SET_STATE(state, summary) {
@@ -380,6 +394,7 @@ export default {
         contentNodeMap: _itemMap(patchedSummaryContent, 'node_id'),
         contentLearnerStatusMap: _statusMap(summary.content_learner_status, 'content_id'),
         lessonMap: _mapLessons(summary.lessons),
+        activeLearnersMap: summary.active_learners,
       });
     },
     CREATE_ITEM(state, { map, id, object }) {
@@ -476,7 +491,7 @@ export default {
             store.commit('SET_CLASS_LESSONS_SIZES', sizes);
           })
           .catch(error => {
-            return store.dispatch('handleApiError', { error }, { root: true });
+            return store.dispatch('handleApiError', error, { root: true });
           });
       }
       return Promise.resolve();
@@ -488,7 +503,7 @@ export default {
             store.commit('SET_CLASS_QUIZZES_SIZES', sizes);
           })
           .catch(error => {
-            return store.dispatch('handleApiError', { error }, { root: true });
+            return store.dispatch('handleApiError', error, { root: true });
           });
       }
       return Promise.resolve();
