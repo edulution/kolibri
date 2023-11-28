@@ -9,6 +9,7 @@ import manageCSV from './manageCSV';
 import importCSV from './importCSV';
 
 export default {
+  namespaced: true,
   state() {
     return {};
   },

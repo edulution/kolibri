@@ -50,7 +50,11 @@
     },
     computed: {
       menuOptions() {
-        return [this.coachString('renameAction'), this.coreString('deleteAction')];
+        return [
+          this.coachString('renameAction'),
+          this.coreString('deleteAction'),
+          this.coachString('subscribeAction')
+        ];
       },
     },
     methods: {
@@ -60,8 +64,10 @@
           emitted = 'rename';
         } else if (selectedOption === this.coreString('deleteAction')) {
           emitted = 'delete';
+        } else if (selectedOption === this.coachString('subscribeAction')) {
+          emitted = 'subscribe';
         }
-        this.$emit(emitted, this.group.name, this.group.id);
+        this.$emit(emitted, this.group.name, this.group.id, this.group?.subscriptions || []);
       },
     },
   };

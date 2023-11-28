@@ -88,8 +88,7 @@
 
 
 <script>
-
-  import { mapGetters, mapState } from 'vuex';
+  import { mapGetters, mapState, mapActions } from 'vuex';
   import find from 'lodash/find';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import urls from 'kolibri.urls';
@@ -155,6 +154,24 @@
       },
     },
     methods: {
+      ...mapActions('subscriptions', [
+        'saveSubscription',
+        'updateGroupSubscriptions',
+      ]),
+      onSubscriptionModalSubmit() {
+        this.updateGroupSubscriptions(this.selectedChannelsIds)
+        
+        this.saveSubscription({
+          id: this.subscriptionModalData.id,
+          choices: JSON.stringify(this.selectedChannelsIds)
+        })
+
+        this.$router.go(this.$router.currentRoute)
+        
+        this.subscriptionModalOpen = false;
+        this.subscriptionModalData = {};
+        this.selectedChannelsIds = [];
+      },
       onSubscriptionModalCancel() {
         this.subscriptionModalOpen = false;
         this.subscriptionModalData = {};
@@ -163,11 +180,7 @@
       onSubscriptionModalOpen(classObj) {
         this.subscriptionModalOpen = true;
         this.subscriptionModalData = classObj;
-      },
-      onSubscriptionModalSubmit() {
-        this.subscriptionModalOpen = false;
-        this.subscriptionModalData = {};
-        this.selectedChannelsIds = [];
+        this.selectedChannelsIds = classObj.subscriptions.length ? JSON.parse(classObj.subscriptions) : classObj.subscriptions;
       },
       onChannelChange(channelId) {
         let selectedChannelsIds = [...this.selectedChannelsIds];

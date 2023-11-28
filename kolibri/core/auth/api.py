@@ -745,7 +745,7 @@ class LearnerGroupViewSet(ValuesViewset):
 
     filter_fields = ("parent",)
 
-    values = ("id", "name", "parent", "user_ids")
+    values = ("id", "name", "parent", "user_ids", "subscriptions")
 
     def annotate_queryset(self, queryset):
         return annotate_array_aggregate(queryset, user_ids="membership__user__id")

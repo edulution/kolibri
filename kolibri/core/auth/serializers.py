@@ -181,7 +181,7 @@ class ClassroomSerializer(serializers.ModelSerializer):
 class LearnerGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearnerGroup
-        fields = ("id", "name", "parent")
+        fields = ("id", "name", "parent", "subscriptions")
 
         validators = [
             UniqueTogetherValidator(
