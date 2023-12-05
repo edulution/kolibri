@@ -174,6 +174,7 @@ export function kolibriLogin(store, sessionPayload) {
         ERROR_CONSTANTS.MISSING_PASSWORD,
         ERROR_CONSTANTS.PASSWORD_NOT_SPECIFIED,
         ERROR_CONSTANTS.NOT_FOUND,
+        ERROR_CONSTANTS.INACTIVE_USER,
       ]);
       if (errorsCaught) {
         if (errorsCaught.includes(ERROR_CONSTANTS.INVALID_CREDENTIALS)) {
@@ -184,6 +185,8 @@ export function kolibriLogin(store, sessionPayload) {
           return LoginErrors.PASSWORD_NOT_SPECIFIED;
         } else if (errorsCaught.includes(ERROR_CONSTANTS.NOT_FOUND)) {
           return LoginErrors.USER_NOT_FOUND;
+        } else if (errorsCaught.includes(ERROR_CONSTANTS.INACTIVE_USER)) {
+          return LoginErrors.INACTIVE_USER
         }
       } else {
         store.dispatch('handleApiError', { error });

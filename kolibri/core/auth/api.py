@@ -332,7 +332,6 @@ class PublicFacilityUserViewSet(ReadOnlyValuesViewset):
         "id_number",
         "gender",
         "birth_year",
-        "deleted",
     )
     field_map = {
         "is_superuser": lambda x: bool(x.pop("devicepermissions__is_superuser")),
@@ -877,6 +876,22 @@ class SessionViewSet(viewsets.ViewSet):
             )
 
         user = authenticate(username=username, password=password, facility=facility_id)
+        
+        if user is not None and user.is_deleted:
+            # If user is deactivated return inactive user message
+            return Response(
+                [
+                    {
+                        "id": error_constants.INACTIVE_USER,
+                        "metadata": {
+                            "field": "password",
+                            "message": "This user has been deactivated."
+                        },
+                    }
+                ],
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        
         if user is not None and user.is_active:
             # Correct password, and the user is marked "active"
             login(request, user)

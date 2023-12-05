@@ -53,6 +53,14 @@
           time right now
         -->
       <form ref="form" class="login-form" @submit.prevent="signIn">
+        <UiAlert
+          v-if="userInactive"
+          type="error"
+          :dismissible="false"
+        >
+          {{ $tr('userIsDeactivated') }}
+        </UiAlert>
+
         <div v-show="showUsernameForm">
           <transition name="textbox">
             <KTextbox
@@ -237,6 +245,9 @@
       },
       userDoesNotExist() {
         return this.loginError === LoginErrors.USER_NOT_FOUND;
+      },
+      userInactive() {
+        return this.loginError === LoginErrors.INACTIVE_USER;
       },
       simpleSignIn() {
         return this.selectedFacility.dataset.learner_can_login_with_no_password;
@@ -521,6 +532,10 @@
         message: 'Change user',
         context:
           'Link to change the user account which the user uses to sign in if they have more than one account.\n',
+      },
+      userIsDeactivated: {
+        message: 'This user has been deactivated',
+        context: 'Error that is shown if the user is not active',
       },
     },
   };
