@@ -36,14 +36,10 @@
       />
       <ExploreChannels
         v-if="displayExploreChannels"
-        :channels="channels"
+        :channels="filteredChannels"
         class="section"
         data-test="exploreChannels"
-        :short="Boolean(displayClasses ||
-          continueLearning ||
-          hasActiveClassesLessons ||
-          hasActiveClassesQuizzes)
-        "
+        :short="isShort"
       />
 
     </div>
@@ -54,12 +50,14 @@
 
 <script>
 
+  import { mapGetters } from 'vuex';
   import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
   import { get } from '@vueuse/core';
   import client from 'kolibri.client';
   import urls from 'kolibri.urls';
   import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
   import useUser from 'kolibri.coreVue.composables.useUser';
+  import { UserKinds } from 'kolibri.coreVue.vuex.constants';
   import useChannels from '../../composables/useChannels';
   import useDeviceSettings from '../../composables/useDeviceSettings';
   import useLearnerResources, {
@@ -94,6 +92,11 @@
       MissingResourceAlert,
     },
     mixins: [commonLearnStrings],
+    data() {
+      return {
+        filteredChannels: [],
+      }
+    },
     setup() {
       const currentInstance = getCurrentInstance().proxy;
       const store = currentInstance.$store;
@@ -101,7 +104,7 @@
 
       const { isUserLoggedIn } = useUser();
       const { canAccessUnassignedContent } = useDeviceSettings();
-      const { localChannelsCache, fetchChannels } = useChannels();
+      const { localChannelsCache, fetchChannels, fetchLearnerChannels } = useChannels();
       const {
         classes,
         activeClassesLessons,
@@ -137,16 +140,6 @@
         () =>
           get(isUserLoggedIn) && get(activeClassesQuizzes) && get(activeClassesQuizzes).length > 0
       );
-      const hasChannels = computed(() => {
-        return get(localChannelsCache).length > 0;
-      });
-      const displayExploreChannels = computed(() => {
-        return (
-          get(hasChannels) &&
-          (!get(isUserLoggedIn) ||
-            (get(learnerFinishedAllClasses) && get(canAccessUnassignedContent)))
-        );
-      });
 
       const displayClasses = computed(() => {
         return get(isUserLoggedIn) && (get(classes).length || !get(canAccessUnassignedContent));
@@ -203,9 +196,11 @@
         hasActiveClassesQuizzes,
         continueLearningFromClasses,
         continueLearning,
-        displayExploreChannels,
         displayClasses,
         missingResources,
+        fetchLearnerChannels,
+        learnerFinishedAllClasses,
+        canAccessUnassignedContent,
       };
     },
     props: {
@@ -214,6 +209,31 @@
         default: null,
       },
     },
+    created() {
+      this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, userId: this.currentUserId }).then(res => {
+        console.log({ res });
+        this.filteredChannels = res;
+      });
+    },
+    computed: {
+      ...mapGetters(['getUserKind', 'currentUserId']),
+      isShort() {
+        if (this.getUserKind === UserKinds.LEARNER) {
+          return false;
+        }
+        return this.displayClasses || this.continueLearning || this.hasActiveClassesLessons || this.hasActiveClassesQuizzes
+      },
+      hasChannels() {
+        return this.filteredChannels && this.filteredChannels.length > 0;
+      },
+      displayExploreChannels() {
+        return (
+          this.hasChannels &&
+          (!this.isUserLoggedIn ||
+            (this.learnerFinishedAllClasses && this.canAccessUnassignedContent))
+        );
+      }
+    }
   };
 
 </script>

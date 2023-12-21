@@ -1,5 +1,9 @@
 <template>
-  <div v-if="channel" class="channel-card" :class="{ 'channel-card-fullwidth': fullwidth }">
+  <div
+    v-if="channel"
+    class="channel-card"
+    :class="{ 'channel-card-fullwidth': fullwidth, 'channel-card-topic': variant === 'topic' }"
+  >
     <div>
       <router-link :to="to" class="link-card">
         <ChannelThumbnailNew
@@ -43,6 +47,11 @@ export default {
       type: Boolean,
       required: false,
       default: false,
+    },
+    variant: {
+      type: String,
+      required: false,
+      default: '',
     }
   }
 }
@@ -91,6 +100,12 @@ export default {
   &.channel-card-fullwidth {
     margin-right: 0 !important;
     width: 100% !important;
+  }
+
+  &.channel-card-topic {
+    width: calc(33.33% - 60px) !important;
+    margin-right: 50px !important;
+    margin-bottom: 50px !important;
   }
 }
 

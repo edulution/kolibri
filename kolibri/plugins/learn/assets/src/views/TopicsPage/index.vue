@@ -257,7 +257,7 @@
   import { ContentNodeResource } from 'kolibri.resources';
   import plugin_data from 'plugin_data';
   import SidePanelModal from '../SidePanelModal';
-  import { PageNames } from '../../constants';
+  import { PageNames, channelThemeTokens } from '../../constants';
   import useChannels from '../../composables/useChannels';
   import useSearch from '../../composables/useSearch';
   import useContentLink from '../../composables/useContentLink';
@@ -762,17 +762,32 @@
         }
         document.documentElement.style.position = '';
       },
+      channelTitle(newVal) {
+        if (!newVal) {
+          return;
+        }
+        
+        const channelIdentifier = newVal.toLowerCase().split('-')[0].replaceAll(" ", "");
+        const themeTokens = channelThemeTokens[channelIdentifier] || channelThemeTokens.default; 
+        this.updateThemeTokens(themeTokens);
+      }
     },
     beforeDestroy() {
       window.removeEventListener('scroll', this.throttledHandleScroll);
       // Unsetting possible change in metadataSidePanelContent watcher
       // to avoid leaving `fixed` position
       document.documentElement.style.position = '';
+      this.updateThemeTokens(channelThemeTokens.default)
     },
     created() {
       window.addEventListener('scroll', this.throttledHandleScroll);
       if (this.subTopicId) {
         this.handleLoadMoreInSubtopic(this.subTopicId);
+      }
+      if (this.channelTitle) {
+        const channelIdentifier = this.channelTitle.toLowerCase().split('-')[0].replaceAll(" ", "");
+        const themeTokens = channelThemeTokens[channelIdentifier] || channelThemeTokens.default; 
+        this.updateThemeTokens(themeTokens);
       }
     },
     methods: {
@@ -890,6 +905,11 @@
           this.$refs.resourcePanel.focusFirstEl();
         }
       },
+      updateThemeTokens(themeTokens) {
+        Object.keys(themeTokens).forEach(token => {
+          this.$themeTokens[token] = themeTokens[token];
+        })
+      }
     },
     $trs: {
       documentTitleForChannel: {

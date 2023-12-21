@@ -1,65 +1,66 @@
 <template>
 
   <div>
-    <!-- header link to folder -->
-    <h2>
-      <template v-for="prefixTitle in (topic.prefixTitles || [])">
-        <span :key="prefixTitle" :style="{ color: $themeTokens.annotation }">
-          {{ prefixTitle }}
-        </span>
+    <div class="topic-subsection-wrapper" :class="[{ 'topic-subsection-expanded': topicExpanded }]">
+      <div
+        class="topic-subsection-header"
+        :style="{ backgroundColor: $themeTokens.appBar }"
+        @click="onExpansionClick"
+      >
+        <!-- header link to folder -->
+        <img
+          v-if="topic.thumbnail"
+          :src="topic.thumbnail"
+          :alt="topic.title"
+          class="topic-logo"
+        >
+        <h2>
+          {{ topic.title }}
+        </h2>
+
+        <div style="flex-grow: 1;"></div>
+
         <KIcon
-          :key="topic.title + prefixTitle"
-          icon="chevronRight"
-          :color="$themeTokens.annotation"
+          icon="chevronDown"
           :style="{ top: '4px' }"
         />
-      </template>
-      <KRouterLink
-        :text="topic.title"
-        :to="genContentLinkKeepCurrentBackLink(topic.id, false)"
-        class="folder-header-link"
-        :appearanceOverrides="{ color: $themeTokens.text }"
-      >
-        <template #iconAfter>
-          <KIcon
-            icon="chevronRight"
-            :style="{ top: '4px' }"
-          />
-        </template>
-      </KRouterLink>
-    </h2>
-    <!-- card grid of items in folder -->
-    <LibraryAndChannelBrowserMainContent
-      v-if="topic.children && topic.children.length"
-      data-test="children-cards-grid"
-      :contents="topic.children"
-      :allowDownloads="allowDownloads"
-      currentCardViewStyle="card"
-      :keepCurrentBackLink="true"
-      @toggleInfoPanel="$emit('toggleInfoPanel', $event)"
-    />
-    <KButton
-      v-if="topic.showMore"
-      class="more-after-grid"
-      data-test="more-button"
-      appearance="basic-link"
-      @click="$emit('showMore', topic.id)"
-    >
-      {{ coreString('showMoreAction') }}
-    </KButton>
-    <KRouterLink v-else-if="topic.viewAll" class="more-after-grid" :to="topic.viewAll">
-      {{ coreString('viewAll') }}
-    </KRouterLink>
-    <KButton
-      v-else-if="topic.viewMore && topic.id !== subTopicLoading"
-      class="more-after-grid"
-      appearance="basic-link"
-      @click="$emit('loadMoreInSubtopic', topic.id)"
-    >
-      {{ coreString('viewMoreAction') }}
-    </KButton>
+      </div>
+      
+      <div class="topic-subsection-body">
+        <!-- card grid of items in folder -->
+        <LibraryAndChannelBrowserMainContent
+          v-if="topic.children && topic.children.length"
+          data-test="children-cards-grid"
+          :contents="topic.children"
+          :allowDownloads="allowDownloads"
+          currentCardViewStyle="card"
+          :keepCurrentBackLink="true"
+          @toggleInfoPanel="$emit('toggleInfoPanel', $event)"
+        />
+        <KButton
+          v-if="topic.showMore"
+          class="more-after-grid"
+          data-test="more-button"
+          appearance="basic-link"
+          @click="$emit('showMore', topic.id)"
+        >
+          {{ coreString('showMoreAction') }}
+        </KButton>
+        <KRouterLink v-else-if="topic.viewAll" class="more-after-grid" :to="topic.viewAll">
+          {{ coreString('viewAll') }}
+        </KRouterLink>
+        <KButton
+          v-else-if="topic.viewMore && topic.id !== subTopicLoading"
+          class="more-after-grid"
+          appearance="basic-link"
+          @click="$emit('loadMoreInSubtopic', topic.id)"
+        >
+          {{ coreString('viewMoreAction') }}
+        </KButton>
 
-    <KCircularLoader v-if="topic.id === subTopicLoading" />
+        <KCircularLoader v-if="topic.id === subTopicLoading" />
+      </div>
+    </div>
   </div>
 
 </template>
@@ -94,6 +95,16 @@
         required: false,
       },
     },
+    data: function () {
+      return {
+        topicExpanded: false
+      }
+    },
+    methods: {
+      onExpansionClick() {
+        this.topicExpanded = !this.topicExpanded
+      },
+    },
   };
 
 </script>
@@ -109,6 +120,59 @@
 
   .more-after-grid {
     margin-bottom: 16px;
+  }
+
+  .topic-subsection-wrapper {
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px 8px 8px 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+
+    .topic-subsection-header {
+      display: flex;
+      align-items: center;
+      background-color: #061D49;
+      border-radius: 8px 8px 0 0;
+      padding: 16px;
+      cursor: pointer;
+      & h2 {
+        margin: 0;
+        color: white !important;
+      }
+      & svg {
+        fill: white !important;
+        font-size: 2rem;
+        top: 0 !important;
+        transition: all 0.3s linear;
+      }
+
+      & .topic-logo {
+        border-radius: 50%;
+        height: 48px;
+        width: 48px;
+        margin-right: 16px;
+      }
+    }
+
+    .topic-subsection-body {
+      display: none;
+      background-color: white;
+      padding: 30px 60px;
+    }
+
+    &.topic-subsection-expanded {
+      .topic-subsection-header {
+        & svg {
+          transform: rotate(180deg);
+        }
+      }
+
+      .topic-subsection-body {
+        display: flex;
+        flex-direction: column;
+      }
+    }
   }
 
 </style>

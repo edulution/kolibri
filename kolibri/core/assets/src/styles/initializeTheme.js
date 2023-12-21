@@ -15,13 +15,17 @@ export function setThemeConfig(theme) {
   });
 }
 
-export default function initializeTheme() {
+export default function initializeTheme({ themeTokens }) {
   validateObject(plugin_data.kolibriTheme, themeSpec);
   const theme = objectWithDefaults(plugin_data.kolibriTheme, themeSpec);
   if (theme.brandColors) {
     setBrandColors(theme.brandColors);
   }
-  setTokenMapping(theme.tokenMapping);
+  if (themeTokens) {
+    setTokenMapping(Object.assign(theme.tokenMapping, themeTokens))
+  } else {
+    setTokenMapping(theme.tokenMapping);
+  }
   setThemeConfig(theme);
   generateGlobalStyles();
   trackInputModality();

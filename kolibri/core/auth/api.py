@@ -105,12 +105,15 @@ class KolibriAuthPermissionsFilter(filters.BaseFilterBackend):
     """
 
     def filter_queryset(self, request, queryset, view):
-        if request.method == "GET":
-            # If a 'GET' method only return readable items to filter down the queryset.
+        if request.method == "GET" and request.resolver_match.url_name.endswith(
+            "-list"
+        ):
+            # only filter down the queryset in the case of the list view being requested
             return request.user.filter_readable(queryset)
-        # otherwise, return the full queryset, as permission checks will happen object-by-object
-        # (and filtering here then leads to 404's instead of the more correct 403's)
-        return queryset
+        else:
+            # otherwise, return the full queryset, as permission checks will happen object-by-object
+            # (and filtering here then leads to 404's instead of the more correct 403's)
+            return queryset
 
 
 def _ensure_raw_dict(d):

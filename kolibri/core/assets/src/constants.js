@@ -188,3 +188,13 @@ export const ApplicationTypes = {
   KOLIBRI: 'kolibri',
   STUDIO: 'studio',
 };
+
+// default theme token color codes
+export const defaultThemeTokens = {
+  primary: '#071d49',
+  primaryDark: '#071d49',
+  appBar: '#071d49',
+  appBarDark: '#071d49',
+  link: '#071d49',
+  linkDark: '#071d49',
+}

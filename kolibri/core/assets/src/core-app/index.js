@@ -18,6 +18,7 @@ import initializeTheme from '../styles/initializeTheme';
 import { i18nSetup } from '../utils/i18n';
 import setupPluginMediator from './pluginMediator';
 import apiSpec from './apiSpec';
+import { defaultThemeTokens } from '../constants';
 
 // Do this before any async imports to ensure that public paths
 // are set correctly
@@ -46,7 +47,7 @@ const coreApp = {
 setupPluginMediator(coreApp);
 
 // set up theme
-initializeTheme();
+initializeTheme({ themeTokens: defaultThemeTokens });
 
 // monitor page visibility
 document.addEventListener('visibilitychange', function() {

@@ -1,6 +1,12 @@
 <template>
 
-  <div class="card drop-shadow">
+  <ChannelCard
+    :channel="contentNode"
+    :to="to"
+    variant="topic"
+    :fullwidth="true"
+  />
+  <!-- <div class="card drop-shadow">
     <router-link
       :to="to"
       class="card card-link"
@@ -56,7 +62,7 @@
       </div>
     </router-link>
     <slot name="footer"></slot>
-  </div>
+  </div> -->
 
 </template>
 
@@ -64,19 +70,21 @@
 <script>
 
   import { validateLinkObject } from 'kolibri.utils.validators';
-  import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
+  // import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import useChannels from '../../composables/useChannels';
-  import LearningActivityLabel from '../LearningActivityLabel';
+  // import LearningActivityLabel from '../LearningActivityLabel';
   import commonLearnStrings from '../commonLearnStrings';
-  import CardThumbnail from './CardThumbnail.vue';
+  // import CardThumbnail from './CardThumbnail.vue';
+  import ChannelCard from '../cards/ChannelCard';
 
   export default {
     name: 'HybridLearningContentCard',
     components: {
-      CardThumbnail,
-      TextTruncatorCss,
-      LearningActivityLabel,
+      ChannelCard,
+      // CardThumbnail,
+      // TextTruncatorCss,
+      // LearningActivityLabel,
     },
     mixins: [commonLearnStrings, commonCoreStrings],
     setup() {

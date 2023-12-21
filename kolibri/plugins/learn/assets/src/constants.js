@@ -42,3 +42,71 @@ export const pageNameToModuleMap = {
 };
 
 export const KolibriStudioId = plugin_data.studioDevice?.instance_id;
+
+export const channelThemeTokens = {
+  default: {
+    primary: '#071d49',
+    primaryDark: '#071d49',
+    appBar: '#071d49',
+    appBarDark: '#071d49',
+    link: '#071d49',
+    linkDark: '#071d49',
+  },
+  /*colors for new courses*/
+  level1: {
+    primary: '#0072CE',
+    primaryDark: '#0072CE',
+    appBar: '#0072CE',
+    appBarDark: '#0072CE',
+    link: '#0072CE',
+    linkDark: '#0072CE',
+  },
+  level2: {
+    primary: '#509E2F',
+    primaryDark: '#509E2F',
+    appBar: '#509E2F',
+    appBarDark: '#509E2F',
+    link: '#509E2F',
+    linkDark: '#509E2F',
+  },
+  level3: {
+    primary: '#440099',
+    primaryDark: '#440099',
+    appBar: '#440099',
+    appBarDark: '#440099',
+    link: '#440099',
+    linkDark: '#440099',
+  },
+  level4: {
+    primary: '#004B87',
+    primaryDark: '#004B87',
+    appBar: '#004B87',
+    appBarDark: '#004B87',
+    link: '#004B87',
+    linkDark: '#004B87',
+  },
+  level5: {
+    primary: '#FFA300',
+    primaryDark: '#FFA300',
+    appBar: '#FFA300',
+    appBarDark: '#FFA300',
+    link: '#FFA300',
+    linkDark: '#FFA300',
+  },
+  level6: {
+    primary: '#071d49',
+    primaryDark: '#071d49',
+    appBar: '#071d49',
+    appBarDark: '#071d49',
+    link: '#071d49',
+    linkDark: '#071d49',
+  },
+  level7: {
+    primary: '#071d49',
+    primaryDark: '#071d49',
+    appBar: '#071d49',
+    appBarDark: '#071d49',
+    link: '#071d49',
+    linkDark: '#071d49',
+  },
+}
