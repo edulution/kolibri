@@ -148,10 +148,11 @@
       }
 
       & .topic-logo {
-        border-radius: 50%;
         height: 48px;
         width: 48px;
+        border-radius: 50%;
         margin-right: 16px;
+        object-fit: cover;
       }
     }
 

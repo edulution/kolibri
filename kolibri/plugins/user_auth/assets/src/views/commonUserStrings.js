@@ -26,6 +26,10 @@ const commonUserStrings = createTranslator('CommonUserPageStrings', {
     message: 'Go to home page',
     context: 'Links to the beginning of the authentication flow.',
   },
+  signingInLabel: {
+    message: "Login",
+    context: 'Generic label that conveys user is signing into their account'
+  }
 });
 
 export function userString(key, args) {

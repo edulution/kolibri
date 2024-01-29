@@ -116,6 +116,7 @@ export default {
       'getAdHocLearners',
       'activeLearners',
       'getActiveLearners',
+      'learnersInfo',
     ]),
     userIsAuthorized() {
       if (this.isSuperuser) {

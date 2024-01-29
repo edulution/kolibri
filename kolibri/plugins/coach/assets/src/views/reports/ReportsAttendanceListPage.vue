@@ -81,7 +81,10 @@
                   </span>
                 </td>
                 <td>
-                  Wed Sep 27 2023
+                  <KOptionalText
+                    :text="
+                      tableRow.lastInteractionTimestamp ? $formatDate(tableRow.lastInteractionTimestamp, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '-'"
+                  />
                 </td>
               </tr>
             </transition-group>
@@ -142,7 +145,8 @@
       table() {
         let sorted = this.learners.map(l => ({
           ...l,
-          isActiveLearner: this.activeLearners.includes(l.id)
+          isActiveLearner: this.activeLearners.includes(l.id),
+          lastInteractionTimestamp: this.learnersInfo.find(d => d.user__username === l.username)?.last_interaction_timestamp__max,
         }));
         
         if (this.filterInput) {

@@ -309,4 +309,7 @@ export default {
   getActiveLearners(state) {
     return state.activeLearners
   },
+  getLearnersInfo(state) {
+    return state.learnersInfo
+  } 
 };
