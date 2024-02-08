@@ -40,7 +40,8 @@ export default [
       const { memberships } = store.state;
       // If a registered user, go to Classes Page, else go to Content
       return router.replace({
-        name: memberships.length > 0 ? ClassesPageNames.ALL_CLASSES : PageNames.TOPICS_ROOT,
+        /*name: memberships.length > 0 ? ClassesPageNames.ALL_CLASSES : PageNames.TOPICS_ROOT,*/
+        name: PageNames.TOPICS_ROOT,
       });
     },
   },
