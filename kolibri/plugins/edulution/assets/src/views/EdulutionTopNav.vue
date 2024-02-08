@@ -1,6 +1,9 @@
 <template>
 
   <KNavbar>
+    <KNavbarLink :title="$tr('channels')" :link="channelsLink">
+      <mat-svg name="apps" category="navigation" />
+    </KNavbarLink>
     <KNavbarLink
       v-if="isUserLoggedIn && userHasMemberships"
       name="classes-link"
@@ -12,9 +15,7 @@
         category="communication"
       />
     </KNavbarLink>
-    <KNavbarLink :title="$tr('channels')" :link="channelsLink">
-      <mat-svg name="apps" category="navigation" />
-    </KNavbarLink>
+    
 
   </KNavbar>
 
