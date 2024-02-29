@@ -33,6 +33,7 @@
 
 const MOCK_DEFAULTS = {
   fetchDevices: jest.fn(() => Promise.resolve([])),
+  setCurrentDevice: jest.fn(() => Promise.resolve(null)),
   baseurl: null,
 };
 
@@ -44,7 +45,3 @@ export function useDevicesMock(overrides = {}) {
 }
 
 export default jest.fn(() => useDevicesMock());
-
-export const setCurrentDevice = jest.fn(id =>
-  Promise.resolve({ id, device_name: 'test-device', baseurl: 'http://test-device' })
-);

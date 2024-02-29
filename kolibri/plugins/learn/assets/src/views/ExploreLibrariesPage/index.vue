@@ -25,9 +25,8 @@
       :deviceName="device['device_name']"
       :deviceIcon="getDeviceIcon(device)"
       :channels="device.channels"
-      :totalChannels="device['total_count']"
+      :totalChannels="device['total_channels']"
       :pinIcon="getPinIcon(true)"
-      :showDescription="device['instance_id'] === studioId"
       :disablePinDevice="device['instance_id'] === studioId"
       @togglePin="handlePinToggle"
     />
@@ -46,13 +45,13 @@
         />
       </div>
       <LibraryItem
-        v-for="(device, index) in unpinnedDevices.slice(0, moreDevices)"
+        v-for="(device, index) in moreDevices"
         :key="index"
         :deviceId="device['instance_id']"
         :deviceName="device['device_name']"
         :deviceIcon="getDeviceIcon(device)"
         :channels="device.channels"
-        :totalChannels="device['total_count']"
+        :totalChannels="device['total_channels']"
         :pinIcon="getPinIcon(false)"
         @togglePin="handlePinToggle"
       />
@@ -73,7 +72,7 @@
 
   import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { crossComponentTranslator, localeCompare } from 'kolibri.utils.i18n';
+  import { crossComponentTranslator } from 'kolibri.utils.i18n';
   import commonLearnStrings from '../commonLearnStrings';
   import useChannels from '../../composables/useChannels';
   import useContentLink from '../../composables/useContentLink';
@@ -109,8 +108,8 @@
     data() {
       return {
         loading: false,
-        networkDevices: {},
-        moreDevices: 0,
+        networkDevices: [],
+        moreDevices: [],
         usersPins: [],
       };
     },
@@ -119,23 +118,15 @@
         return this.unpinnedDevices?.length > 0;
       },
       displayShowButton() {
-        return this.moreDevices === 0 && this.areMoreDevicesAvailable;
+        return this.moreDevices.length === 0;
       },
       displayShowMoreButton() {
-        return this.moreDevices < this.unpinnedDevices?.length;
+        return (
+          this.moreDevices.length > 0 && this.moreDevices.length < this.unpinnedDevices?.length
+        );
       },
       networkDevicesWithChannels() {
-        return Object.values(this.networkDevices)
-          .filter(device => device.channels?.length > 0)
-          .sort((a, b) => {
-            if (a.instance_id === this.studioId) {
-              return 1;
-            }
-            if (b.instance_id === this.studioId) {
-              return -1;
-            }
-            return localeCompare(a.device_name, b.device_name);
-          });
+        return this.networkDevices.filter(device => device.channels?.length > 0);
       },
       pageHeaderStyle() {
         return {
@@ -190,39 +181,25 @@
           const instance_id = pin.instance_id.replace(/-/g, '');
           return { ...pin, instance_id };
         });
-        if (this.usersPins.length === 0) {
-          this.loadMoreDevices();
-        }
       });
 
       this.fetchDevices().then(devices => {
-        const promises = [];
+        this.loading = false;
         for (const device of devices) {
           const baseurl = device.base_url;
-          const promise = this.fetchChannels({ baseurl })
+          this.fetchChannels({ baseurl })
             .then(channels => {
               this.addNetworkDevice(device, channels);
-              // Set loading to false once we have successfully fetched channels
-              // for any device.
-              this.loading = false;
             })
             .catch(() => {
               this.addNetworkDevice(device, []);
             });
-          promises.push(promise);
         }
-        Promise.all(promises).then(() => {
-          // In case we don't successfully fetch any channels, don't do a perpetual loading
-          // state.
-          this.loading = false;
-        });
       });
     },
     methods: {
       addNetworkDevice(device, channels) {
-        this.$set(
-          this.networkDevices,
-          device.instance_id,
+        this.networkDevices.push(
           Object.assign(device, {
             channels: channels.slice(0, 4),
             total_count: channels.length,
@@ -233,7 +210,8 @@
         return this.createPinForUser(instance_id).then(response => {
           const id = response.id;
           this.usersPins = [...this.usersPins, { instance_id, id }];
-          this.moreDevices = 0;
+          this.moreDevices = this.unpinnedDevices;
+
           // eslint-disable-next-line
           this.$store.dispatch('createSnackbar', PinStrings.$tr('pinnedTo'));
         });
@@ -242,9 +220,8 @@
         return this.deletePinForUser(pinId).then(() => {
           // Remove this pin from the usersPins
           this.usersPins = this.usersPins.filter(pin => pin.instance_id != instance_id);
-          if (this.usersPins.length === 0) {
-            this.loadMoreDevices();
-          }
+          this.moreDevices = this.unpinnedDevices;
+
           // eslint-disable-next-line
           this.$store.dispatch('createSnackbar', PinStrings.$tr('pinRemoved'));
         });
@@ -270,7 +247,10 @@
         return pinned ? 'pinned' : 'notPinned';
       },
       loadMoreDevices() {
-        this.moreDevices += 4;
+        const start = this.moreDevices.length;
+        const end = start + 4;
+        const nextDevices = this.unpinnedDevices.slice(start, end);
+        this.moreDevices.push(...nextDevices);
       },
     },
     $trs: {

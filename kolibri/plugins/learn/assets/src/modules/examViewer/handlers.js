@@ -22,6 +22,7 @@ export function showExam(store, params, alreadyOnQuiz) {
     const promises = [
       LearnerClassroomResource.fetchModel({ id: classId }),
       ExamResource.fetchModel({ id: examId }),
+      store.dispatch('setAndCheckChannels'),
     ];
     const shouldResolve = samePageCheckGenerator(store);
     Promise.all(promises).then(
@@ -91,17 +92,13 @@ export function showExam(store, params, alreadyOnQuiz) {
               }
             },
             error => {
-              shouldResolve()
-                ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-                : null;
+              shouldResolve() ? store.dispatch('handleError', error) : null;
             }
           );
         }
       },
       error => {
-        shouldResolve()
-          ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-          : null;
+        shouldResolve() ? store.dispatch('handleError', error) : null;
       }
     );
   }

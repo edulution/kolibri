@@ -2,7 +2,7 @@
 
   <LearnAppBarPage
     :appBarTitle="appBarTitle"
-    :loading="rootNodesLoading"
+    :loading="getRootNodesLoading"
     :appearanceOverrides="{}"
     :deviceId="deviceId"
     :route="back"
@@ -28,13 +28,13 @@
         - Otherwise, show search results.
       -->
       <KCircularLoader
-        v-if="rootNodesLoading || searchLoading"
+        v-if="searchLoading"
         class="loader"
         type="indeterminate"
         :delay="false"
       />
       <div
-        v-else-if="!displayingSearchResults && !rootNodesLoading"
+        v-else-if="!displayingSearchResults && !getRootNodesLoading"
         data-test="channels"
       >
         <h1 class="channels-label">
@@ -246,28 +246,22 @@
 
 <script>
 
-  import { get, set } from '@vueuse/core';
+  import { mapGetters, mapState } from 'vuex';
   import cloneDeep from 'lodash/cloneDeep';
 
-  import { onMounted, getCurrentInstance, ref, watch } from 'kolibri.lib.vueCompositionApi';
+  import { onMounted } from 'kolibri.lib.vueCompositionApi';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
-  import useUser from 'kolibri.coreVue.composables.useUser';
   import { currentLanguage } from 'kolibri.utils.i18n';
-  import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
-  import { ContentNodeResource } from 'kolibri.resources';
   import SidePanelModal from '../SidePanelModal';
   import SearchFiltersPanel from '../SearchFiltersPanel';
-  import { KolibriStudioId, PageNames } from '../../constants';
+  import { KolibriStudioId } from '../../constants';
   import useCardViewStyle from '../../composables/useCardViewStyle';
   import useContentLink from '../../composables/useContentLink';
   import useCoreLearn from '../../composables/useCoreLearn';
-  import useDevices, {
-    setCurrentDevice,
-    StudioNotAllowedError,
-  } from '../../composables/useDevices';
+  import useDevices from '../../composables/useDevices';
   import usePinnedDevices from '../../composables/usePinnedDevices';
-  import useSearch, { searchKeys } from '../../composables/useSearch';
+  import useSearch from '../../composables/useSearch';
   import useLearnerResources from '../../composables/useLearnerResources';
   import BrowseResourceMetadata from '../BrowseResourceMetadata';
   import commonLearnStrings from '../commonLearnStrings';
@@ -300,12 +294,7 @@
       MoreNetworkDevices,
     },
     mixins: [commonLearnStrings, commonCoreStrings],
-    setup(props) {
-      const currentInstance = getCurrentInstance().proxy;
-      const store = currentInstance.$store;
-      const router = currentInstance.$router;
-
-      const { isUserLoggedIn, isCoach, isAdmin, isSuperuser } = useUser();
+    setup() {
       const {
         searchTerms,
         displayingSearchResults,
@@ -323,10 +312,8 @@
       const {
         resumableContentNodes,
         moreResumableContentNodes,
-        fetchResumableContentNodes,
         fetchMoreResumableContentNodes,
       } = useLearnerResources();
-
       const {
         windowBreakpoint,
         windowIsLarge,
@@ -346,107 +333,6 @@
           search(keywords);
         }
       });
-
-      const rootNodes = ref([]);
-      const rootNodesLoading = ref(false);
-
-      function _showChannels(channels, baseurl) {
-        if (get(isUserLoggedIn) && !baseurl) {
-          fetchResumableContentNodes();
-        }
-        const shouldResolve = samePageCheckGenerator(store);
-        return ContentNodeResource.fetchCollection({
-          getParams: {
-            parent__isnull: true,
-            include_coach_content: get(isAdmin) || get(isCoach) || get(isSuperuser),
-            baseurl,
-          },
-        }).then(
-          channelCollection => {
-            if (shouldResolve()) {
-              // we want them to be in the same order as the channels list
-              set(
-                rootNodes,
-                channels
-                  .map(channel => {
-                    const node = channelCollection.find(n => n.channel_id === channel.id);
-                    if (node) {
-                      // The `channel` comes with additional data that is
-                      // not returned from the ContentNodeResource.
-                      // Namely thumbnail, description and tagline (so far)
-                      node.title = channel.name || node.title;
-                      node.thumbnail = channel.thumbnail;
-                      node.description = channel.tagline || channel.description;
-                      return node;
-                    }
-                  })
-                  .filter(Boolean)
-              );
-
-              store.commit('CORE_SET_PAGE_LOADING', false);
-              store.commit('CORE_SET_ERROR', null);
-              store.commit('SET_PAGE_NAME', PageNames.LIBRARY);
-              set(rootNodesLoading, false);
-            }
-          },
-          error => {
-            shouldResolve()
-              ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-              : null;
-            set(rootNodesLoading, false);
-          }
-        );
-      }
-
-      function _showLibrary(baseurl) {
-        return fetchChannels({ baseurl }).then(channels => {
-          if (!channels.length && !store.getters.isUserLoggedIn) {
-            router.replace({ name: PageNames.CONTENT_UNAVAILABLE });
-            return;
-          }
-          if (!channels.length && baseurl) {
-            router.replace({ name: PageNames.LIBRARY });
-            return;
-          }
-
-          const query = currentRoute().query;
-
-          if (searchKeys.some(key => query[key])) {
-            // If currently on a route with search terms
-            // just finish early and let the component handle loading
-            store.commit('CORE_SET_PAGE_LOADING', false);
-            store.commit('CORE_SET_ERROR', null);
-            store.commit('SET_PAGE_NAME', PageNames.LIBRARY);
-            set(rootNodesLoading, false);
-            return Promise.resolve();
-          }
-          return _showChannels(channels, baseurl);
-        });
-      }
-
-      function showLibrary() {
-        set(rootNodesLoading, true);
-        if (props.deviceId) {
-          return setCurrentDevice(props.deviceId)
-            .then(device => {
-              const baseurl = device.base_url;
-              // _showLibrary should unset the rootNodesLoading
-              return _showLibrary(baseurl);
-            })
-            .catch(error => {
-              if (error === StudioNotAllowedError) {
-                router.replace({ name: PageNames.LIBRARY });
-                return;
-              }
-              return Promise.reject(error);
-            });
-        }
-        return _showLibrary();
-      }
-
-      watch(() => props.deviceId, showLibrary);
-
-      showLibrary();
 
       return {
         canAddDownloads,
@@ -476,9 +362,6 @@
         fetchChannels,
         fetchPinsForUser,
         back,
-        rootNodesLoading,
-        rootNodes,
-        isUserLoggedIn,
       };
     },
     props: {
@@ -498,6 +381,8 @@
       };
     },
     computed: {
+      ...mapState(['rootNodes']),
+      ...mapGetters(['isUserLoggedIn', 'getRootNodesLoading']),
       allowDownloads() {
         return this.canAddDownloads && Boolean(this.deviceId);
       },
@@ -516,7 +401,7 @@
         }
       },
       channelsToDisplay() {
-        return this.windowIsSmall ? 3 : 5;
+        return this.windowIsSmall ? 3 : 7;
       },
       devicesWithChannels() {
         //display Kolibri studio for superusers only
@@ -555,7 +440,7 @@
         if ([0, 1, 2, 6].includes(this.windowBreakpoint)) {
           span = 4;
         } else if ([3, 4, 5].includes(this.windowBreakpoint)) {
-          span = 4;
+          span = 6;
         }
         return span;
       },
@@ -754,7 +639,6 @@
   .main-grid {
     margin-top: 110px;
     margin-right: 24px;
-    margin-bottom: 96px;
   }
 
   .channels-label {

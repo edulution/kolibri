@@ -11,7 +11,6 @@ from kolibri.core.auth.models import Classroom
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.models import LearnerGroup
-from kolibri.core.auth.test.helpers import clear_process_cache
 from kolibri.core.auth.test.helpers import provision_device
 from kolibri.core.exams.models import Exam
 from kolibri.core.exams.models import ExamAssignment
@@ -23,7 +22,6 @@ from kolibri.core.logger.models import MasteryLog
 
 class LearnerClassroomTestCase(APITestCase):
     def setUp(self):
-        clear_process_cache()
         provision_device()
         self.facility = Facility.objects.create(name="My Facility")
         self.coach_user = FacilityUser.objects.create(

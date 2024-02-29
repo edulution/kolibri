@@ -17,11 +17,13 @@ import { learnStrings } from '../views/commonLearnStrings';
  */
 const currentDevice = ref(null);
 
+const { kolibriLibrary$ } = learnStrings;
+
 const KolibriStudioDeviceData = {
   ...plugin_data.studioDevice,
   id: KolibriStudioId,
   get device_name() {
-    return learnStrings.$tr('kolibriLibrary');
+    return kolibriLibrary$();
   },
 };
 
@@ -55,12 +57,10 @@ function fetchDevices() {
   });
 }
 
-export const StudioNotAllowedError = 'Cannot access Kolibri Studio';
-
 export function setCurrentDevice(id) {
   if (id === KolibriStudioId) {
     if (!canAccessStudio()) {
-      return Promise.reject(StudioNotAllowedError);
+      return Promise.reject('Cannot access Kolibri Studio');
     }
     set(currentDevice, KolibriStudioDeviceData);
     return Promise.resolve(KolibriStudioDeviceData);

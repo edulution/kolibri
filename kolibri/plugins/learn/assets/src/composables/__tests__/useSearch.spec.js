@@ -35,10 +35,6 @@ function prep(query = {}, descendant = null) {
 }
 
 describe(`useSearch`, () => {
-  beforeEach(() => {
-    ContentNodeResource.fetchCollection = jest.fn();
-    ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
-  });
   describe(`searchTerms computed ref`, () => {
     it(`returns an object with all relevant keys when query params are empty`, () => {
       const { searchTerms } = prep();
@@ -200,6 +196,7 @@ describe(`useSearch`, () => {
   describe('search method', () => {
     it('should call ContentNodeResource.fetchCollection when searchTerms changes', async () => {
       const { store } = prep();
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       store.commit('SET_QUERY', { categories: 'test1,test2' });
       await Vue.nextTick();
@@ -213,7 +210,7 @@ describe(`useSearch`, () => {
     });
     it('should not call ContentNodeResource.fetchCollection if there is no search', () => {
       const { search } = prep();
-      ContentNodeResource.fetchCollection.mockClear();
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).not.toHaveBeenCalled();
@@ -228,6 +225,7 @@ describe(`useSearch`, () => {
     });
     it('should call ContentNodeResource.fetchCollection if there is no search but a descendant is set', () => {
       const { search } = prep({}, ref({ tree_id: 1, lft: 10, rght: 20 }));
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
@@ -242,6 +240,7 @@ describe(`useSearch`, () => {
     });
     it('should set labels and clear more if there is no search but a descendant is set', async () => {
       const { labels, more, search } = prep({}, ref({ tree_id: 1, lft: 10, rght: 20 }));
+      ContentNodeResource.fetchCollection = jest.fn();
       const labelsSet = {
         available: ['labels'],
         channels: [],
@@ -256,6 +255,7 @@ describe(`useSearch`, () => {
     });
     it('should call ContentNodeResource.fetchCollection when searchTerms exist', () => {
       const { search } = prep({ categories: 'test1,test2' });
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
@@ -268,6 +268,7 @@ describe(`useSearch`, () => {
     });
     it('should ignore other categories when AllCategories is set and search for isnull false', () => {
       const { search } = prep({ categories: `test1,test2,${NoCategories},${AllCategories}` });
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
@@ -276,6 +277,7 @@ describe(`useSearch`, () => {
     });
     it('should ignore other categories when NoCategories is set and search for isnull true', () => {
       const { search } = prep({ categories: `test1,test2,${NoCategories}` });
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
@@ -290,6 +292,7 @@ describe(`useSearch`, () => {
         },
         ref({ tree_id: 1, lft: 10, rght: 20 })
       );
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
@@ -305,6 +308,7 @@ describe(`useSearch`, () => {
     });
     it('should set keywords when defined', () => {
       const { search } = prep({ keywords: `this is just a test` });
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       search();
       expect(ContentNodeResource.fetchCollection).toHaveBeenCalledWith({
@@ -326,6 +330,7 @@ describe(`useSearch`, () => {
         cursor: 'adalskdjsadlkjsadlkjsalkd',
       };
       const expectedResults = [{ id: 'node-id1' }];
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(
         Promise.resolve({
           labels: expectedLabels,
@@ -343,14 +348,14 @@ describe(`useSearch`, () => {
   describe('searchMore method', () => {
     it('should not call anything when not displaying search terms', () => {
       const { searchMore } = prep();
-      ContentNodeResource.fetchCollection.mockClear();
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       searchMore();
       expect(ContentNodeResource.fetchCollection).not.toHaveBeenCalled();
     });
     it('should not call anything when more is null', () => {
       const { more, searchMore } = prep({ categories: 'test1' });
-      ContentNodeResource.fetchCollection.mockClear();
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       set(more, null);
       searchMore();
@@ -358,7 +363,7 @@ describe(`useSearch`, () => {
     });
     it('should not call anything when moreLoading is true', () => {
       const { more, moreLoading, searchMore } = prep({ categories: 'test1' });
-      ContentNodeResource.fetchCollection.mockClear();
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       set(more, {});
       set(moreLoading, true);
@@ -367,6 +372,7 @@ describe(`useSearch`, () => {
     });
     it('should pass the more object directly to getParams', () => {
       const { more, searchMore } = prep({ categories: `test1,test2,${NoCategories}` });
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(Promise.resolve({}));
       const moreExpected = { test: 'this', not: 'that' };
       set(more, moreExpected);
@@ -386,6 +392,7 @@ describe(`useSearch`, () => {
         cursor: 'adalskdjsadlkjsadlkjsalkd',
       };
       const originalResults = [{ id: 'originalId', content_id: 'first' }];
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(
         Promise.resolve({
           labels: expectedLabels,
@@ -396,6 +403,7 @@ describe(`useSearch`, () => {
       search();
       await Vue.nextTick();
       const expectedResults = [{ id: 'node-id1', content_id: 'second' }];
+      ContentNodeResource.fetchCollection = jest.fn();
       ContentNodeResource.fetchCollection.mockReturnValue(
         Promise.resolve({
           labels: expectedLabels,

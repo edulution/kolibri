@@ -8,6 +8,7 @@
     <!-- by replacing it with an empty object -->
     <ImmersivePage
       v-else
+      :loading="loading"
       :route="back"
       :appBarTitle="barTitle"
       :appearanceOverrides="{}"
@@ -22,7 +23,7 @@
         />
       </template>
 
-      <KCircularLoader v-if="loading" class="page-loader" />
+      <KCircularLoader v-if="loading" />
 
       <div v-else>
         <!-- Header with thumbail and tagline -->
@@ -41,7 +42,7 @@
               v-if="!!windowIsLarge"
               :topic="topic"
               :topics="topics"
-              :width="sidePanelWidth"
+              :style="tabPosition"
             />
             <SearchFiltersPanel
               v-if="!!windowIsLarge && searchActive"
@@ -241,30 +242,22 @@
 
 <script>
 
-  import { get, set } from '@vueuse/core';
+  import { mapActions, mapState } from 'vuex';
   import isEqual from 'lodash/isEqual';
-  import lodashSet from 'lodash/set';
-  import lodashGet from 'lodash/get';
+  import set from 'lodash/set';
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
-  import { getCurrentInstance, ref, watch } from 'kolibri.lib.vueCompositionApi';
+  import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import useUser from 'kolibri.coreVue.composables.useUser';
   import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { throttle } from 'frame-throttle';
   import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
-  import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
-  import { ContentNodeResource } from 'kolibri.resources';
   import plugin_data from 'plugin_data';
   import SidePanelModal from '../SidePanelModal';
-  import { PageNames, channelThemeTokens } from '../../constants';
-  import useChannels from '../../composables/useChannels';
+  import { PageNames } from '../../constants';
   import useSearch from '../../composables/useSearch';
   import useContentLink from '../../composables/useContentLink';
-  import useContentNodeProgress from '../../composables/useContentNodeProgress';
   import useCoreLearn from '../../composables/useCoreLearn';
-  import { setCurrentDevice, StudioNotAllowedError } from '../../composables/useDevices';
-  import useDownloadRequests from '../../composables/useDownloadRequests';
   import LibraryAndChannelBrowserMainContent from '../LibraryAndChannelBrowserMainContent';
   import SearchFiltersPanel from '../SearchFiltersPanel';
   import BrowseResourceMetadata from '../BrowseResourceMetadata';
@@ -278,33 +271,6 @@
   import TopicSubsection from './TopicSubsection';
   import TopicsPanelModal from './TopicsPanelModal';
   import commonLearnStrings from './../commonLearnStrings';
-
-  function _handleRootTopic(topic, currentChannel) {
-    const isRoot = !topic.parent;
-    if (isRoot) {
-      topic.description = currentChannel.description;
-      topic.tagline = currentChannel.tagline;
-      topic.thumbnail = currentChannel.thumbnail;
-    }
-    return isRoot;
-  }
-
-  function _getChildren(id, topic, skip) {
-    let children = topic.children.results || [];
-    let skipped = false;
-    // If there is only one child, and that child is a topic, then display that instead
-    while (skip && children.length === 1 && !children[0].is_leaf) {
-      topic = children[0];
-      children = topic.children.results || [];
-      skipped = true;
-      id = topic.id;
-    }
-    return {
-      children,
-      skipped,
-      id,
-    };
-  }
 
   export default {
     name: 'TopicsPage',
@@ -340,12 +306,10 @@
       DeviceConnectionStatus,
     },
     mixins: [responsiveWindowMixin, commonCoreStrings, commonLearnStrings],
-    setup(props) {
+    setup() {
       const { canAddDownloads, canDownloadExternally } = useCoreLearn();
-      const currentInstance = getCurrentInstance().proxy;
-      const store = currentInstance.$store;
-      const router = currentInstance.$router;
-      const topic = ref(null);
+      const store = getCurrentInstance().proxy.$store;
+      const topic = computed(() => store.state.topicsTree && store.state.topicsTree.topic);
       const {
         searchTerms,
         displayingSearchResults,
@@ -357,125 +321,8 @@
         searchMore,
         removeFilterTag,
         clearSearch,
-        currentRoute,
       } = useSearch(topic);
       const { back, genContentLinkKeepCurrentBackLink } = useContentLink();
-      const { channelsMap, fetchChannels } = useChannels();
-      const { fetchContentNodeTreeProgress } = useContentNodeProgress();
-      const { isUserLoggedIn, isCoach, isAdmin, isSuperuser } = useUser();
-
-      const isRoot = ref(false);
-      const channel = ref(null);
-      const contents = ref([]);
-      const loading = ref(true);
-
-      function _handleTopicRedirect(route, children, id, skipped) {
-        if (!children.some(c => !c.is_leaf) && route.name !== PageNames.TOPICS_TOPIC_SEARCH) {
-          // if there are no children which are not leaf nodes (i.e. they have children themselves)
-          // then redirect to search results
-          router.replace({
-            name: PageNames.TOPICS_TOPIC_SEARCH,
-            params: { ...route.params, id },
-            query: route.query,
-          });
-          return true;
-        } else if (skipped) {
-          // If we have skipped down the topic tree, replace to the new top level topic
-          router.replace({ name: route.name, params: { ...route.params, id }, query: route.query });
-          return true;
-        }
-      }
-
-      function _loadTopicsTopic({ baseurl, shouldResolve } = {}) {
-        let id = props.id;
-        const route = currentRoute();
-        const skip = route.query && route.query.skip === 'true';
-        const params = {
-          include_coach_content: get(isAdmin) || get(isCoach) || get(isSuperuser),
-          baseurl,
-        };
-        if (get(isUserLoggedIn) && !baseurl) {
-          fetchContentNodeTreeProgress({ id, params });
-        }
-        return Promise.all([
-          ContentNodeResource.fetchTree({
-            id,
-            params,
-          }),
-          fetchChannels({ baseurl }),
-        ]).then(([fetchedTopic]) => {
-          if (shouldResolve()) {
-            const currentChannel = channelsMap[fetchedTopic.channel_id];
-            if (!currentChannel) {
-              router.replace({ name: PageNames.CONTENT_UNAVAILABLE });
-              return;
-            }
-
-            const rootTopic = _handleRootTopic(fetchedTopic, currentChannel);
-
-            const childrenResults = _getChildren(id, fetchedTopic, skip);
-
-            const { children, skipped } = childrenResults;
-
-            id = childrenResults.id;
-
-            _handleTopicRedirect(route, children, id, skipped);
-
-            set(isRoot, rootTopic);
-
-            set(contents, children);
-
-            set(topic, fetchedTopic);
-
-            set(channel, currentChannel);
-
-            set(loading, false);
-
-            store.dispatch('notLoading');
-            store.commit('CORE_SET_ERROR', null);
-          }
-        });
-      }
-
-      function showTopicsTopic() {
-        return store.dispatch('loading').then(() => {
-          const route = currentRoute();
-          store.commit('SET_PAGE_NAME', route.name);
-          set(loading, true);
-          set(topic, null);
-          set(channel, null);
-          set(contents, []);
-          set(isRoot, false);
-          const shouldResolve = samePageCheckGenerator(store);
-          let promise;
-          if (props.deviceId) {
-            promise = setCurrentDevice(props.deviceId).then(device => {
-              const baseurl = device.base_url;
-              const { fetchUserDownloadRequests } = useDownloadRequests(store);
-              fetchUserDownloadRequests({ page: 1, pageSize: 100 });
-              return _loadTopicsTopic({ baseurl, shouldResolve });
-            });
-          } else {
-            promise = _loadTopicsTopic({ shouldResolve });
-          }
-          return promise.catch(error => {
-            if (shouldResolve()) {
-              if (
-                error === StudioNotAllowedError ||
-                (error.response && error.response.status === 410)
-              ) {
-                router.replace({ name: PageNames.LIBRARY });
-                return;
-              }
-              store.dispatch('handleApiError', { error, reloadOnReconnect: true });
-            }
-          });
-        });
-      }
-
-      watch([() => props.id, () => props.deviceId], showTopicsTopic);
-      showTopicsTopic();
-
       return {
         canAddDownloads,
         canDownloadExternally,
@@ -491,27 +338,14 @@
         clearSearch,
         back,
         genContentLinkKeepCurrentBackLink,
-        isRoot,
-        channel,
-        topic,
-        contents,
-        isUserLoggedIn,
-        fetchContentNodeTreeProgress,
-        loading,
       };
     },
     props: {
-      deviceId: {
-        type: String,
+      loading: {
+        type: Boolean,
         default: null,
       },
-      // Our linting doesn't detect usage in the setup function yet.
-      // eslint-disable-next-line kolibri/vue-no-unused-properties
-      id: {
-        type: String,
-        required: true,
-      },
-      subtopic: {
+      deviceId: {
         type: String,
         default: null,
       },
@@ -519,6 +353,7 @@
     data: function() {
       return {
         sidePanelStyleOverrides: {},
+        tabPosition: {},
         showMoreResources: false,
         sidePanelIsOpen: false,
         metadataSidePanelContent: null,
@@ -529,6 +364,7 @@
       };
     },
     computed: {
+      ...mapState('topicsTree', ['channel', 'contents', 'isRoot', 'topic']),
       allowDownloads() {
         return this.canAddDownloads && Boolean(this.deviceId);
       },
@@ -550,7 +386,7 @@
             // To allow navigating to a specific topic under the breadcrumb
             // without following the normal skip logic, add a special query
             // parameter to signal that we do not want to skip.
-            lodashSet(link, ['query', 'skip'], 'false');
+            set(link, ['query', 'skip'], 'false');
             return {
               // Use the channel name just in case the root node does not have a title.
               text: index === 0 ? this.channelTitle : title,
@@ -564,7 +400,7 @@
         return this.$route.name === PageNames.TOPICS_TOPIC_SEARCH;
       },
       channelTitle() {
-        return this.channel ? this.channel.name : '';
+        return this.channel.name;
       },
       resources() {
         return this.contents.filter(content => content.kind !== ContentNodeKinds.TOPIC);
@@ -648,13 +484,13 @@
           });
       },
       subTopicId() {
-        return this.subtopic;
+        return this.$route.params.subtopic;
       },
       currentChannelIsCustom() {
         if (
           plugin_data.enableCustomChannelNav &&
           this.topic &&
-          lodashGet(this.topic, ['options', 'modality']) === 'CUSTOM_NAVIGATION'
+          this.topic.options.modality === 'CUSTOM_NAVIGATION'
         ) {
           return true;
         }
@@ -672,16 +508,16 @@
       gridStyle() {
         let style = {};
         /*
-            Fixes jumping scrollbar when reaching the bottom of the page
-            for certain page heights and when side bar is present.
-            The issue is caused by the document scroll height being changed
-            by the sidebar's switching position from absolute to fixed in
-            the sticky calculation, resulting in an endless cycle
-            of the calculation being called and the sidepanel alternating between
-            fixed and absolute position over and over. Setting min height prevents
-            this by making sure that the document scroll height won't change
-            on the sidebar positioning updates.
-          */
+          Fixes jumping scrollbar when reaching the bottom of the page
+          for certain page heights and when side bar is present.
+          The issue is caused by the document scroll height being changed
+          by the sidebar's switching position from absolute to fixed in
+          the sticky calculation, resulting in an endless cycle
+          of the calculation being called and the sidepanel alternating between
+          fixed and absolute position over and over. Setting min height prevents
+          this by making sure that the document scroll height won't change
+          on the sidebar positioning updates.
+        */
         if (this.windowIsLarge) {
           style = {
             minHeight: '900px',
@@ -762,35 +598,21 @@
         }
         document.documentElement.style.position = '';
       },
-      channelTitle(newVal) {
-        if (!newVal) {
-          return;
-        }
-        
-        const channelIdentifier = newVal.toLowerCase().split('-')[0].replaceAll(" ", "");
-        const themeTokens = channelThemeTokens[channelIdentifier] || channelThemeTokens.default; 
-        this.updateThemeTokens(themeTokens);
-      }
     },
     beforeDestroy() {
       window.removeEventListener('scroll', this.throttledHandleScroll);
       // Unsetting possible change in metadataSidePanelContent watcher
       // to avoid leaving `fixed` position
       document.documentElement.style.position = '';
-      this.updateThemeTokens(channelThemeTokens.default)
     },
     created() {
       window.addEventListener('scroll', this.throttledHandleScroll);
       if (this.subTopicId) {
         this.handleLoadMoreInSubtopic(this.subTopicId);
       }
-      if (this.channelTitle) {
-        const channelIdentifier = this.channelTitle.toLowerCase().split('-')[0].replaceAll(" ", "");
-        const themeTokens = channelThemeTokens[channelIdentifier] || channelThemeTokens.default; 
-        this.updateThemeTokens(themeTokens);
-      }
     },
     methods: {
+      ...mapActions('topicsTree', ['loadMoreContents', 'loadMoreTopics']),
       throttledHandleScroll() {
         this.throttledStickyCalculation();
       },
@@ -837,57 +659,11 @@
           [topicId]: true,
         };
       },
-      loadMoreContents(parentId) {
-        const parentIndex = this.contents.findIndex(p => p.id === parentId);
-        const parent = parentIndex > -1 ? this.contents[parentIndex] : null;
-        const more = parent && parent.children && parent.children.more;
-        if (more) {
-          if (this.isUserLoggedIn) {
-            this.fetchContentNodeTreeProgress(more);
-          }
-          return ContentNodeResource.fetchTree(more)
-            .then(data => {
-              const child = this.contents[parentIndex];
-              child.children.results = child.children.results.concat(data.children.results);
-              child.children.more = data.children.more;
-              this.contents = [
-                ...this.contents.slice(0, parentIndex),
-                child,
-                ...this.contents.slice(parentIndex + 1),
-              ];
-            })
-            .catch(err => {
-              this.$store.dispatch('handleApiError', { error: err });
-            });
-        }
-      },
       handleLoadMoreInSubtopic(topicId) {
         this.subTopicLoading = topicId;
         this.loadMoreContents(topicId).then(() => {
           this.subTopicLoading = null;
         });
-      },
-      loadMoreTopics() {
-        const more = this.topic.children.more;
-        if (more) {
-          if (this.isUserLoggedIn) {
-            this.fetchContentNodeTreeProgress(more);
-          }
-          return ContentNodeResource.fetchTree(more)
-            .then(data => {
-              this.contents = this.contents.concat(data.children.results);
-              this.topic = {
-                ...this.topic,
-                children: {
-                  results: [...this.topic.children.results, ...data.children.results],
-                  more: data.children.more,
-                },
-              };
-            })
-            .catch(err => {
-              this.$store.dispatch('handleApiError', { error: err });
-            });
-        }
       },
       handleLoadMoreInTopic() {
         this.topicMoreLoading = true;
@@ -905,11 +681,6 @@
           this.$refs.resourcePanel.focusFirstEl();
         }
       },
-      updateThemeTokens(themeTokens) {
-        Object.keys(themeTokens).forEach(token => {
-          this.$themeTokens[token] = themeTokens[token];
-        })
-      }
     },
     $trs: {
       documentTitleForChannel: {
@@ -1005,11 +776,6 @@
   .chip {
     margin-bottom: 8px;
     margin-left: 8px;
-  }
-
-  .page-loader {
-    top: $toolbar-height;
-    padding-top: 16px;
   }
 
 </style>

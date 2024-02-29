@@ -8,12 +8,14 @@ import classes from './classes';
 import examReportViewer from './examReportViewer';
 import examViewer from './examViewer';
 import lessonPlaylist from './lessonPlaylist';
+import topicsTree from './topicsTree';
 
 export default {
   state() {
     return {
       pageName: '',
       welcomeModalVisible: false,
+      rootNodes: [],
       canAccessUnassignedContentSetting: plugin_data.allowLearnerUnassignedResourceAccess,
       allowGuestAccess: plugin_data.allowGuestAccess,
       /**
@@ -21,6 +23,7 @@ export default {
        * or not at any time. It should be set as `false` whenever the content page is loaded.
        **/
       showCompleteContentModal: false,
+      rootNodesLoading: false,
     };
   },
   actions,
@@ -32,5 +35,6 @@ export default {
     examReportViewer,
     examViewer,
     lessonPlaylist,
+    topicsTree,
   },
 };

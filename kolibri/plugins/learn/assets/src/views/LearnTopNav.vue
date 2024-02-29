@@ -14,7 +14,6 @@
   import { mapGetters } from 'vuex';
   import HorizontalNavBarWithOverflowMenu from 'kolibri.coreVue.components.HorizontalNavBarWithOverflowMenu';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { UserKinds } from 'kolibri.coreVue.vuex.constants';
   import { PageNames } from '../constants';
   import useCoreLearn from '../composables/useCoreLearn';
   import commonLearnStrings from './commonLearnStrings';
@@ -33,7 +32,6 @@
     },
     computed: {
       ...mapGetters(['isUserLoggedIn', 'canAccessUnassignedContent']),
-      ...mapGetters(['isUserLoggedIn', 'canAccessUnassignedContent', 'getUserKind']),
       links() {
         return [
           {
@@ -44,7 +42,7 @@
             color: this.$themeTokens.textInverted,
           },
           {
-            isHidden: !this.canAccessUnassignedContent || this.getUserKind === UserKinds.LEARNER,
+            isHidden: !this.canAccessUnassignedContent,
             title: this.coreString('libraryLabel'),
             link: this.$router.getRoute(PageNames.LIBRARY),
             icon: 'library',

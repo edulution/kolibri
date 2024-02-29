@@ -57,7 +57,6 @@
         :layout12="{ span: thumbnail ? 10 : 12, alignment: 'auto' }"
       >
         <TextTruncator
-          class="text-description"
           :text="description"
           :maxHeight="110"
         />
@@ -131,10 +130,6 @@
 
   .title {
     margin: 8px 0 16px;
-  }
-
-  .text-description {
-    padding-left: 15px;
   }
 
 </style>

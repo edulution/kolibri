@@ -36,10 +36,14 @@
       />
       <ExploreChannels
         v-if="displayExploreChannels"
-        :channels="filteredChannels"
+        :channels="channels"
         class="section"
         data-test="exploreChannels"
-        :short="isShort"
+        :short="displayClasses ||
+          continueLearning ||
+          hasActiveClassesLessons ||
+          hasActiveClassesQuizzes
+        "
       />
 
     </div>
@@ -50,22 +54,13 @@
 
 <script>
 
-  import { mapGetters } from 'vuex';
-  import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
+  import { computed } from 'kolibri.lib.vueCompositionApi';
   import { get } from '@vueuse/core';
-  import client from 'kolibri.client';
-  import urls from 'kolibri.urls';
   import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
   import useUser from 'kolibri.coreVue.composables.useUser';
-  import { UserKinds } from 'kolibri.coreVue.vuex.constants';
   import useChannels from '../../composables/useChannels';
   import useDeviceSettings from '../../composables/useDeviceSettings';
-  import useLearnerResources, {
-    setClasses,
-    setResumableContentNodes,
-  } from '../../composables/useLearnerResources';
-  import { setContentNodeProgress } from '../../composables/useContentNodeProgress';
-  import { PageNames } from '../../constants';
+  import useLearnerResources from '../../composables/useLearnerResources';
   import AssignedLessonsCards from '../classes/AssignedLessonsCards';
   import AssignedQuizzesCards from '../classes/AssignedQuizzesCards';
   import YourClasses from '../YourClasses';
@@ -92,19 +87,10 @@
       MissingResourceAlert,
     },
     mixins: [commonLearnStrings],
-    data() {
-      return {
-        filteredChannels: [],
-      }
-    },
     setup() {
-      const currentInstance = getCurrentInstance().proxy;
-      const store = currentInstance.$store;
-      const router = currentInstance.$router;
-
       const { isUserLoggedIn } = useUser();
       const { canAccessUnassignedContent } = useDeviceSettings();
-      const { localChannelsCache, fetchChannels, fetchLearnerChannels } = useChannels();
+      const { channels } = useChannels();
       const {
         classes,
         activeClassesLessons,
@@ -140,6 +126,16 @@
         () =>
           get(isUserLoggedIn) && get(activeClassesQuizzes) && get(activeClassesQuizzes).length > 0
       );
+      const hasChannels = computed(() => {
+        return get(channels) && get(channels).length > 0;
+      });
+      const displayExploreChannels = computed(() => {
+        return (
+          get(hasChannels) &&
+          (!get(isUserLoggedIn) ||
+            (get(learnerFinishedAllClasses) && get(canAccessUnassignedContent)))
+        );
+      });
 
       const displayClasses = computed(() => {
         return get(isUserLoggedIn) && (get(classes).length || !get(canAccessUnassignedContent));
@@ -152,43 +148,9 @@
         );
       });
 
-      function hydrateHomePage() {
-        return client({ url: urls['kolibri:kolibri.plugins.learn:homehydrate']() }).then(
-          response => {
-            setClasses(response.data.classrooms);
-            setResumableContentNodes(
-              response.data.resumable_resources.results || [],
-              response.data.resumable_resources.more || null
-            );
-            for (const progress of response.data.resumable_resources_progress) {
-              setContentNodeProgress(progress);
-            }
-          }
-        );
-      }
-
-      fetchChannels().then(channels => {
-        if (!channels.length) {
-          router.replace({ name: PageNames.LIBRARY });
-          return;
-        }
-
-        // force fetch classes and resumable content nodes to make sure that the home
-        // page is up-to-date when navigating to other 'Learn' pages and then back
-        // to the home page
-        return hydrateHomePage()
-          .then(() => {
-            store.commit('SET_PAGE_NAME', PageNames.HOME);
-            store.dispatch('notLoading');
-          })
-          .catch(error => {
-            return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
-          });
-      });
-
       return {
         isUserLoggedIn,
-        channels: localChannelsCache,
+        channels,
         classes,
         activeClassesLessons,
         activeClassesQuizzes,
@@ -196,11 +158,9 @@
         hasActiveClassesQuizzes,
         continueLearningFromClasses,
         continueLearning,
+        displayExploreChannels,
         displayClasses,
         missingResources,
-        fetchLearnerChannels,
-        learnerFinishedAllClasses,
-        canAccessUnassignedContent,
       };
     },
     props: {
@@ -209,31 +169,6 @@
         default: null,
       },
     },
-    created() {
-      this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, userId: this.currentUserId }).then(res => {
-        console.log({ res });
-        this.filteredChannels = res;
-      });
-    },
-    computed: {
-      ...mapGetters(['getUserKind', 'currentUserId']),
-      isShort() {
-        if (this.getUserKind === UserKinds.LEARNER) {
-          return false;
-        }
-        return this.displayClasses || this.continueLearning || this.hasActiveClassesLessons || this.hasActiveClassesQuizzes
-      },
-      hasChannels() {
-        return this.filteredChannels && this.filteredChannels.length > 0;
-      },
-      displayExploreChannels() {
-        return (
-          this.hasChannels &&
-          (!this.isUserLoggedIn ||
-            (this.learnerFinishedAllClasses && this.canAccessUnassignedContent))
-        );
-      }
-    }
   };
 
 </script>
