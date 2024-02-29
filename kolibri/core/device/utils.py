@@ -23,7 +23,7 @@ from kolibri.utils.android import on_android
 logger = logging.getLogger(__name__)
 
 LANDING_PAGE_SIGN_IN = "sign-in"
-LANDING_PAGE_LEARN = "learn"
+LANDING_PAGE_LEARN = "edulution"
 
 APP_KEY_COOKIE_NAME = "app_key_cookie"
 APP_AUTH_TOKEN_COOKIE_NAME = "app_auth_token_cookie"
@@ -349,7 +349,7 @@ def provision_from_file(file_path):
         },
         "device_settings": {
             "language_id": "en",
-            "landing_page": "learn",
+            "landing_page": "edulution",
             "allow_guest_access": true,
             "allow_peer_unlisted_channel_import": true,
             "allow_learner_unassigned_resource_access": true,

@@ -64,7 +64,7 @@ export const pageNameToModuleMap = {
 
 export const LandingPageChoices = {
   SIGN_IN: 'sign-in',
-  LEARN: 'learn',
+  LEARN: 'edulution',
 };
 
 export const MeteredConnectionDownloadOptions = {

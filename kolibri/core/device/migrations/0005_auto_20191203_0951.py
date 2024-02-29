@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
             model_name="devicesettings",
             name="landing_page",
             field=models.CharField(
-                choices=[("sign-in", "Sign-in page"), ("learn", "Learn page")],
+                choices=[("sign-in", "Sign-in page"), ("edulution", "Learn page")],
                 default="sign-in",
                 max_length=7,
             ),
