@@ -1,7 +1,7 @@
 from django.conf.urls import include
 from django.conf.urls import url
 from rest_framework import routers
-
+from .api import KnowledgeMapViewset
 from .api import ChannelMetadataViewSet
 from .api import ContentNodeBookmarksViewset
 from .api import ContentNodeGranularViewset
@@ -22,6 +22,9 @@ router.register(r"usercontentnode", UserContentNodeViewset, basename="userconten
 router.register(
     r"contentnode_tree", ContentNodeTreeViewset, basename="contentnode_tree"
 )
+
+router.register(r'knowledgemap', KnowledgeMapViewset, base_name='knowledgemap')
+
 router.register(
     r"contentnode_search", ContentNodeSearchViewset, basename="contentnode_search"
 )

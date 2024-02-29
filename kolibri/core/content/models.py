@@ -39,7 +39,7 @@ from le_utils.constants import format_presets
 from morango.models.fields import UUIDField
 from mptt.managers import TreeManager
 from mptt.querysets import TreeQuerySet
-
+from mptt.models import MPTTModel 
 from .utils import paths
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
@@ -183,10 +183,9 @@ class ContentNodeManager(
             self._create_space(2 * len(stack), cursor - 1, tree_id)
 
         return stack
-
-
+   
 @python_2_unicode_compatible
-class ContentNode(base_models.ContentNode):
+class ContentNode(base_models.ContentNode, MPTTModel):
     """
     The primary object type in a content database. Defines the properties that are shared
     across all content types.
