@@ -348,3 +348,110 @@ class ContentDownloadRequestSerializer(serializers.ModelSerializer):
         content_request.save()
         automatic_resource_import.enqueue_if_not()
         return content_request
+
+def get_summary_logs(content_ids, user):
+    from kolibri.core.logger.models import ContentSummaryLog
+    if not content_ids:
+        return ContentSummaryLog.objects.none()
+    # get all summary logs for the current user that correspond to the descendant content nodes
+    return ContentSummaryLog.objects.filter(user=user, content_id__in=content_ids)
+    
+def get_topic_progress_fraction(topic, user):
+    from django.db.models import Sum
+    leaf_ids = topic.get_descendants(include_self=False).order_by()\
+        .exclude(kind=content_kinds.TOPIC)\
+        .exclude(available=False)\
+        .values_list("content_id", flat=True)
+    return round(
+        (get_summary_logs(leaf_ids, user).aggregate(Sum('progress'))['progress__sum'] or 0) / (len(leaf_ids) or 1),
+        4
+    )
+    
+def get_content_progress_fraction(content, user):
+    from kolibri.core.logger.models import ContentSummaryLog
+    try:
+        # add up all the progress for the logs, and divide by the total number of content nodes to get overall progress
+        overall_progress = ContentSummaryLog.objects.get(user=user, content_id=content.content_id).progress
+    except ContentSummaryLog.DoesNotExist:
+        return None
+    return round(overall_progress, 4)
+
+def get_topic_and_content_progress_fraction(node, user):
+    if node.kind == content_kinds.TOPIC:
+        return get_topic_progress_fraction(node, user)
+    else:
+        return get_content_progress_fraction(node, user)
+
+def get_topic_and_content_progress_fractions(nodes, user):
+    leaf_ids = nodes.get_descendants(include_self=True) \
+        .order_by() \
+        .exclude(available=False) \
+        .exclude(kind=content_kinds.TOPIC) \
+        .values_list('content_id', flat=True)
+
+    leaf_node_logs = get_summary_logs(leaf_ids, user)
+
+    overall_progress = {}
+
+    for log in leaf_node_logs.values('content_id', 'progress'):
+        overall_progress[log['content_id']] = round(log['progress'], 4)
+
+    for node in nodes:
+        if node.kind == content_kinds.TOPIC:
+            topic_leaf_ids = node.get_descendants(include_self=True) \
+                .order_by() \
+                .exclude(available=False) \
+                .exclude(kind=content_kinds.TOPIC) \
+                .values_list('content_id', flat=True)
+
+            overall_progress[node.content_id] = round(
+                sum(overall_progress.get(leaf_id, 0) for leaf_id in topic_leaf_ids) / len(topic_leaf_ids),
+                4
+            ) if topic_leaf_ids else 0.0
+
+    return overall_progress
+    
+class ContentNodeProgressListSerializer(serializers.ListSerializer):
+
+    def to_representation(self, data):
+        from django.db.models import Manager
+
+        if not data:
+            return data
+
+        if 'request' not in self.context or not self.context['request'].user.is_facility_user:
+            progress_dict = {}
+        else:
+            user = self.context["request"].user
+            # Don't annotate topic progress as too expensive
+            progress_dict = get_topic_and_content_progress_fractions(data, user)
+
+        # Dealing with nested relationships, data can be a Manager,
+        # so, first get a queryset from the Manager if needed
+        iterable = data.all() if isinstance(data, Manager) else data
+
+        return [
+            self.child.to_representation(
+                item,
+                progress_fraction=progress_dict.get(item.content_id, 0.0),
+                annotate_progress_fraction=False
+            ) for item in iterable
+        ]
+    
+class ContentNodeProgressSerializer(serializers.Serializer):
+
+    def to_representation(self, instance, progress_fraction=None, annotate_progress_fraction=True):
+        if progress_fraction is None and annotate_progress_fraction:
+            if 'request' not in self.context or not self.context['request'].user.is_facility_user:
+                # Don't try to annotate for a non facility user
+                progress_fraction = 0
+            else:
+                user = self.context["request"].user
+                progress_fraction = get_topic_and_content_progress_fraction(instance, user) or 0.0
+        return {
+            'id': instance.id,
+            'progress_fraction': progress_fraction,
+        }
+
+    class Meta:
+        list_serializer_class = ContentNodeProgressListSerializer

@@ -1133,7 +1133,7 @@ class ContentNodeTreeViewset(BaseContentNodeTreeViewset, RemoteMixin):
 class KnowledgeMapViewset(ReadOnlyModelViewSet):
     def retrieve(self, request, pk=None):
         def get_progress(node):
-            serializer = ContentNodeProgressViewset.serializer_class(node)
+            serializer = ContentNodeProgressViewsetForKnowledge.serializer_class(node)
             serializer.context['request'] = request
             return serializer.data['progress_fraction']
 
@@ -1152,7 +1152,12 @@ class KnowledgeMapViewset(ReadOnlyModelViewSet):
 
         def get_children(parent_id):
             children = ContentNode.objects.filter(parent=parent_id, available=True)
+
+            if not children:
+                raise Exception('No Content Available For ID :',parent_id )
+            
             serialized = ContentNodeSlimSerializer(children, many=True).data
+
             for c, s in zip(children, serialized):
                 s['progress_fraction'] = get_progress(c)
                 s['pendingPrerequisites'] = filter_pending(info(c.has_prerequisite.all()))
@@ -1669,6 +1674,18 @@ def mean(data):
 
     return mean
 
+class ContentNodeProgressFilter(IdFilter):
+    class Meta:
+        model = models.ContentNode
+        fields = ['ids', ]
+
+class ContentNodeProgressViewsetForKnowledge(viewsets.ReadOnlyModelViewSet):
+    serializer_class = serializers.ContentNodeProgressSerializer
+    filter_backends = (DjangoFilterBackend,)
+    filter_class = ContentNodeProgressFilter
+
+    def get_queryset(self):
+        return models.ContentNode.objects.all()
 
 class ContentNodeProgressViewset(
     TreeQueryMixin, viewsets.GenericViewSet, ListModelMixin
