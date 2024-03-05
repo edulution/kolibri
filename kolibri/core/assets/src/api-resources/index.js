@@ -37,3 +37,6 @@ export {
   StaticNetworkLocationResource,
   DynamicNetworkLocationResource,
 } from './networkLocation';
+export {
+  default as KnowledgemapResource,
+} from './knowledgemap'

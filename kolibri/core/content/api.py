@@ -1153,9 +1153,6 @@ class KnowledgeMapViewset(ReadOnlyModelViewSet):
         def get_children(parent_id):
             children = ContentNode.objects.filter(parent=parent_id, available=True)
 
-            if not children:
-                raise Exception('No Content Available For ID :',parent_id )
-            
             serialized = ContentNodeSlimSerializer(children, many=True).data
 
             for c, s in zip(children, serialized):

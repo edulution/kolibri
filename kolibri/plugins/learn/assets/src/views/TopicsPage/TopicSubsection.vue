@@ -32,6 +32,7 @@
           v-if="topic.children && topic.children.length"
           data-test="children-cards-grid"
           :contents="topic.children"
+          :topicKnowledgemap="topicKnowledgemap"
           :allowDownloads="allowDownloads"
           currentCardViewStyle="card"
           :keepCurrentBackLink="true"
@@ -67,7 +68,7 @@
 
 
 <script>
-
+  import get from 'lodash/get'
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import useContentLink from '../../composables/useContentLink';
   import LibraryAndChannelBrowserMainContent from '../LibraryAndChannelBrowserMainContent';
@@ -100,11 +101,16 @@
         topicExpanded: false
       }
     },
+    computed: {
+      topicKnowledgemap() {
+        return get(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic.id )?.children || [];
+      }
+    },
     methods: {
       onExpansionClick() {
         this.topicExpanded = !this.topicExpanded
       },
-    },
+    }
   };
 
 </script>

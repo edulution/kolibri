@@ -4,6 +4,7 @@ function defaultState() {
     exam: {},
     questionNumber: 0,
     questions: [],
+    knowledgemap: {},
   };
 }
 

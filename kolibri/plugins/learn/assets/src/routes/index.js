@@ -11,6 +11,7 @@ import TopicsContentPage from '../views/TopicsContentPage';
 import ContentUnavailablePage from '../views/ContentUnavailablePage';
 import BookmarkPage from '../views/BookmarkPage.vue';
 import ExploreLibrariesPage from '../views/ExploreLibrariesPage';
+import { showKnowledgemap } from '../modules/examViewer/handlers';
 import classesRoutes from './classesRoutes';
 
 const { channelsMap, fetchChannels } = useChannels();
@@ -120,6 +121,7 @@ export default [
     name: PageNames.TOPICS_TOPIC_SEARCH,
     path: `/topics${optionalDeviceIdPathSegment}/t/:id/search`,
     handler: (toRoute, fromRoute, next) => {
+      showKnowledgemap(store, { contentId: toRoute.params.id });
       if (unassignedContentGuard(next)) {
         return;
       }
@@ -130,7 +132,8 @@ export default [
   {
     name: PageNames.TOPICS_TOPIC,
     path: `/topics${optionalDeviceIdPathSegment}/t/:id/:subtopic?/folders`,
-    handler: (toRoute, fromRoute, next) => {
+    handler: ({ params }, next) => {
+      showKnowledgemap(store, { contentId: params.id });
       if (unassignedContentGuard(next)) {
         return;
       }

@@ -39,6 +39,7 @@
     <!-- Grid of search results  -->
     <LibraryAndChannelBrowserMainContent
       :contents="results"
+      :topicKnowledgemap="topicKnowledgemap"
       :allowDownloads="allowDownloads"
       data-test="search-results-card-grid"
       :currentCardViewStyle="currentCardViewStyle"
@@ -69,6 +70,7 @@
 
 <script>
 
+  import get from 'lodash/get'
   import { ref } from 'kolibri.lib.vueCompositionApi';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
@@ -143,6 +145,11 @@
       return {
         displayedCopies: [],
       };
+    },
+    computed: {
+      topicKnowledgemap() {
+        return get(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic?.id )?.children || [];
+      }
     },
     methods: {
       toggleCardView(value) {
