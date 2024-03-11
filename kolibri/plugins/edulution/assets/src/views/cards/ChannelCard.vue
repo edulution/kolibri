@@ -5,7 +5,7 @@
     :class="{ 'channel-card-fullwidth': fullwidth, 'channel-card-topic': variant === 'topic' }"
   >
     <div>
-      <router-link :to="to" class="link-card">
+      <ToggleRouterLink :link="to" :pendingPrerequisites="pendingPrerequisites">
         <ChannelThumbnailNew
           v-if="channel.thumbnail"
           :thumbnail="channel.thumbnail"
@@ -18,7 +18,7 @@
             <TextTruncatorCss dir="auto" :text="channel.title || channel.name" :maxLines="1" />
           </h3>
         </div>
-      </router-link>
+      </ToggleRouterLink>
     </div>
   </div>
 </template>
@@ -27,12 +27,14 @@
 
 import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
 import ChannelThumbnailNew from '../ChannelThumbnailNew';
+import ToggleRouterLink from '../ToggleRouterLink';
 
 export default {
   name: 'ChannelCard',
   components: {
     ChannelThumbnailNew,
     TextTruncatorCss,
+    ToggleRouterLink,
   },
   props: {
     channel: {
@@ -52,7 +54,12 @@ export default {
       type: String,
       required: false,
       default: '',
-    }
+    },
+    pendingPrerequisites: {
+      type: Array,
+      required: false,
+      default: () => [],
+    },
   }
 }
 </script>
@@ -83,18 +90,15 @@ export default {
     box-shadow: 0 5px 5px -3px rgba(0, 0, 0, .2), 0 8px 10px 1px rgba(0, 0, 0, .14), 0 3px 14px 2px rgba(0, 0, 0, .12);
   }
 
-  & .link-card {
-    text-decoration: none;
 
-    & .text {
-      color: rgb(58, 58, 58);
-      position: relative;
-      height: 92px;
-      padding: 16px;
-    }
-    & .title {
-      margin: 0;
-    }
+  & .text {
+    color: rgb(58, 58, 58);
+    position: relative;
+    height: 92px;
+    padding: 16px;
+  }
+  & .title {
+    margin: 0;
   }
 
   &.channel-card-fullwidth {

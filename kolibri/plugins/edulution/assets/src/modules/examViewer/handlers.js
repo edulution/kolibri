@@ -1,4 +1,4 @@
-import { ContentNodeResource, ExamResource } from 'kolibri.resources';
+import { ContentNodeResource, ExamResource, KnowledgemapResource } from 'kolibri.resources';
 import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
 import { convertExamQuestionSources } from 'kolibri.utils.exams';
 import shuffled from 'kolibri.utils.shuffled';
@@ -105,4 +105,21 @@ export function showExam(store, params, alreadyOnQuiz) {
       }
     );
   }
+}
+
+export function showKnowledgemap(store, { contentId }) {
+  return store.dispatch('loading').then(() => {
+    // Load knowledgemap only when user is logged in
+    if (!store.getters.isUserLoggedIn) {
+      return
+    }
+
+    return KnowledgemapResource.fetchModel({ id: contentId })
+        .then(({ progress, results }) => {
+          store.commit('examViewer/SET_STATE', { knowledgemap: { progress, results } })
+        })
+        .catch(error => {
+            return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        });
+  })
 }

@@ -5,6 +5,7 @@
     :to="to"
     variant="topic"
     :fullwidth="true"
+    :pendingPrerequisites="pendingPrerequisites"
   />
   <!-- <div class="card drop-shadow">
     <router-link
@@ -104,6 +105,11 @@
         type: Object,
         required: true,
       },
+      knowledgemap: {
+        type: Object,
+        required: false,
+        default: () => {}
+      },
     },
     computed: {
       headerStyles() {
@@ -123,6 +129,9 @@
       channelTitle() {
         return this.getChannelTitle(this.contentNode && this.contentNode.channel_id);
       },
+      pendingPrerequisites() {
+        return this.knowledgemap?.pendingPrerequisites || []
+      }
     },
   };
 

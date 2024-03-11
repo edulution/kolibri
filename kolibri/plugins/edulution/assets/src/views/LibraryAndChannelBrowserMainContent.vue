@@ -11,6 +11,7 @@
         :key="`resource-${idx}`"
         :data-test="componentType + '-' + idx"
         :contentNode="contentNode"
+        :knowledgemap="knowledgemap(idx)"
         :to="contentLink(contentNode.id, contentNode.is_leaf)"
         @openCopiesModal="$emit('openCopiesModal', contentNode.copies)"
       >
@@ -30,6 +31,7 @@
 
 <script>
 
+  import get from 'lodash/get'
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import useContentLink from '../composables/useContentLink';
   import CardGrid from './cards/CardGrid';
@@ -82,6 +84,11 @@
         type: Boolean,
         default: false,
       },
+      topicKnowledgemap: {
+        type: Array,
+        required: false,
+        default: () => [],
+      }
     },
     computed: {
       componentType() {
@@ -99,6 +106,9 @@
         return this.keepCurrentBackLink && !isResource
           ? this.genContentLinkKeepCurrentBackLink(id, isResource)
           : this.genContentLinkBackLinkCurrentPage(id, isResource);
+      },
+      knowledgemap(idx) {
+        return get(this.topicKnowledgemap, `[${idx}]`, {})
       },
     },
   };

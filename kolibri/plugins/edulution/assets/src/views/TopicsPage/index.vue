@@ -124,6 +124,7 @@
                 :allowDownloads="allowDownloads"
                 data-test="search-results"
                 :contents="resourcesDisplayed"
+                :topicKnowledgemap="topicKnowledgemap"
                 :numCols="numCols"
                 currentCardViewStyle="card"
                 @toggleInfoPanel="toggleInfoPanel"
@@ -529,6 +530,9 @@
       };
     },
     computed: {
+      topicKnowledgemap() {
+        return lodashGet(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic?.id )?.children || [];
+      },
       allowDownloads() {
         return this.canAddDownloads && Boolean(this.deviceId);
       },
