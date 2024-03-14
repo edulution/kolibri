@@ -16,7 +16,7 @@
         v-for="quiz in visibleQuizzes"
         :key="quiz.id"
         :quiz="quiz"
-        :to="getClassQuizLink(quiz)"
+        :to="getClassAssessmentLink(quiz)"
         :collectionTitle="displayClassName ? getQuizClassName(quiz) : ''"
       />
     </CardGrid>
@@ -43,7 +43,7 @@
       QuizCard,
     },
     setup(props) {
-      const { getClass, getClassQuizLink } = useLearnerResources();
+      const { getClass, getClassAssessmentLink } = useLearnerResources();
 
       const visibleQuizzes = computed(() => {
         if (!props.quizzes) {
@@ -69,7 +69,7 @@
       return {
         visibleQuizzes,
         getQuizClassName,
-        getClassQuizLink,
+        getClassAssessmentLink,
       };
     },
     props: {

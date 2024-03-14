@@ -228,6 +228,38 @@ export default function useLearnerResources() {
   }
 
   /**
+   * @param {Object} assessment
+   * @returns {Object} vue-router link to a assessment report page when the assessment
+   *                   is closed. Otherwise returns a link to a assessment page.
+   * @public
+   */
+  function getClassAssessmentLink(assessment) {
+    if (!assessment || !assessment.progress) {
+      return undefined;
+    }
+    if (assessment.progress.closed) {
+      return {
+        name: ClassesPageNames.ASSESSMENT_REPORT_VIEWER,
+        params: {
+          classId: assessment.collection,
+          examId: assessment.id,
+          questionNumber: 0,
+          questionInteraction: 0,
+          tryIndex: 0,
+        },
+      };
+    }
+    return {
+      name: ClassesPageNames.EXAM_VIEWER,
+      params: {
+        classId: assessment.collection,
+        examId: assessment.id,
+        questionNumber: 0,
+      },
+    };
+  }
+
+  /**
    * Fetches a class by its ID and saves data
    * to this composable's store
    *
@@ -323,6 +355,7 @@ export default function useLearnerResources() {
     getClassActiveQuizzes,
     getClassLessonLink,
     getClassQuizLink,
+    getClassAssessmentLink,
     fetchClass,
     fetchClasses,
     fetchLesson,

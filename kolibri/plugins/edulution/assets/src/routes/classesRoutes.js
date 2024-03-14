@@ -13,6 +13,7 @@ import ExamReportViewer from '../views/LearnExamReportViewer';
 import AllClassesPage from '../views/classes/AllClassesPage';
 import ClassAssignmentsPage from '../views/classes/ClassAssignmentsPage';
 import LessonPlaylistPage from '../views/classes/LessonPlaylistPage';
+import AssessmentPage from '../views/AssessmentPage';
 import AssessmentReportViewer from '../views/LearnAssessmentReportViewer';
 
 function noClassesGuard() {
@@ -77,6 +78,21 @@ export default [
       showExamReport(store, toRoute.params);
     },
     component: ExamReportViewer,
+  },
+  {
+    name: ClassesPageNames.ASSESSMENT_VIEWER,
+    path: '/classes/:classId/assessment/:examId/:questionNumber',
+    handler: (toRoute, fromRoute) => {
+      if (noClassesGuard()) {
+        return noClassesGuard();
+      }
+      const alreadyOnAssessment =
+        fromRoute.name === ClassesPageNames.ASSESSMENT_VIEWER &&
+        toRoute.params.examId === fromRoute.params.examId &&
+        toRoute.params.classId === fromRoute.params.classId;
+      showExam(store, toRoute.params, alreadyOnAssessment);
+    },
+    component: AssessmentPage,
   },
   {
     name: ClassesPageNames.ASSESSMENT_REPORT_VIEWER,
