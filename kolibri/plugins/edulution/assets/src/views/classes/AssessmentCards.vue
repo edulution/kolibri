@@ -12,16 +12,16 @@
       v-if="visibleQuizzes.length > 0"
       :gridType="1"
     >
-      <QuizCard
+      <AssessmentCard
         v-for="quiz in visibleQuizzes"
         :key="quiz.id"
         :quiz="quiz"
         :to="getClassAssessmentLink(quiz)"
-        :collectionTitle="displayClassName ? getQuizClassName(quiz) : ''"
+        :collectionTitle="displayClassName ? getAssessmentName(quiz) : ''"
       />
     </CardGrid>
     <p v-else>
-      {{ $tr('noQuizzesMessage') }}
+      {{ $tr('noAssessmentMessage') }}
     </p>
 
   </div>
@@ -33,42 +33,41 @@
 
   import { computed } from 'kolibri.lib.vueCompositionApi';
   import useLearnerResources from '../../composables/useLearnerResources';
-  import QuizCard from '../cards/QuizCard';
   import CardGrid from '../cards/CardGrid';
+  import AssessmentCard from '../cards/AssessmentCard';
 
   export default {
     name: 'AssessmentCards',
     components: {
       CardGrid,
-      QuizCard,
+      AssessmentCard
     },
     setup(props) {
       const { getClass, getClassAssessmentLink } = useLearnerResources();
-
       const visibleQuizzes = computed(() => {
         if (!props.quizzes) {
           return [];
         }
-        return props.quizzes.filter(quiz => {
-          if (!quiz.active) {
+        return props.quizzes.filter(assessment => {
+          if (!assessment.active) {
             return false;
-          } else if (quiz.archive) {
+          } else if (assessment.archive) {
             // Closed (archived) quizzes only show if the learner started/submitted
-            return quiz.progress.started || quiz.progress.closed;
+            return assessment.progress.started || assessment.progress.closed;
           } else {
             return true;
           }
         });
       });
 
-      function getQuizClassName(quiz) {
-        const quizClass = getClass(quiz.collection);
-        return quizClass ? quizClass.name : '';
+      function getAssessmentName(assessment) {
+        const assessmentClass = getClass(assessment.collection);
+        return assessmentClass ? assessmentClass.name : '';
       }
 
       return {
         visibleQuizzes,
-        getQuizClassName,
+        getAssessmentName,
         getClassAssessmentLink,
       };
     },
@@ -100,23 +99,23 @@
       // TODO: Would be more consistent to have this computed property in `setup`,
       // however haven't found a way to work with translations there yet
       header() {
-        return this.recent ? this.$tr('recentQuizzesHeader') : this.$tr('yourQuizzesHeader');
+        return this.recent ? this.$tr('recentAssessmentsHeader') : this.$tr('yourAssessmentHeader');
       },
     },
     $trs: {
-      yourQuizzesHeader: {
-        message: 'Your Assessment quizzes',
+      yourAssessmentHeader: {
+        message: 'Your assessments',
         context:
-          "AssessmentCards.yourQuizzesHeader\n\nHeading on the 'Learn' page for a section where a learner can see which quizzes have been assigned to them.",
+          "AssessmentCards.yourAssessmentHeader\n\nHeading on the 'Learn' page for a section where a learner can see which assessments have been assigned to them.",
       },
-      noQuizzesMessage: {
-        message: 'You have no quizzes assigned',
-        context: 'Message that a learner sees if a coach has not assigned any quizzes to them.',
+      noAssessmentMessage: {
+        message: 'You have no assessments assigned',
+        context: 'Message that a learner sees if a coach has not assigned any assessments to them.',
       },
-      recentQuizzesHeader: {
-        message: 'Assessment quizzes',
+      recentAssessmentsHeader: {
+        message: 'Recent assessments',
         context:
-          "Section header on the learner's Home page, displaying the most recent quizzes that the coaches assigned to them.",
+          "Section header on the learner's Home page, displaying the most recent assessments that the coaches assigned to them.",
       },
     },
   };
