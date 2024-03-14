@@ -11,6 +11,7 @@
 
       <AssignedLessonsCards :lessons="activeLessons" />
       <AssignedQuizzesCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
+      <AssessmentCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
     </div>
   </LearnAppBarPage>
 
@@ -31,6 +32,7 @@
   import LearnAppBarPage from './../LearnAppBarPage';
   import AssignedQuizzesCards from './AssignedQuizzesCards';
   import AssignedLessonsCards from './AssignedLessonsCards';
+  import AssessmentCards from './AssessmentCards';
 
   export default {
     name: 'ClassAssignmentsPage',
@@ -44,6 +46,7 @@
       AssignedLessonsCards,
       KBreadcrumbs,
       LearnAppBarPage,
+      AssessmentCards
     },
     mixins: [commonCoreStrings, commonLearnStrings],
     setup(_, { root }) {

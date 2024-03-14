@@ -34,6 +34,14 @@
         recent
         data-test="recentQuizzes"
       />
+      <AssessmentCards
+        v-if="hasActiveClassesQuizzes"
+        class="section"
+        :quizzes="activeClassesQuizzes"
+        displayClassName
+        recent
+        data-test="recentQuizzes"
+      />
       <ExploreChannels
         v-if="displayExploreChannels"
         :channels="filteredChannels"
@@ -70,6 +78,7 @@
   import AssignedQuizzesCards from '../classes/AssignedQuizzesCards';
   import YourClasses from '../YourClasses';
   import LearnAppBarPage from '../LearnAppBarPage';
+  import AssessmentCards from '../classes/AssessmentCards';
   import commonLearnStrings from './../commonLearnStrings';
   import ContinueLearning from './ContinueLearning';
   import ExploreChannels from './ExploreChannels';
@@ -90,13 +99,9 @@
       ExploreChannels,
       LearnAppBarPage,
       MissingResourceAlert,
+      AssessmentCards,
     },
     mixins: [commonLearnStrings],
-    data() {
-      return {
-        filteredChannels: [],
-      }
-    },
     setup() {
       const currentInstance = getCurrentInstance().proxy;
       const store = currentInstance.$store;
@@ -203,17 +208,19 @@
         canAccessUnassignedContent,
       };
     },
+    
     props: {
       loading: {
         type: Boolean,
         default: null,
       },
     },
-    created() {
-      this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, userId: this.currentUserId }).then(res => {
-        console.log({ res });
-        this.filteredChannels = res;
-      });
+    
+
+    data() {
+      return {
+        filteredChannels: [],
+      }
     },
     computed: {
       ...mapGetters(['getUserKind', 'currentUserId']),
@@ -233,7 +240,14 @@
             (this.learnerFinishedAllClasses && this.canAccessUnassignedContent))
         );
       }
-    }
+    },
+    created() {
+      this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, userId: this.currentUserId }).then(res => {
+        console.log({ res });
+        this.filteredChannels = res;
+      });
+    },
+    
   };
 
 </script>
