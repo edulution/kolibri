@@ -6,13 +6,14 @@ import { showLessonPlaylist } from '../modules/lessonPlaylist/handlers';
 import { showClassAssignmentsPage } from '../modules/classAssignments/handlers';
 import { showAllClassesPage } from '../modules/classes/handlers';
 import { showExam } from '../modules/examViewer/handlers';
-import { showExamReport } from '../modules/examReportViewer/handlers';
+import { showExamReport, showAssessmentReport } from '../modules/examReportViewer/handlers';
 import { inClasses } from '../composables/useCoreLearn';
 import ExamPage from '../views/ExamPage';
 import ExamReportViewer from '../views/LearnExamReportViewer';
 import AllClassesPage from '../views/classes/AllClassesPage';
 import ClassAssignmentsPage from '../views/classes/ClassAssignmentsPage';
 import LessonPlaylistPage from '../views/classes/LessonPlaylistPage';
+import AssessmentReportViewer from '../views/LearnAssessmentReportViewer';
 
 function noClassesGuard() {
   const { canAccessUnassignedContent } = store.getters;
@@ -76,5 +77,16 @@ export default [
       showExamReport(store, toRoute.params);
     },
     component: ExamReportViewer,
+  },
+  {
+    name: ClassesPageNames.ASSESSMENT_REPORT_VIEWER,
+    path: '/classes/:classId/assessmentReport/:examId/:tryIndex/:questionNumber/:questionInteraction',
+    handler: toRoute => {
+      if (noClassesGuard()) {
+        return noClassesGuard();
+      }
+      showAssessmentReport(store, toRoute.params);
+    },
+    component: AssessmentReportViewer,
   },
 ];
