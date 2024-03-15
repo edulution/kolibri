@@ -77,7 +77,7 @@
           {
             id: PlanTabs.ASSESSMENT,
             label: this.coreString('assessmentLabel'),
-            to: this.classRoute(PageNames.ASSESSMENT_EXAMS),
+            to: this.classRoute(PageNames.ASSESSMENTS),
           },
           {
             id: PlanTabs.GROUPS,
