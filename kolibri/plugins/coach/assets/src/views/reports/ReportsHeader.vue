@@ -79,6 +79,11 @@
             to: this.classRoute('ReportsQuizListPage'),
           },
           {
+            id: ReportsTabs.ASSESSMENT,
+            label: this.coreString('assessmentLabel'),
+            to: this.classRoute('ReportsAssessmentListPage'),
+          },
+          {
             id: ReportsTabs.GROUPS,
             label: this.coachString('groupsLabel'),
             to: this.classRoute('ReportsGroupListPage'),

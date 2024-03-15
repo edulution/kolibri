@@ -26,6 +26,7 @@ const LESSONS = '/lessons';
 const LESSON = '/lessons/:lessonId';
 const QUIZZES = '/quizzes';
 const QUIZ = '/quizzes/:quizId';
+const ASSESSMENTS = '/assessments';
 const QUESTIONS = '/questions';
 const QUESTION = '/questions/:questionId';
 const TRY = '/try/:tryIndex';
@@ -562,6 +563,14 @@ export default [
     meta: {
       // TODO Leaves out details about the question
       titleParts: ['QUIZ_NAME', 'CLASS_NAME'],
+    },
+  },
+  {
+    path: path(CLASS, ASSESSMENTS),
+    component: pages.ReportsAssessmentListPage,
+    handler: defaultHandler,
+    meta: {
+      titleParts: ['quizzesLabel', 'CLASS_NAME'],
     },
   },
 ];

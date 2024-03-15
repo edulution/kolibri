@@ -21,6 +21,7 @@
             <th>{{ coachString('groupNameLabel') }}</th>
             <th>{{ coreString('lessonsLabel') }}</th>
             <th>{{ coreString('quizzesLabel') }}</th>
+            <th>{{ coreString('assessmentLabel') }}</th>
             <th>{{ coreString('learnersLabel') }}</th>
             <th>{{ coachString('avgScoreLabel') }}</th>
             <th>{{ coachString('lastActivityLabel') }}</th>
@@ -109,6 +110,7 @@
           const tableRow = {
             numLessons: groupLessons.length,
             numQuizzes: groupExams.length,
+            numAssessments: groupExams.length,
             numLearners: learnerIds.length,
             avgScore: this.avgScore(learnerIds),
             lastActivity: this.lastActivity(learnerIds),
@@ -150,6 +152,10 @@
           {
             name: this.coachString('quizzesLabel'),
             key: 'numQuizzes',
+          },
+          {
+            name: this.coachString('assessmentLabel'),
+            key: 'numAssessments',
           },
           {
             name: this.coachString('learnersLabel'),

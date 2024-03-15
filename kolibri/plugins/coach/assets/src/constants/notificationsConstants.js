@@ -3,6 +3,7 @@ export const NotificationObjects = {
   RESOURCE: 'Resource',
   LESSON: 'Lesson',
   QUIZ: 'Quiz',
+  ASSESSMENT:'Assessment'
 };
 
 export const NotificationEvents = {

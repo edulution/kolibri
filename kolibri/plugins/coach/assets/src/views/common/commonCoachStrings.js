@@ -340,6 +340,20 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Indicates which quizzes have been assigned to a learner or a group in the report section.',
   },
+  assessmentClosedLabel: {
+    message: 'Assessment ended',
+    context:
+      'A label indicating that the currently viewed assessment is ended - meaning that learners will no longer be able to give answers to the assessment.',
+  },
+  assessmentsLabel: {
+    message: 'Assessments',
+    context: 'Plural of assessment.',
+  }, // Kept here for use in common.js
+  assessmentAssignedLabel: {
+    message: 'assessment assigned',
+    context:
+      'Indicates which assessments have been assigned to a learner or a group in the report section.',
+  },
   recipientsLabel: {
     message: 'Recipients',
     context:
@@ -576,6 +590,30 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   closeQuizModalDetail: {
     message:
       'All learners will be given a final score and a quiz report. Unfinished questions will be counted as incorrect.',
+
+    context:
+      "Text shown on a modal pop-up window when the user clicks the 'End Quiz' button. This explains what will happen when the modal window is confirmed.",
+  },
+  closeAssessmentLabel: {
+    message: 'End Assessment',
+    context:
+      "Label for a button that, when clicked, will 'end' a assessment. This makes the assessment inactive and Learners will no longer be able to give answers.",
+  },
+  openAssessmentLabel: {
+    message: 'Start assessment',
+    context:
+      "Label for a button that, when clicked, will 'start' a assessment - making it active so that learners may take the assessment.",
+  },
+  openAssessmentModalDetail: {
+    message:
+      'Starting the assessment will make it visible to learners and they will be able to answer questions',
+
+    context:
+      "Text shown on a modal pop-up window when the user clicks the 'Start Assessment' button. This explains what will happen when the user confirms the action of starting the assessment.",
+  },
+  closeAssessmentModalDetail: {
+    message:
+      'All learners will be given a final score and a assessment report. Unfinished questions will be counted as incorrect.',
 
     context:
       "Text shown on a modal pop-up window when the user clicks the 'End Quiz' button. This explains what will happen when the modal window is confirmed.",

@@ -127,4 +127,15 @@ export default [
     path: '/:classId/plan/quizzes/:quizId/edit',
     component: QuizEditDetailsPage,
   },
+  {
+    name: PageNames.ASSESSMENT_EXAMS,
+    path: '/:classId/plan/assessment',
+    component: CoachExamsPage,
+    handler(toRoute) {
+      showExamsPage(store, toRoute.params.classId);
+    },
+    meta: {
+      titleParts: ['assessmentLabel', 'CLASS_NAME'],
+    },
+  },
 ];

@@ -86,6 +86,11 @@
             disabled: this.resourceIsDisabled(NotificationObjects.QUIZ),
           },
           {
+            label: this.coreString('assessmentLabel'),
+            value: 'assessment',
+            disabled: this.resourceIsDisabled(NotificationObjects.ASSESSMENT),
+          },
+          {
             label: this.$tr('exercisesLabel'),
             value: ContentNodeKinds.EXERCISE,
             disabled: this.resourceIsDisabled(ContentNodeKinds.EXERCISE),

@@ -66,6 +66,7 @@
       isMainReport() {
         return (
           this.$route.name === 'ReportsQuizListPage' ||
+          this.$route.name === 'ReportsAssessmentListPage' ||
           this.$route.name === 'ReportsGroupListPage' ||
           this.$route.name === 'ReportsLearnerListPage' ||
           this.$route.name === 'ReportsLessonListPage' ||
