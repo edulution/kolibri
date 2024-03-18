@@ -27,6 +27,7 @@ const LESSON = '/lessons/:lessonId';
 const QUIZZES = '/quizzes';
 const QUIZ = '/quizzes/:quizId';
 const ASSESSMENTS = '/assessments';
+const ASSESSMENT = '/assessments/:quizId';
 const QUESTIONS = '/questions';
 const QUESTION = '/questions/:questionId';
 const TRY = '/try/:tryIndex';
@@ -574,7 +575,7 @@ export default [
     },
   },
   {
-    path: path(CLASS, ASSESSMENTS, LEARNERS),
+    path: path(CLASS, ASSESSMENT, LEARNERS),
     component: pages.ReportsAssessmentsLearnerListPage,
     handler: defaultHandler,
     meta: {

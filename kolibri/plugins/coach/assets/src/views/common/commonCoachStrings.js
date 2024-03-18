@@ -60,6 +60,10 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'All quizzes',
     context: 'Navigation link that takes coach back to the list of all the quizzes they manage.',
   },
+  allAssessmentsLabel: {
+    message: 'All assessments',
+    context: 'Navigation link that takes coach back to the list of all the assessments they manage.',
+  },
   avgScoreLabel: {
     message: 'Average score',
     context:
@@ -575,6 +579,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "Label for a button that, when clicked, will 'start' a quiz - making it active so that learners may take the quiz.",
   },
+  openAssessmentLabel: {
+    message: 'Start assessment',
+    context:
+      "Label for a button that, when clicked, will 'start' a quiz - making it active so that learners may take the quiz.",
+  },
   openQuizModalDetail: {
     message:
       'Starting the quiz will make it visible to learners and they will be able to answer questions',
@@ -584,6 +593,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   },
   closeQuizLabel: {
     message: 'End quiz',
+    context:
+      "Label for a button that, when clicked, will 'end' a quiz. This makes the quiz inactive and Learners will no longer be able to give answers.",
+  },
+  closeAssessmentLabel: {
+    message: 'End assessment',
     context:
       "Label for a button that, when clicked, will 'end' a quiz. This makes the quiz inactive and Learners will no longer be able to give answers.",
   },
