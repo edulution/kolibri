@@ -195,6 +195,7 @@ class ContentFile(Base):
 
     id = Column(CHAR(32), primary_key=True)
     preset = Column(String(150), nullable=False)
+    available = Column(Boolean, nullable=False)
     supplementary = Column(Boolean, nullable=False)
     thumbnail = Column(Boolean, nullable=False)
     priority = Column(Integer, index=True)
