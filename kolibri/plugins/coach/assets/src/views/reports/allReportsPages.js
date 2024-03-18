@@ -40,7 +40,7 @@ import ReportsQuizPreviewPage from './ReportsQuizPreviewPage';
 import ReportsQuizQuestionListPage from './ReportsQuizQuestionListPage';
 import ReportsQuizQuestionPage from './ReportsQuizQuestionPage';
 import ReportsAssessmentListPage from './ReportsAssessmentListPage';
-
+import ReportsAssessmentsLearnerListPage from './ReportsAssessmentsLearnerListPage'
 
 export default {
   ReportsGroupActivityPage,
@@ -85,4 +85,5 @@ export default {
   ReportsQuizQuestionListPage,
   ReportsQuizQuestionPage,
   ReportsAssessmentListPage,
+  ReportsAssessmentsLearnerListPage
 };

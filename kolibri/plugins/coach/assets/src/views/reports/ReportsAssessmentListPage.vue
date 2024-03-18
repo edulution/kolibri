@@ -56,7 +56,7 @@
                 <td>
                   <KRouterLink
                     :text="tableRow.title"
-                    :to="classRoute('ReportsQuizLearnerListPage', { quizId: tableRow.id })"
+                    :to="classRoute('ReportsAssessmenstsLearnerListPage', { quizId: tableRow.id })"
                     icon="quiz"
                   />
                 </td>

@@ -570,7 +570,15 @@ export default [
     component: pages.ReportsAssessmentListPage,
     handler: defaultHandler,
     meta: {
-      titleParts: ['quizzesLabel', 'CLASS_NAME'],
+      titleParts: ['assessmentsLabel', 'CLASS_NAME'],
+    },
+  },
+  {
+    path: path(CLASS, ASSESSMENTS, LEARNERS),
+    component: pages.ReportsAssessmentsLearnerListPage,
+    handler: defaultHandler,
+    meta: {
+      titleParts: ['assessmentsLabel', 'QUIZ_NAME', 'CLASS_NAME'],
     },
   },
 ];
