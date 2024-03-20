@@ -16,6 +16,7 @@ from kolibri.core.content.api import ContentNodeViewset
 from kolibri.core.content.api import UserContentNodeViewset
 from kolibri.core.content.models import ContentNode
 from kolibri.core.exams.models import Exam
+from kolibri.core.assessment.models import ExamAssessment
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.logger.models import AttemptLog
 from kolibri.core.logger.models import MasteryLog
@@ -135,6 +136,93 @@ class LearnerClassroomViewset(ReadOnlyValuesViewset):
             user=self.request.user
         ).values("summarylog__content_id")
 
+        assessments = (
+            ExamAssessment.objects.filter(
+                assignmentassessments__collection__membership__user=self.request.user,
+                collection__in=(c["id"] for c in items),
+            )
+            .filter(Q(active=True) | Q(id__in=user_masterylog_content_ids))
+            .annotate(
+                closed=Subquery(
+                    MasteryLog.objects.filter(
+                        summarylog__content_id=OuterRef("id"), user=self.request.user
+                    ).values("complete")[:1]
+                ),
+                score=Subquery(
+                    AttemptLog.objects.filter(
+                        sessionlog__content_id=OuterRef("id"), user=self.request.user
+                    )
+                    .order_by()
+                    .values_list("item")
+                    .distinct()
+                    .values("masterylog")
+                    .annotate(total_correct=Sum("correct"))
+                    .values("total_correct"),
+                    output_field=IntegerField(),
+                ),
+                answer_count=Subquery(
+                    AttemptLog.objects.filter(
+                        sessionlog__content_id=OuterRef("id"), user=self.request.user
+                    )
+                    .order_by()
+                    .values_list("item")
+                    .distinct()
+                    .values("masterylog")
+                    .annotate(total_complete=Count("id"))
+                    .values("total_complete"),
+                    output_field=IntegerField(),
+                ),
+            )
+            .distinct()
+            .values(
+                "collection",
+                "active",
+                "archive",
+                "id",
+                "question_count",
+                "title",
+                "closed",
+                "answer_count",
+                "score",
+                "question_sources",
+            )
+        )
+        assessment_node_ids = set()
+        for assessment in assessments:
+            assessment_node_ids |= {
+                question["exercise_id"] for question in assessment.get("question_sources")
+            }
+
+        available_assessments_ids = set(
+            ContentNode.objects.filter_by_uuids(assessment_node_ids).values_list(
+                "id", flat=True
+            )
+        )
+
+        for assessment in assessments:
+            closed = assessment.pop("closed")
+            score = assessment.pop("score")
+            answer_count = assessment.pop("answer_count")
+            if closed is not None:
+                assessment["progress"] = {
+                    "closed": closed,
+                    "score": score,
+                    "answer_count": answer_count,
+                    "started": True,
+                }
+            else:
+                assessment["progress"] = {
+                    "score": None,
+                    "answer_count": None,
+                    "closed": None,
+                    "started": False,
+                }
+            assessment["missing_resource"] = any(
+                question["exercise_id"] not in available_assessments_ids
+                for question in assessment.get("question_sources")
+            )
+
+
         exams = (
             Exam.objects.filter(
                 assignments__collection__membership__user=self.request.user,
@@ -224,6 +312,7 @@ class LearnerClassroomViewset(ReadOnlyValuesViewset):
         for item in items:
             item["assignments"] = {
                 "exams": [exam for exam in exams if exam["collection"] == item["id"]],
+                "assessments": [assessment for assessment in assessments if assessment["collection"] == item["id"]],
                 "lessons": [
                     lesson for lesson in lessons if lesson["collection"] == item["id"]
                 ],
