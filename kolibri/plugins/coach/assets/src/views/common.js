@@ -39,6 +39,8 @@ import Placeholder from './common/Placeholder';
 import StatusElapsedTime from './common/StatusElapsedTime';
 import { VERBS, ICONS } from './common/status/constants';
 import AssessmentLessonDetailsHeader from './common/AssessmentLessonDetailsHeader';
+import AssessmentStatus from './common/AssessmentStatus';
+
 
 export default {
   components: {
@@ -68,6 +70,7 @@ export default {
     StatusElapsedTime,
     TimeDuration,
     AssessmentLessonDetailsHeader,
+    AssessmentStatus
   },
   mixins: [coachStringsMixin],
   computed: {

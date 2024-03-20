@@ -12,7 +12,7 @@
         >
           <KButton
             :primary="true"
-            :text="coachString('openQuizLabel')"
+            :text="coachString('openAssessmentLabel')"
             type="button"
             @click="showConfirmationModal = true"
           />
@@ -27,7 +27,7 @@
           :layout12="{ span: 12 }"
         >
           <KButton
-            :text="coachString('closeQuizLabel')"
+            :text="coachString('closeAssessmentLabel')"
             type="submit"
             :appearanceOverrides="cancelStyleOverrides"
             @click="showCancellationModal = true"
@@ -46,7 +46,7 @@
         </KGridItem>
       </div>
 
-      <!-- Quiz Closed label & time since closed -->
+      <!-- Assessment Closed label & time since closed -->
       <div v-if="exam.archive && !$isPrint" class="status-item">
         <KGridItem
           class="status-label"
@@ -54,7 +54,7 @@
           :layout8="{ span: 4 }"
           :layout12="{ span: 12 }"
         >
-          {{ coachString('quizClosedLabel') }}
+          {{ coachString('assessmentClosedLabel') }}
         </KGridItem>
         <KGridItem
           :layout4="{ span: 4 }"
@@ -197,37 +197,37 @@
 
     <KModal
       v-if="showConfirmationModal"
-      :title="coachString('openQuizLabel')"
+      :title="coachString('openAssessmentLabel')"
       :submitText="coreString('continueAction')"
       :cancelText="coreString('cancelAction')"
       @cancel="showConfirmationModal = false"
       @submit="handleOpenQuiz"
     >
-      <p>{{ coachString('openQuizModalDetail') }}</p>
+      <p>{{ coachString('openAssessmentModalDetail') }}</p>
       <p>{{ coachString('lodQuizDetail') }}</p>
       <p>{{ coachString('fileSizeToDownload', { size: exam.size_string }) }}</p>
     </KModal>
 
     <KModal
       v-if="showCancellationModal"
-      :title="coachString('closeQuizLabel')"
+      :title="coachString('closeAssessmentLabel')"
       :submitText="coreString('continueAction')"
       :cancelText="coreString('cancelAction')"
       @cancel="showCancellationModal = false"
       @submit="handleCloseQuiz"
     >
-      <div>{{ coachString('closeQuizModalDetail') }}</div>
+      <div>{{ coachString('closeAssessmentModalDetail') }}</div>
     </KModal>
 
     <KModal
       v-if="showRemoveReportVisibilityModal"
-      :title="coachString('makeQuizReportNotVisibleTitle')"
+      :title="coachString('makeAssessmentReportNotVisibleTitle')"
       :submitText="coreString('continueAction')"
       :cancelText="coreString('cancelAction')"
       @cancel="showRemoveReportVisibilityModal = false"
       @submit="makeQuizInactive(exam)"
     >
-      <p>{{ coachString('makeQuizReportNotVisibleText') }}</p>
+      <p>{{ coachString('makeAssessmentReportNotVisibleText') }}</p>
       <p>{{ coachString('fileSizeToRemove', { size: exam.size_string }) }}</p>
       <KCheckbox
         :checked="dontShowAgainChecked"
@@ -237,13 +237,13 @@
     </KModal>
     <KModal
       v-if="showMakeReportVisibleModal"
-      :title="coachString('makeQuizReportVisibleTitle')"
+      :title="coachString('makeAssessmentReportVisibleTitle')"
       :submitText="coreString('continueAction')"
       :cancelText="coreString('cancelAction')"
       @cancel="showMakeReportVisibleModal = false"
       @submit="makeQuizInactive(exam)"
     >
-      <p>{{ coachString('makeQuizReportVisibleText') }}</p>
+      <p>{{ coachString('makeAssessmentReportVisibleText') }}</p>
       <p>{{ coachString('fileSizeToDownload', { size: exam.size_string }) }}</p>
       <KCheckbox
         :checked="dontShowAgainChecked"
@@ -376,10 +376,10 @@
           .then(() => {
             this.$store.dispatch('classSummary/refreshClassSummary');
             this.showCancellationModal = false;
-            this.$store.dispatch('createSnackbar', this.coachString('quizClosedMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentClosedMessage'));
           })
           .catch(() => {
-            this.$store.dispatch('createSnackbar', this.coachString('quizFailedToCloseMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToCloseMessage'));
           });
       },
       // modal about quiz report size should only exist of LODs exist in the class
@@ -414,8 +414,8 @@
         }
         const newActiveState = !this.exam.active;
         const snackbarMessage = newActiveState
-          ? this.coachString('quizVisibleToLearners')
-          : this.coachString('quizNotVisibleToLearners');
+          ? this.coachString('assessmentVisibleToLearners')
+          : this.coachString('assessmentNotVisibleToLearners');
 
         const promise = ExamResource.saveModel({
           id: this.$route.params.quizId,
@@ -438,7 +438,7 @@
       reportVisibleToLearnersLabel: {
         message: 'Report visible to learners',
         context:
-          'The label for a switch that will toggle whether or not learners can view their quiz report.',
+          'The label for a switch that will toggle whether or not learners can view their assessment report.',
       },
       questionOrderLabel: {
         message: 'Question order',

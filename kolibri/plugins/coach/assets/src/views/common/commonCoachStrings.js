@@ -582,7 +582,7 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   openAssessmentLabel: {
     message: 'Start assessment',
     context:
-      "Label for a button that, when clicked, will 'start' a quiz - making it active so that learners may take the quiz.",
+      "Label for a button that, when clicked, will 'start' a assessment - making it active so that learners may take the assessment.",
   },
   openQuizModalDetail: {
     message:
@@ -608,16 +608,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "Text shown on a modal pop-up window when the user clicks the 'End Quiz' button. This explains what will happen when the modal window is confirmed.",
   },
-  closeAssessmentLabel: {
-    message: 'End Assessment',
-    context:
-      "Label for a button that, when clicked, will 'end' a assessment. This makes the assessment inactive and Learners will no longer be able to give answers.",
-  },
-  openAssessmentLabel: {
-    message: 'Start assessment',
-    context:
-      "Label for a button that, when clicked, will 'start' a assessment - making it active so that learners may take the assessment.",
-  },
   openAssessmentModalDetail: {
     message:
       'Starting the assessment will make it visible to learners and they will be able to answer questions',
@@ -631,6 +621,50 @@ const coachStrings = createTranslator('CommonCoachStrings', {
 
     context:
       "Text shown on a modal pop-up window when the user clicks the 'End Quiz' button. This explains what will happen when the modal window is confirmed.",
+  },
+  assessmentVisibleToLearners: {
+    message: 'Assessment report is visible to learners',
+    context:
+      'A brief snackbar message notifying the user that learners may view their assessment report. It will show when the user changes a setting to make the assessment visible.',
+  },
+  assessmentNotVisibleToLearners: {
+    message: 'Assessment report is not visible to learners',
+    context:
+      'A brief snackbar message notifying the user that learners may no longer view their assessment report. It will show when the user changes a setting to make the assessment no longer visible.',
+  },
+  lodAssessmentDetail: {
+    message:
+      'Resource files in this assessment will be downloaded to learn-only devices that are set up to sync with this server.',
+    context:
+      'Information provided to a coach when starting a assessment that has been assigned to learners.',
+  },
+  makeAssessmentReportNotVisibleTitle: {
+    message: 'Make assessment report not visible',
+  },
+  makeAssessmentReportNotVisibleText: {
+    message:
+      'Learners will no longer be able to see this assessment report. Resource files in this assessment will be removed from learn-only devices that are set up to sync with this server.',
+    context:
+      'A message within a pop up modal explaining the impact of changing the assessment report visibility to learners',
+  },
+  makeAssessmentReportVisibleTitle: {
+    message: 'Make assessment report visible',
+  },
+  makeAssessmentReportVisibleText: {
+    message:
+      'Learners will be able to see this assessment report. Resource files in this assessment will be downloaded to learn-only devices that are set up to sync with this server.',
+    context:
+      'A message within a pop up modal explaining the impact of changing the assessment report visibility to learners',
+  },
+  assessmentClosedMessage: {
+    message: 'Assessment ended',
+    context:
+      "A brief snackbar message notifying the user that the assessment was successfully ended. Displays when the user clicks 'End assessment'.",
+  },
+  assessmentFailedToCloseMessage: {
+    message: 'There was a problem ending the quiz. The assessment was not ended.',
+    context:
+      'A brief snackbar message notifying the user that there was an error trying to end the assessment and that the assessment was not ended.',
   },
   lessonNotVisibleToLearnersLabel: {
     message: 'Lesson is not visible to learners',

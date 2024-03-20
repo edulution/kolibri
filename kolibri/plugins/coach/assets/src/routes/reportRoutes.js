@@ -582,4 +582,61 @@ export default [
       titleParts: ['assessmentsLabel', 'QUIZ_NAME', 'CLASS_NAME'],
     },
   },
+  {
+    path: path(CLASS, GROUP, ASSESSMENT, LEARNER),
+    name: PageNames.REPORTS_GROUP_REPORT_ASSESSMENT_LEARNER_PAGE_ROOT,
+    redirect: to => {
+      const { params } = to;
+      return {
+        name: pages.ReportsGroupReportAssessmentLearnerPage.name,
+        params: {
+          ...params,
+          questionId: 0,
+          interactionIndex: 0,
+          tryIndex: 0,
+        },
+      };
+    },
+  },
+  {
+    path: path(CLASS, ASSESSMENT, LEARNERS),
+    component: pages.ReportsAssessmentLearnerListPage,
+    handler: defaultHandler,
+    meta: {
+      titleParts: ['learnersLabel', 'QUIZ_NAME', 'CLASS_NAME'],
+    },
+  },
+  {
+    path: path(CLASS, ASSESSMENT, QUESTIONS),
+    component: pages.ReportsAssessmentQuestionListPage,
+    handler: generateQuestionListHandler(['quizId']),
+    meta: {
+      titleParts: ['questionsLabel', 'QUIZ_NAME', 'CLASS_NAME'],
+    },
+  },
+  {
+    path: path(CLASS, ASSESSMENT, LEARNER),
+    name: PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT,
+    redirect: to => {
+      const { params } = to;
+      return {
+        name: pages.ReportsAssessmentLearnerPage.name,
+        params: {
+          ...params,
+          questionId: 0,
+          tryIndex: 0,
+          interactionIndex: 0,
+        },
+      };
+    },
+  },
+  {
+    path: path(CLASS, ASSESSMENT, LEARNER, TRY, QUESTION, INTERACTION),
+    component: pages.ReportsAssessmentLearnerPage,
+    handler: generateExamReportDetailHandler(['learnerId', 'quizId']),
+    meta: {
+      // Leaves out question and interaction numbers
+      titleParts: ['LEARNER_NAME', 'QUIZ_NAME', 'CLASS_NAME'],
+    },
+  },
 ];

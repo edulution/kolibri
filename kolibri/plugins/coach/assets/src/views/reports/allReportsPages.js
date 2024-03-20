@@ -41,6 +41,11 @@ import ReportsQuizQuestionListPage from './ReportsQuizQuestionListPage';
 import ReportsQuizQuestionPage from './ReportsQuizQuestionPage';
 import ReportsAssessmentListPage from './ReportsAssessmentListPage';
 import ReportsAssessmentsLearnerListPage from './ReportsAssessmentsLearnerListPage'
+import ReportsAssessmentQuestionListPage from './ReportsAssessmentQuestionListPage.vue'
+import ReportsAssessmentLearnerPage from './ReportsAssessmentLearnerPage';
+import ReportsGroupReportAssessmentLearnerPage from './ReportsGroupReportAssessmentLearnerPage';
+import ReportsAssessmentLearnerListPage from './ReportsAssessmentLearnerListPage';
+
 
 export default {
   ReportsGroupActivityPage,
@@ -85,5 +90,9 @@ export default {
   ReportsQuizQuestionListPage,
   ReportsQuizQuestionPage,
   ReportsAssessmentListPage,
-  ReportsAssessmentsLearnerListPage
+  ReportsAssessmentsLearnerListPage,
+  ReportsAssessmentQuestionListPage,
+  ReportsAssessmentLearnerPage,
+  ReportsGroupReportAssessmentLearnerPage,
+  ReportsAssessmentLearnerListPage
 };

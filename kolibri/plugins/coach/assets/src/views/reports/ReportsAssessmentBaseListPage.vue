@@ -27,7 +27,7 @@
         <h2 class="visuallyhidden">
           {{ coachString('generalInformationLabel') }}
         </h2>
-        <QuizStatus
+        <AssessmentStatus
           :className="className"
           :avgScore="avgScore"
           :groupAndAdHocLearnerNames="getRecipientNamesForExam(exam)"
@@ -44,15 +44,15 @@
             <HeaderTab
               :text="coachString('reportLabel')"
               :to="group ?
-                classRoute('ReportsGroupReportQuizLearnerListPage') :
-                classRoute('ReportsQuizLearnerListPage')
+                classRoute('ReportsGroupReportAssessmentLearnerListPage') :
+                classRoute('ReportsAssessmentLearnerListPage')
               "
             />
             <HeaderTab
               :text="coachString('difficultQuestionsLabel')"
               :to="group ?
-                classRoute('ReportsGroupReportQuizQuestionListPage') :
-                classRoute('ReportsQuizQuestionListPage')
+                classRoute('ReportsGroupReportAssessmentQuestionListPage') :
+                classRoute('ReportsAssessmentQuestionListPage')
               "
             />
           </HeaderTabs>
