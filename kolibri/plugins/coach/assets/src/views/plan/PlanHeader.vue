@@ -105,7 +105,7 @@
         context: "Title of the 'Plan your class' section.",
       },
       planYourClassDescription: {
-        message: 'Create and manage your lessons, quizzes,assessments and groups',
+        message: 'Create and manage your lessons, quizzes, assessments and groups',
         context: "Description of the 'Plan your class' section.",
       },
       coachPlan: {
