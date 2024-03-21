@@ -10,6 +10,7 @@ from kolibri.core.auth.constants import role_kinds
 from kolibri.core.auth.models import AbstractFacilityDataModel
 from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
+from kolibri.core.auth.models import FacilityDataset
 from kolibri.core.auth.permissions.base import RoleBasedPermissions
 from kolibri.core.content.utils.assignment import ContentAssignmentManager
 from kolibri.core.fields import JSONField
@@ -51,16 +52,6 @@ class ExamAssessment(AbstractFacilityDataModel):
 
     question_sources = JSONField(default=[], blank=True)
 
-    """
-    This field is interpreted differently depending on the 'data_model_version' field.
-
-    V1:
-        Used to help select new questions from exercises at quiz creation time
-
-    V0:
-        Used to decide which questions are in an exam at runtime.
-        See convertExamQuestionSourcesV0V2 in exams/utils.js for details.
-    """
     seed = models.IntegerField(default=1)
 
     # When True, learners see questions in the order they appear in 'question_sources'.
@@ -75,10 +66,10 @@ class ExamAssessment(AbstractFacilityDataModel):
     # who creates them in the context of their class, this stores that relationship but does
     # not assign exam itself to the class - for that see the ExamAssignment model.
     collection = models.ForeignKey(
-        Collection, related_name="assessment", blank=False, null=False
+        Collection, related_name="examassessment", blank=False, null=False
     )
     creator = models.ForeignKey(
-        FacilityUser, related_name="assessment", blank=False, null=True
+        FacilityUser, related_name="examassessment", blank=False, null=True
     )
 
     # To be set True when the quiz is first set to active=True
@@ -169,12 +160,12 @@ class ExamAssignmentAssessment(AbstractFacilityDataModel):
         )
         | UserCanReadExamAssignmentData()
     )
-    exam = models.ForeignKey(ExamAssessment, related_name="assignments", blank=False, null=False)
+    exam = models.ForeignKey(ExamAssessment, related_name="assignmentassessments", blank=False, null=False)
     collection = models.ForeignKey(
-        Collection, related_name="assigned_exams", blank=False, null=False
+        Collection, related_name="assessment_exams", blank=False, null=False
     )
     assigned_by = models.ForeignKey(
-        FacilityUser, related_name="assigned_exams", blank=False, null=True
+        FacilityUser, related_name="assessment_exams", blank=False, null=True
     )
 
     def pre_save(self):
@@ -245,8 +236,9 @@ class IndividualSyncableExam(AbstractFacilityDataModel):
 
     morango_model_name = "individualsyncableexam"
 
-    user = models.ForeignKey(FacilityUser)
-    collection = models.ForeignKey(Collection)
+    user = models.ForeignKey(FacilityUser, related_name='individual_syncable_exams_assessment')
+    collection = models.ForeignKey(Collection, related_name='individual_syncable_exams_assessment')
+    dataset = models.ForeignKey(FacilityDataset, related_name="individual_syncable_exams_assessment")
     exam_id = models.UUIDField()
 
     serialized_exam = JSONField()
