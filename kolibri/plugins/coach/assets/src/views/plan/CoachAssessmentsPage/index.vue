@@ -27,7 +27,7 @@
               primary
               hasDropdown
               appearance="raised-button"
-              :text="coachString('newQuizAction')"
+              :text="coachString('newAssessmentAction')"
             >
               <template #menu>
                 <KDropdownMenu
@@ -46,7 +46,7 @@
               :primary="true"
               appearance="raised-button"
               :to="newExamRoute"
-              :text="coachString('newQuizAction')"
+              :text="coachString('newAssessmentAction')"
             />
           </div>
         </div>
@@ -70,7 +70,7 @@
               >
                 <td>
                   <KRouterLink
-                    :to="$router.getRoute('QuizSummaryPage', { quizId: exam.id })"
+                    :to="$router.getRoute(PageNames.ASSESSMENT_QUIZ_SUMMARY, { quizId: exam.id })"
                     appearance="basic-link"
                     :text="exam.title"
                     icon="quiz"
@@ -90,20 +90,20 @@
                   <!-- Open quiz button -->
                   <KButton
                     v-if="!exam.active && !exam.archive"
-                    :text="coachString('openQuizLabel')"
+                    :text="coachString('openAssessmentLabel')"
                     appearance="flat-button"
                     @click="showOpenConfirmationModal = true; activeQuiz = exam"
                   />
                   <!-- Close quiz button -->
                   <KButton
                     v-if="exam.active && !exam.archive"
-                    :text="coachString('closeQuizLabel')"
+                    :text="coachString('closeAssessmentLabel')"
                     appearance="flat-button"
                     @click="showCloseConfirmationModal = true; activeQuiz = exam;"
                   />
                   <!-- Closed quiz label -->
                   <div v-if="exam.archive">
-                    {{ coachString('quizClosedLabel') }}
+                    {{ coachString('assessmentClosedLabel') }}
                   </div>
                 </td>
 
@@ -137,25 +137,25 @@
         <!-- Modals for Close & Open of quiz from right-most column -->
         <KModal
           v-if="showOpenConfirmationModal"
-          :title="coachString('openQuizLabel')"
+          :title="coachString('openAssessmentLabel')"
           :submitText="coreString('continueAction')"
           :cancelText="coreString('cancelAction')"
           @cancel="showOpenConfirmationModal = false"
           @submit="handleOpenQuiz(activeQuiz.id)"
         >
-          <p>{{ coachString('openQuizModalDetail') }}</p>
-          <p>{{ coachString('lodQuizDetail') }}</p>
+          <p>{{ coachString('openAssessmentModalDetail') }}</p>
+          <p>{{ coachString('lodAssessmentDetail') }}</p>
           <p>{{ coachString('fileSizeToDownload', { size: activeQuiz.size_string }) }}</p>
         </KModal>
         <KModal
           v-if="showCloseConfirmationModal"
-          :title="coachString('closeQuizLabel')"
+          :title="coachString('closeAssessmentLabel')"
           :submitText="coreString('continueAction')"
           :cancelText="coreString('cancelAction')"
           @cancel="showCloseConfirmationModal = false"
           @submit="handleCloseQuiz(activeQuiz.id)"
         >
-          <div>{{ coachString('closeQuizModalDetail') }}</div>
+          <div>{{ coachString('closeAssessmentModalDetail') }}</div>
         </KModal>
       </KTabsPanel>
     </KPageContainer>
@@ -249,7 +249,7 @@
         return this.sortedExams;
       },
       newExamRoute() {
-        return { name: PageNames.EXAM_CREATION_ROOT };
+        return { name: PageNames.ASSESSMENT_CREATION_ROOT };
       },
       dropdownOptions() {
         return [
@@ -336,25 +336,25 @@
     },
     $trs: {
       noExams: {
-        message: 'You do not have any quizzes',
-        context: 'Message displayed when there are no quizzes within a class.',
+        message: 'You do not have any assessments',
+        context: 'Message displayed when there are no assessments within a class.',
       },
       noStartedExams: {
-        message: 'No started quizzes',
+        message: 'No started assessments',
         context:
-          'Message displayed when there are no started quizes. Started quizzes are those that are in progress.',
+          'Message displayed when there are no started quizes. Started assessments are those that are in progress.',
       },
       newQuiz: {
-        message: 'Create new quiz',
+        message: 'Create new assessment',
         context: "Title of the screen launched from the 'New quiz' button on the 'Plan' tab.\n",
       },
       selectQuiz: {
-        message: 'Select quiz',
+        message: 'Select assessment',
         context:
-          "Practice quizzes are pre-made quizzes, that don't require the curation work on the part of the coach. Selecting a practice quiz refers to importing a ready-to-use quiz.",
+          "Practice assessments are pre-made assessments, that don't require the curation work on the part of the coach. Selecting a practice quiz refers to importing a ready-to-use quiz.",
       },
       totalQuizSize: {
-        message: 'Total size of quizzes visible to learners: {size}',
+        message: 'Total size of assessments visible to learners: {size}',
         context:
           'Descriptive text at the top of the table that displays the calculated file size of all quiz resources (i.e. 120 MB)',
       },

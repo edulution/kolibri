@@ -31,6 +31,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "In the Plan > Quizzes section, coaches can create new quizzes using the 'New quiz' button.",
   },
+  newAssessmentAction: {
+    message: 'New assessment',
+    context:
+      "In the Plan > Assessments section, coaches can create new quizzes using the 'New assessment' button.",
+  },
   previewAction: {
     message: 'Preview',
     context:
