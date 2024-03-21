@@ -8,7 +8,7 @@
     :primary="false"
     :route="toolbarRoute"
   >
-    <LearnerQuizReport @navigate="handleNavigation" />
+    <LearnerAssessmentReport @navigate="handleNavigation" />
   </CoachImmersivePage>
   
 </template>
@@ -19,13 +19,13 @@
     import { mapState } from 'vuex';
     import commonCoach from '../common';
     import CoachImmersivePage from '../CoachImmersivePage';
-    import LearnerQuizReport from '../common/LearnerQuizReport';
+    import LearnerAssessmentReport from '../common/LearnerAssessmentReport';
   
     export default {
       name: 'ReportsAssessmentLearnerPage',
       components: {
         CoachImmersivePage,
-        LearnerQuizReport,
+        LearnerAssessmentReport,
       },
       mixins: [commonCoach],
       computed: {

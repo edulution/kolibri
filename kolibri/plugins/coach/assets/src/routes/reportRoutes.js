@@ -639,4 +639,13 @@ export default [
       titleParts: ['LEARNER_NAME', 'QUIZ_NAME', 'CLASS_NAME'],
     },
   },
+  {
+    name: pages.ReportsAssessmentPreviewPage.name,
+    path: path(CLASS, ASSESSMENT, '/preview'),
+    component: pages.ReportsAssessmentPreviewPage,
+    handler: defaultHandler,
+    meta: {
+      titleParts: ['previewLabel', 'QUIZ_NAME', 'CLASS_NAME'],
+    },
+  },
 ];

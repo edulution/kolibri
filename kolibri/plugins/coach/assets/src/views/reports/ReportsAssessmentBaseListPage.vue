@@ -102,7 +102,7 @@
         }
         if (option === 'PREVIEW') {
           this.$router.push(
-            this.$router.getRoute('ReportsQuizPreviewPage', {}, this.defaultBackLinkQuery)
+            this.$router.getRoute('ReportsAssessmentPreviewPage', {}, this.defaultBackLinkQuery)
           );
         }
         if (option === 'PRINT_REPORT') {

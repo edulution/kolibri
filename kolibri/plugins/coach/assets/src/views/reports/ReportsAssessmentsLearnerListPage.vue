@@ -48,7 +48,7 @@
       },
       methods: {
         detailLink(learnerId) {
-          return this.classRoute(PageNames.REPORTS_QUIZ_LEARNER_PAGE_ROOT, {
+          return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
             learnerId,
           });
         },
