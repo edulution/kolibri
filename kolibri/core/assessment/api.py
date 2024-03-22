@@ -79,14 +79,14 @@ class AssessmentViewset(ValuesViewset):
         "learners_see_fixed_order",
     )
 
-    field_map = {"assignments": "assignment_collections"}
+    field_map = {"assignmentassessments": "assignment_collections"}
 
     def get_queryset(self):
         return models.ExamAssessment.objects.all()
 
     def annotate_queryset(self, queryset):
         return annotate_array_aggregate(
-            queryset, assignment_collections="assignments__collection"
+            queryset, assignment_collections="assignmentassessments__collection"
         )
 
     def consolidate(self, items, queryset):

@@ -44,6 +44,7 @@ from kolibri.core.content.api import OptionalPageNumberPagination
 from kolibri.core.decorators import query_params_required
 from kolibri.core.exams.models import Exam
 from kolibri.core.lessons.models import Lesson
+from kolibri.core.assessment.models import ExamAssessment
 from kolibri.core.logger.constants import interaction_types
 from kolibri.core.logger.constants.exercise_attempts import MAPPING
 from kolibri.core.logger.evaluation import attempts_diff
@@ -51,9 +52,9 @@ from kolibri.core.logger.evaluation import LOG_ORDER_BY
 from kolibri.core.notifications.api import create_summarylog
 from kolibri.core.notifications.api import parse_attemptslog
 from kolibri.core.notifications.api import parse_summarylog
-from kolibri.core.notifications.api import quiz_answered_notification
-from kolibri.core.notifications.api import quiz_completed_notification
-from kolibri.core.notifications.api import quiz_started_notification
+from kolibri.core.notifications.api import quiz_answered_notification, assessment_answered_notification
+from kolibri.core.notifications.api import quiz_completed_notification, assessment_completed_notification
+from kolibri.core.notifications.api import quiz_started_notification, assessment_started_notification
 from kolibri.core.notifications.tasks import wrap_to_save_queue
 from kolibri.utils.time_utils import local_now
 
@@ -84,12 +85,15 @@ class StartSessionSerializer(serializers.Serializer):
     mastery_model = MasteryModelSerializer(required=False)
     # Do this as a special way of handling our coach generated quizzes
     quiz_id = HexStringUUIDField(required=False)
+    assessment_id = HexStringUUIDField(required=False)
     # A flag to indicate whether to start the session over again
     repeat = serializers.BooleanField(required=False, default=False)
 
     def validate(self, data):
         if "quiz_id" in data and ("lesson_id" in data or "node_id" in data):
             raise ValidationError("quiz_id must not be mixed with other context")
+        if "assessment_id" in data and ("lesson_id" in data or "node_id" in data):
+            raise ValidationError("assessment_id must not be mixed with other context")
         if "node_id" not in data and "quiz_id" not in data:
             raise ValidationError("node_id is required if not a coach assigned quiz")
         if "node_id" in data:
@@ -183,6 +187,8 @@ class LogContext(object):
     content_id for that node is recorded directly on the sessionlog.
     quiz_id - represents the id of the Exam Model object that this session
     is regarding (if any).
+    assessment_id - represents the id of the ExamAssessment Model object that this session
+    is regarding (if any).
     lesson_id - represents the id of the lesson this node_id is being engaged
     with from within (if any).
     mastery_level - represents the current 'try' at an assessment, whether an exercise
@@ -195,7 +201,7 @@ class LogContext(object):
     updating a session (see _update_session method).
     """
 
-    __slots__ = "node_id", "quiz_id", "lesson_id", "mastery_level"
+    __slots__ = "node_id", "quiz_id", "assessment_id", "lesson_id", "mastery_level"
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -246,6 +252,18 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             id=quiz_id,
         ).exists():
             raise PermissionDenied("User does not have access to this quiz_id")
+        
+    def _check_assessment_permissions(self, user, assessment_id):
+        if user.is_anonymous:
+            raise PermissionDenied("Cannot access a assessment if not logged in")
+        if not ExamAssessment.objects.filter(
+            active=True,
+            assignments__collection_id__in=user.memberships.all().values(
+                "collection_id"
+            ),
+            id=assessment_id,
+        ).exists():
+            raise PermissionDenied("User does not have access to this assessment_id")
 
     def _check_lesson_permissions(self, user, lesson_id):
         if user.is_anonymous:
@@ -262,6 +280,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         node_id = validated_data.get("node_id")
         quiz_id = validated_data.get("quiz_id")
         lesson_id = validated_data.get("lesson_id")
+        assessment_id = validated_data.get("assessment_id")
 
         context = LogContext()
 
@@ -281,6 +300,13 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             channel_id = None
             kind = content_kinds.QUIZ
             context["quiz_id"] = quiz_id
+        elif assessment_id is not None:
+            self._check_assessment_permissions(user, assessment_id)
+            mastery_model = {"type": exercises.ASSESSMENT, "coach_assigned": True}
+            content_id = assessment_id
+            channel_id = None
+            kind = content_kinds.ASSESSMENT
+            context["assessment_id"] = assessment_id
         return content_id, channel_id, kind, mastery_model, context
 
     def _get_or_create_summarylog(
@@ -444,6 +470,10 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             wrap_to_save_queue(
                 quiz_started_notification, masterylog, context["quiz_id"]
             )
+        if "assessment_id" in context:
+            wrap_to_save_queue(
+                assessment_started_notification, masterylog, context["assessment_id"]
+            )
 
     def _check_quiz_log_permissions(self, masterylog):
         if (
@@ -453,6 +483,14 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             and masterylog.mastery_criterion.get("coach_assigned")
         ):
             raise PermissionDenied("Cannot update a finished coach assigned quiz")
+        
+        if (
+            masterylog
+            and masterylog.complete
+            and masterylog.mastery_criterion.get("type") == exercises.ASSESSMENT
+            and masterylog.mastery_criterion.get("coach_assigned")
+        ):
+            raise PermissionDenied("Cannot update a finished coach assigned assessment")
 
     def _get_or_create_masterylog(
         self,
@@ -464,6 +502,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         context,
     ):
         is_quiz = mastery_model["type"] == exercises.QUIZ
+        is_assessment = mastery_model["type"] == exercises.ASSESSMENT
         masterylogs = MasteryLog.objects.filter(
             summarylog=summarylog,
             user=user,
@@ -474,6 +513,8 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         # here by whether they have a negative mastery_level or not, depending
         # on whether this is a quiz or an exercise.
         if is_quiz:
+            masterylogs = masterylogs.filter(mastery_level__lt=0)
+        elif is_assessment:
             masterylogs = masterylogs.filter(mastery_level__lt=0)
         else:
             masterylogs = masterylogs.filter(mastery_level__gt=0)
@@ -508,6 +549,8 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
                 # where d is the number of combinations of d digits, p is the probability
                 # So for 9 digits, d = 10^9
                 # p = 0.000001 for one in a million
+                mastery_level = randint(MIN_INTEGER, -1)
+            elif is_assessment:
                 mastery_level = randint(MIN_INTEGER, -1)
             else:
                 mastery_level = (
@@ -552,6 +595,8 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             attemptlogs = attemptlogs[: MAPPING[exercise_type]]
         elif exercise_type == exercises.QUIZ:
             attemptlogs = attemptlogs.order_by()
+        elif exercise_type == exercises.ASSESSMENT:
+            attemptlogs = attemptlogs.order_by()
         else:
             attemptlogs = attemptlogs[:10]
 
@@ -583,6 +628,10 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         if "quiz_id" in context:
             wrap_to_save_queue(
                 quiz_completed_notification, masterylog, context["quiz_id"]
+            )
+        if "assessment_id" in context:
+            wrap_to_save_queue(
+                assessment_completed_notification, masterylog, context["assessment_id"]
             )
 
     def _update_and_return_mastery_log_id(
@@ -763,6 +812,10 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         if created and "quiz_id" in context:
             wrap_to_save_queue(
                 quiz_answered_notification, attemptlog, context["quiz_id"]
+            )
+        if created and "assessment_id" in context:
+            wrap_to_save_queue(
+                assessment_answered_notification, attemptlog, context["assessment_id"]
             )
 
     def _get_session_log(self, session_id, user):

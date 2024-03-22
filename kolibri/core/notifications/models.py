@@ -81,6 +81,7 @@ class NotificationObjectType(ChoicesEnum):
     Quiz = "Quiz"
     Help = "Help"
     Lesson = "Lesson"
+    Assessment = "Assessment"
 
 
 class NotificationEventType(ChoicesEnum):
