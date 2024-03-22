@@ -59,7 +59,10 @@
                     icon="quiz"
                   />
                 </td>
-                <td>
+                <td  
+                  :style="{ backgroundColor: 
+                    scoreBackgroundColor((tableRow.avgScore) || 0) }" 
+                >
                   <Score :value="tableRow.avgScore" />
                 </td>
                 <td>
@@ -298,6 +301,18 @@
           const fileName = this.$tr('printLabel', { className: this.className });
           new CSVExporter(columns, fileName).export(this.table);
         },
+        scoreBackgroundColor(value) {
+          console.log(value,"value")
+        if (value >= 0 && value < 30) {
+          return 'red';
+        } else if (value >= 30 && value < 50) {
+          return 'blue';
+        } else if (value >= 50 && value < 70) {
+          return 'black';
+        } else if (value >= 70 && value <= 100) {
+          return 'pink';
+        }
+      },
       },
       $trs: {
         noEndedExams: {

@@ -1,7 +1,7 @@
 <template>
 
   <ReportsAssessmentBaseListPage @export="exportCSV">
-    <ReportsAssessmentLearnersTable :entries="table" :questionCount="exam.question_count" />
+    <ReportsAssessmentLearnersTable :entries="dummyEntries" :questionCount="100" />
   </ReportsAssessmentBaseListPage>
   
 </template>
@@ -25,6 +25,17 @@
         ReportsAssessmentLearnersTable,
       },
       mixins: [commonCoach, commonCoreStrings],
+      data(){
+        return {
+      dummyEntries: [
+        { id: 1, name: 'Entry 1', statusObj: { num_correct: 10 } },
+        { id: 2, name: 'Entry 2', statusObj: { num_correct: 40 } },
+        { id: 3, name: 'Entry 3', statusObj: { num_correct: 20 } },
+        { id: 4, name: 'Entry 4', statusObj: { num_correct: 80 } },
+        { id: 5, name: 'Entry 5', statusObj: { num_correct: 100 } },
+      ]
+    };
+      },
       computed: {
         exam() {
           return this.examMap[this.$route.params.quizId];
