@@ -17,7 +17,7 @@
         >
           <template #dropdown>
             <QuizOptionsDropdownMenu
-              optionsFor="report"
+              optionsFor="assessment"
               @select="handleSelectOption"
             />
           </template>
@@ -32,6 +32,8 @@
           :avgScore="avgScore"
           :groupAndAdHocLearnerNames="getRecipientNamesForExam(exam)"
           :exam="exam"
+          showReportVisible="true"
+          showSize="true"
         />
       </KGridItem>
       <KGridItem :layout12="{ span: $isPrint ? 12 : 8 }">
@@ -42,17 +44,10 @@
           <ReportsControls @export="$emit('export')" />
           <HeaderTabs :enablePrint="true">
             <HeaderTab
-              :text="coachString('reportLabel')"
+              :text="coachString('resultBreakdownLabel')"
               :to="group ?
                 classRoute('ReportsGroupReportAssessmentLearnerListPage') :
                 classRoute('ReportsAssessmentLearnerListPage')
-              "
-            />
-            <HeaderTab
-              :text="coachString('difficultQuestionsLabel')"
-              :to="group ?
-                classRoute('ReportsGroupReportAssessmentQuestionListPage') :
-                classRoute('ReportsAssessmentQuestionListPage')
               "
             />
           </HeaderTabs>

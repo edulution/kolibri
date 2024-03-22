@@ -64,7 +64,7 @@
           <ElapsedTime :date="examDateArchived" style="margin-top: 8px;" />
         </KGridItem>
       </div>
-      <div v-if="exam.archive && !$isPrint" class="status-item">
+      <div v-if="showReportVisible && exam.archive && !$isPrint" class="status-item">
         <KGridItem
           class="status-label"
           :layout4="{ span: 4 }"
@@ -174,7 +174,7 @@
       </div>
 
       <!-- quiz size -->
-      <div v-if="!$isPrint" class="status-item">
+      <div v-if="!$isPrint && showSize" class="status-item">
         <KGridItem
           class="status-label"
           :layout4="{ span: 4 }"

@@ -575,14 +575,6 @@ export default [
     },
   },
   {
-    path: path(CLASS, ASSESSMENT, LEARNERS),
-    component: pages.ReportsAssessmentsLearnerListPage,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['assessmentsLabel', 'QUIZ_NAME', 'CLASS_NAME'],
-    },
-  },
-  {
     path: path(CLASS, GROUP, ASSESSMENT, LEARNER),
     name: PageNames.REPORTS_GROUP_REPORT_ASSESSMENT_LEARNER_PAGE_ROOT,
     redirect: to => {

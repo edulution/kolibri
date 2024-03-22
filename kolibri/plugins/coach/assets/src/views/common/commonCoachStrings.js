@@ -378,6 +378,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Reports are representations of learner progress and performance data shown to coaches in a class.',
   },
+  resultBreakdownLabel: {
+    message: 'Result Breakdown',
+    context:
+      'Result Breakdown are representations of learner progress and performance data shown to coaches in a class.',
+  },
   resourcesViewedLabel: {
     message: 'Resources viewed',
     context:
@@ -399,6 +404,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   ungroupedLearnersLabel: {
     message: 'Ungrouped learners',
     context: 'Refers to learners who are not part of a specific group.',
+  },
+  topicLabel: {
+    message: 'Topics',
+    context:
+      'Topics are representations of list of topic to study in a class.',
   },
 
   // notifications

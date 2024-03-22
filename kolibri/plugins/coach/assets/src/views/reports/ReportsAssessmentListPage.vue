@@ -34,7 +34,6 @@
               {{ coachString('avgScoreLabel') }}
               <AverageScoreTooltip v-show="!$isPrint" />
             </th>
-            <th>{{ coreString('progressLabel') }}</th>
             <th>{{ coachString('recipientsLabel') }}</th>
             <th>{{ coachString('sizeLabel') }}</th>
             <th
@@ -56,19 +55,12 @@
                 <td>
                   <KRouterLink
                     :text="tableRow.title"
-                    :to="classRoute('ReportsAssessmentsLearnerListPage', { quizId: tableRow.id })"
+                    :to="classRoute('ReportsAssessmentLearnerListPage', { quizId: tableRow.id })"
                     icon="quiz"
                   />
                 </td>
                 <td>
                   <Score :value="tableRow.avgScore" />
-                </td>
-                <td>
-                  <StatusSummary
-                    :tally="tableRow.tally"
-                    :verbose="true"
-                    :includeNotStarted="true"
-                  />
                 </td>
                 <td>
                   <Recipients
@@ -86,7 +78,7 @@
                   <!-- Open quiz button -->
                   <KButton
                     v-if="!tableRow.active && !tableRow.archive"
-                    :text="coachString('openQuizLabel')"
+                    :text="coachString('openAssessmentLabel')"
                     appearance="flat-button"
                     class="table-left-aligned-button"
                     @click="showOpenConfirmationModal = true; modalQuizId = tableRow.id"
