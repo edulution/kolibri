@@ -1,7 +1,7 @@
 <template>
 
   <ReportsAssessmentBaseListPage @export="exportCSV">
-    <ReportsLearnersTable :entries="table" :questionCount="exam.question_count" />
+    <ReportsAssessmentLearnersTable :entries="table" :questionCount="exam.question_count" />
   </ReportsAssessmentBaseListPage>
   
 </template>
@@ -16,13 +16,13 @@
     import CSVExporter from '../../csv/exporter';
     import * as csvFields from '../../csv/fields';
     import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage';
-    import ReportsLearnersTable from './ReportsLearnersTable';
+    import ReportsAssessmentLearnersTable from './ReportsAssessmentLearnersTable';
   
     export default {
       name: 'ReportsGroupReportAssessmentLearnerListPage',
       components: {
         ReportsAssessmentBaseListPage,
-        ReportsLearnersTable,
+        ReportsAssessmentLearnersTable,
       },
       mixins: [commonCoach, commonCoreStrings],
       computed: {

@@ -32,7 +32,7 @@
         ...mapState('examReportDetail', ['exam']),
         toolbarRoute() {
           const backRoute = this.backRouteForQuery(this.$route.query);
-          return backRoute || this.classRoute('ReportsAssessmentsLearnerListPage', {});
+          return backRoute || this.classRoute('ReportsAssessmentLearnerListPage', {});
         },
       },
       methods: {
