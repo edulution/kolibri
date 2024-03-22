@@ -54,6 +54,8 @@ class ExamAssessment(AbstractFacilityDataModel):
 
     seed = models.IntegerField(default=1)
 
+    assignments = JSONField(default=[], blank=True)
+
     # When True, learners see questions in the order they appear in 'question_sources'.
     # When False, each learner sees questions in a random (but consistent) order seeded
     #   by their user's UUID.

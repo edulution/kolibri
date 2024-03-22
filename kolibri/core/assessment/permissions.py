@@ -63,6 +63,6 @@ class UserCanReadExamData(DenyAll):
         assignments = ExamAssignmentAssessment.objects.filter(
             collection_id__in=user.memberships.all().values("collection_id")
         )
-        return Q(assignments__in=assignments) & Q(
+        return Q(assignmentassessments__in=assignments) & Q(
             Q(active=True) | Q(id__in=user_masterylog_content_ids)
         )
