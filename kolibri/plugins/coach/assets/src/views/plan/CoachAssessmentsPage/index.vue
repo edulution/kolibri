@@ -202,7 +202,7 @@
     },
     computed: {
       sortedExams() {
-        return this._.orderBy(this.exams, ['date_created'], ['desc']);
+        return this._.orderBy(this.assessments, ['date_created'], ['desc']);
       },
       practiceQuizzesExist() {
         return plugin_data.practice_quizzes_exist;
