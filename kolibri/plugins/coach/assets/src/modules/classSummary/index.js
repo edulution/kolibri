@@ -97,6 +97,14 @@ function defaultState() {
      */
     activeLearnersMap: [],
     assessmentMap: {},
+    /*
+     * assessmentLearnerStatusMap := {
+     *   [exam_id]: {
+     *     [learner_id]: { exam_id, learner_id, status, last_activity, num_correct, score }
+     *   }
+     * }
+     */
+    assessmentLearnerStatusMap: {}
   };
 }
 
@@ -381,6 +389,16 @@ export default {
     assessments(state) {
       return Object.values(state.assessmentMap);
     },
+    /*
+     * assessmentStatuses := [
+     *   { exam_id, learner_id, status, last_activity }, ...
+     * ]
+     */
+    assessmentStatuses(state) {
+      return flatten(
+        Object.values(state.examLearnerStatusMap).map(learnerMap => Object.values(learnerMap))
+      );
+    },
   },
   mutations: {
     SET_STATE(state, summary) {
@@ -417,6 +435,7 @@ export default {
         activeLearnersMap: summary.active_learners,
         learnersInfo: summary.learners_info,
         assessmentMap,
+        assessmentLearnerStatusMap: _statusMap(summary.exam_learner_status, 'exam_id'),
       });
     },
     CREATE_ITEM(state, { map, id, object }) {

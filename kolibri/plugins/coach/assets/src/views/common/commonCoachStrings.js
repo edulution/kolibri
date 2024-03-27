@@ -589,6 +589,15 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'A message within a pop up modal explaining the impact of changing the quiz report visibility to learners',
   },
+  assessmentOpenedMessage: {
+    message: 'Assessment started',
+    context: 'A brief snackbar message notifying the user that the quiz was successfully started.',
+  },
+  assessmentFailedToOpenMessage: {
+    message: 'There was a problem starting the assessment. The assessment was not started.',
+    context:
+      'A brief snackbar message notifying the user that there was an error trying to start the quiz and that the quiz was not started.',
+  },
   openQuizLabel: {
     message: 'Start quiz',
     context:
