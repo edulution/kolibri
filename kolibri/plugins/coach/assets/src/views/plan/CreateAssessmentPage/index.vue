@@ -34,46 +34,18 @@
           />
         </KGridItem>
         <KGridItem :layout12="{ span: 6 }">
-          <KGrid>
-            <KGridItem
-              :layout4="{ span: 2 }"
-              :layout8="{ span: 5 }"
-              :layout12="{ span: 8 }"
-            >
-              <KTextbox
-                ref="questionsInput"
-                v-model.trim.number="numQuestions"
-                type="number"
-                :min="1"
-                :max="maxQs"
-                :invalid="Boolean(showError && numQuestIsInvalidText)"
-                :invalidText="numQuestIsInvalidText"
-                :label="$tr('numQuestions')"
-                @blur="handleNumberQuestionsBlur"
+          <KButton
+            hasDropdown
+            appearance="flat-button"
+            :text="coreString('userNamesList')"
+          >
+            <template #menu>
+              <KDropdownMenu
+                :options="options"
+                @select="handleSelectUserOption"
               />
-            </KGridItem>
-            <KGridItem
-              :layout4="{ span: 2 }"
-              :layout8="{ span: 3 }"
-              :layout12="{ span: 4 }"
-              :style="{ marginTop: '16px' }"
-            >
-              <KIconButton
-                icon="minus"
-                aria-hidden="true"
-                class="number-btn"
-                :disabled="numQuestions === 1"
-                @click="numQuestions -= 1"
-              />
-              <KIconButton
-                icon="plus"
-                aria-hidden="true"
-                class="number-btn"
-                :disabled="numQuestions === maxQs"
-                @click="numQuestions += 1"
-              />
-            </KGridItem>
-          </KGrid>
+            </template>
+          </KButton>
         </KGridItem>
       </KGrid>
 
@@ -193,7 +165,6 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { ContentNodeResource } from 'kolibri.resources';
   import { PageNames } from '../../../constants/';
-  import { MAX_QUESTIONS } from '../../../constants/examConstants';
   import LessonsSearchBox from '../../plan/LessonResourceSelectionPage/SearchTools/LessonsSearchBox';
   import LessonsSearchFilters from '../../plan/LessonResourceSelectionPage/SearchTools/LessonsSearchFilters';
   import ResourceSelectionBreadcrumbs from '../../plan/LessonResourceSelectionPage/SearchTools/ResourceSelectionBreadcrumbs';
@@ -226,7 +197,6 @@
           kind: this.$route.query.kind || null,
           role: this.$route.query.role || null,
         },
-        numQuestionsBlurred: false,
         bookmarksCount: 0,
         bookmarks: [],
         more: null,
@@ -236,13 +206,18 @@
       ...mapState(['toolbarRoute']),
       ...mapGetters('examCreation', ['numRemainingSearchResults']),
       ...mapState('examCreation', [
-        'numberOfQuestions',
         'contentList',
         'selectedExercises',
-        'availableQuestions',
         'searchResults',
         'ancestors',
       ]),
+      options() {
+        const useListing = [];
+        for(const users of this.learners){
+          useListing.push({"label" : users.name , "value" : users.username})
+        }
+        return useListing
+      },
       topicRoute() {
         if (this.$route.query.last_id) {
           return {
@@ -257,9 +232,6 @@
       },
       pageName() {
         return this.$route.name;
-      },
-      maxQs() {
-        return MAX_QUESTIONS;
       },
       bookmarksRoute() {
         return (
@@ -281,26 +253,6 @@
         },
         set(value) {
           this.$store.commit('examCreation/SET_TITLE', value);
-        },
-      },
-      numQuestions: {
-        get() {
-          return this.numberOfQuestions;
-        },
-        set(value) {
-          // If value in the input doesn't match state, update it
-          if (value !== Number(this.$refs.questionsInput.currentText)) {
-            this.$refs.questionsInput.currentText = value;
-          }
-          // If it is cleared out, then set vuex state to null so it can be caught during
-          // validation
-          if (value === '') {
-            this.$store.commit('examCreation/SET_NUMBER_OF_QUESTIONS', null);
-          }
-          if (value && value >= 1 && value <= this.maxQs) {
-            this.$store.commit('examCreation/SET_NUMBER_OF_QUESTIONS', value);
-            this.$store.dispatch('examCreation/updateSelectedQuestions');
-          }
         },
       },
       filteredContentList() {
@@ -393,33 +345,6 @@
           return '';
         }
         return this.ancestors[this.ancestors.length - 1].description;
-      },
-      numQuestIsInvalidText() {
-        if (this.numQuestions === '') {
-          return this.$tr('numQuestionsBetween');
-        }
-        if (this.numQuestions < 1 || this.numQuestions > 50) {
-          return this.$tr('numQuestionsBetween');
-        }
-        if (!Number.isInteger(this.numQuestions)) {
-          return this.$tr('numQuestionsBetween');
-        }
-        if (this.availableQuestions === 0) {
-          return this.$tr('noneSelected');
-        }
-        if (this.availableQuestions == 0 || this.availableQuestions == null) {
-          return this.$tr('numQuestionsExceedNoExercises', {
-            inputNumQuestions: this.numQuestions,
-            maxQuestionsFromSelection: 0,
-          });
-        }
-        if (this.numQuestions > this.availableQuestions) {
-          return this.$tr('numQuestionsExceed', {
-            inputNumQuestions: this.numQuestions,
-            maxQuestionsFromSelection: String(this.availableQuestions),
-          });
-        }
-        return null;
       },
     },
     watch: {
@@ -621,14 +546,8 @@
           },
         };
       },
-      handleNumberQuestionsBlur() {
-        this.numQuestionsBlurred = true;
-        if (Number(this.$refs.questionsInput.currentText) < 0) {
-          this.numQuestions = 1;
-        }
-        if (Number(this.$refs.questionsInput.currentText) > this.maxQs) {
-          this.numQuestions = this.maxQs;
-        }
+      handleSelectUserOption(option){
+        console.log(option,"===>option")
       },
     },
     $trs: {
@@ -644,28 +563,6 @@
         message: 'Select folders or exercises from these channels',
         context:
           'When creating a new quiz, coaches can choose which folders or exercises they want to include in the quiz from the channels that contain exercise resources.',
-      },
-      numQuestions: {
-        message: 'Number of questions',
-        context: 'Indicates the number of questions that the quiz will have.',
-      },
-      numQuestionsBetween: {
-        message: 'Enter a number between 1 and 50',
-        context:
-          "Refers to an error if the coach inputs a number of quiz questions that's not between 1 and 50. Quizzes cannot have less than 1 or more than 50 questions. ",
-      },
-      numQuestionsExceed: {
-        message:
-          'The max number of questions based on the exercises you selected is {maxQuestionsFromSelection}. Select more exercises to reach {inputNumQuestions} questions, or lower the number of questions to {maxQuestionsFromSelection}.',
-        context:
-          'This message displays if the learning resource has less questions than the number selected by the coach initially.',
-      },
-      numQuestionsExceedNoExercises: {
-        message:
-          'The max number of questions based on the exercises you selected is 0. Select more exercises to reach {inputNumQuestions} questions.',
-
-        context:
-          'This message displays if the learning resource selected by the coach has less questions then the number of questions coach wants to use in the quiz.\n',
       },
       noneSelected: {
         message: 'No exercises are selected',

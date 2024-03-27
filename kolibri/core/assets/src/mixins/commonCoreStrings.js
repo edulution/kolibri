@@ -411,6 +411,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'Generally the OPTIONS dropdown menu displays beside a user in a list of users.\n\nIf you select OPTIONS it will display a list of options of actions that you can do with that user. For example, edit their details, reset their password or delete them. ',
   },
+  userNamesList: {
+    message: 'User Names',
+    context:
+      'Generally the OPTIONS dropdown menu displays beside a user in a list of users.\n\nIf you select OPTIONS it will display a list of options of actions that you can do with that user. For example, edit their details, reset their password or delete them. ',
+  },
   passwordLabel: {
     message: 'Password',
     context: "'Password' is a required field when you create an account as a user on Kolibri.",
