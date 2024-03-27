@@ -88,6 +88,7 @@ export default {
       'contentLearnerStatusMap',
       'lessonMap',
       'activeLearnersMap',
+      'assessmentLearnerStatusMap',
     ]),
     ...mapGetters('classSummary', [
       'coaches',
@@ -115,6 +116,8 @@ export default {
       'getContentStatusTally',
       'getExamStatusObjForLearner',
       'getExamStatusTally',
+      'getAssessmentStatusObjForLearner',
+      'getAssessmentStatusTally',
       'getLessonStatusStringForLearner',
       'getLessonStatusTally',
       'getContentAvgTimeSpent',
