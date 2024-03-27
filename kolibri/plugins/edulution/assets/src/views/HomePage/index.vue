@@ -34,9 +34,9 @@
         data-test="recentQuizzes" 
       />
       <AssessmentCards 
-        v-if="hasActiveClassesQuizzes" 
-        class="section" 
-        :quizzes="activeClassesQuizzes"
+        v-if="hasActiveClassesAssessments" 
+        class="section"
+        :assessments="activeClassesAssessments"
         displayClassName
         recent 
         data-test="recentQuizzes" 
@@ -113,6 +113,7 @@ export default {
       classes,
       activeClassesLessons,
       activeClassesQuizzes,
+      activeClassesAssessments,
       resumableClassesQuizzes,
       resumableClassesResources,
       resumableContentNodes,
@@ -144,6 +145,12 @@ export default {
       () =>
         get(isUserLoggedIn) && get(activeClassesQuizzes) && get(activeClassesQuizzes).length > 0
     );
+    const hasActiveClassesAssessments = computed(
+      () =>
+        get(isUserLoggedIn) && get(activeClassesAssessments) && 
+        get(activeClassesAssessments).length > 0
+    );
+    
 
     const displayClasses = computed(() => {
       return get(isUserLoggedIn) && (get(classes).length || !get(canAccessUnassignedContent));
@@ -152,7 +159,8 @@ export default {
     const missingResources = computed(() => {
       return (
         get(activeClassesLessons).some(l => l.missing_resource) ||
-        get(activeClassesQuizzes).some(q => q.missing_resource)
+        get(activeClassesQuizzes).some(q => q.missing_resource) ||
+        get(activeClassesAssessments).some(q => q.missing_resource)
       );
     });
 
@@ -196,8 +204,10 @@ export default {
       classes,
       activeClassesLessons,
       activeClassesQuizzes,
+      activeClassesAssessments,
       hasActiveClassesLessons,
       hasActiveClassesQuizzes,
+      hasActiveClassesAssessments,
       continueLearningFromClasses,
       continueLearning,
       displayClasses,
@@ -228,7 +238,8 @@ export default {
         return false;
       }
       return this.displayClasses || this.continueLearning || 
-        this.hasActiveClassesLessons || this.hasActiveClassesQuizzes
+        this.hasActiveClassesLessons || this.hasActiveClassesQuizzes || 
+        this.hasActiveClassesAssessments 
     },
     hasChannels() {
       return this.filteredChannels && this.filteredChannels.length > 0;

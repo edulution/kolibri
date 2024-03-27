@@ -68,6 +68,14 @@ export default function useLearnerResources() {
     return flatMap(get(classes), c => c.assignments.exams);
   });
 
+   /**
+   * @returns {Array} - All quizzes assigned to a learner in all their classes
+   * @private
+   */
+   const _classesAssessments = computed(() => {
+    return flatMap(get(classes), c => c.assignments.assessments);
+  });
+
   /**
    * Because the API endpoint only returns active lessons this is just all the lessons
    * @returns {Array} - All active lessons assigned to a learner in all their classes
@@ -108,12 +116,30 @@ export default function useLearnerResources() {
   });
 
   /**
+   * @returns {Array} - All active Assessments assigned to a learner in all their classes
+   * @public
+   */
+  const activeClassesAssessments = computed(() => {
+    return get(_classesAssessments).filter(assessment => assessment.active);
+  });
+
+  /**
    * @returns {Array} - Active and in progress quizzes assigned to a learner
    *                    in all their classes
    * @public
    */
   const resumableClassesQuizzes = computed(() => {
     return get(activeClassesQuizzes).filter(quiz => quiz.progress.started && !quiz.progress.closed);
+  });
+
+   /**
+   * @returns {Array} - Active and in progress assessments assigned to a learner
+   *                    in all their classes
+   * @public
+   */
+   const resumableClassesAssessments = computed(() => {
+    return get(activeClassesAssessments).filter(quiz => 
+      quiz.progress.started && !quiz.progress.closed);
   });
 
   /**
@@ -360,7 +386,9 @@ export default function useLearnerResources() {
     classes,
     activeClassesLessons,
     activeClassesQuizzes,
+    activeClassesAssessments,
     resumableClassesQuizzes,
+    resumableClassesAssessments,
     resumableClassesResources,
     learnerFinishedAllClasses,
     getClass,
