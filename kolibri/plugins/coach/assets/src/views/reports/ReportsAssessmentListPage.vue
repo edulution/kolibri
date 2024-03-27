@@ -17,7 +17,7 @@
       >
         <ReportsControls @export="exportCSV">
           <p v-if="table.length && table.length > 0">
-            {{ $tr('totalQuizSize', { size: calcTotalSizeOfVisibleQuizzes }) }}
+            {{ $tr('totalAssessmentSize', { size: calcTotalSizeOfVisibleAssessments }) }}
           </p>
           <KSelect
             v-model="filter"
@@ -32,7 +32,7 @@
             <th>{{ coachString('titleLabel') }}</th>
             <th style="position:relative;">
               {{ coachString('avgScoreLabel') }}
-              <AverageScoreTooltip v-show="!$isPrint" />
+              <AverageScoreTooltip v-show="!$isPrint" variant="ASSESSMENT" />
             </th>
             <th>{{ coachString('recipientsLabel') }}</th>
             <th>{{ coachString('sizeLabel') }}</th>
@@ -169,7 +169,7 @@
       computed: {
         emptyMessage() {
           if (this.filter.value === 'allAssessments') {
-            return this.coachString('quizListEmptyState');
+            return this.coachString('assessmenListEmptyState');
           }
           if (this.filter.value === 'startedAssessments') {
             return this.coreString('noResultsLabel');
@@ -178,7 +178,7 @@
             return this.coreString('noResultsLabel');
           }
           if (this.filter.value === 'endedAssessments') {
-            return this.$tr('noEndedExams');
+            return this.$tr('noEndedAssessments');
           }
   
           return '';
@@ -188,8 +188,8 @@
             {
               label: this.coachString('filterQuizAll'),
               value: 'allAssessments',
-              noStartedExams: 'No started quizzes',
-              noExamsNotStarted: 'No quizzes not started',
+              noStartedExams: 'No started assessments',
+              noExamsNotStarted: 'No assessments not started',
             },
             {
               label: this.coachString('filterQuizStarted'),
@@ -222,7 +222,7 @@
             const learnersForQuiz = this.getLearnersForExam(assessment);
             const tableRow = {
               totalLearners: learnersForQuiz.length,
-              tally: this.getExamStatusTally(assessment.id, learnersForQuiz),
+              tally: this.getAssessmentStatusTally(assessment.id, learnersForQuiz),
               groupNames: this.getGroupNames(assessment.groups),
               recipientNames: this.getRecipientNamesForExam(assessment),
               avgScore: this.getExamAvgScore(assessment.id, learnersForQuiz),
@@ -232,12 +232,12 @@
             return tableRow;
           });
         },
-        calcTotalSizeOfVisibleQuizzes() {
-          if (this.exams) {
+        calcTotalSizeOfVisibleAssessments() {
+          if (this.assessments) {
             let sum = 0;
-            this.exams.forEach(exam => {
-              if (exam.active) {
-                sum += exam.size;
+            this.assessments.forEach(assessment => {
+              if (assessment.active) {
+                sum += assessment.size;
               }
             });
             const size = bytesForHumans(sum);
@@ -314,7 +314,7 @@
       },
       },
       $trs: {
-        noEndedExams: {
+        noEndedAssessments: {
           message: 'No ended assessments',
           context:
             'Message displayed when there are no ended quizes. Ended assessments are those that are no longer in progress.',
@@ -324,7 +324,7 @@
           context:
             "Title that displays on a printed copy of the 'Reports' > 'Assessments' page. This shows if the user uses the 'Print' option by clicking on the printer icon and displays on the downloadable CSV file.",
         },
-        totalQuizSize: {
+        totalAssessmentSize: {
           message: 'Total size of assessments visible to learners: {size}',
           context:
             'Descriptive text at the top of the table that displays the calculated file size of all assessment resources (i.e. 120 MB)',

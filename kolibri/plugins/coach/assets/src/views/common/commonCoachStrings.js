@@ -467,6 +467,11 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'When no quizzes have been created this message will display in the class information screen.',
   },
+  assessmenListEmptyState: {
+    message: 'There are no assessments',
+    context:
+      'When no quizzes have been created this message will display in the class information screen.',
+  },
   liveAttendanceLabel: {
     message: 'Attendance',
     context: "Live attendance of the users for logged in users",

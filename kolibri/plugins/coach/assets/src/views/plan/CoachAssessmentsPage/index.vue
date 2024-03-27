@@ -14,7 +14,7 @@
       >
         <div class="filter-and-button">
           <p v-if="filteredExams.length && filteredExams.length > 0">
-            {{ $tr('totalQuizSize', { size: calcTotalSizeOfVisibleQuizzes }) }}
+            {{ $tr('totalAssessmentSize', { size: calcTotalSizeOfVisibleQuizzes }) }}
           </p>
           <KSelect
             v-model="statusSelected"
@@ -50,7 +50,7 @@
             />
           </div>
         </div>
-        <CoreTable>
+        <CoreTable :emptyMessage="emptyMessage">
           <template #headers>
             <th>{{ coachString('titleLabel') }}</th>
             <th>{{ coachString('recipientsLabel') }}</th>
@@ -112,28 +112,6 @@
           </template>
         </CoreTable>
 
-        <p v-if="!exams.length">
-          {{ $tr('noExams') }}
-        </p>
-        <p
-          v-else-if="statusSelected.value === coachString('filterQuizStarted') &&
-            !startedExams.length"
-        >
-          {{ $tr('noStartedExams') }}
-        </p>
-        <p
-          v-else-if=" statusSelected.value === coachString('filterQuizNotStarted') &&
-            !notStartedExams.length"
-        >
-          {{ coreString('noResults') }}
-        </p>
-        <p
-          v-else-if=" statusSelected.value === coachString('filterQuizEnded') &&
-            !endedExams.length"
-        >
-          {{ coreString('noResults') }}
-        </p>
-
         <!-- Modals for Close & Open of quiz from right-most column -->
         <KModal
           v-if="showOpenConfirmationModal"
@@ -168,7 +146,7 @@
 
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { ExamResource } from 'kolibri.resources';
+  import { AssessmentResource } from 'kolibri.resources';
   import plugin_data from 'plugin_data';
   import bytesForHumans from 'kolibri.utils.bytesForHumans';
   import { mapActions } from 'vuex';
@@ -202,7 +180,7 @@
     },
     computed: {
       sortedExams() {
-        return this._.orderBy(this.exams, ['date_created'], ['desc']);
+        return this._.orderBy(this.assessments, ['date_created'], ['desc']);
       },
       practiceQuizzesExist() {
         return plugin_data.practice_quizzes_exist;
@@ -227,15 +205,16 @@
           },
         ];
       },
-
       startedExams() {
-        return this.sortedExams.filter(exam => exam.active === true && exam.archive === false);
+        return this.sortedExams.filter(
+          assessment => assessment.active === true && assessment.archive === false);
       },
       endedExams() {
-        return this.sortedExams.filter(exam => exam.active === true && exam.archive === true);
+        return this.sortedExams.filter(
+          assessment => assessment.active === true && assessment.archive === true);
       },
       notStartedExams() {
-        return this.sortedExams.filter(exam => exam.active === false);
+        return this.sortedExams.filter(assessment => assessment.active === false);
       },
       filteredExams() {
         const filter = this.statusSelected.label;
@@ -248,13 +227,29 @@
         }
         return this.sortedExams;
       },
+      emptyMessage() {
+        if (this.statusSelected.value === this.coachString('filterQuizAll')) {
+          return this.coachString('assessmenListEmptyState');
+        }
+        if (this.statusSelected.value === this.coachString('filterQuizStarted')) {
+          return this.coreString('noResultsLabel');
+        }
+        if (this.statusSelected.value === this.coachString('filterQuizNotStarted')) {
+          return this.coreString('noResultsLabel');
+        }
+        if (this.statusSelected.value === this.coachString('filterQuizEnded')) {
+          return this.$tr('noEndedAssessments');
+        }
+
+        return '';
+      },
       newExamRoute() {
         return { name: PageNames.ASSESSMENT_CREATION_ROOT };
       },
       dropdownOptions() {
         return [
-          { label: this.$tr('newQuiz'), value: 'MAKE_NEW_QUIZ' },
-          { label: this.$tr('selectQuiz'), value: 'SELECT_QUIZ' },
+          { label: this.$tr('newAssessment'), value: 'MAKE_NEW_QUIZ' },
+          { label: this.$tr('selectAssessment'), value: 'SELECT_QUIZ' },
         ];
       },
       calcTotalSizeOfVisibleQuizzes() {
@@ -287,7 +282,7 @@
         });
       },
       handleOpenQuiz(quizId) {
-        const promise = ExamResource.saveModel({
+        const promise = AssessmentResource.saveModel({
           id: quizId,
           data: {
             active: true,
@@ -300,14 +295,14 @@
           .then(() => {
             this.$store.dispatch('classSummary/refreshClassSummary');
             this.showOpenConfirmationModal = false;
-            this.$store.dispatch('createSnackbar', this.coachString('quizOpenedMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentOpenedMessage'));
           })
           .catch(() => {
-            this.$store.dispatch('createSnackbar', this.coachString('quizFailedToOpenMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToOpenMessage'));
           });
       },
       handleCloseQuiz(quizId) {
-        const promise = ExamResource.saveModel({
+        const promise = AssessmentResource.saveModel({
           id: quizId,
           data: {
             archive: true,
@@ -320,10 +315,10 @@
           .then(() => {
             this.$store.dispatch('classSummary/refreshClassSummary');
             this.showCloseConfirmationModal = false;
-            this.$store.dispatch('createSnackbar', this.coachString('quizClosedMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentClosedMessage'));
           })
           .catch(() => {
-            this.$store.dispatch('createSnackbar', this.coachString('quizFailedToCloseMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToCloseMessage'));
           });
       },
       handleSelect({ value }) {
@@ -335,29 +330,25 @@
       },
     },
     $trs: {
-      noExams: {
-        message: 'You do not have any assessments',
-        context: 'Message displayed when there are no assessments within a class.',
-      },
-      noStartedExams: {
-        message: 'No started assessments',
-        context:
-          'Message displayed when there are no started quizes. Started assessments are those that are in progress.',
-      },
-      newQuiz: {
+      newAssessment: {
         message: 'Create new assessment',
         context: "Title of the screen launched from the 'New quiz' button on the 'Plan' tab.\n",
       },
-      selectQuiz: {
+      selectAssessment: {
         message: 'Select assessment',
         context:
           "Practice assessments are pre-made assessments, that don't require the curation work on the part of the coach. Selecting a practice quiz refers to importing a ready-to-use quiz.",
       },
-      totalQuizSize: {
+      totalAssessmentSize: {
         message: 'Total size of assessments visible to learners: {size}',
         context:
           'Descriptive text at the top of the table that displays the calculated file size of all quiz resources (i.e. 120 MB)',
       },
+      noEndedAssessments: {
+          message: 'No ended assessments',
+          context:
+            'Message displayed when there are no ended quizes. Ended assessments are those that are no longer in progress.',
+        },
     },
   };
 
