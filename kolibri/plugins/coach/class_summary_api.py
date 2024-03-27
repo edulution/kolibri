@@ -307,6 +307,32 @@ def serialize_exams(queryset):
     )
 
 
+def serialize_assessments(queryset):
+    queryset = annotate_array_aggregate(
+        queryset, exam_assignments="assignmentassessments__collection"
+    )
+    return list(
+        map(
+            _map_exam,
+            queryset.values(
+                "id",
+                "title",
+                "active",
+                "question_sources",
+                "data_model_version",
+                "question_count",
+                "learners_see_fixed_order",
+                "seed",
+                "date_created",
+                "date_archived",
+                "date_activated",
+                "archive",
+                "exam_assignments",
+            ),
+        )
+    )
+
+
 from django.db import connection
 from django.utils import timezone
 from kolibri.deployment.default.settings import base
@@ -367,10 +393,10 @@ class ClassSummaryViewSet(viewsets.ViewSet):
         query_learners = FacilityUser.objects.filter(memberships__collection=classroom)
         query_lesson = Lesson.objects.filter(collection=pk)
         query_exams = Exam.objects.filter(collection=pk)
-        query_assessments = Exam.objects.filter(collection=pk)
+        query_assessments = ExamAssessment.objects.filter(collection=pk)
         lesson_data = serialize_lessons(query_lesson)
         exam_data = serialize_exams(query_exams)
-        assessment_data = serialize_exams(query_assessments)
+        assessment_data = serialize_assessments(query_assessments)
 
         all_node_ids = set()
         for lesson in lesson_data:
@@ -411,6 +437,19 @@ class ClassSummaryViewSet(viewsets.ViewSet):
                 for node_id in exam["node_ids"]
             )
         
+        # filter classes out of assessment assignments
+        for assessment in assessment_data:
+            assessment["groups"] = [
+                g
+                for g in assessment["assignments"]
+                if g != pk and g not in individual_learners_group_ids
+            ]
+            # determine if any resources are missing locally for the quiz
+            assessment["missing_resource"] = any(
+                node_id not in node_lookup or not node_lookup[node_id]["available"]
+                for node_id in assessment["node_ids"]
+            )
+
         # filter classes out of assessment assignments
         for assessment in assessment_data:
             assessment["groups"] = [
