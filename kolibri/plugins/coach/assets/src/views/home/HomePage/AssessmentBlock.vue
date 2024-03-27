@@ -10,7 +10,7 @@
     </template>
   
     <p v-if="table.length === 0">
-      {{ coachString('quizListEmptyState') }}
+      {{ coachString('assessmenListEmptyState') }}
     </p>
   
     <BlockItem

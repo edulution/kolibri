@@ -81,6 +81,48 @@ def _get_quiz_status(queryset):
     return items
 
 
+def _get_assessment_status(queryset):
+    queryset = queryset.filter(
+        mastery_level__lt=0,
+    ).order_by("-end_timestamp")
+    queryset = queryset.annotate(
+        previous_masterylog=Subquery(
+            queryset.filter(
+                summarylog=OuterRef("summarylog"),
+                end_timestamp__lt=OuterRef("end_timestamp"),
+            ).values_list("id")[:1]
+        ),
+    )
+    queryset = annotate_response_summary(queryset)
+    items = []
+    statuses = queryset.annotate(
+        last_activity=Max("attemptlogs__end_timestamp"),
+        previous_num_correct=SQCount(
+            logger_models.AttemptLog.objects.filter(
+                masterylog=OuterRef("previous_masterylog"), correct=1
+            )
+            .order_by()
+            .values_list("item")
+            .distinct(),
+            field="item",
+        ),
+    ).values(
+        "summarylog__content_id",
+        "complete",
+        "last_activity",
+        "num_correct",
+        "num_answered",
+        "previous_num_correct",
+        learner_id=F("user_id"),
+    )
+    seen = set()
+    for item in statuses:
+        key = "{}-{}".format(item["learner_id"], item["summarylog__content_id"])
+        if key not in seen:
+            items.append(item)
+            seen.add(key)
+    return items
+
 def content_status_serializer(lesson_data, learners_data, classroom):  # noqa C901
 
     # First generate a unique set of content node ids from all the lessons
@@ -227,11 +269,25 @@ def _map_exam_status(item):
     return item
 
 
+def _map_assessment_status(item):
+    complete = item.pop("complete")
+    item["status"] = COMPLETED if complete else STARTED
+    item["assessment_id"] = item.pop("summarylog__content_id")
+    return item
+
+
 def serialize_coach_assigned_quiz_status(queryset):
     queryset = logger_models.MasteryLog.objects.filter(
         summarylog__content_id__in=queryset.values("id"),
     ).order_by()
     return list(map(_map_exam_status, _get_quiz_status(queryset)))
+
+
+def serialize_coach_assigned_assessment_status(queryset):
+    queryset = logger_models.MasteryLog.objects.filter(
+        summarylog__content_id__in=queryset.values("id"),
+    ).order_by()
+    return list(map(_map_assessment_status, _get_assessment_status(queryset)))
 
 
 def serialize_groups(queryset):
@@ -284,6 +340,32 @@ def _map_exam(item):
 def serialize_exams(queryset):
     queryset = annotate_array_aggregate(
         queryset, exam_assignments="assignments__collection"
+    )
+    return list(
+        map(
+            _map_exam,
+            queryset.values(
+                "id",
+                "title",
+                "active",
+                "question_sources",
+                "data_model_version",
+                "question_count",
+                "learners_see_fixed_order",
+                "seed",
+                "date_created",
+                "date_archived",
+                "date_activated",
+                "archive",
+                "exam_assignments",
+            ),
+        )
+    )
+
+
+def serialize_assessments(queryset):
+    queryset = annotate_array_aggregate(
+        queryset, exam_assignments="assignmentassessments__collection"
     )
     return list(
         map(
@@ -367,10 +449,10 @@ class ClassSummaryViewSet(viewsets.ViewSet):
         query_learners = FacilityUser.objects.filter(memberships__collection=classroom)
         query_lesson = Lesson.objects.filter(collection=pk)
         query_exams = Exam.objects.filter(collection=pk)
-        query_assessments = Exam.objects.filter(collection=pk)
+        query_assessments = ExamAssessment.objects.filter(collection=pk)
         lesson_data = serialize_lessons(query_lesson)
         exam_data = serialize_exams(query_exams)
-        assessment_data = serialize_exams(query_assessments)
+        assessment_data = serialize_assessments(query_assessments)
 
         all_node_ids = set()
         for lesson in lesson_data:
@@ -424,6 +506,19 @@ class ClassSummaryViewSet(viewsets.ViewSet):
                 for node_id in assessment["node_ids"]
             )
 
+        # filter classes out of assessment assignments
+        for assessment in assessment_data:
+            assessment["groups"] = [
+                g
+                for g in assessment["assignments"]
+                if g != pk and g not in individual_learners_group_ids
+            ]
+            # determine if any resources are missing locally for the quiz
+            assessment["missing_resource"] = any(
+                node_id not in node_lookup or not node_lookup[node_id]["available"]
+                for node_id in assessment["node_ids"]
+            )
+
         # filter classes out of lesson assignments
         for lesson in lesson_data:
             lesson["groups"] = [
@@ -456,6 +551,7 @@ class ClassSummaryViewSet(viewsets.ViewSet):
             "exams": exam_data,
             "assessments": assessment_data,
             "exam_learner_status": serialize_coach_assigned_quiz_status(query_exams),
+            "assessment_learner_status": serialize_coach_assigned_assessment_status(query_assessments),
             "content": content,
             "content_learner_status": content_status_serializer(
                 lesson_data, learners_data, classroom
