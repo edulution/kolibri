@@ -10,7 +10,10 @@
     <template #tbody>
       <transition-group tag="tbody" name="list">
         <tr v-for="tableRow in entries" :key="tableRow.id" data-test="entry">
-          <td>
+          <td 
+            :style="{ backgroundColor: 
+              scoreBackgroundColor((tableRow.statusObj.num_correct / questionCount * 100) || 0) }" 
+          >
             <template>
               {{ tableRow.name }}
             </template>
@@ -68,6 +71,17 @@
   
           return null;
         },
+        scoreBackgroundColor(value) {
+        if (value >= 0 && value < 30) {
+          return 'red';
+        } else if (value >= 30 && value < 50) {
+          return 'blue';
+        } else if (value >= 50 && value < 70) {
+          return 'black';
+        } else if (value >= 70 && value <= 100) {
+          return 'pink';
+        }
+      },
       },
       $trs: {
       },
