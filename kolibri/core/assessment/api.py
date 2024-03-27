@@ -106,9 +106,9 @@ class AssessmentViewset(ValuesViewset):
                 if item["id"] in adhoc_assignments:
                     adhoc_assignment = adhoc_assignments[item["id"]]
                     item["learner_ids"] = adhoc_assignments[item["id"]]["learner_ids"]
-                    item["assignments"] = [
+                    item["assignmentassessments"] = [
                         i
-                        for i in item["assignments"]
+                        for i in item["assignmentassessments"]
                         if i != adhoc_assignment["collection"]
                     ]
                 else:
