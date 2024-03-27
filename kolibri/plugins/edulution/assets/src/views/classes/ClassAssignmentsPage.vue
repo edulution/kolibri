@@ -11,7 +11,7 @@
 
       <AssignedLessonsCards :lessons="activeLessons" />
       <AssignedQuizzesCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
-      <AssessmentCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
+      <AssessmentCards :assessments="activeAssessments" :style="{ marginTop: '44px' }" />
     </div>
   </LearnAppBarPage>
 
@@ -55,6 +55,7 @@
         getClass,
         getClassActiveLessons,
         getClassActiveQuizzes,
+        getClassActiveAssessments,
       } = useLearnerResources();
 
       const classId = root.$router.currentRoute.params.classId;
@@ -62,6 +63,7 @@
       const className = computed(() => (get(classroom) ? get(classroom).name : ''));
       const activeLessons = computed(() => getClassActiveLessons(get(classId)));
       const activeQuizzes = computed(() => getClassActiveQuizzes(get(classId)));
+      const activeAssessments = computed(() => getClassActiveAssessments(get(classId)));
 
       function schedulePoll() {
         const timeoutId = setTimeout(pollForUpdates, 30000);
@@ -88,6 +90,7 @@
         className,
         activeLessons,
         activeQuizzes,
+        activeAssessments
       };
     },
     computed: {

@@ -9,15 +9,15 @@
     </h2>
 
     <CardGrid
-      v-if="visibleQuizzes.length > 0"
+      v-if="visibleAssessments.length > 0"
       :gridType="1"
     >
       <AssessmentCard
-        v-for="quiz in visibleQuizzes"
-        :key="quiz.id"
-        :quiz="quiz"
-        :to="getClassAssessmentLink(quiz)"
-        :collectionTitle="displayClassName ? getAssessmentName(quiz) : ''"
+        v-for="assessment in visibleAssessments"
+        :key="assessment.id"
+        :assessment="assessment"
+        :to="getClassAssessmentLink(assessment)"
+        :collectionTitle="displayClassName ? getAssessmentName(assessment) : ''"
       />
     </CardGrid>
     <p v-else>
@@ -44,11 +44,11 @@
     },
     setup(props) {
       const { getClass, getClassAssessmentLink } = useLearnerResources();
-      const visibleQuizzes = computed(() => {
-        if (!props.quizzes) {
+      const visibleAssessments = computed(() => {
+        if (!props.assessments) {
           return [];
         }
-        return props.quizzes.filter(assessment => {
+        return props.assessments.filter(assessment => {
           if (!assessment.active) {
             return false;
           } else if (assessment.archive) {
@@ -66,29 +66,29 @@
       }
 
       return {
-        visibleQuizzes,
+        visibleAssessments,
         getAssessmentName,
         getClassAssessmentLink,
       };
     },
     props: {
-      // `quizzes` prop is used in `setup`
+      // `assessments` prop is used in `setup`
       // eslint-disable-next-line kolibri/vue-no-unused-properties
-      quizzes: {
+      assessments: {
         type: Array,
         required: true,
       },
       /**
-       * If `true` 'Recent quizzes' header will be displayed.
-       * Otherwise 'Your quizzes' will be displayed.
+       * If `true` 'Recent assessments' header will be displayed.
+       * Otherwise 'Your assessments' will be displayed.
        */
       recent: {
         type: Boolean,
         default: false,
       },
       /**
-       * A quiz's class name will be displayed above
-       * the quiz title if `true`
+       * A assessment's class name will be displayed above
+       * the assessment title if `true`
        */
       displayClassName: {
         type: Boolean,

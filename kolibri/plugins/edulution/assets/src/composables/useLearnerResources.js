@@ -177,6 +177,19 @@ export default function useLearnerResources() {
     return classroom.assignments.exams.filter(exam => exam.active);
   }
 
+   /**
+   * @param {String} classId
+   * @returns {Array} All active assessments of a class
+   * @public
+   */
+   function getClassActiveAssessments(classId) {
+    const classroom = getClass(classId);
+    if (!classroom || !classroom.assignments || !classroom.assignments.assessments) {
+      return [];
+    }
+    return classroom.assignments.assessments.filter(exam => exam.active);
+  }
+
   /**
    * @param {Object} lesson
    * @returns {Object} vue-router link to a lesson page
@@ -363,5 +376,6 @@ export default function useLearnerResources() {
     fetchMoreResumableContentNodes,
     resumableContentNodes,
     moreResumableContentNodes,
+    getClassActiveAssessments
   };
 }
