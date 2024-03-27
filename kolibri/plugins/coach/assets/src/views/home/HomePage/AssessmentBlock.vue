@@ -51,15 +51,15 @@
       mixins: [commonCoach, commonCoreStrings],
       computed: {
         table() {
-          const recent = orderBy(this.exams, this.lastActivity, ['desc']).slice(0, MAX_QUIZZES);
-          return recent.map(exam => {
-            const assigned = this.getLearnersForExam(exam);
+          const recent = orderBy(this.assessments, this.lastActivity, ['desc']).slice(0, MAX_QUIZZES);
+          return recent.map(assessment => {
+            const assigned = this.getLearnersForExam(assessment);
             return {
-              key: exam.id,
-              name: exam.title,
-              tally: this.getExamStatusTally(exam.id, assigned),
-              groups: exam.groups.map(groupId => this.groupMap[groupId].name),
-              assignments: exam.assignments,
+              key: assessment.id,
+              name: assessment.title,
+              tally: this.getExamStatusTally(assessment.id, assigned),
+              groups: assessment.groups.map(groupId => this.groupMap[groupId].name),
+              assignments: assessment.assignments,
               hasAssignments: assigned.length > 0,
             };
           });

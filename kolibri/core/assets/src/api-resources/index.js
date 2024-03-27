@@ -38,3 +38,4 @@ export {
   DynamicNetworkLocationResource,
 } from './networkLocation';
 export { default as KnowledgemapResource } from './knowledgemap'
+export { default as AssessmentResource } from './assessment'

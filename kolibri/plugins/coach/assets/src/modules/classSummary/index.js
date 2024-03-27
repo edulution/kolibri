@@ -96,6 +96,7 @@ function defaultState() {
      * ]
      */
     activeLearnersMap: [],
+    assessmentMap: {},
   };
 }
 
@@ -364,11 +365,27 @@ export default {
     },
     learnersInfo(state) {
       return state.learnersInfo;
-    }
+    },
+    /*
+     * assessments := [
+     *   {
+     *     id,
+     *     active,
+     *     title,
+     *     question_sources: [{exercise_id, question_id}, ...],
+     *     groups: [id, ...],
+     *   },
+     *   ...
+     * ]
+     */
+    assessments(state) {
+      return Object.values(state.assessmentMap);
+    },
   },
   mutations: {
     SET_STATE(state, summary) {
       const examMap = _mapExams(summary.exams);
+      const assessmentMap = _mapExams(summary.assessments || []);
       for (const status of summary.exam_learner_status) {
         // convert dates
         status.last_activity = status.last_activity ? new Date(status.last_activity) : null;
@@ -399,6 +416,7 @@ export default {
         lessonMap: _mapLessons(summary.lessons),
         activeLearnersMap: summary.active_learners,
         learnersInfo: summary.learners_info,
+        assessmentMap,
       });
     },
     CREATE_ITEM(state, { map, id, object }) {

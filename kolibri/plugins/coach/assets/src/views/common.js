@@ -93,6 +93,7 @@ export default {
       'coaches',
       'learners',
       'groups',
+      'assessments',
       'exams',
       'examStatuses',
       'content',

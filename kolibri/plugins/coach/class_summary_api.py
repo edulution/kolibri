@@ -19,6 +19,7 @@ from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.content.models import ContentNode
 from kolibri.core.exams.models import Exam
+from kolibri.core.assessment.models import ExamAssessment
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.logger import models as logger_models
 from kolibri.core.logger.utils.quiz import annotate_response_summary
@@ -366,14 +367,18 @@ class ClassSummaryViewSet(viewsets.ViewSet):
         query_learners = FacilityUser.objects.filter(memberships__collection=classroom)
         query_lesson = Lesson.objects.filter(collection=pk)
         query_exams = Exam.objects.filter(collection=pk)
+        query_assessments = Exam.objects.filter(collection=pk)
         lesson_data = serialize_lessons(query_lesson)
         exam_data = serialize_exams(query_exams)
+        assessment_data = serialize_exams(query_assessments)
 
         all_node_ids = set()
         for lesson in lesson_data:
             all_node_ids |= set(lesson.get("node_ids"))
         for exam in exam_data:
             all_node_ids |= set(exam.get("node_ids"))
+        for assessment in assessment_data:
+            all_node_ids |= set(assessment.get("node_ids"))
 
         content = list(
             ContentNode.objects.filter_by_uuids(all_node_ids).values(
@@ -404,6 +409,19 @@ class ClassSummaryViewSet(viewsets.ViewSet):
             exam["missing_resource"] = any(
                 node_id not in node_lookup or not node_lookup[node_id]["available"]
                 for node_id in exam["node_ids"]
+            )
+        
+        # filter classes out of assessment assignments
+        for assessment in assessment_data:
+            assessment["groups"] = [
+                g
+                for g in assessment["assignments"]
+                if g != pk and g not in individual_learners_group_ids
+            ]
+            # determine if any resources are missing locally for the quiz
+            assessment["missing_resource"] = any(
+                node_id not in node_lookup or not node_lookup[node_id]["available"]
+                for node_id in assessment["node_ids"]
             )
 
         # filter classes out of lesson assignments
@@ -436,6 +454,7 @@ class ClassSummaryViewSet(viewsets.ViewSet):
                 classroom.get_individual_learners_group()
             ),
             "exams": exam_data,
+            "assessments": assessment_data,
             "exam_learner_status": serialize_coach_assigned_quiz_status(query_exams),
             "content": content,
             "content_learner_status": content_status_serializer(
