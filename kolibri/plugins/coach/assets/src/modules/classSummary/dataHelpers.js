@@ -53,6 +53,7 @@ export default {
    */
   getLearnersForGroups(state) {
     return function(groupIds) {
+      console.log({ groupIds })
       if (!Array.isArray(groupIds)) {
         throw new Error('getLearnersForGroups: invalid parameter(s)');
       }
@@ -205,6 +206,17 @@ export default {
     };
   },
   /*
+   * Return a STATUSES constant given an exam ID and a learner ID
+   */
+  getAssessmentStatusObjForLearner(state) {
+    return function(examId, learnerId) {
+      if (!examId || !learnerId) {
+        throw new Error('getAssessmentStatusObjForLearner: invalid parameter(s)');
+      }
+      return get(state.assessmentLearnerStatusMap, [examId, learnerId], notStartedStatusObj());
+    };
+  },
+  /*
    * Return a 'tally object' given an exam ID and an array of learner IDs
    */
   getExamStatusTally(state, getters) {
@@ -220,6 +232,27 @@ export default {
       };
       learnerIds.forEach(learnerId => {
         const status = getters.getExamStatusObjForLearner(examId, learnerId);
+        tallies[keyMap[status.status]] += 1;
+      });
+      return tallies;
+    };
+  },
+  /*
+   * Return a 'tally object' given an exam ID and an array of learner IDs
+   */
+  getAssessmentStatusTally(state, getters) {
+    return function(examId, learnerIds) {
+      if (!examId || !Array.isArray(learnerIds)) {
+        throw new Error('getAssessmentStatusTally: invalid parameter(s)');
+      }
+      const tallies = {
+        started: 0,
+        notStarted: 0,
+        completed: 0,
+        helpNeeded: 0,
+      };
+      learnerIds.forEach(learnerId => {
+        const status = getters.getAssessmentStatusObjForLearner(examId, learnerId);
         tallies[keyMap[status.status]] += 1;
       });
       return tallies;

@@ -57,7 +57,7 @@
             return {
               key: assessment.id,
               name: assessment.title,
-              tally: this.getExamStatusTally(assessment.id, assigned),
+              tally: this.getAssessmentStatusTally(assessment.id, assigned),
               groups: assessment.groups.map(groupId => this.groupMap[groupId].name),
               assignments: assessment.assignments,
               hasAssignments: assigned.length > 0,
@@ -70,10 +70,10 @@
         lastActivity(exam) {
           // Default to UNIX 0 so activity-less exams go to the end of the list
           let last = new Date(0);
-          if (!this.examLearnerStatusMap[exam.id]) {
+          if (!this.assessmentLearnerStatusMap[exam.id]) {
             return last;
           }
-          Object.values(this.examLearnerStatusMap[exam.id]).forEach(status => {
+          Object.values(this.assessmentLearnerStatusMap[exam.id]).forEach(status => {
             if (status.last_activity > last) {
               last = status.last_activity;
             }

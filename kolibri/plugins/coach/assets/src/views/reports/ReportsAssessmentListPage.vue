@@ -108,14 +108,14 @@
         <!-- Modals for Close & Open of quiz from right-most column -->
         <KModal
           v-if="showOpenConfirmationModal"
-          :title="coachString('openQuizLabel')"
+          :title="coachString('openAssessmentLabel')"
           :submitText="coreString('continueAction')"
           :cancelText="coreString('cancelAction')"
           @cancel="showOpenConfirmationModal = false"
           @submit="handleOpenQuiz(modalQuizId)"
         >
-          <p>{{ coachString('openQuizModalDetail') }}</p>
-          <p>{{ coachString('lodQuizDetail') }}</p>
+          <p>{{ coachString('openAssessmentModalDetail') }}</p>
+          <p>{{ coachString('lodAssessmentDetail') }}</p>
           <p>{{ coachString('fileSizeToDownload', { size: modalQuizId.size_string }) }}</p>
         </KModal>
         <KModal
@@ -138,7 +138,7 @@
   <script>
   
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-    import { ExamResource } from 'kolibri.resources';
+    import { AssessmentResource } from 'kolibri.resources';
     import bytesForHumans from 'kolibri.utils.bytesForHumans';
     import { REPORTS_TABS_ID, ReportsTabs } from '../../constants/tabsConstants';
     import commonCoach from '../common';
@@ -160,7 +160,7 @@
         return {
           REPORTS_TABS_ID,
           ReportsTabs,
-          filter: 'allQuizzes',
+          filter: 'allAssessments',
           showOpenConfirmationModal: false,
           showCloseConfirmationModal: false,
           modalQuizId: null,
@@ -168,16 +168,16 @@
       },
       computed: {
         emptyMessage() {
-          if (this.filter.value === 'allQuizzes') {
+          if (this.filter.value === 'allAssessments') {
             return this.coachString('quizListEmptyState');
           }
-          if (this.filter.value === 'startedQuizzes') {
+          if (this.filter.value === 'startedAssessments') {
             return this.coreString('noResultsLabel');
           }
-          if (this.filter.value === 'quizzesNotStarted') {
+          if (this.filter.value === 'assessmentsNotStarted') {
             return this.coreString('noResultsLabel');
           }
-          if (this.filter.value === 'endedQuizzes') {
+          if (this.filter.value === 'endedAssessments') {
             return this.$tr('noEndedExams');
           }
   
@@ -187,48 +187,48 @@
           return [
             {
               label: this.coachString('filterQuizAll'),
-              value: 'allQuizzes',
+              value: 'allAssessments',
               noStartedExams: 'No started quizzes',
               noExamsNotStarted: 'No quizzes not started',
             },
             {
               label: this.coachString('filterQuizStarted'),
-              value: 'startedQuizzes',
+              value: 'startedAssessments',
             },
             {
               label: this.coachString('filterQuizNotStarted'),
-              value: 'quizzesNotStarted',
+              value: 'assessmentsNotStarted',
             },
             {
               label: this.coachString('filterQuizEnded'),
-              value: 'endedQuizzes',
+              value: 'endedAssessments',
             },
           ];
         },
         table() {
-          const filtered = this.exams.filter(exam => {
-            if (this.filter.value === 'allQuizzes') {
+          const filtered = this.assessments.filter(assessment => {
+            if (this.filter.value === 'allAssessments') {
               return true;
-            } else if (this.filter.value === 'startedQuizzes') {
-              return exam.active && !exam.archive;
-            } else if (this.filter.value === 'quizzesNotStarted') {
-              return !exam.active;
-            } else if (this.filter.value === 'endedQuizzes') {
-              return exam.active && exam.archive;
+            } else if (this.filter.value === 'startedAssessments') {
+              return assessment.active && !assessment.archive;
+            } else if (this.filter.value === 'assessmentsNotStarted') {
+              return !assessment.active;
+            } else if (this.filter.value === 'endedAssessments') {
+              return assessment.active && assessment.archive;
             }
           });
           const sorted = this._.orderBy(filtered, ['date_created'], ['desc']);
-          return sorted.map(exam => {
-            const learnersForQuiz = this.getLearnersForExam(exam);
+          return sorted.map(assessment => {
+            const learnersForQuiz = this.getLearnersForExam(assessment);
             const tableRow = {
               totalLearners: learnersForQuiz.length,
-              tally: this.getExamStatusTally(exam.id, learnersForQuiz),
-              groupNames: this.getGroupNames(exam.groups),
-              recipientNames: this.getRecipientNamesForExam(exam),
-              avgScore: this.getExamAvgScore(exam.id, learnersForQuiz),
+              tally: this.getExamStatusTally(assessment.id, learnersForQuiz),
+              groupNames: this.getGroupNames(assessment.groups),
+              recipientNames: this.getRecipientNamesForExam(assessment),
+              avgScore: this.getExamAvgScore(assessment.id, learnersForQuiz),
               hasAssignments: learnersForQuiz.length > 0,
             };
-            Object.assign(tableRow, exam);
+            Object.assign(tableRow, assessment);
             return tableRow;
           });
         },
@@ -251,7 +251,7 @@
       },
       methods: {
         handleOpenQuiz(quizId) {
-          const promise = ExamResource.saveModel({
+          const promise = AssessmentResource.saveModel({
             id: quizId,
             data: {
               active: true,
@@ -264,14 +264,14 @@
             .then(() => {
               this.$store.dispatch('classSummary/refreshClassSummary');
               this.showOpenConfirmationModal = false;
-              this.$store.dispatch('createSnackbar', this.coachString('quizOpenedMessage'));
+              this.$store.dispatch('createSnackbar', this.coachString('assessmentOpenedMessage'));
             })
             .catch(() => {
-              this.$store.dispatch('createSnackbar', this.coachString('quizFailedToOpenMessage'));
+              this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToOpenMessage'));
             });
         },
         handleCloseQuiz(quizId) {
-          const promise = ExamResource.saveModel({
+          const promise = AssessmentResource.saveModel({
             id: quizId,
             data: {
               archive: true,
@@ -284,10 +284,10 @@
             .then(() => {
               this.$store.dispatch('classSummary/refreshClassSummary');
               this.showCloseConfirmationModal = false;
-              this.$store.dispatch('createSnackbar', this.coachString('quizClosedMessage'));
+              this.$store.dispatch('createSnackbar', this.coachString('assessmentClosedMessage'));
             })
             .catch(() => {
-              this.$store.dispatch('createSnackbar', this.coachString('quizFailedToCloseMessage'));
+              this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToCloseMessage'));
             });
         },
         exportCSV() {
@@ -302,16 +302,15 @@
           new CSVExporter(columns, fileName).export(this.table);
         },
         scoreBackgroundColor(value) {
-          console.log(value,"value")
-        if (value >= 0 && value < 30) {
-          return 'red';
-        } else if (value >= 30 && value < 50) {
-          return 'blue';
-        } else if (value >= 50 && value < 70) {
-          return 'black';
-        } else if (value >= 70 && value <= 100) {
-          return 'pink';
-        }
+          if (value >= 0 && value < 30) {
+            return 'red';
+          } else if (value >= 30 && value < 50) {
+            return 'blue';
+          } else if (value >= 50 && value < 70) {
+            return 'black';
+          } else if (value >= 70 && value <= 100) {
+            return 'pink';
+          }
       },
       },
       $trs: {
