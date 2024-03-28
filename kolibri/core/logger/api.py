@@ -302,10 +302,10 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             context["quiz_id"] = quiz_id
         elif assessment_id is not None:
             self._check_assessment_permissions(user, assessment_id)
-            mastery_model = {"type": exercises.ASSESSMENT, "coach_assigned": True}
+            mastery_model = {"type": 'assessment', "coach_assigned": True}
             content_id = assessment_id
             channel_id = None
-            kind = content_kinds.ASSESSMENT
+            kind = 'assessment'
             context["assessment_id"] = assessment_id
         return content_id, channel_id, kind, mastery_model, context
 
@@ -487,7 +487,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         if (
             masterylog
             and masterylog.complete
-            and masterylog.mastery_criterion.get("type") == exercises.ASSESSMENT
+            and masterylog.mastery_criterion.get("type") == 'assessment'
             and masterylog.mastery_criterion.get("coach_assigned")
         ):
             raise PermissionDenied("Cannot update a finished coach assigned assessment")
@@ -502,7 +502,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         context,
     ):
         is_quiz = mastery_model["type"] == exercises.QUIZ
-        is_assessment = mastery_model["type"] == exercises.ASSESSMENT
+        is_assessment = mastery_model["type"] == 'assessment'
         masterylogs = MasteryLog.objects.filter(
             summarylog=summarylog,
             user=user,
@@ -595,7 +595,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             attemptlogs = attemptlogs[: MAPPING[exercise_type]]
         elif exercise_type == exercises.QUIZ:
             attemptlogs = attemptlogs.order_by()
-        elif exercise_type == exercises.ASSESSMENT:
+        elif exercise_type == 'assessment':
             attemptlogs = attemptlogs.order_by()
         else:
             attemptlogs = attemptlogs[:10]
@@ -884,6 +884,9 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
 
         if "quiz_id" in context:
             self._check_quiz_permissions(user, context["quiz_id"])
+        
+        if "assessment_id" in context:
+            self._check_assessment_permissions(user, context["assessment_id"])
 
         update_fields = self._update_content_log(
             sessionlog, end_timestamp, validated_data
