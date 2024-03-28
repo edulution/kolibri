@@ -5,7 +5,7 @@ import find from 'lodash/find';
 import isFunction from 'lodash/isFunction';
 import Vue from 'kolibri.lib.vue';
 import bytesForHumans from 'kolibri.utils.bytesForHumans';
-import { ExamResource, LessonResource } from 'kolibri.resources';
+import { ExamResource, LessonResource, AssessmentResource } from 'kolibri.resources';
 import ClassSummaryResource from '../../apiResources/classSummary';
 import dataHelpers from './dataHelpers';
 import { STATUSES } from './constants';
@@ -515,6 +515,19 @@ export default {
         state.examMap = { ...state.examMap };
       }
     },
+    SET_CLASS_ASSESSMENTS_SIZES(state, sizes) {
+      if (sizes.length > 0) {
+        for (const sizeItem of sizes) {
+          for (const [key, val] of Object.entries(sizeItem)) {
+            if (state.assessmentMap[key]) {
+              state.assessmentMap[key]['size_string'] = bytesForHumans(val);
+              state.assessmentMap[key]['size'] = val;
+            }
+          }
+        }
+        state.assessmentMap = { ...state.assessmentMap };
+      }
+    },
   },
   actions: {
     updateWithNotifications,
@@ -528,6 +541,7 @@ export default {
           return Promise.all([
             store.dispatch('fetchLessonsSizes', classId),
             store.dispatch('fetchQuizzesSizes', classId),
+            store.dispatch('fetchAssessmentsSizes', classId),
           ]).then(() => summary);
         });
     },
@@ -548,6 +562,18 @@ export default {
         return ExamResource.fetchQuizzesSizes({ collection: classId })
           .then(sizes => {
             store.commit('SET_CLASS_QUIZZES_SIZES', sizes);
+          })
+          .catch(error => {
+            return store.dispatch('handleApiError', error, { root: true });
+          });
+      }
+      return Promise.resolve();
+    },
+    fetchAssessmentsSizes(store, classId) {
+      if (Object.keys(store.state.assessmentMap).length > 0) {
+        return AssessmentResource.fetchAssessmentsSizes({ collection: classId })
+          .then(sizes => {
+            store.commit('SET_CLASS_ASSESSMENTS_SIZES', sizes);
           })
           .catch(error => {
             return store.dispatch('handleApiError', error, { root: true });
