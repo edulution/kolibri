@@ -29,7 +29,7 @@
             :value="selectedLearner"  
             :label="$tr('learnerLabel')"
             :options="learnerOptions"
-            :style="{ background: $themePalette.grey.v_300 }"
+            :style="{ background: $themePalette.grey.v_300,padding: '10px 10px 10px 10px' }"
             :disabled="assessmentCreationConfirmRoute"
             @change="onSelectLearner"
           />
