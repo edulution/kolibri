@@ -5,7 +5,7 @@ import {
   generateExerciseDetailHandler,
   exerciseRootRedirectHandler,
 } from '../modules/exerciseDetail/handlers';
-import { generateExamReportDetailHandler } from '../modules/examReportDetail/handlers';
+import { generateExamReportDetailHandler, generateAssessmentReportDetailHandler } from '../modules/examReportDetail/handlers';
 import {
   generateQuestionDetailHandler,
   questionRootRedirectHandler,
@@ -625,7 +625,7 @@ export default [
   {
     path: path(CLASS, ASSESSMENT, LEARNER, TRY, QUESTION, INTERACTION),
     component: pages.ReportsAssessmentLearnerPage,
-    handler: generateExamReportDetailHandler(['learnerId', 'quizId']),
+    handler: generateAssessmentReportDetailHandler(['learnerId', 'quizId']),
     meta: {
       // Leaves out question and interaction numbers
       titleParts: ['LEARNER_NAME', 'QUIZ_NAME', 'CLASS_NAME'],

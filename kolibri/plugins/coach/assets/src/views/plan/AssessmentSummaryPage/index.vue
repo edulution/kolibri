@@ -25,7 +25,7 @@
         <h2 class="visuallyhidden">
           {{ coachString('generalInformationLabel') }}
         </h2>
-        <QuizStatus
+        <AssessmentStatus
           :className="className"
           :avgScore="avgScore"
           :groupAndAdHocLearnerNames="getRecipientNamesForExam(exam)"
@@ -83,7 +83,7 @@
   import QuizOptionsDropdownMenu from './QuizOptionsDropdownMenu';
   import ManageExamModals from './ManageExamModals';
   import {
-    fetchQuizSummaryPageData,
+    fetchAssessmentSummaryPageData,
     serverAssignmentPayload,
     clientAssigmentState,
     deleteExam,
@@ -128,7 +128,7 @@
         return this.getExamAvgScore(this.$route.params.quizId, this.recipients);
       },
       exam() {
-        return this.examMap[this.$route.params.quizId];
+        return this.assessmentMap[this.$route.params.quizId];
       },
       recipients() {
         return this.getLearnersForExam(this.exam);
@@ -143,7 +143,7 @@
       },
     },
     beforeRouteEnter(to, from, next) {
-      return fetchQuizSummaryPageData(to.params.quizId)
+      return fetchAssessmentSummaryPageData(to.params.quizId)
         .then(data => {
           next(vm => vm.setData(data));
         })
