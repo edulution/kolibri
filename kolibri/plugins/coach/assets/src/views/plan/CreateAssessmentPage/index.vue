@@ -15,11 +15,12 @@
       <KGrid>
         <KGridItem :layout12="{ span: 5 }">
           <KTextbox
-            v-model.trim="examTitle"
+            :value="examTitle"
             :label="coachString('titleLabel')"
-            :autofocus="true"
             :maxlength="100"
             type="text"
+            :disabled="assessmentCreationConfirmRoute"
+            @input="onChangeTitle"
           />
         </KGridItem>
 
@@ -29,6 +30,7 @@
             :label="$tr('learnerLabel')"
             :options="learnerOptions"
             :style="{ background: $themePalette.grey.v_300 }"
+            :disabled="assessmentCreationConfirmRoute"
             @change="onSelectLearner"
           />
         </KGridItem>
@@ -45,6 +47,7 @@
               class="content-list-item"
             >
               <KRadioButton
+                v-if="assessmentCreationRoute"
                 v-model="selectedContent"
                 :value="content.id"
                 :showLabel="false"
@@ -118,8 +121,11 @@
 
 <script>
 
-import { AssessmentResource } from 'kolibri.resources';
+import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
+  import { AssessmentResource, ContentNodeResource, ContentNodeSearchResource } from 'kolibri.resources';
   import { mapState, mapActions, mapGetters } from 'vuex';
+  import uniq from 'lodash/uniq';
+  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
@@ -130,6 +136,7 @@ import { AssessmentResource } from 'kolibri.resources';
   import { PageNames } from '../../../constants/';
   import commonCoach from '../../common';
   import CoachImmersivePage from '../../CoachImmersivePage';
+import { filterAndAnnotateContentList } from '../../../modules/examCreation/actions';
 
   export default {
     name: 'CreateAssessmentPage',
@@ -154,8 +161,6 @@ import { AssessmentResource } from 'kolibri.resources';
         'contentList',
       ]),
       learnerOptions() {
-        console.log({ learner: this.learners })
-
         return this.learners.map(learner => ({
           label: learner.name,
           value: learner.id
@@ -174,20 +179,73 @@ import { AssessmentResource } from 'kolibri.resources';
         return false;
       },
       filteredContentList() {
+        if (this.assessmentCreationConfirmRoute) {
+          return this.contentList.filter(c => c.id === this.$route.params.channelId);
+        }
         return this.contentList;
+      },
+      pageName() {
+        return this.$route.name;
+      },
+      assessmentCreationRoute() {
+        return this.pageName === PageNames.ASSESSMENT_CREATION_ROOT;
+      },
+      assessmentCreationConfirmRoute() {
+        return this.pageName === PageNames.ASSESSMENT_CREATION_CONFIRM;
       },
     },
     watch: {
+      // showExamCreationSearchPage
     },
     methods: {
       onSelectLearner(option) {
-        this.selectedLearner = option;
+        if (this.assessmentCreationRoute) {
+          this.selectedLearner = option;
+        }
       },
-      onSubmit() {
+      onChangeTitle(title) {
+        if (this.assessmentCreationRoute) {
+          this.examTitle = title;
+        }
+      },
+      async onSubmit() {
+        if (this.assessmentCreationRoute) {
+          const results = await ContentNodeResource.fetchCollection({
+            getParams: {
+              parent: this.selectedContent,
+              kind_in: [ContentNodeKinds.EXERCISE, ContentNodeKinds.TOPIC]
+            }
+          })
+          const contentList = await filterAndAnnotateContentList(results)
+          const exercises2 = []
+          contentList.forEach(d => {
+            d.exercises.forEach(e => {
+              exercises2.push(e)
+            })
+          })
+
+          const contentNodes = await ContentNodeResource.fetchCollection({
+            getParams: { ids: exercises2.map(d => d.id) },
+          })
+
+          const exercises = {};
+          contentNodes.forEach(exercise => {
+            exercises[exercise.id] = exercise;
+          });
+          const availableExercises = exercises2.filter(id => exercises[id]);
+          const exerciseTitles = availableExercises.map(id => exercises[id].title);
+          const questionIdArrays = availableExercises.map(
+            id => assessmentMetaDataState(exercises[id]).assessmentIds
+          );
+          console.log({ results, contentList, contentNodes, exerciseTitles, questionIdArrays })
+          // return
+        }
+        // return;
+
         const exam = {
           collection: this.classId,
           title: this.examTitle,
-          seed: 928,
+          seed: this.$store.state.seed,
           question_count: 10,
           question_sources: [],
           assignments: [this.classId],

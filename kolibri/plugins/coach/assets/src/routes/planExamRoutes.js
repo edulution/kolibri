@@ -128,15 +128,4 @@ export default [
     path: '/:classId/plan/quizzes/:quizId/edit',
     component: QuizEditDetailsPage,
   },
-  {
-    name: PageNames.ASSESSMENTS,
-    path: '/:classId/plan/assessments',
-    component: CoachAssessmentsPage,
-    handler(toRoute) {
-      showExamsPage(store, toRoute.params.classId);
-    },
-    meta: {
-      titleParts: ['assessmentLabel', 'CLASS_NAME'],
-    },
-  },
 ];

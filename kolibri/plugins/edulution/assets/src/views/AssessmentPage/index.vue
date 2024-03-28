@@ -460,7 +460,7 @@
     },
     $trs: {
       submitExam: {
-        message: 'Submit quiz',
+        message: 'Submit assessment',
         context:
           'Action that learner takes to submit their quiz answers so that the coach can review them.',
       },

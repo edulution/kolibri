@@ -289,7 +289,7 @@ export default function useLearnerResources() {
       };
     }
     return {
-      name: ClassesPageNames.EXAM_VIEWER,
+      name: ClassesPageNames.ASSESSMENT_VIEWER,
       params: {
         classId: assessment.collection,
         examId: assessment.id,

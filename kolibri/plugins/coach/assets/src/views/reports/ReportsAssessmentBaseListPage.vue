@@ -81,7 +81,7 @@
         return this.getExamAvgScore(this.$route.params.quizId, this.recipients);
       },
       exam() {
-        return this.examMap[this.$route.params.quizId];
+        return this.assessmentMap[this.$route.params.quizId];
       },
       recipients() {
         return this.getLearnersForExam(this.exam);

@@ -1,7 +1,7 @@
 <template>
 
   <ReportsAssessmentBaseListPage @export="exportCSV">
-    <ReportsAssessmentLearnersTable :entries="dummyEntries" :questionCount="100" />
+    <ReportsAssessmentLearnersTable :entries="table" :questionCount="exam.question_count" />
   </ReportsAssessmentBaseListPage>
   
 </template>
@@ -15,8 +15,8 @@
     import commonCoach from '../common';
     import CSVExporter from '../../csv/exporter';
     import * as csvFields from '../../csv/fields';
-    import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage';
-    import ReportsAssessmentLearnersTable from './ReportsAssessmentLearnersTable';
+    import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage.vue';
+    import ReportsAssessmentLearnersTable from './ReportsAssessmentLearnersTable.vue';
   
     export default {
       name: 'ReportsAssessmentLearnerListPage',
@@ -25,20 +25,9 @@
         ReportsAssessmentLearnersTable,
       },
       mixins: [commonCoach, commonCoreStrings],
-      data(){
-        return {
-      dummyEntries: [
-        { id: 1, name: 'Entry 1', statusObj: { num_correct: 10 } },
-        { id: 2, name: 'Entry 2', statusObj: { num_correct: 40 } },
-        { id: 3, name: 'Entry 3', statusObj: { num_correct: 20 } },
-        { id: 4, name: 'Entry 4', statusObj: { num_correct: 80 } },
-        { id: 5, name: 'Entry 5', statusObj: { num_correct: 100 } },
-      ]
-    };
-      },
       computed: {
         exam() {
-          return this.examMap[this.$route.params.quizId];
+          return this.assessmentMap[this.$route.params.quizId];
         },
         recipients() {
           return this.getLearnersForExam(this.exam);

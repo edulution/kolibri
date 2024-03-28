@@ -42,6 +42,15 @@ export default [
     },
   },
   {
+    name: PageNames.ASSESSMENT_CREATION_CONFIRM,
+    path: '/:classId/plan/assessments/new/confirm',
+    component: CreateAssessmentPage,
+    // handler: toRoute => {
+      // showExamCreationTopicPage(store, toRoute.params);
+      // showExamCreationSearchPage(store, toRoute.params, toRoute.query);
+    // },
+  },
+  {
     name: PageNames.ASSESSMENT_CREATION_PRACTICE_QUIZ,
     path: '/:classId/plan/assessments/new/practice_assessment',
     component: CreatePracticeQuizPage,

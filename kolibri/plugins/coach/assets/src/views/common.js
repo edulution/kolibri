@@ -88,6 +88,7 @@ export default {
       'contentLearnerStatusMap',
       'lessonMap',
       'activeLearnersMap',
+      'assessmentMap',
       'assessmentLearnerStatusMap',
     ]),
     ...mapGetters('classSummary', [
