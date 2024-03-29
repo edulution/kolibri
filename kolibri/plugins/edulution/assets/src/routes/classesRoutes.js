@@ -5,7 +5,7 @@ import { ClassesPageNames, PageNames } from '../constants';
 import { showLessonPlaylist } from '../modules/lessonPlaylist/handlers';
 import { showClassAssignmentsPage } from '../modules/classAssignments/handlers';
 import { showAllClassesPage } from '../modules/classes/handlers';
-import { showExam } from '../modules/examViewer/handlers';
+import { showExam, showAssessment } from '../modules/examViewer/handlers';
 import { showExamReport, showAssessmentReport } from '../modules/examReportViewer/handlers';
 import { inClasses } from '../composables/useCoreLearn';
 import ExamPage from '../views/ExamPage';
@@ -90,7 +90,7 @@ export default [
         fromRoute.name === ClassesPageNames.ASSESSMENT_VIEWER &&
         toRoute.params.examId === fromRoute.params.examId &&
         toRoute.params.classId === fromRoute.params.classId;
-      showExam(store, toRoute.params, alreadyOnAssessment);
+        showAssessment(store, toRoute.params, alreadyOnAssessment);
     },
     component: AssessmentPage,
   },

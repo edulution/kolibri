@@ -40,6 +40,7 @@ export const pageNameToModuleMap = {
   [ClassesPageNames.CLASS_ASSIGNMENTS]: 'classAssignments',
   [ClassesPageNames.EXAM_VIEWER]: 'examViewer',
   [ClassesPageNames.EXAM_REPORT_VIEWER]: 'examReportViewer',
+  [ClassesPageNames.ASSESSMENT_REPORT_VIEWER]: 'assessmentReportViewer',
   [ClassesPageNames.LESSON_PLAYLIST]: 'lessonPlaylist',
 };
 
