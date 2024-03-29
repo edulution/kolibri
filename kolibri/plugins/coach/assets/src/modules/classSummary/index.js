@@ -413,7 +413,7 @@ export default {
       for (const status of summary.assessment_learner_status) {
         // convert dates
         status.last_activity = status.last_activity ? new Date(status.last_activity) : null;
-        status.score = _score(status.num_correct, assessmentMap[status.exam_id].question_count);
+        status.score = _score(status.num_correct, assessmentMap[status.assessment_id].question_count);
       }
       for (const status of summary.content_learner_status) {
         // convert dates
@@ -441,7 +441,7 @@ export default {
         activeLearnersMap: summary.active_learners,
         learnersInfo: summary.learners_info,
         assessmentMap,
-        assessmentLearnerStatusMap: _statusMap(summary.assessment_learner_status, 'exam_id'),
+        assessmentLearnerStatusMap: _statusMap(summary.assessment_learner_status, 'assessment_id'),
       });
     },
     CREATE_ITEM(state, { map, id, object }) {
