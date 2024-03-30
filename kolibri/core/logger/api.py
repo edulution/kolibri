@@ -94,7 +94,7 @@ class StartSessionSerializer(serializers.Serializer):
             raise ValidationError("quiz_id must not be mixed with other context")
         if "assessment_id" in data and ("lesson_id" in data or "node_id" in data):
             raise ValidationError("assessment_id must not be mixed with other context")
-        if "node_id" not in data and "quiz_id" not in data:
+        if "node_id" not in data and "quiz_id" not in data and "assessment_id" not in data:
             raise ValidationError("node_id is required if not a coach assigned quiz")
         if "node_id" in data:
             errors = {}
@@ -258,7 +258,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             raise PermissionDenied("Cannot access a assessment if not logged in")
         if not ExamAssessment.objects.filter(
             active=True,
-            assignments__collection_id__in=user.memberships.all().values(
+            assignmentassessments__collection_id__in=user.memberships.all().values(
                 "collection_id"
             ),
             id=assessment_id,
