@@ -73,6 +73,13 @@ class ExamAssessment(AbstractFacilityDataModel):
     creator = models.ForeignKey(
         FacilityUser, related_name="examassessment", blank=False, null=True
     )
+    assessment_group = models.ForeignKey(
+        'ExamAssessmentGroup',  # String reference to the model
+        related_name="exam_assessments",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL
+    )
 
     # To be set True when the quiz is first set to active=True
     date_activated = models.DateTimeField(default=None, null=True, blank=True)
@@ -282,3 +289,51 @@ class IndividualSyncableExam(AbstractFacilityDataModel):
         exam = ExamAssessment.deserialize(serialized_exam)
         exam.active = True
         return exam
+    
+
+class ExamAssessmentGroup(AbstractFacilityDataModel):
+
+    morango_model_name = "examassessmentgroup"
+
+    permissions = (
+        RoleBasedPermissions(
+            target_field="collection",
+            can_be_created_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_read_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_updated_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_deleted_by=(role_kinds.ADMIN, role_kinds.COACH),
+        )
+        | UserCanReadExamData()
+    )
+
+    title = models.CharField(max_length=200)
+
+    learner_id = models.IntegerField(default=1)
+
+    # Is this exam currently active and visible to students to whom it is assigned?
+    active = models.BooleanField(default=False)
+
+    creator = models.ForeignKey(
+        FacilityUser, related_name="assessementfacilityuser", blank=False, null=True
+    )
+
+    date_activated = models.DateTimeField(default=None, null=True, blank=True)
+    date_created = models.DateTimeField(auto_now_add=True, null=True)
+    archive = models.BooleanField(default=False)
+    date_archived = models.DateTimeField(default=None, null=True, blank=True)
+    assessment_map  = JSONField(default=[], blank=True)
+    last_assessment = models.ForeignKey(
+        'ExamAssessment',  # String reference to the model
+        related_name="last_assessment_group",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL
+    )
+    current_assessment = models.ForeignKey(
+        'ExamAssessment',  # String reference to the model
+        related_name="current_assessment_group",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL
+    )
+
