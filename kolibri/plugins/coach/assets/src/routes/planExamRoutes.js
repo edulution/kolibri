@@ -17,7 +17,6 @@ import CreateExamPage from '../views/plan/CreateExamPage';
 import CreateExamPreview from '../views/plan/CreateExamPage/CreateExamPreview.vue';
 import PlanQuizPreviewPage from '../views/plan/PlanQuizPreviewPage';
 import CoachExamsPage from '../views/plan/CoachExamsPage';
-import CoachAssessmentsPage from '../views/plan/CoachAssessmentsPage';
 import { showExamsPage } from '../modules/examsRoot/handlers';
 import QuizSummaryPage from '../views/plan/QuizSummaryPage';
 import QuizEditDetailsPage from '../views/plan/QuizEditDetailsPage';

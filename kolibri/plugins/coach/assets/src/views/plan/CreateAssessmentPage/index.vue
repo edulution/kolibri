@@ -15,28 +15,24 @@
       <KGrid>
         <KGridItem :layout12="{ span: 5 }">
           <KTextbox
-            :value="examTitle"
+            v-model="assessmentTitle"
             :label="coachString('titleLabel')"
             :maxlength="100"
             type="text"
-            :disabled="assessmentCreationConfirmRoute"
-            @input="onChangeTitle"
           />
         </KGridItem>
 
         <KGridItem :layout12="{ span: 5 }">
           <KSelect
-            :value="selectedLearner"  
+            v-model="selectedLearner"
             :label="$tr('learnerLabel')"
             :options="learnerOptions"
-            :style="{ background: $themePalette.grey.v_300,padding: '10px 10px 10px 10px' }"
-            :disabled="assessmentCreationConfirmRoute"
-            @change="onSelectLearner"
+            :style="{ background: $themePalette.grey.v_300, padding: '10px 10px 10px 10px' }"
           />
         </KGridItem>
       </KGrid>
 
-      <h2>{{ $tr('chooseExercises') }}</h2>
+      <h2>{{ $tr('chooseChannel') }}</h2>
 
       <div>
         <div>
@@ -47,7 +43,6 @@
               class="content-list-item"
             >
               <KRadioButton
-                v-if="assessmentCreationRoute"
                 v-model="selectedContent"
                 :value="content.id"
                 :showLabel="false"
@@ -62,7 +57,10 @@
                   :isMobile="windowIsSmall"
                 />
 
-                <div :class="windowIsSmall ? 'mobile-text' : 'text'" :style="{ color: $themeTokens.text }">
+                <div
+                  :class="windowIsSmall ? 'mobile-text' : 'text'"
+                  :style="{ color: $themeTokens.text }"
+                >
                   <div
                     :class="{ 'title-message-wrapper': Boolean(!windowIsSmall) }"
                     :style="{ color: $themeTokens.text }"
@@ -121,22 +119,23 @@
 
 <script>
 
-import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
-  import { AssessmentResource, ContentNodeResource, ContentNodeSearchResource } from 'kolibri.resources';
-  import { mapState, mapActions, mapGetters } from 'vuex';
-  import uniq from 'lodash/uniq';
-  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+  import { mapState } from 'vuex';
+  
+  import { AssessmentResource, ContentNodeResource } from 'kolibri.resources';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import ContentIcon from 'kolibri.coreVue.components.ContentIcon';
   import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
   
+  import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
+  import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  
   import CardThumbnail from '../LessonResourceSelectionPage/LessonContentCard/CardThumbnail.vue';
-  import { PageNames } from '../../../constants/';
-  import commonCoach from '../../common';
   import CoachImmersivePage from '../../CoachImmersivePage';
-import { filterAndAnnotateContentList } from '../../../modules/examCreation/actions';
+  
+  import { PageNames } from '../../../constants';
+  import commonCoach from '../../common';
 
   export default {
     name: 'CreateAssessmentPage',
@@ -150,7 +149,7 @@ import { filterAndAnnotateContentList } from '../../../modules/examCreation/acti
     mixins: [commonCoreStrings, commonCoach, responsiveWindowMixin],
     data() {
       return {
-        examTitle: '',
+        assessmentTitle: '',
         selectedLearner: {},
         selectedContent: '',
       };
@@ -167,96 +166,99 @@ import { filterAndAnnotateContentList } from '../../../modules/examCreation/acti
         }))
       },
       isInvalidSubmission() {
-        if (!this.examTitle) {
+        if (!this.assessmentTitle) {
           return true;
         }
         if (!Object.keys(this.selectedLearner).length) {
           return true;
         }
-        if (!Object.keys(this.selectedContent).length) {
+        if (!this.selectedContent) {
           return true;
         }
         return false;
       },
       filteredContentList() {
-        if (this.assessmentCreationConfirmRoute) {
-          return this.contentList.filter(c => c.id === this.$route.params.channelId);
-        }
         return this.contentList;
       },
-      pageName() {
-        return this.$route.name;
-      },
-      assessmentCreationRoute() {
-        return this.pageName === PageNames.ASSESSMENT_CREATION_ROOT;
-      },
-      assessmentCreationConfirmRoute() {
-        return this.pageName === PageNames.ASSESSMENT_CREATION_CONFIRM;
-      },
-    },
-    watch: {
-      // showExamCreationSearchPage
     },
     methods: {
-      onSelectLearner(option) {
-        if (this.assessmentCreationRoute) {
-          this.selectedLearner = option;
+      async prepareAssessments() {
+        const assessments = [];
+        const contentNodes = await ContentNodeResource.fetchCollection({
+          getParams: {
+            parent: this.selectedContent,
+            kind_in: [ContentNodeKinds.TOPIC]
+          }
+        })
+
+        const descendantsNodes = await ContentNodeResource.fetchDescendantsAssessments(
+          contentNodes.map(c => c.id)
+        );
+        
+        for (const contentNode of contentNodes) {
+          const descendantsNodeIndex = descendantsNodes.data.findIndex(
+            d => d.id === contentNode.id && d.num_assessments
+          )
+          if (descendantsNodeIndex !== -1) {
+            const excercises = await ContentNodeResource.fetchDescendants([contentNode.id], {
+              descendant_kind: ContentNodeKinds.EXERCISE,
+            })
+
+            const exerciseContents = await ContentNodeResource.fetchCollection({
+              getParams: {
+                ids: excercises.data.map(e => e.id),
+              }
+            })
+            
+            let questionSources = [];
+
+            for (const exercise of exerciseContents) {
+              questionSources = [
+                ...questionSources,
+                ...exercise.assessmentmetadata.assessment_item_ids.map(a => ({
+                  exercise_id: exercise.id,
+                  question_id: a,
+                  title: exercise.title,
+                  missing_resource: false,
+                }))
+              ]
+            }
+            
+            assessments.push({
+              id: contentNode.id,
+              title: contentNode.title,
+              exercises: excercises.data.map(e => ({
+                id: e.id,
+                title: e.title
+              })),
+              question_sources: questionSources,
+              question_count: questionSources.length,
+            })
+          }
         }
-      },
-      onChangeTitle(title) {
-        if (this.assessmentCreationRoute) {
-          this.examTitle = title;
-        }
+
+        return assessments;
       },
       async onSubmit() {
-        if (this.assessmentCreationRoute) {
-          const results = await ContentNodeResource.fetchCollection({
-            getParams: {
-              parent: this.selectedContent,
-              kind_in: [ContentNodeKinds.EXERCISE, ContentNodeKinds.TOPIC]
-            }
-          })
-          const contentList = await filterAndAnnotateContentList(results)
-          const exercises2 = []
-          contentList.forEach(d => {
-            d.exercises.forEach(e => {
-              exercises2.push(e)
-            })
-          })
-
-          const contentNodes = await ContentNodeResource.fetchCollection({
-            getParams: { ids: exercises2.map(d => d.id) },
-          })
-
-          const exercises = {};
-          contentNodes.forEach(exercise => {
-            exercises[exercise.id] = exercise;
-          });
-          const availableExercises = exercises2.filter(id => exercises[id]);
-          const exerciseTitles = availableExercises.map(id => exercises[id].title);
-          const questionIdArrays = availableExercises.map(
-            id => assessmentMetaDataState(exercises[id]).assessmentIds
-          );
-          console.log({ results, contentList, contentNodes, exerciseTitles, questionIdArrays })
-          // return
-        }
-        // return;
-
-        const exam = {
+        const assessments = await this.prepareAssessments();
+        
+        const data = {
           collection: this.classId,
-          title: this.examTitle,
-          seed: this.$store.state.seed,
-          question_count: 10,
-          question_sources: [],
-          assignments: [this.classId],
-          learners_see_fixed_order: false,
+          title: this.assessmentTitle,
           date_archived: null,
           date_activated: null,
-          learner_ids: [this.selectedLearner.value],
+          channel_id: this.selectedContent,
+          learner_id: this.selectedLearner.value,
+          assessments,
         };
-        return AssessmentResource.saveModel({ data: exam }).then(() => {
-          return this.$router.push({ name: PageNames.ASSESSMENTS });
-        });
+
+        try {
+          const result = await AssessmentResource.saveModel({ data })
+          console.log({ result })
+          this.$router.push({ name: PageNames.ASSESSMENTS });
+        } catch (error) {
+          console.log("error", error)
+        }
       }
     },
     $trs: {
@@ -264,35 +266,14 @@ import { filterAndAnnotateContentList } from '../../../modules/examCreation/acti
         message: 'Learner',
         context: '',
       },
-      resources: {
-        message: '{count} {count, plural, one {resource} other {resources}}',
-        context: "Only translate 'resource' and 'resources'.",
-      },
       createNewAssessmentLabel: {
         message: 'Create new assessment',
         context: "Title of the screen launched from the 'New quiz' button on the 'Plan' tab.",
       },
-      chooseExercises: {
+      chooseChannel: {
         message: 'Select channel to map assessment',
         context:
           'When creating a new quiz, coaches can choose which folders or exercises they want to include in the quiz from the channels that contain exercise resources.',
-      },
-      noneSelected: {
-        message: 'No exercises are selected',
-        context:
-          "Error message which displays if no resources have been selected in the 'Create new quiz' screen.",
-      },
-      exitSearchButtonLabel: {
-        message: 'Exit search',
-        context:
-          "Button to exit the 'Search' page when user searches for resources to use in a quiz.",
-      },
-      selectionInformation: {
-        message:
-          '{count, number, integer} of {total, number, integer} {total, plural, one {resource selected} other {resources selected}}',
-
-        context:
-          "Indicates the number of resources selected by the coach. For example: '3 of 5 resources selected'.\n\nOnly translate 'of' and 'resource/resources selected'",
       },
     },
   };
