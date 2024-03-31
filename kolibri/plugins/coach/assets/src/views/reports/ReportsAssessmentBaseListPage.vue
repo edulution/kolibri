@@ -23,6 +23,7 @@
           </template>
         </AssessmentLessonDetailsHeader>
       </KGridItem>
+
       <KGridItem :layout12="{ span: $isPrint ? 12 : 4 }">
         <h2 class="visuallyhidden">
           {{ coachString('generalInformationLabel') }}
@@ -33,24 +34,16 @@
           :groupAndAdHocLearnerNames="getRecipientNamesForExam(exam)"
           :exam="exam"
           showReportVisible="true"
-          showSize="true"
+          variant="REPORT"
         />
       </KGridItem>
+
       <KGridItem :layout12="{ span: $isPrint ? 12 : 8 }">
         <h2 class="visuallyhidden">
           {{ coachString('detailsLabel') }}
         </h2>
         <KPageContainer :topMargin="$isPrint ? 0 : 16">
           <ReportsControls @export="$emit('export')" />
-          <HeaderTabs :enablePrint="true">
-            <HeaderTab
-              :text="coachString('resultBreakdownLabel')"
-              :to="group ?
-                classRoute('ReportsGroupReportAssessmentLearnerListPage') :
-                classRoute('ReportsAssessmentLearnerListPage')
-              "
-            />
-          </HeaderTabs>
           <slot></slot>
         </KPageContainer>
       </KGridItem>

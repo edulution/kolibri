@@ -1,7 +1,16 @@
 <template>
 
   <ReportsAssessmentBaseListPage @export="exportCSV">
-    <ReportsAssessmentLearnersTable :entries="table" :questionCount="exam.question_count" />
+    <ReportsAssessmentTestsTable
+      v-if="currentView === 'TEST_LIST'"
+      :entries="testTable"
+      @testTitleClick="onTestTitleClick"
+    />
+    <ReportsAssessmentBreakdownTable
+      v-if="currentView === 'TEST_BREAKDOWN'"
+      :entries="breakdownData"
+      @backClick="onBackClick"
+    />
   </ReportsAssessmentBaseListPage>
   
 </template>
@@ -16,21 +25,32 @@
     import CSVExporter from '../../csv/exporter';
     import * as csvFields from '../../csv/fields';
     import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage.vue';
-    import ReportsAssessmentLearnersTable from './ReportsAssessmentLearnersTable.vue';
+    import ReportsAssessmentTestsTable from './ReportsAssessmentTestsTable.vue';
+    import ReportsAssessmentBreakdownTable from './ReportsAssessmentBreakdownTable.vue';
   
     export default {
       name: 'ReportsAssessmentLearnerListPage',
       components: {
         ReportsAssessmentBaseListPage,
-        ReportsAssessmentLearnersTable,
+        ReportsAssessmentTestsTable,
+        ReportsAssessmentBreakdownTable,
       },
       mixins: [commonCoach, commonCoreStrings],
+      data() {
+        return {
+          currentView: 'TEST_LIST',
+          breakdownData: [],
+        };
+      },
       computed: {
         exam() {
           return this.assessmentMap[this.$route.params.quizId];
         },
         recipients() {
           return this.getLearnersForExam(this.exam);
+        },
+        testTable() {
+          return Object.values(this.examMap)
         },
         table() {
           const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
@@ -68,6 +88,23 @@
   
           exporter.export(this.table);
         },
+        onTestTitleClick(assessmentId) {
+          console.log("assessmentId", assessmentId)
+          this.breakdownData = [{
+            id: 1,
+            title: 'Topic 1',
+            question_count: 4,
+          }, {
+            id: 2,
+            title: 'Topic 2',
+            question_count: 6,
+          }]
+          this.currentView = 'TEST_BREAKDOWN'
+        },
+        onBackClick() {
+          this.breakdownData = []
+          this.currentView = 'TEST_LIST'
+        }
       },
     };
   

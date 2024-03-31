@@ -11,38 +11,52 @@
           :layout12="{ span: 12 }"
         >
           <KButton
+            v-if="isPlan"
             :primary="true"
             :text="coachString('openAssessmentLabel')"
             type="button"
             @click="showConfirmationModal = true"
           />
+
+          <div v-if="isReport">
+            {{ $tr('openAssessmentLabel') }}
+          </div>
+        </KGridItem>
+        <KGridItem
+          :layout4="{ span: 4 }"
+          :layout8="{ span: 4 }"
+          :layout12="{ span: 12 }"
+        >
+          <ElapsedTime :date="examDateCreated" />
         </KGridItem>
       </div>
 
       <!-- Quiz Close button & time since opened -->
       <div v-if="exam.active && !exam.archive && !$isPrint" class="status-item">
         <KGridItem
+          class="status-label"
           :layout4="{ span: 4 }"
           :layout8="{ span: 4 }"
           :layout12="{ span: 12 }"
         >
           <KButton
+            v-if="isPlan"
             :text="coachString('closeAssessmentLabel')"
             type="submit"
             :appearanceOverrides="cancelStyleOverrides"
             @click="showCancellationModal = true"
           />
+
+          <div v-if="isReport">
+            {{ $tr('closeAssessmentLabel') }}
+          </div>
         </KGridItem>
         <KGridItem
           :layout4="{ span: 4 }"
           :layout8="{ span: 4 }"
           :layout12="{ span: 12 }"
         >
-          <StatusElapsedTime
-            :date="examDateOpened"
-            actionType="opened"
-            style="display: block; margin-top: 8px;"
-          />
+          <ElapsedTime :date="examDateOpened" />
         </KGridItem>
       </div>
 
@@ -61,9 +75,10 @@
           :layout8="{ span: 4 }"
           :layout12="{ span: 12 }"
         >
-          <ElapsedTime :date="examDateArchived" style="margin-top: 8px;" />
+          <ElapsedTime :date="examDateArchived" />
         </KGridItem>
       </div>
+
       <div v-if="showReportVisible && exam.archive && !$isPrint" class="status-item">
         <KGridItem
           class="status-label"
@@ -229,12 +244,11 @@
   import { coachStringsMixin } from './commonCoachStrings';
   import Score from './Score';
   import Recipients from './Recipients';
-  import StatusElapsedTime from './StatusElapsedTime';
   import AverageScoreTooltip from './AverageScoreTooltip';
 
   export default {
     name: 'AssessmentStatus',
-    components: { Score, Recipients, ElapsedTime, StatusElapsedTime, AverageScoreTooltip },
+    components: { Score, Recipients, ElapsedTime, AverageScoreTooltip },
     mixins: [coachStringsMixin, commonCoreStrings],
     props: {
       className: {
@@ -253,6 +267,10 @@
         type: Number,
         default: null,
       },
+      variant: {
+        type: String,
+        default: 'PLAN',
+      }
     },
     data() {
       return {
@@ -265,10 +283,11 @@
       };
     },
     computed: {
-      orderDescriptionString() {
-        return this.exam.learners_see_fixed_order
-          ? this.coachString('orderFixedLabel')
-          : this.coachString('orderRandomLabel');
+      isPlan() {
+        return this.variant === 'PLAN'
+      },
+      isReport() {
+        return this.variant === 'REPORT'
       },
       cancelStyleOverrides() {
         return {
@@ -276,6 +295,13 @@
           'background-color': this.$themePalette.red.v_700,
           ':hover': { 'background-color': this.$themePalette.red.v_900 },
         };
+      },
+      examDateCreated() {
+        if (this.exam.date_created) {
+          return new Date(this.exam.date_created);
+        } else {
+          return null;
+        }
       },
       examDateArchived() {
         if (this.exam.date_archived) {
@@ -401,10 +427,14 @@
         context:
           'The label for a switch that will toggle whether or not learners can view their assessment report.',
       },
-      questionOrderLabel: {
-        message: 'Question order',
-        context: 'A label for the place where the question order is shown.',
+      openAssessmentLabel: {
+        message: 'Assessment created',
+        context: '',
       },
+      closeAssessmentLabel: {
+        message: 'Assessment started',
+        context: '',
+      }
     },
   };
 
