@@ -16,30 +16,19 @@
         :activeTabId="ReportsTabs.ASSESSMENT"
       >
         <ReportsControls @export="exportCSV">
-          <p v-if="table.length && table.length > 0">
-            {{ $tr('totalAssessmentSize', { size: calcTotalSizeOfVisibleAssessments }) }}
-          </p>
           <KSelect
             v-model="filter"
             :label="coachString('filterQuizStatus')"
             :options="filterOptions"
             :inline="true"
           />
-  
         </ReportsControls>
+
         <CoreTable :emptyMessage="emptyMessage">
           <template #headers>
             <th>{{ coachString('titleLabel') }}</th>
-            <th style="position:relative;">
-              {{ coachString('avgScoreLabel') }}
-              <AverageScoreTooltip v-show="!$isPrint" variant="ASSESSMENT" />
-            </th>
             <th>{{ coachString('recipientsLabel') }}</th>
-            <th>{{ coachString('sizeLabel') }}</th>
-            <th
-              v-show="!$isPrint"
-              class="center-text"
-            >
+            <th v-show="!$isPrint">
               {{ coachString('statusLabel') }}
             </th>
           </template>
@@ -59,41 +48,25 @@
                     icon="quiz"
                   />
                 </td>
-                <td  
-                  :style="{ backgroundColor: 
-                    scoreBackgroundColor((tableRow.avgScore) || 0) }" 
-                >
-                  <Score :value="tableRow.avgScore" />
-                </td>
                 <td>
                   <Recipients
                     :groupNames="getRecipientNamesForExam(tableRow)"
                     :hasAssignments="tableRow.hasAssignments"
                   />
                 </td>
-                <td>
-                  {{ tableRow.size_string ? tableRow.size_string : '--' }}
-                </td>
-                <td
-                  v-show="!$isPrint"
-                  class="button-col center-text core-table-button-col"
-                >
-                  <!-- Open quiz button -->
-                  <KButton
+                <td v-show="!$isPrint">
+                  <div
                     v-if="!tableRow.active && !tableRow.archive"
-                    :text="coachString('openAssessmentLabel')"
-                    appearance="flat-button"
-                    class="table-left-aligned-button"
-                    @click="showOpenConfirmationModal = true; modalQuizId = tableRow.id"
-                  />
-                  <!-- Close quiz button -->
-                  <KButton
+                    class="quiz-closed-label"
+                  >
+                    {{ $tr('openAssessmentLabel') }}
+                  </div>
+                  <div
                     v-if="tableRow.active && !tableRow.archive"
-                    :text="coachString('closeAssessmentLabel')"
-                    appearance="flat-button"
-                    class="table-left-aligned-button"
-                    @click="showCloseConfirmationModal = true; modalQuizId = tableRow.id;"
-                  />
+                    class="quiz-closed-label"
+                  >
+                    {{ $tr('closeAssessmentLabel') }}
+                  </div>
                   <div
                     v-if="tableRow.archive"
                     class="quiz-closed-label"
@@ -105,29 +78,6 @@
             </transition-group>
           </template>
         </CoreTable>
-        <!-- Modals for Close & Open of quiz from right-most column -->
-        <KModal
-          v-if="showOpenConfirmationModal"
-          :title="coachString('openAssessmentLabel')"
-          :submitText="coreString('continueAction')"
-          :cancelText="coreString('cancelAction')"
-          @cancel="showOpenConfirmationModal = false"
-          @submit="handleOpenQuiz(modalQuizId)"
-        >
-          <p>{{ coachString('openAssessmentModalDetail') }}</p>
-          <p>{{ coachString('lodAssessmentDetail') }}</p>
-          <p>{{ coachString('fileSizeToDownload', { size: modalQuizId.size_string }) }}</p>
-        </KModal>
-        <KModal
-          v-if="showCloseConfirmationModal"
-          :title="coachString('closeAssessmentLabel')"
-          :submitText="coreString('continueAction')"
-          :cancelText="coreString('cancelAction')"
-          @cancel="showCloseConfirmationModal = false"
-          @submit="handleCloseQuiz(modalQuizId)"
-        >
-          <div>{{ coachString('closeAssessmentModalDetail') }}</div>
-        </KModal>
       </KTabsPanel>
     </KPageContainer>
   </CoachAppBarPage>
@@ -138,8 +88,6 @@
   <script>
   
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-    import { AssessmentResource } from 'kolibri.resources';
-    import bytesForHumans from 'kolibri.utils.bytesForHumans';
     import { REPORTS_TABS_ID, ReportsTabs } from '../../constants/tabsConstants';
     import commonCoach from '../common';
     import CoachAppBarPage from '../CoachAppBarPage';
@@ -161,9 +109,6 @@
           REPORTS_TABS_ID,
           ReportsTabs,
           filter: 'allAssessments',
-          showOpenConfirmationModal: false,
-          showCloseConfirmationModal: false,
-          modalQuizId: null,
         };
       },
       computed: {
@@ -232,64 +177,11 @@
             return tableRow;
           });
         },
-        calcTotalSizeOfVisibleAssessments() {
-          if (this.assessments) {
-            let sum = 0;
-            this.assessments.forEach(assessment => {
-              if (assessment.active) {
-                sum += assessment.size;
-              }
-            });
-            const size = bytesForHumans(sum);
-            return size;
-          }
-          return '--';
-        },
       },
       beforeMount() {
         this.filter = this.filterOptions[0];
       },
       methods: {
-        handleOpenQuiz(quizId) {
-          const promise = AssessmentResource.saveModel({
-            id: quizId,
-            data: {
-              active: true,
-              date_activated: new Date(),
-            },
-            exists: true,
-          });
-  
-          return promise
-            .then(() => {
-              this.$store.dispatch('classSummary/refreshClassSummary');
-              this.showOpenConfirmationModal = false;
-              this.$store.dispatch('createSnackbar', this.coachString('assessmentOpenedMessage'));
-            })
-            .catch(() => {
-              this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToOpenMessage'));
-            });
-        },
-        handleCloseQuiz(quizId) {
-          const promise = AssessmentResource.saveModel({
-            id: quizId,
-            data: {
-              archive: true,
-              date_archived: new Date(),
-            },
-            exists: true,
-          });
-  
-          return promise
-            .then(() => {
-              this.$store.dispatch('classSummary/refreshClassSummary');
-              this.showCloseConfirmationModal = false;
-              this.$store.dispatch('createSnackbar', this.coachString('assessmentClosedMessage'));
-            })
-            .catch(() => {
-              this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToCloseMessage'));
-            });
-        },
         exportCSV() {
           const columns = [
             ...csvFields.title(),
@@ -301,17 +193,6 @@
           const fileName = this.$tr('printLabel', { className: this.className });
           new CSVExporter(columns, fileName).export(this.table);
         },
-        scoreBackgroundColor(value) {
-          if (value >= 0 && value < 30) {
-            return 'red';
-          } else if (value >= 30 && value < 50) {
-            return 'blue';
-          } else if (value >= 50 && value < 70) {
-            return 'black';
-          } else if (value >= 70 && value <= 100) {
-            return 'pink';
-          }
-      },
       },
       $trs: {
         noEndedAssessments: {
@@ -324,11 +205,14 @@
           context:
             "Title that displays on a printed copy of the 'Reports' > 'Assessments' page. This shows if the user uses the 'Print' option by clicking on the printer icon and displays on the downloadable CSV file.",
         },
-        totalAssessmentSize: {
-          message: 'Total size of assessments visible to learners: {size}',
-          context:
-            'Descriptive text at the top of the table that displays the calculated file size of all assessment resources (i.e. 120 MB)',
+        openAssessmentLabel: {
+          message: 'Assessment not started',
+          context: '',
         },
+        closeAssessmentLabel: {
+          message: 'Assessment started',
+          context: '',
+        }
       },
     };
   
