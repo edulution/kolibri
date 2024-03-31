@@ -21,6 +21,7 @@
           </template>
         </QuizLessonDetailsHeader>
       </KGridItem>
+
       <KGridItem :layout12="{ span: 4 }">
         <h2 class="visuallyhidden">
           {{ coachString('generalInformationLabel') }}
@@ -32,12 +33,20 @@
           :exam="exam"
         />
       </KGridItem>
+      
       <KGridItem :layout12="{ span: 8 }">
         <KPageContainer
           v-if="!loading"
           :topMargin="16"
         >
-          <section v-if="selectedQuestions">
+          <section v-if="currentView === 'TEST_LISTING'">
+            DEFAULT
+            Render Test Listing Here
+            in table view
+            and title should have function to switch to QUESTION_PREVIEW
+          </section>  
+          
+          <section v-if="currentView === 'QUESTIONS_PERVIEW'">
             <h2>
               {{ coachString('numberOfQuestions', { value: selectedQuestions.length }) }}
             </h2>
@@ -56,6 +65,7 @@
         </KPageContainer>
       </KGridItem>
     </KGrid>
+
     <ManageExamModals
       :currentAction="currentAction"
       :quiz="quiz"
@@ -88,7 +98,7 @@
     clientAssigmentState,
     deleteExam,
   } from './api';
-
+  
   export default {
     name: 'AssessmentSummaryPage',
     components: {
@@ -110,6 +120,7 @@
         selectedExercises: {},
         loading: true,
         currentAction: '',
+        currentView: 'TEST_LISTING',
       };
     },
     computed: {
@@ -125,10 +136,10 @@
         return !this.quiz.learners_see_fixed_order;
       },
       avgScore() {
-        return this.getExamAvgScore(this.$route.params.quizId, this.recipients);
+        return this.getExamAvgScore(this.$route.params.assessmentId, this.recipients);
       },
       exam() {
-        return this.assessmentMap[this.$route.params.quizId];
+        return this.assessmentMap[this.$route.params.assessmentId];
       },
       recipients() {
         return this.getLearnersForExam(this.exam);
@@ -141,9 +152,10 @@
       classId() {
         return this.$route.params.classId;
       },
+
     },
     beforeRouteEnter(to, from, next) {
-      return fetchAssessmentSummaryPageData(to.params.quizId)
+      return fetchAssessmentSummaryPageData(to.params.assessmentId)
         .then(data => {
           next(vm => vm.setData(data));
         })

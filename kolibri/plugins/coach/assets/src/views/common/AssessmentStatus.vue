@@ -154,45 +154,6 @@
         </KGridItem>
       </div>
 
-      <!-- Question Order -->
-      <div v-if="!$isPrint" class="status-item">
-        <KGridItem
-          class="status-label"
-          :layout4="{ span: 4 }"
-          :layout8="{ span: 4 }"
-          :layout12="{ span: 12 }"
-        >
-          {{ $tr('questionOrderLabel') }}
-        </KGridItem>
-        <KGridItem
-          :layout4="{ span: 4 }"
-          :layout8="{ span: 4 }"
-          :layout12="{ span: 12 }"
-        >
-          {{ orderDescriptionString }}
-        </KGridItem>
-      </div>
-
-      <!-- quiz size -->
-      <div v-if="!$isPrint && showSize" class="status-item">
-        <KGridItem
-          class="status-label"
-          :layout4="{ span: 4 }"
-          :layout8="{ span: 4 }"
-          :layout12="{ span: 12 }"
-        >
-          {{ coachString('sizeLabel') }}
-        </KGridItem>
-        <KGridItem
-          :layout4="{ span: 4 }"
-          :layout8="{ span: 4 }"
-          :layout12="{ span: 12 }"
-        >
-          <p>{{ exam.size_string ? exam.size_string : '--' }}</p>
-        </KGridItem>
-      </div>
-
-
     </KGrid>
 
     <KModal

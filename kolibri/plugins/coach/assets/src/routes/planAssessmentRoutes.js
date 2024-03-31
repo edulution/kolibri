@@ -124,10 +124,10 @@ export default [
   },
   {
     name: PageNames.ASSESSMENT_QUIZ_SUMMARY,
-    path: '/:classId/plan/assessments/:quizId',
+    path: '/:classId/plan/assessments/:assessmentId',
     component: AssessmentSummaryPage,
     meta: {
-      titleParts: ['QUIZ_NAME', 'quizzesLabel', 'CLASS_NAME'],
+      titleParts: ['QUIZ_NAME', 'assessmentLabel', 'CLASS_NAME'],
     },
   },
 ];

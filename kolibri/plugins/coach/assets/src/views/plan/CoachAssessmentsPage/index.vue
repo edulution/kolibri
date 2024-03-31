@@ -46,7 +46,7 @@
               >
                 <td>
                   <KRouterLink
-                    :to="$router.getRoute(PageNames.ASSESSMENT_QUIZ_SUMMARY, { quizId: exam.id })"
+                    :to="$router.getRoute(PageNames.ASSESSMENT_QUIZ_SUMMARY, { assessmentId: exam.id })"
                     appearance="basic-link"
                     :text="exam.title"
                     icon="quiz"
