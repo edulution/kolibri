@@ -213,7 +213,7 @@ export default function useLearnerResources() {
     if (!classroom || !classroom.assignments || !classroom.assignments.assessments) {
       return [];
     }
-    return classroom.assignments.assessments.filter(exam => exam.active);
+    return classroom.assignments.assessments.filter(exam => exam.active && !exam.archive);
   }
 
   /**

@@ -355,7 +355,7 @@
       },
     },
     created() {
-      this.initContentSession({ quizId: this.$route.params.examId })
+      this.initContentSession({ assessmentId: this.$route.params.examId })
         .then(this.startTrackingProgress)
         .catch(err => {
           if (err.response && err.response.status === 403) {
