@@ -13,35 +13,13 @@
         :activeTabId="PlanTabs.ASSESSMENT"
       >
         <div class="filter-and-button">
-          <p v-if="filteredExams.length && filteredExams.length > 0">
-            {{ $tr('totalAssessmentSize', { size: calcTotalSizeOfVisibleQuizzes }) }}
-          </p>
           <KSelect
             v-model="statusSelected"
             :label="coachString('filterQuizStatus')"
             :options="statusOptions"
             :inline="true"
           />
-          <KButtonGroup v-if="practiceQuizzesExist">
-            <KButton
-              primary
-              hasDropdown
-              appearance="raised-button"
-              :text="coachString('newAssessmentAction')"
-            >
-              <template #menu>
-                <KDropdownMenu
-                  :options="dropdownOptions"
-                  class="options-btn"
-                  @select="handleSelect"
-                />
-              </template>
-            </KButton>
-          </KButtonGroup>
-          <div
-            v-else
-            class="button"
-          >
+          <div class="button">
             <KRouterLink
               :primary="true"
               appearance="raised-button"
@@ -50,14 +28,12 @@
             />
           </div>
         </div>
+
         <CoreTable :emptyMessage="emptyMessage">
           <template #headers>
             <th>{{ coachString('titleLabel') }}</th>
             <th>{{ coachString('recipientsLabel') }}</th>
-            <th>{{ coachString('sizeLabel') }}</th>
-            <th class="center-text">
-              {{ coachString('statusLabel') }}
-            </th>
+            <th class="center-text">{{ coachString('statusLabel') }}</th>
           </template>
           <template #tbody>
             <transition-group
@@ -83,9 +59,7 @@
                     :hasAssignments="exam.assignments.length > 0"
                   />
                 </td>
-                <td>
-                  {{ exam.size_string ? exam.size_string : '--' }}
-                </td>
+               
                 <td class="button-col center-text core-table-button-col">
                   <!-- Open quiz button -->
                   <KButton
@@ -125,6 +99,7 @@
           <p>{{ coachString('lodAssessmentDetail') }}</p>
           <p>{{ coachString('fileSizeToDownload', { size: activeQuiz.size_string }) }}</p>
         </KModal>
+
         <KModal
           v-if="showCloseConfirmationModal"
           :title="coachString('closeAssessmentLabel')"
@@ -147,8 +122,6 @@
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { AssessmentResource } from 'kolibri.resources';
-  import plugin_data from 'plugin_data';
-  import bytesForHumans from 'kolibri.utils.bytesForHumans';
   import { mapActions } from 'vuex';
   import { PageNames } from '../../../constants';
   import { PLAN_TABS_ID, PlanTabs } from '../../../constants/tabsConstants';
@@ -181,9 +154,6 @@
     computed: {
       sortedExams() {
         return this._.orderBy(this.assessments, ['date_created'], ['desc']);
-      },
-      practiceQuizzesExist() {
-        return plugin_data.practice_quizzes_exist;
       },
       statusOptions() {
         return [
@@ -246,25 +216,6 @@
       newExamRoute() {
         return { name: PageNames.ASSESSMENT_CREATION_ROOT };
       },
-      dropdownOptions() {
-        return [
-          { label: this.$tr('newAssessment'), value: 'MAKE_NEW_QUIZ' },
-          { label: this.$tr('selectAssessment'), value: 'SELECT_QUIZ' },
-        ];
-      },
-      calcTotalSizeOfVisibleQuizzes() {
-        if (this.filteredExams) {
-          let sum = 0;
-          this.filteredExams.forEach(exam => {
-            if (exam.active) {
-              sum += exam.size;
-            }
-          });
-          const size = bytesForHumans(sum);
-          return size;
-        }
-        return '--';
-      },
     },
     mounted() {
       this.checkIfAnyLODsInClass();
@@ -321,29 +272,8 @@
             this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToCloseMessage'));
           });
       },
-      handleSelect({ value }) {
-        const nextRoute = {
-          MAKE_NEW_QUIZ: PageNames.EXAM_CREATION_ROOT,
-          SELECT_QUIZ: PageNames.EXAM_CREATION_PRACTICE_QUIZ,
-        }[value];
-        this.$router.push(this.$router.getRoute(nextRoute));
-      },
     },
     $trs: {
-      newAssessment: {
-        message: 'Create new assessment',
-        context: "Title of the screen launched from the 'New quiz' button on the 'Plan' tab.\n",
-      },
-      selectAssessment: {
-        message: 'Select assessment',
-        context:
-          "Practice assessments are pre-made assessments, that don't require the curation work on the part of the coach. Selecting a practice quiz refers to importing a ready-to-use quiz.",
-      },
-      totalAssessmentSize: {
-        message: 'Total size of assessments visible to learners: {size}',
-        context:
-          'Descriptive text at the top of the table that displays the calculated file size of all quiz resources (i.e. 120 MB)',
-      },
       noEndedAssessments: {
           message: 'No ended assessments',
           context:
