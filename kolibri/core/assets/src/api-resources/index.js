@@ -39,3 +39,7 @@ export {
 } from './networkLocation';
 export { default as KnowledgemapResource } from './knowledgemap'
 export { default as AssessmentResource } from './assessment'
+export { default as AssessmentGroupResource } from './assessmentGroup'
+export { default as AssessmentStartResource } from './assessmentStart'
+export { default as AssessmentStopResource } from './assessmentStop'
+export { default as LearnerAssessmentResource } from './learnerAssessments'

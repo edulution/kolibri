@@ -55,8 +55,8 @@
 
                 <td>
                   <Recipients
-                    :groupNames="getRecipientNamesForExam(exam)"
-                    :hasAssignments="exam.assignments.length > 0"
+                    :groupNames="getRecipientNameForAssessment(exam)"
+                    :hasAssignments="true"
                   />
                 </td>
                
@@ -121,7 +121,7 @@
 
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { AssessmentResource } from 'kolibri.resources';
+  import { AssessmentResource, AssessmentStartResource, AssessmentStopResource } from 'kolibri.resources';
   import { mapActions } from 'vuex';
   import { PageNames } from '../../../constants';
   import { PLAN_TABS_ID, PlanTabs } from '../../../constants/tabsConstants';
@@ -153,7 +153,7 @@
     },
     computed: {
       sortedExams() {
-        return this._.orderBy(this.assessments, ['date_created'], ['desc']);
+        return this._.orderBy(this.assessmentGroups, ['date_created'], ['desc']);
       },
       statusOptions() {
         return [
@@ -233,7 +233,7 @@
         });
       },
       handleOpenQuiz(quizId) {
-        const promise = AssessmentResource.saveModel({
+        const promise = AssessmentStartResource.saveModel({
           id: quizId,
           data: {
             active: true,
@@ -253,7 +253,7 @@
           });
       },
       handleCloseQuiz(quizId) {
-        const promise = AssessmentResource.saveModel({
+        const promise = AssessmentStopResource.saveModel({
           id: quizId,
           data: {
             archive: true,

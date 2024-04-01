@@ -91,6 +91,14 @@ export default {
       );
     };
   },
+  getRecipientNameForAssessment(state) {
+    return function(exam) {
+      const adHocLearners = exam.assignments.map(
+        learnerId => state.learnerMap[learnerId].name
+      );
+      return adHocLearners
+    };
+  },
   /*
    * Return array of learner IDs given an exam
    */

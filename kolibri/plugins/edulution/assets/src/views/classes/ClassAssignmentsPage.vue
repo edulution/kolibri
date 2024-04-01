@@ -11,7 +11,7 @@
 
       <AssignedLessonsCards :lessons="activeLessons" />
       <AssignedQuizzesCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
-      <AssessmentCards :assessments="activeAssessments" :style="{ marginTop: '44px' }" />
+      <AssessmentCards :assessments="assessments" :style="{ marginTop: '44px' }" />
     </div>
   </LearnAppBarPage>
 
@@ -24,10 +24,11 @@
   import { get } from '@vueuse/core';
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import useUser from 'kolibri.coreVue.composables.useUser';
 
   import { PageNames, ClassesPageNames } from '../../constants';
 
-  import useLearnerResources from '../../composables/useLearnerResources';
+  import useLearnerResources, { getLearnerAssessments } from '../../composables/useLearnerResources';
   import commonLearnStrings from './../commonLearnStrings';
   import LearnAppBarPage from './../LearnAppBarPage';
   import AssignedQuizzesCards from './AssignedQuizzesCards';
@@ -58,6 +59,7 @@
         getClassActiveAssessments,
       } = useLearnerResources();
 
+      const { currentUserId } = useUser();
       const classId = root.$router.currentRoute.params.classId;
       const classroom = computed(() => getClass(classId));
       const className = computed(() => (get(classroom) ? get(classroom).name : ''));
@@ -90,8 +92,15 @@
         className,
         activeLessons,
         activeQuizzes,
-        activeAssessments
+        activeAssessments,
+        currentUserId: get(currentUserId),
+        classId: get(classId),
       };
+    },
+    data() {
+      return {
+        assessments: [],
+      }
     },
     computed: {
       breadcrumbs() {
@@ -109,6 +118,11 @@
           },
         ];
       },
+    },
+    created() {
+      getLearnerAssessments(this.currentUserId, this.classId).then(res => {
+        this.assessments = res;
+      });
     },
     $trs: {
       documentTitle: {

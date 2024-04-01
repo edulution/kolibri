@@ -34,9 +34,9 @@
         data-test="recentQuizzes" 
       />
       <AssessmentCards 
-        v-if="hasActiveClassesAssessments" 
+        v-if="assessments.length" 
         class="section"
-        :assessments="activeClassesAssessments"
+        :assessments="assessments"
         displayClassName
         recent 
         data-test="recentQuizzes" 
@@ -56,7 +56,6 @@
 
 
 <script>
-
 import { mapGetters } from 'vuex';
 import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
 import { get } from '@vueuse/core';
@@ -70,6 +69,7 @@ import useDeviceSettings from '../../composables/useDeviceSettings';
 import useLearnerResources, {
   setClasses,
   setResumableContentNodes,
+  getLearnerAssessments,
 } from '../../composables/useLearnerResources';
 import { setContentNodeProgress } from '../../composables/useContentNodeProgress';
 import { PageNames } from '../../constants';
@@ -198,7 +198,7 @@ export default {
         });
     });
 
-    return {
+    return{ 
       isUserLoggedIn,
       channels: localChannelsCache,
       classes,
@@ -229,6 +229,7 @@ export default {
   data() {
     return {
       filteredChannels: [],
+      assessments: [],
     }
   },
   computed: {
@@ -255,8 +256,11 @@ export default {
   created() {
     this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, 
       userId: this.currentUserId }).then(res => {
-      console.log({ res });
       this.filteredChannels = res;
+    });
+
+    getLearnerAssessments(this.currentUserId, null).then(res => {
+      this.assessments = res;
     });
   },
 

@@ -50,7 +50,7 @@
                 </td>
                 <td>
                   <Recipients
-                    :groupNames="getRecipientNamesForExam(tableRow)"
+                    :groupNames="getRecipientNameForAssessment(tableRow)"
                     :hasAssignments="tableRow.hasAssignments"
                   />
                 </td>
@@ -151,7 +151,7 @@
           ];
         },
         table() {
-          const filtered = this.assessments.filter(assessment => {
+          const filtered = this.assessmentGroups.filter(assessment => {
             if (this.filter.value === 'allAssessments') {
               return true;
             } else if (this.filter.value === 'startedAssessments') {

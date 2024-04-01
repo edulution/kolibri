@@ -298,8 +298,8 @@ class GetLearnerAssessmentViewset(ViewSet):
             learner_id = request.query_params.get('learner_id')
             classroom_id = request.query_params.get('classroom_id')
 
-            if not learner_id or not classroom_id:
-                return Response({"error": "Learner ID and Classroom ID are required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not learner_id:
+                return Response({"error": "Learner ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             learner_assessments = self.queryset.filter(learner_id=learner_id, collection=classroom_id)
             serializer = self.serializer_class(learner_assessments, many=True)

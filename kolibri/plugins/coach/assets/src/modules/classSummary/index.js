@@ -5,7 +5,7 @@ import find from 'lodash/find';
 import isFunction from 'lodash/isFunction';
 import Vue from 'kolibri.lib.vue';
 import bytesForHumans from 'kolibri.utils.bytesForHumans';
-import { ExamResource, LessonResource, AssessmentResource } from 'kolibri.resources';
+import { ExamResource, LessonResource, AssessmentResource, AssessmentGroupResource } from 'kolibri.resources';
 import ClassSummaryResource from '../../apiResources/classSummary';
 import dataHelpers from './dataHelpers';
 import { STATUSES } from './constants';
@@ -104,7 +104,8 @@ function defaultState() {
      *   }
      * }
      */
-    assessmentLearnerStatusMap: {}
+    assessmentLearnerStatusMap: {},
+    assessmentGroupMap: {},
   };
 }
 
@@ -186,6 +187,16 @@ function _mapExams(exams) {
     exam.date_created = new Date(exam.date_created);
     return exam;
   });
+}
+
+function _mapAssessmentGroup(assessmentGroups) {
+  return _itemMap(assessmentGroups, 'id', assessment => {
+    // convert dates
+    assessment.date_created = new Date(assessment.date_created);
+    assessment.groups = [];
+    assessment.assignments = [assessment.learner_id]
+    return assessment;
+  })
 }
 
 function _mapLessons(lessons) {
@@ -389,6 +400,9 @@ export default {
     assessments(state) {
       return Object.values(state.assessmentMap);
     },
+    assessmentGroups(state) {
+      return Object.values(state.assessmentGroupMap);
+    },
     /*
      * assessmentStatuses := [
      *   { exam_id, learner_id, status, last_activity }, ...
@@ -401,9 +415,12 @@ export default {
     },
   },
   mutations: {
-    SET_STATE(state, summary) {
+    SET_STATE(state, { summary, assessmentGroups }) {
       const examMap = _mapExams(summary.exams);
       const assessmentMap = _mapExams(summary.assessments || []);
+      let assessmentGroupMap = Object.values(assessmentGroups).filter(d => typeof d !== 'string');
+      assessmentGroupMap = _mapAssessmentGroup(assessmentGroupMap || []);
+      console.log({ assessmentMap, assessmentGroupMap, exams: summary.exams })
       
       for (const status of summary.exam_learner_status) {
         // convert dates
@@ -442,6 +459,7 @@ export default {
         learnersInfo: summary.learners_info,
         assessmentMap,
         assessmentLearnerStatusMap: _statusMap(summary.assessment_learner_status, 'exam_id'),
+        assessmentGroupMap,
       });
     },
     CREATE_ITEM(state, { map, id, object }) {
@@ -533,8 +551,9 @@ export default {
     updateWithNotifications,
     loadClassSummary(store, classId) {
       return ClassSummaryResource.fetchModel({ id: classId, force: true })
-        .then(summary => {
-          store.commit('SET_STATE', summary);
+        .then(async (summary) => {
+          const assessmentGroups = await AssessmentGroupResource.fetchModel({ id: classId, force: true })
+          store.commit('SET_STATE', { summary, assessmentGroups });
           return summary;
         })
         .then(summary => {

@@ -10,7 +10,7 @@ import { get, set } from '@vueuse/core';
 import flatMap from 'lodash/flatMap';
 import flatMapDepth from 'lodash/flatMapDepth';
 
-import { ContentNodeResource } from 'kolibri.resources';
+import { ContentNodeResource, LearnerAssessmentResource } from 'kolibri.resources';
 import { deduplicateResources } from '../utils/contentNode';
 import { LearnerClassroomResource, LearnerLessonResource } from '../apiResources';
 import { ClassesPageNames } from '../constants';
@@ -56,6 +56,37 @@ export function setClasses(classData) {
   set(classes, classData);
   for (const classroom of classData) {
     setClassData(classroom);
+  }
+}
+
+export async function getLearnerAssessments(learnerId, classroomId) {
+  try {
+    const getParams = {
+      learner_id: learnerId
+    }
+    if (classroomId) {
+      getParams['classroom_id'] = classroomId
+    }
+    const response = await LearnerAssessmentResource.fetchCollection({ 
+      getParams,
+      force: true
+    })
+    
+    return response.map(r => {
+      return {
+        ...r,
+        "question_sources": JSON.parse(r.question_sources.replace(/'/g, '"').replace(/False/g, 'false')),
+        "missing_resource": false,
+        "progress": {
+          "score": null,
+          "answer_count": null,
+          "closed": null,
+          "started": null,
+        }
+      }
+    });
+  } catch (error) {
+    console.log("error", { error }) 
   }
 }
 
