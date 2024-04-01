@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from django.db import models
 from django.db.utils import IntegrityError
@@ -318,7 +319,7 @@ class ExamAssessmentGroup(models.Model):
     learner_id = models.CharField(max_length=200, default='1')
 
     channel_id = models.UUIDField(null=True)
-    new_id = models.UUIDField(null=True)
+    new_id = models.UUIDField(null=True, default=uuid.uuid4)
 
     # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)

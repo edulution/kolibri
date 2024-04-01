@@ -1,7 +1,7 @@
 import every from 'lodash/every';
 import uniq from 'lodash/uniq';
 import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
-import { ExamResource, AssessmentResource, ContentNodeResource } from 'kolibri.resources';
+import { ExamResource, AssessmentDetailsResource, ContentNodeResource } from 'kolibri.resources';
 
 /*
  * Converts from v0 exam structures to v1
@@ -202,7 +202,7 @@ export function getExamReport(examId, tryIndex = 0, questionNumber = 0, interact
 
 export function getAssessmentReport(examId, tryIndex = 0, questionNumber = 0, interactionIndex = 0) {
   return new Promise((resolve, reject) => {
-    const examPromise = AssessmentResource.fetchModel({ id: examId });
+    const examPromise = AssessmentDetailsResource.fetchModel({ id: examId });
 
     examPromise.then(
       exam => {

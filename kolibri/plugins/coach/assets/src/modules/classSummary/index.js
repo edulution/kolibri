@@ -5,7 +5,7 @@ import find from 'lodash/find';
 import isFunction from 'lodash/isFunction';
 import Vue from 'kolibri.lib.vue';
 import bytesForHumans from 'kolibri.utils.bytesForHumans';
-import { ExamResource, LessonResource, AssessmentResource, AssessmentGroupResource } from 'kolibri.resources';
+import { ExamResource, LessonResource, AssessmentDetailsResource, AssessmentGroupResource } from 'kolibri.resources';
 import ClassSummaryResource from '../../apiResources/classSummary';
 import dataHelpers from './dataHelpers';
 import { STATUSES } from './constants';
@@ -420,7 +420,6 @@ export default {
       const assessmentMap = _mapExams(summary.assessments || []);
       let assessmentGroupMap = Object.values(assessmentGroups).filter(d => typeof d !== 'string');
       assessmentGroupMap = _mapAssessmentGroup(assessmentGroupMap || []);
-      console.log({ assessmentMap, assessmentGroupMap, exams: summary.exams })
       
       for (const status of summary.exam_learner_status) {
         // convert dates
@@ -590,7 +589,7 @@ export default {
     },
     // fetchAssessmentsSizes(store, classId) {
     //   if (Object.keys(store.state.assessmentMap).length > 0) {
-    //     return AssessmentResource.fetchAssessmentsSizes({ collection: classId })
+    //     return AssessmentDetailsResource.fetchAssessmentsSizes({ collection: classId })
     //       .then(sizes => {
     //         store.commit('SET_CLASS_ASSESSMENTS_SIZES', sizes);
     //       })

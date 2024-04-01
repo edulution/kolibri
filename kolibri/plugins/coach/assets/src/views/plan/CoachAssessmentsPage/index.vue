@@ -121,7 +121,7 @@
 
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { AssessmentResource, AssessmentStartResource, AssessmentStopResource } from 'kolibri.resources';
+  import { AssessmentStartResource, AssessmentStopResource } from 'kolibri.resources';
   import { mapActions } from 'vuex';
   import { PageNames } from '../../../constants';
   import { PLAN_TABS_ID, PlanTabs } from '../../../constants/tabsConstants';

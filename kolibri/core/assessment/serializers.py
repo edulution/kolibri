@@ -273,6 +273,7 @@ class GetExamAssessmentSerializer(serializers.ModelSerializer):
         fields = (
             'question_sources',
             'title',
+            'id',
         )
 
 class GetGroupExamAssessmentSerializer(serializers.ModelSerializer):

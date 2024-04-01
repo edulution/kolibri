@@ -1,6 +1,6 @@
 import map from 'lodash/map';
 import { fetchNodeDataAndConvertExam } from 'kolibri.utils.exams';
-import { ExamResource, AssessmentResource, ContentNodeResource, AssessmentGroupDataResource } from 'kolibri.resources';
+import { ExamResource, ContentNodeResource, AssessmentGroupDataResource } from 'kolibri.resources';
 
 export function fetchQuizSummaryPageData(examId) {
   const payload = {

@@ -75,6 +75,8 @@ export async function getLearnerAssessments(learnerId, classroomId) {
     return response.map(r => {
       return {
         ...r,
+        "group_id": r.id,
+        "id": r.current_assessment.id,
         "group_title": r.title,
         "title": r.current_assessment.title,
         "question_sources": r.current_assessment.question_sources,

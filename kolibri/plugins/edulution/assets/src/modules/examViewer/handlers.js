@@ -1,4 +1,4 @@
-import { ContentNodeResource, ExamResource, AssessmentResource, KnowledgemapResource } from 'kolibri.resources';
+import { ContentNodeResource, ExamResource, AssessmentDetailsResource, KnowledgemapResource } from 'kolibri.resources';
 import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
 import { convertExamQuestionSources } from 'kolibri.utils.exams';
 import shuffled from 'kolibri.utils.shuffled';
@@ -140,13 +140,12 @@ export function showAssessment(store, params, alreadyOnQuiz) {
   } else {
     const promises = [
       LearnerClassroomResource.fetchModel({ id: classId }),
-      AssessmentResource.fetchModel({ id: examId }),
+      AssessmentDetailsResource.fetchModel({ id: examId }),
     ];
     const shouldResolve = samePageCheckGenerator(store);
     Promise.all(promises).then(
       ([classroom, assessmentData]) => {
         const exam = assessmentData;
-        console.log({ assessmentData })
         if (shouldResolve()) {
           store.commit('classAssignments/SET_CURRENT_CLASSROOM', classroom);
 

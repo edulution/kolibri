@@ -6,8 +6,8 @@ from .api import AssessmentViewset, GroupAssessmentViewset, CreateAssessmentReco
 from .api import GetLearnerAssessmentViewset, FetchAssessmentGroupData
 
 router = routers.SimpleRouter()
-# router.register(r"assessment", AssessmentViewset, basename="assessment")
 router.register(r"assessment", CreateAssessmentRecord, basename="assessment")
+router.register(r"assessmentdetails", AssessmentViewset, basename="assessmentdetails")
 router.register(r"assessmentgroup", GroupAssessmentViewset, basename="assessmentgroup")
 router.register(r"assessmentstart", ExamAssessmentStartViewSet, basename="assessmentstart")
 router.register(r"assessmentstop", ExamAssessmentStopViewSet, basename="assessmentstop")
