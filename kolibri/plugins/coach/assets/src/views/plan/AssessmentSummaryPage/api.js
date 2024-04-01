@@ -1,6 +1,6 @@
 import map from 'lodash/map';
 import { fetchNodeDataAndConvertExam } from 'kolibri.utils.exams';
-import { ExamResource, AssessmentResource, ContentNodeResource } from 'kolibri.resources';
+import { ExamResource, AssessmentResource, ContentNodeResource, AssessmentGroupDataResource } from 'kolibri.resources';
 
 export function fetchQuizSummaryPageData(examId) {
   const payload = {
@@ -33,6 +33,7 @@ export function fetchAssessmentSummaryPageData(examId) {
     // To render the exercises in QuestionListPreview > ContentRenderer
     exerciseContentNodes: {},
   };
+  AssessmentGroupDataResource.fetchModel({ id: examId }).then(console.log)
   return AssessmentResource.fetchModel({ id: examId })
     .then(exam => {
       return fetchNodeDataAndConvertExam(exam);

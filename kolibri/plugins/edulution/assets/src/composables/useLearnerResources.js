@@ -75,7 +75,9 @@ export async function getLearnerAssessments(learnerId, classroomId) {
     return response.map(r => {
       return {
         ...r,
-        "question_sources": JSON.parse(r.question_sources.replace(/'/g, '"').replace(/False/g, 'false')),
+        "group_title": r.title,
+        "title": r.current_assessment.title,
+        "question_sources": r.current_assessment.question_sources,
         "missing_resource": false,
         "progress": {
           "score": null,

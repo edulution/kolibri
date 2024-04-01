@@ -8,12 +8,9 @@ import {
   showExamCreationSearchPage,
   showExamCreationQuestionSelectionPage,
   showExamCreationPreviewPage,
-  showPracticeQuizCreationRootPage,
-  showPracticeQuizCreationTopicPage,
   showPracticeQuizCreationPreviewPage,
 } from '../modules/assessmentCreation/handlers';
 import { showExamsPage } from '../modules/examsRoot/handlers';
-import CreatePracticeQuizPage from '../views/plan/CreateAssessmentPage/CreatePracticeQuizPage.vue';
 import CreateAssessmentPage from '../views/plan/CreateAssessmentPage/index.vue';
 import CreateAssessmentPreviewPage from '../views/plan/CreateAssessmentPage/CreateAssessmentPreview.vue';
 import PlanQuizPreviewPage from '../views/plan/PlanQuizPreviewPage.vue';
@@ -39,31 +36,6 @@ export default [
     component: CreateAssessmentPage,
     handler: toRoute => {
       showExamCreationRootPage(store, toRoute.params);
-    },
-  },
-  {
-    name: PageNames.ASSESSMENT_CREATION_CONFIRM,
-    path: '/:classId/plan/assessments/new/confirm',
-    component: CreateAssessmentPage,
-    // handler: toRoute => {
-      // showExamCreationTopicPage(store, toRoute.params);
-      // showExamCreationSearchPage(store, toRoute.params, toRoute.query);
-    // },
-  },
-  {
-    name: PageNames.ASSESSMENT_CREATION_PRACTICE_QUIZ,
-    path: '/:classId/plan/assessments/new/practice_assessment',
-    component: CreatePracticeQuizPage,
-    handler: toRoute => {
-      showPracticeQuizCreationRootPage(store, toRoute.params);
-    },
-  },
-  {
-    name: PageNames.ASSESSMENT_CREATION_SELECT_PRACTICE_QUIZ_TOPIC,
-    path: '/:classId/plan/assessments/new/practice_assessment/topic/:topicId',
-    component: CreatePracticeQuizPage,
-    handler: toRoute => {
-      showPracticeQuizCreationTopicPage(store, toRoute.params);
     },
   },
   {
