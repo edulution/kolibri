@@ -14,14 +14,7 @@
             group ? classRoute('ReportsGroupReportPage') : classRoute('ReportsAssessmentListPage')"
           :backlinkLabel="group ? group.name : coachString('allAssessmentsLabel')"
           optionsFor="report"
-        >
-          <template #dropdown>
-            <QuizOptionsDropdownMenu
-              optionsFor="assessment"
-              @select="handleSelectOption"
-            />
-          </template>
-        </AssessmentLessonDetailsHeader>
+        />
       </KGridItem>
 
       <KGridItem :layout12="{ span: $isPrint ? 12 : 4 }">
@@ -58,7 +51,6 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
   import CoachAppBarPage from '../CoachAppBarPage';
-  import QuizOptionsDropdownMenu from '../plan/QuizSummaryPage/QuizOptionsDropdownMenu';
   import ReportsControls from './ReportsControls';
 
   export default {
@@ -66,9 +58,13 @@
     components: {
       CoachAppBarPage,
       ReportsControls,
-      QuizOptionsDropdownMenu,
     },
     mixins: [commonCoach, commonCoreStrings],
+    data (){
+      return{
+        
+      }
+    },
     computed: {
       avgScore() {
         return this.getExamAvgScore(this.$route.params.quizId, this.recipients);
@@ -81,24 +77,6 @@
       },
       group() {
         return this.$route.params.groupId && this.groupMap[this.$route.params.groupId];
-      },
-    },
-    methods: {
-      handleSelectOption(option) {
-        if (option === 'EDIT_DETAILS') {
-          this.$router.push(this.$router.getRoute('QuizReportEditDetailsPage'));
-        }
-        if (option === 'PREVIEW') {
-          this.$router.push(
-            this.$router.getRoute('ReportsAssessmentPreviewPage', {}, this.defaultBackLinkQuery)
-          );
-        }
-        if (option === 'PRINT_REPORT') {
-          this.$print();
-        }
-        if (option === 'EXPORT') {
-          this.$emit('export');
-        }
       },
     },
   };

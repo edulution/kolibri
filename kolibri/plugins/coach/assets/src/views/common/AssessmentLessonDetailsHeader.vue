@@ -18,7 +18,8 @@
             <!-- KLabeledIcon does not have an 'exam' token, but rather 'quiz' -->
             <KLabeledIcon
               :icon="examOrLesson === 'exam' ? 'quiz' : 'lesson'"
-              :label="resource.title"
+              :label="assessmentTitle"
+              class="assessment-title"
             />
           </h1>
           <StatusElapsedTime v-show="!$isPrint" :date="createdDate" actionType="created" />
@@ -69,6 +70,10 @@
           return ['exam', 'lesson'].includes(value);
         },
       },
+      assessmentTitle:{
+          type: String,
+          default:''
+        }
     },
     computed: {
       ...mapState('classSummary', ['examMap', 'lessonMap']),
@@ -103,6 +108,10 @@
 
   /deep/ .time-context {
     margin-bottom: 0;
+  }
+
+  .assessment-title {
+    font-size: 20px;
   }
 
 </style>
