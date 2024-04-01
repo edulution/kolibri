@@ -6,7 +6,8 @@ from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,CreateAssessmentSerializer, GetExamAssessmentSerializer
+from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,\
+    CreateAssessmentSerializer, GetExamAssessmentSerializer, GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
 from rest_framework import status
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
@@ -290,8 +291,8 @@ class ExamAssessmentStopViewSet(ViewSet):
         
 
 class GetLearnerAssessmentViewset(ViewSet):
-    queryset = models.ExamAssessment.objects.all()
-    serializer_class = GetExamAssessmentSerializer
+    queryset = models.ExamAssessmentGroup.objects.all()
+    serializer_class = GetGroupExamAssessmentSerializer
 
     def list(self, request):
         try:
@@ -303,7 +304,24 @@ class GetLearnerAssessmentViewset(ViewSet):
 
             learner_assessments = self.queryset.filter(learner_id=learner_id, collection=classroom_id)
             serializer = self.serializer_class(learner_assessments, many=True)
+
+            # Fetch question sources based on current_assessment
+            assessment_ids = [assessment['current_assessment'] for assessment in serializer.data]
+            question_sources = models.ExamAssessment.objects.filter(id__in=assessment_ids).values_list('question_sources', flat=True)
+
             return Response(serializer.data)
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Learner Assessments not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+class FetchAssessmentData(ViewSet):
+    queryset = models.ExamAssessment.objects.all()
+    serializer_class = GroupAssessmentSerializer
+
+    def retrieve(self, request, pk=None):
+        try:
+            assessment = self.queryset.filter(assessment_group_id=pk)
+            serializer = self.serializer_class(assessment, many=True)
+            return Response(serializer.data)
+        except models.ExamAssessment.DoesNotExist:
+            return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
