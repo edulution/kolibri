@@ -61,20 +61,16 @@
                 </td>
                
                 <td class="button-col center-text core-table-button-col">
-                  <!-- Open quiz button -->
-                  <KButton
-                    v-if="!exam.active && !exam.archive"
-                    :text="coachString('openAssessmentLabel')"
-                    appearance="flat-button"
-                    @click="showOpenConfirmationModal = true; activeQuiz = exam"
-                  />
-                  <!-- Close quiz button -->
-                  <KButton
-                    v-if="exam.active && !exam.archive"
-                    :text="coachString('closeAssessmentLabel')"
-                    appearance="flat-button"
-                    @click="showCloseConfirmationModal = true; activeQuiz = exam;"
-                  />
+                  <!-- Open quiz label -->
+                  <div v-if="!exam.active && !exam.archive">
+                    {{ $tr('openAssessmentLabel') }}
+                  </div>
+
+                  <!-- Close quiz label -->
+                  <div v-if="exam.active && !exam.archive">
+                    {{ $tr('closeAssessmentLabel') }}
+                  </div>
+                  
                   <!-- Closed quiz label -->
                   <div v-if="exam.archive">
                     {{ coachString('assessmentClosedLabel') }}
@@ -279,6 +275,14 @@
           context:
             'Message displayed when there are no ended quizes. Ended assessments are those that are no longer in progress.',
         },
+        openAssessmentLabel: {
+          message: 'Assessment not started',
+          context: '',
+        },
+        closeAssessmentLabel: {
+          message: 'Assessment started',
+          context: '',
+        }
     },
   };
 
