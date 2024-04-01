@@ -294,16 +294,30 @@ class ExamAssessmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExamAssessment
         fields = (
+            "id",
+            "title",
             "question_sources",
             "data_model_version",
             "learners_see_fixed_order",
             "seed",
-            "assignments"
+            "date_created",
+            "date_archived",
+            "date_activated",
+            "archive",
+            "active",
+            "assignments",
+        )
+
+class ExamAssessmentGroupDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamAssessment
+        fields = (
+            "id",
+            "title"
         )
 
 class GroupAssessmentSerializer(serializers.ModelSerializer):
-    current_assessment = ExamAssessmentSerializer()
-    
+    current_assessment = ExamAssessmentGroupDataSerializer()
     class Meta:
         model = ExamAssessmentGroup
         fields = (
@@ -313,6 +327,10 @@ class GroupAssessmentSerializer(serializers.ModelSerializer):
             "date_archived",
             "date_activated",
             "archive",
-            "current_assessment"
+            "active",
+            "current_assessment",
+            "last_assessment",
+            "learner_id",
+            "collection"
         )
 

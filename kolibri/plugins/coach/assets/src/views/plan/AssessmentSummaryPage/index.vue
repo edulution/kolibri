@@ -41,7 +41,7 @@
               </template>
               <template #tbody>
                 <transition-group tag="tbody" name="list">
-                  <tr v-for="tableRow of titleList" :key="tableRow.id" data-test="entry">
+                  <tr v-for="tableRow of assessmentList" :key="tableRow.id" data-test="entry">
                     <KLabeledIcon
                       :icon="'quiz'"
                       :label="tableRow.title " 
@@ -97,7 +97,7 @@
 
 
 <script>
-
+  import { AssessmentGroupDataResource } from 'kolibri.resources';
   import { mapState } from 'vuex';
   import fromPairs from 'lodash/fromPairs';
   import find from 'lodash/find';
@@ -137,24 +137,7 @@
         loading: true,
         currentAction: '',
         currentView: '',
-        titleList:[
-          {
-            id:0,
-            title:"title1"
-          },
-          {
-            id:1,
-            title:"title2"
-          },
-          {
-            id:2,
-            title:"title3"
-          },
-          {
-            id:3,
-            title:"title4"
-          }
-        ]
+        assessmentList: [],
       };
     },
     computed: {
@@ -189,6 +172,9 @@
 
     },
     beforeRouteEnter(to, from, next) {
+      AssessmentGroupDataResource.fetchModel({ id: to.params.assessmentId }).then(d => {
+        this.assessmentList = Object.values(d).filter(d => typeof d !== 'string');
+      })
       return fetchAssessmentSummaryPageData(to.params.assessmentId)
         .then(data => {
           next(vm => vm.setData(data));

@@ -2,6 +2,7 @@ import json
 from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
+from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status
 from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -217,6 +218,8 @@ class CreateAssessmentRecord(ViewSet):
                     new_title = test.get('title')
 
                     insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = obj.id, channel_id = channel_id,  creator_id=creator_id)
+                    # assessmentAssignment
+                    # new_id
 
                 # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
                 # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
@@ -379,24 +382,40 @@ class FetchAssessmentGroupData(ViewSet):
             assessment_group = self.queryset.get(id=pk)
             serializer = self.serializer_class(assessment_group)
 
-            # Fetch ExamAssessment details based on current_assessment_id
-            current_assessment_id = assessment_group.current_assessment_id
-            exam_assessment = models.ExamAssessment.objects.get(id=current_assessment_id)
-            exam_assessment_serializer = ExamAssessmentSerializer(exam_assessment)
-
+            exam_assessments = models.ExamAssessment.objects.filter(assessment_group=pk)
+            exam_assessments_list = []
+            for assessment in exam_assessments:
+                assessment_dict = {
+                    "id": assessment.id,
+                    "title": assessment.title,
+                    "question_sources": assessment.question_sources,
+                    "data_model_version": assessment.data_model_version,
+                    "learners_see_fixed_order": assessment.learners_see_fixed_order,
+                    "seed": assessment.seed,
+                    "date_created": assessment.date_created,
+                    "date_archived": assessment.date_archived,
+                    "date_activated": assessment.date_activated,
+                    "archive": assessment.archive,
+                    "active": assessment.active,
+                    "assignments": assessment.assignments,
+                }
+                exam_assessments_list.append(assessment_dict)
+            
             # Construct response data
             response_data = {
-                "id": current_assessment_id,
+                "id": pk,
                 "title": serializer.data['title'],
                 "date_created": serializer.data['date_created'],
                 "date_archived": serializer.data['date_archived'],
                 "date_activated": serializer.data['date_activated'],
                 "archive": serializer.data['archive'],
-                "question_sources": exam_assessment_serializer.data['question_sources'],
-                "data_model_version": exam_assessment_serializer.data['data_model_version'],
-                "learners_see_fixed_order": exam_assessment_serializer.data['learners_see_fixed_order'],
-                "seed": exam_assessment_serializer.data['seed'],
-                "assignments": exam_assessment_serializer.data['assignments']
+                "active": serializer.data['active'],
+                "learner_id": serializer.data['learner_id'],
+                "collection_id": serializer.data['collection'],
+                "current_assessment_id": serializer.data['current_assessment'],
+                "last_assessment_id": serializer.data['last_assessment'],
+                "assessments": exam_assessments_list,
+                "learner_status": serialize_coach_assigned_assessment_status(exam_assessments),
             }
 
             return Response(response_data)

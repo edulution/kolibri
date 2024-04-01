@@ -33,12 +33,12 @@ export function fetchAssessmentSummaryPageData(examId) {
     // To render the exercises in QuestionListPreview > ContentRenderer
     exerciseContentNodes: {},
   };
-  AssessmentGroupDataResource.fetchModel({ id: examId }).then(console.log)
-  return AssessmentResource.fetchModel({ id: examId })
+  return AssessmentGroupDataResource.fetchModel({ id: examId })
     .then(exam => {
       return fetchNodeDataAndConvertExam(exam);
     })
     .then(exam => {
+      console.log({ exam })
       payload.exam = exam;
       return ContentNodeResource.fetchCollection({
         getParams: {

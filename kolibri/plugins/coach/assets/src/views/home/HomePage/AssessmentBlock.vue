@@ -3,27 +3,45 @@
   <Block
     :allLinkText="coachString('viewAllAction')"
     :allLinkRoute="classRoute('ReportsAssessmentListPage', {})"
-    :showAllLink="table.length > 0"
+    :showAllLink="listData.length > 0"
   >
     <template #title>
       <KLabeledIcon icon="quiz" :label="coreString('assessmentLabel')" />
     </template>
   
-    <p v-if="table.length === 0">
+    <p v-if="listData.length === 0">
       {{ coachString('assessmenListEmptyState') }}
     </p>
-  
+
     <BlockItem
-      v-for="tableRow in table"
-      :key="tableRow.key"
+      v-for="item in listData"
+      :key="item.key"
     >
-      <ItemProgressDisplay
-        :name="tableRow.name"
-        :tally="tableRow.tally"
-        :groupNames="groupAndAdHocLearnerNames(tableRow.groups, tableRow.assignments)"
-        :hasAssignments="tableRow.hasAssignments"
-        :to="classRoute('ReportsAssessmentLearnerListPage', { quizId: tableRow.key })"
-      />
+      <router-link
+        class="link"
+        :style="{ color: $themeTokens.text }"
+        :class="themeClass"
+        :to="classRoute('ReportsAssessmentLearnerListPage', { quizId: item.key })"
+      >
+        <KFixedGrid numCols="4" class="wrapper">
+          <KFixedGridItem span="3">
+            <h3 class="title">
+              {{ item.name }}
+            </h3>
+            <div class="context2">
+              <Recipients
+                :groupNames="item.learner"
+                :hasAssignments="item.learner.length"
+              />
+            </div>
+          </KFixedGridItem>
+          <KFixedGridItem span="1" alignment="right">
+            <div class="context">
+              <span>{{ learnerStatus(item) }}</span>
+            </div>
+          </KFixedGridItem>
+        </KFixedGrid>
+      </router-link>
     </BlockItem>
   </Block>
   
@@ -32,67 +50,84 @@
   
   <script>
   
-    import orderBy from 'lodash/orderBy';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import commonCoach from '../../common';
     import Block from './Block';
     import BlockItem from './BlockItem';
-    import ItemProgressDisplay from './ItemProgressDisplay';
   
     const MAX_QUIZZES = 3;
   
     export default {
       name: 'AssessmentBlock',
       components: {
-        ItemProgressDisplay,
         Block,
         BlockItem,
       },
       mixins: [commonCoach, commonCoreStrings],
       computed: {
-        table() {
-          const recent = orderBy(this.assessments, this.lastActivity, ['desc']).slice(0, MAX_QUIZZES);
-          return recent.map(assessment => {
-            const assigned = this.getLearnersForExam(assessment);
+        listData() {
+          return this.assessmentGroups.slice(0, MAX_QUIZZES).map(assessment => {
+            const learner = this.getRecipientNameForAssessment(assessment);
             return {
               key: assessment.id,
               name: assessment.title,
-              tally: this.getAssessmentStatusTally(assessment.id, assigned),
-              groups: assessment.groups.map(groupId => this.groupMap[groupId].name),
-              assignments: assessment.assignments,
-              hasAssignments: assigned.length > 0,
-            };
+              learner,
+              isActive: assessment.active,
+              isArchive: assessment.archive,
+            }
+          })
+        },
+        themeClass() {
+          return this.$computedClass({
+            ':hover': {
+              // Background is light enough so that contents colored at grey.v_300
+              // are still visible.
+              backgroundColor: this.$themePalette.grey.v_100,
+              // Add equal and opposite margin and padding to give the highlighted
+              // region more space without increasing the size of the parent div.
+              margin: '-8px',
+              padding: '8px',
+              borderRadius: '4px',
+            },
           });
         },
       },
       methods: {
-        // return the last activity among all users for a particular exam
-        lastActivity(exam) {
-          // Default to UNIX 0 so activity-less exams go to the end of the list
-          let last = new Date(0);
-          if (!this.assessmentLearnerStatusMap[exam.id]) {
-            return last;
+        learnerStatus(assessment) {
+          if (assessment.isActive && !assessment.isArchive) {
+            return 'Started'
           }
-          Object.values(this.assessmentLearnerStatusMap[exam.id]).forEach(status => {
-            if (status.last_activity > last) {
-              last = status.last_activity;
-            }
-          });
-          return last;
-        },
-        groupAndAdHocLearnerNames(groups, assignments) {
-          const adHocGroup = this.adHocGroups.find(group => assignments.includes(group.id));
-          let adHocLearners = [];
-          if (adHocGroup) {
-            adHocLearners = adHocGroup.member_ids.map(learnerId => this.learnerMap[learnerId].name);
+          if (assessment.isActive && assessment.isArchive) {
+            return 'Completed'
           }
-          return groups.concat(adHocLearners);
-        },
+          return 'Not Started'
+        }
       },
     };
   
   </script>
   
   
-  <style lang="scss" scoped></style>
+  <style lang="scss" scoped>
+  .link {
+    display: block;
+    text-decoration: none;
+  }
+  .wrapper {
+    margin-bottom: 8px;
+  }
+  .title {
+    margin-bottom: 0;
+  }
+  .context2 {
+    margin-top: 8px;
+    font-size: small;
+  }
+  .context {
+    position: relative;
+    top: 16px;
+    margin-bottom: 16px;
+    font-size: small;
+  }
+</style>
   
