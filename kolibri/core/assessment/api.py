@@ -19,6 +19,7 @@ from kolibri.core.assessment import models
 from kolibri.core.assessment import serializers
 from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
+from .serializers import ExamAssessmentSerializer
 
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
@@ -369,15 +370,38 @@ class GetLearnerAssessmentViewset(ViewSet):
             return Response({"error": "Learner Assessments not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-class FetchAssessmentData(ViewSet):
-    queryset = models.ExamAssessment.objects.all()
+class FetchAssessmentGroupData(ViewSet):
+    queryset = models.ExamAssessmentGroup.objects.all()
     serializer_class = GroupAssessmentSerializer
 
     def retrieve(self, request, pk=None):
         try:
-            assessment = self.queryset.filter(assessment_group_id=pk)
-            serializer = self.serializer_class(assessment, many=True)
-            return Response(serializer.data)
+            assessment_group = self.queryset.get(id=pk)
+            serializer = self.serializer_class(assessment_group)
+
+            # Fetch ExamAssessment details based on current_assessment_id
+            current_assessment_id = assessment_group.current_assessment_id
+            exam_assessment = models.ExamAssessment.objects.get(id=current_assessment_id)
+            exam_assessment_serializer = ExamAssessmentSerializer(exam_assessment)
+
+            # Construct response data
+            response_data = {
+                "id": current_assessment_id,
+                "title": serializer.data['title'],
+                "date_created": serializer.data['date_created'],
+                "date_archived": serializer.data['date_archived'],
+                "date_activated": serializer.data['date_activated'],
+                "archive": serializer.data['archive'],
+                "question_sources": exam_assessment_serializer.data['question_sources'],
+                "data_model_version": exam_assessment_serializer.data['data_model_version'],
+                "learners_see_fixed_order": exam_assessment_serializer.data['learners_see_fixed_order'],
+                "seed": exam_assessment_serializer.data['seed'],
+                "assignments": exam_assessment_serializer.data['assignments']
+            }
+
+            return Response(response_data)
+        except models.ExamAssessmentGroup.DoesNotExist:
+            return Response({"error": "Assessment Group not found"}, status=status.HTTP_404_NOT_FOUND)
         except models.ExamAssessment.DoesNotExist:
-            return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
-            return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Exam Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
+

@@ -289,20 +289,30 @@ class GetGroupExamAssessmentSerializer(serializers.ModelSerializer):
         )
 
 
-class GroupAssessmentSerializer(serializers.ModelSerializer):
+class ExamAssessmentSerializer(serializers.ModelSerializer):
+    question_sources = serializers.JSONField()
     class Meta:
         model = ExamAssessment
         fields = (
-            "id",
-            "title",
             "question_sources",
-            'data_model_version',
-            'learners_see_fixed_order',
-            'seed',
-            "date_activated",
-            'date_created',
-            "date_archived",
-            "collection",
-            "archive",
+            "data_model_version",
+            "learners_see_fixed_order",
+            "seed",
             "assignments"
         )
+
+class GroupAssessmentSerializer(serializers.ModelSerializer):
+    current_assessment = ExamAssessmentSerializer()
+    
+    class Meta:
+        model = ExamAssessmentGroup
+        fields = (
+            "id",
+            "title",
+            "date_created",
+            "date_archived",
+            "date_activated",
+            "archive",
+            "current_assessment"
+        )
+
