@@ -302,7 +302,7 @@ class GetLearnerAssessmentViewset(ViewSet):
             if not learner_id:
                 return Response({"error": "Learner ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-            learner_assessments = self.queryset.filter(learner_id=learner_id, collection=classroom_id)
+            learner_assessments = self.queryset.filter(learner_id=learner_id, collection=classroom_id, active=True)
             serializer = self.serializer_class(learner_assessments, many=True)
 
             # Fetch question sources based on current_assessment
