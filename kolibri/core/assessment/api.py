@@ -170,7 +170,7 @@ class GroupAssessmentViewset(ViewSet):
 
 class CreateAssessmentRecord(ViewSet):
     def create(self, request, pk=None):
-        from .models import ExamAssessment
+        from .models import ExamAssessment, ExamAssignmentAssessment
 
         try:
 
@@ -218,8 +218,6 @@ class CreateAssessmentRecord(ViewSet):
                     new_title = test.get('title')
 
                     insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = obj.id, channel_id = channel_id,  creator_id=creator_id)
-                    # assessmentAssignment
-                    # new_id
 
                 # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
                 # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
@@ -235,6 +233,8 @@ class CreateAssessmentRecord(ViewSet):
                     final_dict = {'id':instance.id, 'title':instance.title,'question_count': instance.question_count, 'question_sources': instance.question_sources,'seed':instance.seed, 'learners_see_fixed_order': instance.learners_see_fixed_order, 'date_activated':instance.date_activated}
                     instance_list.append(assessment_dict)
                     final_response_list.append(final_dict)
+
+                    insert_record_exam_assignment = ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
 
                 if len(instance_list) != 0: 
                     to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
