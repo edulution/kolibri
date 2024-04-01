@@ -8,18 +8,13 @@
 
     <KGrid gutter="16">
       <KGridItem>
-        <QuizLessonDetailsHeader
+        <AssessmentLessonDetailsHeader
           :backlink="$router.getRoute('ASSESSMENTS')"
           :backlinkLabel="coachString('allAssessmentsLabel')"
           examOrLesson="exam"
-        >
-          <template #dropdown>
-            <QuizOptionsDropdownMenu
-              optionsFor="plan"
-              @select="setCurrentAction"
-            />
-          </template>
-        </QuizLessonDetailsHeader>
+          :assessmentTitle="quiz.title"
+        />
+
       </KGridItem>
 
       <KGridItem :layout12="{ span: 4 }">
@@ -40,13 +35,36 @@
           :topMargin="16"
         >
           <section v-if="currentView === 'TEST_LISTING'">
-            DEFAULT
-            Render Test Listing Here
-            in table view
-            and title should have function to switch to QUESTION_PREVIEW
+            <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
+              <template #headers>
+                <th>{{ coachString('topicLabel') }}</th>
+              </template>
+              <template #tbody>
+                <transition-group tag="tbody" name="list">
+                  <tr v-for="tableRow of titleList" :key="tableRow.id" data-test="entry">
+                    <KLabeledIcon
+                      :icon="'quiz'"
+                      :label="tableRow.title " 
+                      class="table-title"
+                      @click.prevent="toggleView('QUESTION_PREVIEW')"
+                    />
+                  </tr>
+                </transition-group>
+              </template>
+            </CoreTable>
           </section>  
           
-          <section v-if="currentView === 'QUESTIONS_PERVIEW'">
+          <section v-if="currentView === 'QUESTION_PREVIEW'">
+            <div  
+              class="back-arrow"
+              @click.prevent="toggleView('TEST_LISTING')"
+            >
+              <KIcon
+                icon="back"
+              />
+              <span>Back To Listing</span>
+            </div>
+
             <h2>
               {{ coachString('numberOfQuestions', { value: selectedQuestions.length }) }}
             </h2>
@@ -90,7 +108,6 @@
   import CoachAppBarPage from '../../CoachAppBarPage';
   import QuestionListPreview from '../CreateExamPage/QuestionListPreview';
   import { coachStringsMixin } from '../../common/commonCoachStrings';
-  import QuizOptionsDropdownMenu from './QuizOptionsDropdownMenu';
   import ManageExamModals from './ManageExamModals';
   import {
     fetchAssessmentSummaryPageData,
@@ -105,7 +122,6 @@
       CoachAppBarPage,
       ManageExamModals,
       QuestionListPreview,
-      QuizOptionsDropdownMenu,
     },
     mixins: [commonCoach, coachStringsMixin, commonCoreStrings],
     data() {
@@ -120,7 +136,25 @@
         selectedExercises: {},
         loading: true,
         currentAction: '',
-        currentView: 'TEST_LISTING',
+        currentView: '',
+        titleList:[
+          {
+            id:0,
+            title:"title1"
+          },
+          {
+            id:1,
+            title:"title2"
+          },
+          {
+            id:2,
+            title:"title3"
+          },
+          {
+            id:3,
+            title:"title4"
+          }
+        ]
       };
     },
     computed: {
@@ -163,7 +197,14 @@
           next(vm => vm.setError(error));
         });
     },
+    mounted() {
+      this.currentView = 'TEST_LISTING'
+    },
     methods: {
+      // @public
+      toggleView(view) {
+        this.currentView = view;
+      },
       // @public
       setData(data) {
         const { exam, exerciseContentNodes } = data;
@@ -178,6 +219,7 @@
         this.loading = false;
         this.$store.dispatch('notLoading');
       },
+      // @public
       setCurrentAction(action) {
         if (action === 'EDIT_DETAILS') {
           this.$router.push(this.$router.getRoute('QuizEditDetailsPage'));
@@ -280,5 +322,21 @@
   /deep/ .perseus-radio-selected {
     z-index: 0 !important;
   }
+
+  .back-arrow {
+  color: blue;
+  display: inline-flex;
+  gap: 6px;
+  cursor: pointer;
+  & span {
+    text-decoration: underline;
+  }
+}
+
+.table-title {
+  color: blue;
+  cursor: pointer ;
+  margin: 2px 0px 3px 0px;
+}
 
 </style>
