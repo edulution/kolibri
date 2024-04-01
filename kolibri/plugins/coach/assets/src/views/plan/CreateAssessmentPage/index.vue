@@ -159,6 +159,9 @@
       ...mapState('examCreation', [
         'contentList',
       ]),
+      ...mapState({
+        userId: state => state.core.session.user_id,
+      }),
       learnerOptions() {
         return this.learners.map(learner => ({
           label: learner.name,
@@ -237,7 +240,7 @@
           }
         }
 
-        return assessments;
+        return [...assessments.reverse()];
       },
       async onSubmit() {
         const assessments = await this.prepareAssessments();
@@ -250,6 +253,7 @@
           channel_id: this.selectedContent,
           learner_id: this.selectedLearner.value,
           assessments,
+          creator_id: this.userId,
         };
 
         try {

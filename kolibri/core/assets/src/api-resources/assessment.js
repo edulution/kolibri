@@ -7,7 +7,7 @@ import { Resource } from 'kolibri.lib.apiResource';
 export default new Resource({
     name: 'assessment',
     idKey: 'id',
-    fetchAssessmentsSizes(getParams = {}) {
-      return this.fetchListCollection('size', getParams);
-    },
+    // fetchAssessmentsSizes(getParams = {}) {
+    //   return [];
+    // },
 });

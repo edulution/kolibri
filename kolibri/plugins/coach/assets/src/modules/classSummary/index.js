@@ -541,7 +541,7 @@ export default {
           return Promise.all([
             store.dispatch('fetchLessonsSizes', classId),
             store.dispatch('fetchQuizzesSizes', classId),
-            store.dispatch('fetchAssessmentsSizes', classId),
+            // store.dispatch('fetchAssessmentsSizes', classId),
           ]).then(() => summary);
         });
     },
@@ -569,18 +569,18 @@ export default {
       }
       return Promise.resolve();
     },
-    fetchAssessmentsSizes(store, classId) {
-      if (Object.keys(store.state.assessmentMap).length > 0) {
-        return AssessmentResource.fetchAssessmentsSizes({ collection: classId })
-          .then(sizes => {
-            store.commit('SET_CLASS_ASSESSMENTS_SIZES', sizes);
-          })
-          .catch(error => {
-            return store.dispatch('handleApiError', error, { root: true });
-          });
-      }
-      return Promise.resolve();
-    },
+    // fetchAssessmentsSizes(store, classId) {
+    //   if (Object.keys(store.state.assessmentMap).length > 0) {
+    //     return AssessmentResource.fetchAssessmentsSizes({ collection: classId })
+    //       .then(sizes => {
+    //         store.commit('SET_CLASS_ASSESSMENTS_SIZES', sizes);
+    //       })
+    //       .catch(error => {
+    //         return store.dispatch('handleApiError', error, { root: true });
+    //       });
+    //   }
+    //   return Promise.resolve();
+    // },
     refreshClassSummary(store) {
       return store.dispatch('loadClassSummary', store.state.id);
     },

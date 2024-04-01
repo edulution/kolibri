@@ -180,13 +180,16 @@ class CreateAssessmentRecord(ViewSet):
             date_archived = request_data.get('date_archived')
             learner_id = request_data.get('learner_id')
             title = request_data.get('title')
+            creator_id = request.user.id
+            if not creator_id:
+                creator_id = request_data.get('creator_id')
             # test_data = ExamAssessmentGroup.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=title, creator_id='ab8e752daeefb1fade99bf34efcafe6e')
             
             id_available = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id)
 
             if not id_available:
 
-                dictt = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':title, 'collection':collection, 'creator':request.user.id}
+                dictt = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':title, 'collection':collection, 'creator': creator_id}
                 group_serializer = CreateAssessmentGroupSerializer(data=dictt)
 
                 group_serializer.is_valid(raise_exception=True)
@@ -205,7 +208,7 @@ class CreateAssessmentRecord(ViewSet):
                     question_count = test.get('question_count')
                     new_title = test.get('title')
 
-                    insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = fetch_id.id,  creator_id='ab8e752daeefb1fade99bf34efcafe6e')
+                    insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = fetch_id.id,  creator_id=creator_id)
 
                 # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
                 # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
