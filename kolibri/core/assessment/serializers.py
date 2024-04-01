@@ -7,7 +7,8 @@ from rest_framework.serializers import ModelSerializer
 from rest_framework.serializers import PrimaryKeyRelatedField
 from rest_framework.serializers import Serializer
 from rest_framework.serializers import ValidationError
-
+from rest_framework import serializers
+from .models import ExamAssessmentGroup
 from kolibri.core import error_constants
 from kolibri.core.api import HexUUIDField
 from kolibri.core.auth.constants.collection_kinds import ADHOCLEARNERSGROUP
@@ -216,3 +217,48 @@ class ExamAssessmentSerializer(ModelSerializer):
                             user_id=new_learner_id,
                             collection=adhoc_group_assignment.collection,
                         )
+
+
+class AssessmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamAssessmentGroup
+        fields = (
+            "id",
+            "title",
+            "active",
+            "date_activated",
+            'date_created',
+            "date_archived",
+            "collection",
+            "archive",
+            "learner_id",
+        )
+
+class CreateAssessmentGroupSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = ExamAssessmentGroup
+        fields = (
+            "title",
+            "date_activated",
+            "date_archived",
+            "collection",
+            "archive",
+            "learner_id",
+            "creator",
+            "assessment_map"
+        )
+
+class CreateAssessmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamAssessment
+        fields = (
+            "question_sources",
+            "title",
+            "date_activated",
+            "date_archived",
+            "collection",
+            "archive",
+            "learner_id",
+            "question_count"
+        )

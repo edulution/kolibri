@@ -70,6 +70,11 @@ class ExamAssessment(AbstractFacilityDataModel):
     collection = models.ForeignKey(
         Collection, related_name="examassessment", blank=False, null=False
     )
+
+    learner = models.ForeignKey(
+        FacilityUser, related_name="examassessmentlearner", blank=False, null=True
+    )
+
     creator = models.ForeignKey(
         FacilityUser, related_name="examassessment", blank=False, null=True
     )
@@ -291,7 +296,7 @@ class IndividualSyncableExam(AbstractFacilityDataModel):
         return exam
     
 
-class ExamAssessmentGroup(AbstractFacilityDataModel):
+class ExamAssessmentGroup(models.Model):
 
     morango_model_name = "examassessmentgroup"
 
@@ -308,13 +313,17 @@ class ExamAssessmentGroup(AbstractFacilityDataModel):
 
     title = models.CharField(max_length=200)
 
-    learner_id = models.IntegerField(default=1)
+    learner_id = models.CharField(max_length=200, default='1')
 
     # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)
 
     creator = models.ForeignKey(
         FacilityUser, related_name="assessementfacilityuser", blank=False, null=True
+    )
+
+    collection = models.ForeignKey(
+        Collection, related_name="examassessmentgrouplist", blank=False, null=True
     )
 
     date_activated = models.DateTimeField(default=None, null=True, blank=True)
