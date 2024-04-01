@@ -56,6 +56,8 @@ class ExamAssessment(AbstractFacilityDataModel):
 
     assignments = JSONField(default=[], blank=True)
 
+    channel_id = models.UUIDField(null=True)
+
     # When True, learners see questions in the order they appear in 'question_sources'.
     # When False, each learner sees questions in a random (but consistent) order seeded
     #   by their user's UUID.
@@ -314,6 +316,8 @@ class ExamAssessmentGroup(models.Model):
     title = models.CharField(max_length=200)
 
     learner_id = models.CharField(max_length=200, default='1')
+
+    channel_id = models.UUIDField(null=True)
 
     # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)

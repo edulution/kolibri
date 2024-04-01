@@ -181,25 +181,31 @@ class CreateAssessmentRecord(ViewSet):
             date_archived = request_data.get('date_archived')
             learner_id = request_data.get('learner_id')
             title = request_data.get('title')
+            channel_id = request_data.get('channel_id')
             creator_id = request.user.id
             if not creator_id:
                 creator_id = request_data.get('creator_id')
             # test_data = ExamAssessmentGroup.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=title, creator_id='ab8e752daeefb1fade99bf34efcafe6e')
             
-            id_available = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id)
+            id_available = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
 
             if not id_available:
 
-                dictt = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':title, 'collection':collection, 'creator': creator_id}
-                group_serializer = CreateAssessmentGroupSerializer(data=dictt)
+                field_update = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':title, 'collection':collection, 'creator': creator_id, 'channel_id': channel_id}
+                
+                group_serializer = CreateAssessmentGroupSerializer(data=field_update)
 
                 group_serializer.is_valid(raise_exception=True)
                 
                 group_serializer.save()
 
-            fetch_id = models.ExamAssessmentGroup.objects.get(learner_id = learner_id)
+            fetch_id = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
             
-            is_available = models.ExamAssessment.objects.filter(learner_id = learner_id)
+            obj = None
+            if fetch_id.exists():
+                obj = fetch_id[0] 
+            
+            is_available = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
 
             if not is_available:
             
@@ -209,19 +215,22 @@ class CreateAssessmentRecord(ViewSet):
                     question_count = test.get('question_count')
                     new_title = test.get('title')
 
-                    insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = fetch_id.id,  creator_id=creator_id)
+                    insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = obj.id, channel_id = channel_id,  creator_id=creator_id)
 
                 # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
                 # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
                 # assessment_serializer.is_valid(raise_exception=True)
                 # assessment_serializer.save(creator_id= 'ab8e752daeefb1fade99bf34efcafe6e')
                     
-                assessment_record = models.ExamAssessment.objects.filter(learner_id = learner_id)
+                assessment_record = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
                 instance_list = []
+                final_response_list = []
         
                 for instance in assessment_record:
                     assessment_dict = {'id':instance.id, 'title':instance.title}
+                    final_dict = {'id':instance.id, 'title':instance.title,'question_count': instance.question_count, 'question_sources': instance.question_sources,'seed':instance.seed, 'learners_see_fixed_order': instance.learners_see_fixed_order, 'date_activated':instance.date_activated}
                     instance_list.append(assessment_dict)
+                    final_response_list.append(final_dict)
 
                 if len(instance_list) != 0: 
                     to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
@@ -229,17 +238,43 @@ class CreateAssessmentRecord(ViewSet):
                     # assessement_serializer.is_valid(raise_exception=True)
                     # assessement_serializer.save()
 
-                    updated_count = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id).update(**to_dict)
+                    updated_count = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
 
-            return Response("OK")
+                return Response(final_response_list, status=status.HTTP_200_OK)
+            
+            return Response({"error": "Assessment for this learner already exist"}, status=status.HTTP_404_NOT_FOUND)
         
         except models.ExamAssessmentGroup.DoesNotExist:
-            # Handle case where no instance with the given pk is found
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
         
 
+# class ExamAssessmentStartViewSet(ViewSet):
+#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
+#         try:
+#             # Fetch the instances based on the assessment_group_id
+#             update_dict = {'active': 1}
+#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+            
+#             if available_id:
+#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
+#             else:
+#                 return Response({'message': 'Invalid Assessment ID'})
+#             # Fetch the instance based on the primary key
+
+#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
+#             if available_group_id:
+#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
+#             else:
+#                 return Response({'message': 'Invalid Group ID'})
+
+#             # Optionally, you can return a success response indicating the update was successful
+#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
+#         except models.ExamAssessmentGroup.DoesNotExist:
+#             # Handle case where no instance with the given pk is found
+            # return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
+        
 class ExamAssessmentStartViewSet(ViewSet):
-   def update(self, request, pk=None):  # Ensure pk is included in the method signature
+   def partial_update(self, request, pk=None):  # Ensure pk is included in the method signature
         try:
             # Fetch the instances based on the assessment_group_id
             update_dict = {'active': 1}
@@ -264,26 +299,46 @@ class ExamAssessmentStartViewSet(ViewSet):
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
         
 
+# class ExamAssessmentStopViewSet(ViewSet):
+#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
+#         try:
+#             # Fetch the instances based on the assessment_group_id
+#             update_dict = {'archive': 1}
+#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+            
+#             if available_id:
+#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
+#             else:
+#                 return Response({'message': 'Invalid Assessment ID'})
+#             # Fetch the instance based on the primary key
+
+#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
+#             if available_group_id:
+#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
+#             else:
+#                 return Response({'message': 'Invalid Group ID'})
+
+#             # Optionally, you can return a success response indicating the update was successful
+#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
+#         except models.ExamAssessmentGroup.DoesNotExist:
+#             # Handle case where no instance with the given pk is found
+#             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
 class ExamAssessmentStopViewSet(ViewSet):
-   def update(self, request, pk=None):  # Ensure pk is included in the method signature
+    def partial_update(self, request, pk=None):
         try:
-            # Fetch the instances based on the assessment_group_id
             update_dict = {'archive': 1}
             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
             if available_id:
                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
             else:
-                return Response({'message': 'Invalid Assessment ID'})
-            # Fetch the instance based on the primary key
+                return Response({'message': 'Invalid Assessment ID'}, status=status.HTTP_404_NOT_FOUND)
 
             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
             if available_group_id:
                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
             else:
-                return Response({'message': 'Invalid Group ID'})
+                return Response({'message': 'Invalid Group ID'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Optionally, you can return a success response indicating the update was successful
             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
         except models.ExamAssessmentGroup.DoesNotExist:
             # Handle case where no instance with the given pk is found
@@ -325,3 +380,4 @@ class FetchAssessmentData(ViewSet):
             return Response(serializer.data)
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
