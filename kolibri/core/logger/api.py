@@ -254,16 +254,20 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             raise PermissionDenied("User does not have access to this quiz_id")
         
     def _check_assessment_permissions(self, user, assessment_id):
+        print('_check_assessment_permissions1 =====================+++++++++++++++++++++++==================')
         if user.is_anonymous:
+            print('_check_assessment_permissions2 =====================+++++++++++++++++++++++==================')
             raise PermissionDenied("Cannot access a assessment if not logged in")
         if not ExamAssessment.objects.filter(
             active=True,
-            assignmentassessments__collection_id__in=user.memberships.all().values(
-                "collection_id"
-            ),
+            # assignmentassessments__collection_id__in=user.memberships.all().values(
+            #     "collection_id"
+            # ),
             id=assessment_id,
         ).exists():
+            print(assessment_id, '_check_assessment_permissions3 =====================+++++++++++++++++++++++==================')
             raise PermissionDenied("User does not have access to this assessment_id")
+        print('_check_assessment_permissions4 =====================+++++++++++++++++++++++==================')
 
     def _check_lesson_permissions(self, user, lesson_id):
         if user.is_anonymous:
@@ -283,7 +287,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         assessment_id = validated_data.get("assessment_id")
 
         context = LogContext()
-
+        print('_get_context1 =====================+++++++++++++++++++++++==================')
         if node_id is not None:
             mastery_model = validated_data.get("mastery_model")
             content_id = validated_data.get("content_id")
@@ -301,7 +305,9 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             kind = content_kinds.QUIZ
             context["quiz_id"] = quiz_id
         elif assessment_id is not None:
+            print('_get_context2 =====================+++++++++++++++++++++++==================')
             self._check_assessment_permissions(user, assessment_id)
+            print('_get_context3 =====================+++++++++++++++++++++++==================')
             mastery_model = {"type": 'assessment', "coach_assigned": True}
             content_id = assessment_id
             channel_id = None
@@ -408,13 +414,15 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         serializer = StartSessionSerializer(
             data=request.data, context={"request": request}
         )
+        print('called1 =====================+++++++++++++++++++++++==================')
         serializer.is_valid(raise_exception=True)
         start_timestamp = local_now()
         repeat = serializer.validated_data["repeat"]
-
+        print('called2 =====================+++++++++++++++++++++++==================')
         content_id, channel_id, kind, mastery_model, context = self._get_context(
             request.user, serializer.validated_data
         )
+        print('called3 =====================+++++++++++++++++++++++==================')
 
         with transaction.atomic(), dataset_cache:
 

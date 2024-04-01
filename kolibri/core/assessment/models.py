@@ -318,6 +318,7 @@ class ExamAssessmentGroup(models.Model):
     learner_id = models.CharField(max_length=200, default='1')
 
     channel_id = models.UUIDField(null=True)
+    new_id = models.UUIDField(null=True)
 
     # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)
