@@ -262,3 +262,17 @@ class CreateAssessmentSerializer(serializers.ModelSerializer):
             "learner_id",
             "question_count"
         )
+
+
+class GetExamAssessmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamAssessment
+        fields = (
+            'id',
+            'collection',
+            'active',
+            'archive',
+            'title',
+            'question_sources',
+        )
+

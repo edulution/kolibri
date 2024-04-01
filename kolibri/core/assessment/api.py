@@ -6,7 +6,7 @@ from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,CreateAssessmentSerializer
+from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,CreateAssessmentSerializer, GetExamAssessmentSerializer
 from rest_framework import status
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
@@ -287,3 +287,23 @@ class ExamAssessmentStopViewSet(ViewSet):
         except models.ExamAssessmentGroup.DoesNotExist:
             # Handle case where no instance with the given pk is found
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+
+class GetLearnerAssessmentViewset(ViewSet):
+    queryset = models.ExamAssessment.objects.all()
+    serializer_class = GetExamAssessmentSerializer
+
+    def list(self, request):
+        try:
+            learner_id = request.query_params.get('learner_id')
+            classroom_id = request.query_params.get('classroom_id')
+
+            if not learner_id or not classroom_id:
+                return Response({"error": "Learner ID and Classroom ID are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            learner_assessments = self.queryset.filter(learner_id=learner_id, collection=classroom_id)
+            serializer = self.serializer_class(learner_assessments, many=True)
+            return Response(serializer.data)
+        except models.ExamAssessment.DoesNotExist:
+            return Response({"error": "Learner Assessments not found"}, status=status.HTTP_404_NOT_FOUND)
+
