@@ -306,7 +306,7 @@ def to_fetch_learner_status(assessment_group_id):
     
     for instance in fetch_assessment_id:
         assessment_id_list.append(instance.id)
-        final_list.append({ "assessment_id": instance.id, "exercise_ids": [], "correct_question_ids": [], "attempted_question_ids": [] })
+        final_list.append({ "assessment_id": instance.id, 'excercise_id' :instance.question_sources[0]['exercise_id'],  "exercise_ids": [], "correct_question_ids": [], "attempted_question_ids": [] })
 
     if len(assessment_id_list) != 0:
            
@@ -335,14 +335,28 @@ def to_fetch_learner_status(assessment_group_id):
                     
                     if assessment_index == -1:
                         continue
-                    
-                    exercise_index = find(final_list[assessment_index]["exercise_ids"], 'id', exercise_id)
+
+                    exercise_index = find(final_list, 'excercise_id', exercise_id)
+            
                     if exercise_index != -1:
                         exercise_title = ContentNode.objects.get(id=exercise_id).title
-                        final_list[assessment_index]["exercise_ids"].append({
-                            "id": exercise_id,
-                            "title": exercise_title
-                        })
+
+                        id_already_exist = final_list[assessment_index]["exercise_ids"]
+
+                        if len(id_already_exist) == 0:
+                            final_list[assessment_index]["exercise_ids"].append({
+                                "id": exercise_id,
+                                "title": exercise_title
+                            })
+                        
+                        else:
+                            matches = [item for item in id_already_exist if item['id'] == exercise_id]
+
+                            if not matches:
+                                final_list[assessment_index]["exercise_ids"].append({
+                                "id": exercise_id,
+                                "title": exercise_title
+                            })
                     
                     if data['correct'] == 1.0:
                         final_list[assessment_index]["correct_question_ids"].append(question_id)
