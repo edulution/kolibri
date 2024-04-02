@@ -335,3 +335,11 @@ class GroupAssessmentSerializer(serializers.ModelSerializer):
             "collection"
         )
 
+
+class MarkAssessmentSerializer(serializers.Serializer):
+    learner_id = serializers.CharField()
+    # collection_id = serializers.CharField()
+    assessment_id = serializers.CharField()
+    assessment_group_id = serializers.CharField()
+    # assessment_map = serializers.JSONField()
+

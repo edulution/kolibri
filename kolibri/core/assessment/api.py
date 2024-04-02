@@ -20,7 +20,8 @@ from kolibri.core.assessment import models
 from kolibri.core.assessment import serializers
 from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
-from .serializers import ExamAssessmentSerializer
+from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer
+from datetime import datetime
 
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
@@ -424,3 +425,59 @@ class FetchAssessmentGroupData(ViewSet):
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Exam Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+class MarkAssessmentViewset(ViewSet):
+    serializer_class = MarkAssessmentSerializer
+
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if serializer.is_valid():
+            learner_id = serializer.validated_data.get('learner_id')
+            # collection_id = serializer.validated_data.get('collection_id')
+            assessment_id = serializer.validated_data.get('assessment_id')
+            assessment_group_id = serializer.validated_data.get('assessment_group_id')
+            # assessment_map = serializer.validated_data.get('assessment_map')
+
+            try:
+                assessment_group = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
+            except models.ExamAssessmentGroup.DoesNotExist:
+                return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
+            assessment_data = models.ExamAssessment.objects.filter(id=assessment_id).last()
+            if assessment_data:
+                question_count = assessment_data.question_count
+
+            learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
+
+            num_correct_value = learner_status[0]['num_correct']
+
+            percentage = (num_correct_value/question_count)*100
+            assessment_map = assessment_group.assessment_map
+            # Find the index of the current ID in the assessment_map
+            if percentage < 75.0:
+                index = next((i for i, item in enumerate(assessment_map) if item['id'] == assessment_group.current_assessment_id), None)
+                if index is not None and index <= len(assessment_map) - 1:
+                    next_id = assessment_map[index + 1]['id']
+                    if next_id != assessment_group.current_assessment_id:
+                        assessment_group.current_assessment_id = next_id  
+                    else:
+                        assessment_group.last_assessment_id = next_id 
+                        assessment_data.archive = True
+                        assessment_data.date_archived = datetime.now()
+                        assessment_group.archive = True
+                        assessment_group.date_archived = datetime.now()
+            else:
+                assessment_group.last_assessment_id = assessment_map[-1]['id']
+                assessment_data.archive = True
+                assessment_data.date_archived = datetime.now()
+                assessment_group.archive = True
+                assessment_group.date_archived = datetime.now()
+
+            assessment_group.save()
+            assessment_data.save()
+
+            return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
