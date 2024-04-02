@@ -49,7 +49,7 @@
   
   
   <script>
-  
+
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import commonCoach from '../../common';
     import Block from './Block';

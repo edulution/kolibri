@@ -417,7 +417,6 @@ export default {
   mutations: {
     SET_STATE(state, { summary, assessmentGroups }) {
       const examMap = _mapExams(summary.exams);
-      const assessmentMap = _mapExams(summary.assessments || []);
       let assessmentGroupMap = Object.values(assessmentGroups).filter(d => typeof d !== 'string');
       assessmentGroupMap = _mapAssessmentGroup(assessmentGroupMap || []);
       
@@ -425,11 +424,6 @@ export default {
         // convert dates
         status.last_activity = status.last_activity ? new Date(status.last_activity) : null;
         status.score = _score(status.num_correct, examMap[status.exam_id].question_count);
-      }
-      for (const status of summary.assessment_learner_status) {
-        // convert dates
-        status.last_activity = status.last_activity ? new Date(status.last_activity) : null;
-        status.score = _score(status.num_correct, assessmentMap[status.exam_id].question_count);
       }
       for (const status of summary.content_learner_status) {
         // convert dates
@@ -456,8 +450,6 @@ export default {
         lessonMap: _mapLessons(summary.lessons),
         activeLearnersMap: summary.active_learners,
         learnersInfo: summary.learners_info,
-        assessmentMap,
-        assessmentLearnerStatusMap: _statusMap(summary.assessment_learner_status, 'exam_id'),
         assessmentGroupMap,
       });
     },
