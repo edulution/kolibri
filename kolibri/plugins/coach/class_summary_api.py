@@ -292,24 +292,32 @@ def serialize_coach_assigned_assessment_status(queryset):
 from kolibri.core.assessment import models
 from kolibri.core.logger.models import AttemptLog,ContentSessionLog
 
+def find(lst, key, value):
+    for i, dic in enumerate(lst):
+        if dic[key] == value:
+            return i
+    return -1
+
 def to_fetch_learner_status(assessment_group_id):
     fetch_assessment_id = models.ExamAssessment.objects.filter(assessment_group_id = assessment_group_id)
 
     assessment_id_list = []
+    final_list = []
     
     for instance in fetch_assessment_id:
         assessment_id_list.append(instance.id)
+        final_list.append({ "assessment_id": instance.id, "exercise_ids": [], "correct_question_ids": [], "attempted_question_ids": [] })
 
     if len(assessment_id_list) != 0:
            
         queryset = ContentSessionLog.objects.filter(content_id__in=assessment_id_list)
 
         object_id_list = []
-        object_content_list = []
+        content_sessions = {}
 
         for object in queryset:
+            content_sessions[object.id] = object.content_id            
             object_id_list.append(object.id)
-            object_content_list.append(object.content_id)
 
         if len(object_id_list) != 0:
             
@@ -319,30 +327,29 @@ def to_fetch_learner_status(assessment_group_id):
                 
                 corrected_ans_list= list(corrected_ans)
 
-                correct_question_ids = []
-                attempted_question_ids = []
-                final_list = []
-                
                 for data in corrected_ans_list:
+                    assessment_id = content_sessions[data['sessionlog_id']]
+                    assessment_index = find(final_list, 'assessment_id', assessment_id)
+                    question_id = data['item'].split(':')[1]
+                    exercise_id = data['item'].split(':')[0]
+                    
+                    if assessment_index == -1:
+                        continue
+                    
+                    exercise_index = find(final_list[assessment_index]["exercise_ids"], 'id', exercise_id)
+                    if exercise_index != -1:
+                        exercise_title = ContentNode.objects.get(id=exercise_id).title
+                        final_list[assessment_index]["exercise_ids"].append({
+                            "id": exercise_id,
+                            "title": exercise_title
+                        })
                     
                     if data['correct'] == 1.0:
-                        correct_question_ids.append(data['item'])
+                        final_list[assessment_index]["correct_question_ids"].append(question_id)
                     
-                    attempted_question_ids.append(data['item'])
+                    final_list[assessment_index]["attempted_question_ids"].append(question_id)
 
-                    content_id_set = ContentSessionLog.objects.get(id=data['sessionlog_id']).content_id
-
-                    dictionary = {'correct_question_ids': correct_question_ids, 'attempted_question_ids':attempted_question_ids, 'content_id':content_id_set}
-
-                    final_list.append(dictionary)
-
-            if len(final_list) != 0:
-                return final_list
-
-
-            return final_list[-1]
-    
-    return []
+    return final_list
 
 def serialize_groups(queryset):
     queryset = annotate_array_aggregate(queryset, member_ids="membership__user__id")

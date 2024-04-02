@@ -57,7 +57,7 @@
                 id: d.id,
                 title: d.title,
                 question_count: d.question_sources.length,
-                score: statusData?.num_correct || null,
+                score: statusData?.correct_question_ids?.length || null,
               }
             })
           }
