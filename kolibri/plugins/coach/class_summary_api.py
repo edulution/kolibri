@@ -289,6 +289,60 @@ def serialize_coach_assigned_assessment_status(queryset):
     ).order_by()
     return list(map(_map_assessment_status, _get_assessment_status(queryset)))
 
+from kolibri.core.assessment import models
+from kolibri.core.logger.models import AttemptLog,ContentSessionLog
+
+def to_fetch_learner_status(assessment_group_id):
+    fetch_assessment_id = models.ExamAssessment.objects.filter(assessment_group_id = assessment_group_id)
+
+    assessment_id_list = []
+    
+    for instance in fetch_assessment_id:
+        assessment_id_list.append(instance.id)
+
+    if len(assessment_id_list) != 0:
+           
+        queryset = ContentSessionLog.objects.filter(content_id__in=assessment_id_list)
+
+        object_id_list = []
+        object_content_list = []
+
+        for object in queryset:
+            object_id_list.append(object.id)
+            object_content_list.append(object.content_id)
+
+        if len(object_id_list) != 0:
+            
+            if len(assessment_id_list) > 1:
+                
+                corrected_ans = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values('correct','sessionlog_id', 'item')
+                
+                corrected_ans_list= list(corrected_ans)
+
+                correct_question_ids = []
+                attempted_question_ids = []
+                final_list = []
+                
+                for data in corrected_ans_list:
+                    
+                    if data['correct'] == 1.0:
+                        correct_question_ids.append(data['item'])
+                    
+                    attempted_question_ids.append(data['item'])
+
+                    content_id_set = ContentSessionLog.objects.get(id=data['sessionlog_id']).content_id
+
+                    dictionary = {'correct_question_ids': correct_question_ids, 'attempted_question_ids':attempted_question_ids, 'content_id':content_id_set}
+
+                    final_list.append(dictionary)
+
+            if len(final_list) != 0:
+                return final_list
+
+
+            return final_list[-1]
+    
+    return []
 
 def serialize_groups(queryset):
     queryset = annotate_array_aggregate(queryset, member_ids="membership__user__id")

@@ -2,7 +2,7 @@ import json
 from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
-from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status
+from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -416,7 +416,7 @@ class FetchAssessmentGroupData(ViewSet):
                 "current_assessment_id": serializer.data['current_assessment'],
                 "last_assessment_id": serializer.data['last_assessment'],
                 "assessments": exam_assessments_list,
-                "learner_status": serialize_coach_assigned_assessment_status(exam_assessments),
+                "learner_status": to_fetch_learner_status(pk),
             }
 
             return Response(response_data)
