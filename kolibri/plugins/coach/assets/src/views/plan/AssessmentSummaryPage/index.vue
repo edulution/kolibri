@@ -23,9 +23,8 @@
         </h2>
         <AssessmentStatus
           :className="className"
-          :avgScore="avgScore"
-          :groupAndAdHocLearnerNames="getRecipientNamesForExam(exam)"
-          :exam="exam"
+          :groupAndAdHocLearnerNames="getRecipientNameForAssessment(quiz)"
+          :exam="quiz"
         />
       </KGridItem>
       
@@ -44,9 +43,9 @@
                   <tr v-for="tableRow of assessmentList" :key="tableRow.id" data-test="entry">
                     <KLabeledIcon
                       :icon="'quiz'"
-                      :label="tableRow.title " 
+                      :label="tableRow.title" 
                       class="table-title"
-                      @click.prevent="toggleView('QUESTION_PREVIEW')"
+                      @click.prevent="toggleView('QUESTION_PREVIEW',tableRow.id)"
                     />
                   </tr>
                 </transition-group>
@@ -97,24 +96,16 @@
 
 
 <script>
-  import { AssessmentGroupDataResource } from 'kolibri.resources';
+  import { AssessmentGroupDataResource ,ContentNodeResource } from 'kolibri.resources';
   import { mapState } from 'vuex';
   import fromPairs from 'lodash/fromPairs';
-  import find from 'lodash/find';
-  import { ERROR_CONSTANTS } from 'kolibri.coreVue.vuex.constants';
-  import CatchErrors from 'kolibri.utils.CatchErrors';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import map from 'lodash/map';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import QuestionListPreview from '../CreateExamPage/QuestionListPreview';
   import { coachStringsMixin } from '../../common/commonCoachStrings';
   import ManageExamModals from './ManageExamModals';
-  import {
-    fetchAssessmentSummaryPageData,
-    serverAssignmentPayload,
-    clientAssigmentState,
-    deleteExam,
-  } from './api';
   
   export default {
     name: 'AssessmentSummaryPage',
@@ -138,6 +129,7 @@
         currentAction: '',
         currentView: '',
         assessmentList: [],
+        selectedId:null 
       };
     },
     computed: {
@@ -152,50 +144,45 @@
       quizIsRandomized() {
         return !this.quiz.learners_see_fixed_order;
       },
-      avgScore() {
-        return this.getExamAvgScore(this.$route.params.assessmentId, this.recipients);
-      },
-      exam() {
-        return this.assessmentMap[this.$route.params.assessmentId];
-      },
-      recipients() {
-        return this.getLearnersForExam(this.exam);
-      },
       orderDescriptionString() {
         return this.quizIsRandomized
           ? this.coachString('orderRandomDescription')
           : this.coachString('orderFixedDescription');
       },
-      classId() {
-        return this.$route.params.classId;
-      },
 
     },
     beforeRouteEnter(to, from, next) {
-      AssessmentGroupDataResource.fetchModel({ id: to.params.assessmentId }).then(d => {
-        this.assessmentList = Object.values(d).filter(d => typeof d !== 'string');
-      })
-      return fetchAssessmentSummaryPageData(to.params.assessmentId)
-        .then(data => {
-          next(vm => vm.setData(data));
-        })
-        .catch(error => {
-          next(vm => vm.setError(error));
-        });
-    },
+  const fetchData = async () => {
+    try {
+      const d = await AssessmentGroupDataResource.fetchModel({ id: to.params.assessmentId });
+      next(vm => {
+        vm.assessmentList = d.assessments;
+      });
+    } catch (error) {
+      // Handle error
+      console.error(error);
+    }
+  };
+  fetchData();
+},
     mounted() {
       this.currentView = 'TEST_LISTING'
     },
+    created() {
+        this.fetchAssessmentGroupDetails();
+        this.fetchSelectedExcercise()
+      },
     methods: {
       // @public
-      toggleView(view) {
+      toggleView(view,id) {
         this.currentView = view;
+        this.selectedId = id
+        const selectedQuestionSource = this.assessmentList.find(d => d.id == this.selectedId)
+        this.quiz.question_sources = selectedQuestionSource?.question_sources
       },
       // @public
       setData(data) {
-        const { exam, exerciseContentNodes } = data;
-        this.quiz = exam;
-        this.selectedExercises = fromPairs(exerciseContentNodes.map(x => [x.id, x]));
+        this.selectedExercises = fromPairs(data.map(x => [x.id, x]));
         this.loading = false;
         this.$store.dispatch('notLoading');
       },
@@ -216,85 +203,20 @@
       closeModal() {
         this.currentAction = '';
       },
-      handleSubmitCopy({ classroomId, groupIds, adHocLearnerIds, examTitle }) {
-        const title = examTitle
-          .trim()
-          .substring(0, 50)
-          .trim();
+      async fetchAssessmentGroupDetails() {
+          const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.assessmentId })
+          this.loading = false;
+          this.quiz = {
+            ...response,
+            groups: [],
+            assignments: [response.learner_id],
+          };
+        },
 
-        const className = find(this.classList, { id: classroomId }).name;
-        const assignments = serverAssignmentPayload(groupIds, classroomId);
-
-        this.$store
-          .dispatch('examReport/copyExam', {
-            exam: {
-              collection: classroomId,
-              title,
-              question_count: this.quiz.question_count,
-              question_sources: this.quiz.question_sources,
-              assignments,
-              learner_ids: adHocLearnerIds,
-              date_archived: null,
-              date_activated: null,
-            },
-            className,
-          })
-          .then(result => {
-            this.showSnackbarNotification('quizCopied');
-            // If exam was copied to the current classroom, add it to the classSummary module
-            if (classroomId === this.classId) {
-              const object = {
-                id: result.id,
-                title: result.title,
-                groups: clientAssigmentState(groupIds.concat(), this.classId),
-                active: false,
-              };
-              this.$store.commit('classSummary/CREATE_ITEM', {
-                map: 'examMap',
-                id: object.id,
-                object,
-              });
-            }
-            this.closeModal();
-          })
-          .catch(error => {
-            const caughtErrors = CatchErrors(error, [ERROR_CONSTANTS.UNIQUE]);
-            if (caughtErrors) {
-              this.$store.commit('CORE_CREATE_SNACKBAR', {
-                text: this.$tr('uniqueTitleError', {
-                  title,
-                  className,
-                }),
-                autoDismiss: false,
-                actionText: this.coreString('closeAction'),
-                actionCallback: () => this.$store.commit('CORE_CLEAR_SNACKBAR'),
-              });
-            } else {
-              this.$store.dispatch('handleApiError', { error });
-            }
-            this.$store.dispatch('notLoading');
-            this.closeModal();
-          });
-      },
-      handleSubmitDelete() {
-        return deleteExam(this.quiz.id)
-          .then(() => {
-            this.$store.commit('classSummary/DELETE_ITEM', { map: 'examMap', id: this.quiz.id });
-            this.$router.replace(this.$router.getRoute('EXAMS'), () => {
-              this.showSnackbarNotification('quizDeleted');
-            });
-          })
-          .catch(error => {
-            this.$store.dispatch('handleApiError', { error });
-          });
-      },
-    },
-    $trs: {
-      uniqueTitleError: {
-        message: `A quiz titled '{title}' already exists in '{className}'`,
-        context:
-          'Displays if user attempts to give a quiz the same name as one that already exists.',
-      },
+        async fetchSelectedExcercise() {
+          const response = await ContentNodeResource.fetchCollection({getParams: {ids: map(this.quiz.question_sources, 'exercise_id'),}})
+          this.setData(response)
+        }
     },
   };
 
@@ -310,7 +232,7 @@
   }
 
   .back-arrow {
-  color: blue;
+  color: #071D49;
   display: inline-flex;
   gap: 6px;
   cursor: pointer;
