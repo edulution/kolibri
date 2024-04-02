@@ -235,7 +235,7 @@
 
 <script>
 
-  import { ExamResource } from 'kolibri.resources';
+  import { ExamResource,AssessmentStartResource, AssessmentStopResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import ElapsedTime from 'kolibri.coreVue.components.ElapsedTime';
   import Lockr from 'lockr';
@@ -245,6 +245,7 @@
   import Score from './Score';
   import Recipients from './Recipients';
   import AverageScoreTooltip from './AverageScoreTooltip';
+
 
   export default {
     name: 'AssessmentStatus',
@@ -330,8 +331,8 @@
     methods: {
       ...mapActions(['fetchUserSyncStatus']),
       handleOpenQuiz() {
-        const promise = ExamResource.saveModel({
-          id: this.$route.params.quizId,
+        const promise = AssessmentStartResource.saveModel({
+          id: this.$route.params.assessmentId,
           data: {
             active: true,
             date_activated: new Date(),
@@ -350,8 +351,8 @@
           });
       },
       handleCloseQuiz() {
-        const promise = ExamResource.saveModel({
-          id: this.$route.params.quizId,
+        const promise = AssessmentStopResource.saveModel({
+          id: this.$route.params.assessmentId,
           data: {
             archive: true,
             date_archived: new Date(),
