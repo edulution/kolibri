@@ -133,7 +133,7 @@
           :layout8="{ span: 4 }"
           :layout12="layout12Label"
         >
-          {{ coachString('recipientsLabel') }}
+          {{ $tr('recipientsLabel') }}
         </KGridItem>
         <KGridItem
           :layout4="{ span: 4 }"
@@ -150,7 +150,7 @@
       </div>
 
       <!-- Average Score -->
-      <div class="status-item">
+      <!-- <div class="status-item">
         <KGridItem
           class="status-label"
           :layout4="{ span: 4 }"
@@ -167,7 +167,7 @@
         >
           <Score :value="avgScore" />
         </KGridItem>
-      </div>
+      </div> -->
 
     </KGrid>
 
@@ -433,6 +433,10 @@
       },
       closeAssessmentLabel: {
         message: 'Assessment started',
+        context: '',
+      },
+      recipientsLabel: {
+        message: 'Recipient',
         context: '',
       }
     },

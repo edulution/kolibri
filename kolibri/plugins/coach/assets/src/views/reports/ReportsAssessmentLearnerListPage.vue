@@ -1,6 +1,6 @@
 <template>
 
-  <ReportsAssessmentBaseListPage @export="exportCSV">
+  <ReportsAssessmentBaseListPage :assessmentDetails="assessmentDetails" @export="exportCSV">
     <ReportsAssessmentTestsTable
       v-if="currentView === 'TEST_LIST'"
       :entries="testTable"
@@ -19,6 +19,7 @@
   <script>
   
     import sortBy from 'lodash/sortBy';
+    import { AssessmentGroupDataResource } from 'kolibri.resources';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import { PageNames } from '../../constants';
     import commonCoach from '../common';
@@ -40,38 +41,47 @@
         return {
           currentView: 'TEST_LIST',
           breakdownData: [],
+          assessmentDetails: {},
         };
       },
       computed: {
         exam() {
-          return this.assessmentMap[this.$route.params.quizId];
-        },
-        recipients() {
-          return this.getLearnersForExam(this.exam);
+          return {}
+          //  this.assessmentMap[this.$route.params.quizId];
         },
         testTable() {
-          return Object.values(this.examMap)
+          if (this.assessmentDetails.assessments) {
+            return this.assessmentDetails.assessments.map(d => {
+              const statusData = this.assessmentDetails.learner_status.find(l => l.assessment_id === d.id)
+              return {
+                id: d.id,
+                title: d.title,
+                question_count: d.question_sources.length,
+                score: statusData?.num_correct || null,
+              }
+            })
+          }
+          return []
         },
         table() {
-          const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
-          const sorted = sortBy(learners, ['name']);
-          return sorted.map(learner => {
-            const tableRow = {
-              groups: this.getGroupNamesForLearner(learner.id),
-              statusObj: this.getExamStatusObjForLearner(this.exam.id, learner.id),
-              link: this.detailLink(learner.id),
-            };
-            Object.assign(tableRow, learner);
-            return tableRow;
-          });
+          return []
+          // const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
+          // const sorted = sortBy(learners, ['name']);
+          // return sorted.map(learner => {
+          //   const tableRow = {
+          //     groups: this.getGroupNamesForLearner(learner.id),
+          //     statusObj: this.getExamStatusObjForLearner(this.exam.id, learner.id),
+          //     link: this.detailLink(learner.id),
+          //   };
+          //   Object.assign(tableRow, learner);
+          //   return tableRow;
+          // });
         },
       },
+      created() {
+        this.fetchAssessmentGroupDetails();
+      },
       methods: {
-        detailLink(learnerId) {
-          return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
-            learnerId,
-          });
-        },
         exportCSV() {
           const columns = [
             ...csvFields.name(),
@@ -104,6 +114,14 @@
         onBackClick() {
           this.breakdownData = []
           this.currentView = 'TEST_LIST'
+        },
+        async fetchAssessmentGroupDetails() {
+          const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.quizId })
+          this.assessmentDetails = {
+            ...response,
+            groups: [],
+            assignments: [response.learner_id],
+          };
         }
       },
     };

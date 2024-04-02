@@ -9,7 +9,7 @@
     </template>
     <template #tbody>
       <transition-group tag="tbody" name="list">
-        <tr v-for="(tableRow, index) in entries" :key="tableRow.id">
+        <tr v-for="(tableRow) in entries" :key="tableRow.id">
           <td>
             <a href="#" @click.prevent="onTestTitleClick(tableRow)">
               {{ tableRow.title }}
@@ -19,13 +19,13 @@
             <span
               class="score-chip"
               :style="{
-                backgroundColor: scoreColor(calcPercentage(index * 1.875, tableRow.question_count)),
+                backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.question_count)),
                 color: 'white',
               }"
             >
               {{
                 $formatNumber(
-                  calcPercentage(index * 1.875, tableRow.question_count),
+                  calcPercentage(tableRow.score, tableRow.question_count),
                   { style: 'percent' }
                 )
               }}

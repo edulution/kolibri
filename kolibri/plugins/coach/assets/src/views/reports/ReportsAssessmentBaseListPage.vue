@@ -10,10 +10,10 @@
       <KGridItem>
         <AssessmentLessonDetailsHeader
           examOrLesson="exam"
-          :backlink="
-            group ? classRoute('ReportsGroupReportPage') : classRoute('ReportsAssessmentListPage')"
-          :backlinkLabel="group ? group.name : coachString('allAssessmentsLabel')"
+          :backlink="classRoute('ReportsAssessmentListPage')"
+          :backlinkLabel="coachString('allAssessmentsLabel')"
           optionsFor="report"
+          :assessmentTitle="assessmentDetails.title"
         />
       </KGridItem>
 
@@ -23,9 +23,8 @@
         </h2>
         <AssessmentStatus
           :className="className"
-          :avgScore="avgScore"
-          :groupAndAdHocLearnerNames="getRecipientNamesForExam(exam)"
-          :exam="exam"
+          :groupAndAdHocLearnerNames="getRecipientNameForAssessment(assessmentDetails)"
+          :exam="assessmentDetails"
           showReportVisible="true"
           variant="REPORT"
         />
@@ -60,24 +59,11 @@
       ReportsControls,
     },
     mixins: [commonCoach, commonCoreStrings],
-    data (){
-      return{
-        
+    props: {
+      assessmentDetails: {
+        type: Object,
+        required: true,
       }
-    },
-    computed: {
-      avgScore() {
-        return this.getExamAvgScore(this.$route.params.quizId, this.recipients);
-      },
-      exam() {
-        return this.assessmentMap[this.$route.params.quizId];
-      },
-      recipients() {
-        return this.getLearnersForExam(this.exam);
-      },
-      group() {
-        return this.$route.params.groupId && this.groupMap[this.$route.params.groupId];
-      },
     },
   };
 
