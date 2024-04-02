@@ -5,6 +5,6 @@ import { Resource } from 'kolibri.lib.apiResource';
  * AssessmentResource.fetchCollection({ getParams: { collection: classId } })
  */
 export default new Resource({
-    name: 'assessmentstop',
+    name: 'markassessment',
     idKey: 'id',
 });

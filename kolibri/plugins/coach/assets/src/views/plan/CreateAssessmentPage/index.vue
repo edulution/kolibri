@@ -261,7 +261,9 @@
           console.log({ result })
           this.$router.push({ name: PageNames.ASSESSMENTS });
         } catch (error) {
-          console.log("error", error)
+          if (error?.response?.data?.error) {
+            this.$store.dispatch('createSnackbar', error.response.data.error);
+          }
         }
       }
     },

@@ -455,13 +455,14 @@
       },
       async finishExam() {
         await this.saveAnswer(true)
-        // const data = {
-        //   learner_id: this.$store.getters.currentUserId,
-        //   collection_id: this.$route.params.classId,
-        //   assessment_id: this.exam.id,
-        //   assessment_group_id: this.$route.params.assessmentGroupId,
-        // }
-        // await AssessmentCompleteResource.saveModel({ data })
+        if (this.$route.params.assessmentGroupId) {
+          const data = {
+            learner_id: this.$store.getters.currentUserId,
+            assessment_id: this.exam.id,
+            assessment_group_id: this.$route.params.assessmentGroupId,
+          }
+          await AssessmentCompleteResource.saveModel({ data })
+        }
         this.$router.push(this.backPageLink);
       },
     },
