@@ -49,16 +49,15 @@
           return {}
           //  this.assessmentMap[this.$route.params.quizId];
         },
-        recipients() {
-          return this.getLearnersForExam(this.exam);
-        },
         testTable() {
           if (this.assessmentDetails.assessments) {
             return this.assessmentDetails.assessments.map(d => {
+              const statusData = this.assessmentDetails.learner_status.find(l => l.assessment_id === d.id)
               return {
                 id: d.id,
                 title: d.title,
                 question_count: d.question_sources.length,
+                score: statusData?.num_correct || null,
               }
             })
           }
@@ -83,11 +82,6 @@
         this.fetchAssessmentGroupDetails();
       },
       methods: {
-        detailLink(learnerId) {
-          return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
-            learnerId,
-          });
-        },
         exportCSV() {
           const columns = [
             ...csvFields.name(),
