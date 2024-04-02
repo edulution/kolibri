@@ -329,6 +329,7 @@ export default function useLearnerResources() {
         classId: assessment.collection,
         examId: assessment.id,
         questionNumber: 0,
+        assessmentGroupId: assessment.group_id,
       },
     };
   }

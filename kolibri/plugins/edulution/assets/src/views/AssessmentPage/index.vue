@@ -177,6 +177,7 @@
   import { mapState } from 'vuex';
   import isEqual from 'lodash/isEqual';
   import debounce from 'lodash/debounce';
+  import { AssessmentCompleteResource } from 'kolibri.resources';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
   import UiIconButton from 'kolibri.coreVue.components.UiIconButton';
@@ -452,10 +453,16 @@
         }
         this.submitModalOpen = !this.submitModalOpen;
       },
-      finishExam() {
-        this.saveAnswer(true).then(() => {
-          this.$router.push(this.backPageLink);
-        });
+      async finishExam() {
+        await this.saveAnswer(true)
+        // const data = {
+        //   learner_id: this.$store.getters.currentUserId,
+        //   collection_id: this.$route.params.classId,
+        //   assessment_id: this.exam.id,
+        //   assessment_group_id: this.$route.params.assessmentGroupId,
+        // }
+        // await AssessmentCompleteResource.saveModel({ data })
+        this.$router.push(this.backPageLink);
       },
     },
     $trs: {

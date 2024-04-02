@@ -80,7 +80,7 @@ export default [
   },
   {
     name: ClassesPageNames.ASSESSMENT_VIEWER,
-    path: '/classes/:classId/assessment/:examId/:questionNumber',
+    path: '/classes/:classId/assessment/:examId/:questionNumber/:assessmentGroupId',
     handler: (toRoute, fromRoute) => {
       if (noClassesGuard()) {
         return noClassesGuard();
@@ -88,7 +88,8 @@ export default [
       const alreadyOnAssessment =
         fromRoute.name === ClassesPageNames.ASSESSMENT_VIEWER &&
         toRoute.params.examId === fromRoute.params.examId &&
-        toRoute.params.classId === fromRoute.params.classId;
+        toRoute.params.classId === fromRoute.params.classId &&
+        toRoute.params.assessmentGroupId === fromRoute.params.assessmentGroupId;
       showAssessment(store, toRoute.params, alreadyOnAssessment);
     },
     component: AssessmentPage,
