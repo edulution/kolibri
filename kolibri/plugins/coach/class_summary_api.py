@@ -292,77 +292,55 @@ def serialize_coach_assigned_assessment_status(queryset):
 from kolibri.core.assessment import models
 from kolibri.core.logger.models import AttemptLog,ContentSessionLog
 
-def find(lst, key, value):
+def find_index(lst, key, value):
     for i, dic in enumerate(lst):
         if dic[key] == value:
             return i
     return -1
 
 def to_fetch_learner_status(assessment_group_id):
-    fetch_assessment_id = models.ExamAssessment.objects.filter(assessment_group_id = assessment_group_id)
-
-    assessment_id_list = []
     final_list = []
     
-    for instance in fetch_assessment_id:
-        assessment_id_list.append(instance.id)
-        final_list.append({ "assessment_id": instance.id, 'excercise_id' :instance.question_sources[0]['exercise_id'],  "exercise_ids": [], "correct_question_ids": [], "attempted_question_ids": [] })
+    exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
+    
+    if len(exam_assessments) == 0:
+        return final_list
 
-    if len(assessment_id_list) != 0:
-           
-        queryset = ContentSessionLog.objects.filter(content_id__in=assessment_id_list)
+    assessment_id_list = []
+    for assessment in exam_assessments:
+        assessment_id_list.append(assessment.id)
+        final_list.append({
+            "assessment_id": assessment.id,
+            "correct_question_ids": [],
+            "attempted_question_ids": []
+        })
 
-        object_id_list = []
-        content_sessions = {}
+    content_seesion_logs = ContentSessionLog.objects.filter(content_id__in=assessment_id_list)
 
-        for object in queryset:
-            content_sessions[object.id] = object.content_id            
-            object_id_list.append(object.id)
+    if len(content_seesion_logs) == 0:
+        return final_list
 
-        if len(object_id_list) != 0:
-            
-            if len(assessment_id_list) > 1:
-                
-                corrected_ans = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values('correct','sessionlog_id', 'item')
-                
-                corrected_ans_list= list(corrected_ans)
+    object_id_list = []
+    content_sessions = {}
 
-                for data in corrected_ans_list:
-                    assessment_id = content_sessions[data['sessionlog_id']]
-                    assessment_index = find(final_list, 'assessment_id', assessment_id)
-                    question_id = data['item'].split(':')[1]
-                    exercise_id = data['item'].split(':')[0]
-                    
-                    if assessment_index == -1:
-                        continue
+    for object in content_seesion_logs:
+        content_sessions[object.id] = object.content_id            
+        object_id_list.append(object.id)
 
-                    exercise_index = find(final_list, 'excercise_id', exercise_id)
-            
-                    if exercise_index != -1:
-                        exercise_title = ContentNode.objects.get(id=exercise_id).title
+    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values("correct","sessionlog_id","item")
+    
+    attempt_logs_list= list(attempt_logs)
 
-                        id_already_exist = final_list[assessment_index]["exercise_ids"]
-
-                        if len(id_already_exist) == 0:
-                            final_list[assessment_index]["exercise_ids"].append({
-                                "id": exercise_id,
-                                "title": exercise_title
-                            })
-                        
-                        else:
-                            matches = [item for item in id_already_exist if item['id'] == exercise_id]
-
-                            if not matches:
-                                final_list[assessment_index]["exercise_ids"].append({
-                                "id": exercise_id,
-                                "title": exercise_title
-                            })
-                    
-                    if data['correct'] == 1.0:
-                        final_list[assessment_index]["correct_question_ids"].append(question_id)
-                    
-                    final_list[assessment_index]["attempted_question_ids"].append(question_id)
-
+    for data in attempt_logs_list:
+        assessment_id = content_sessions[data["sessionlog_id"]]
+        assessment_index = find_index(final_list, "assessment_id", assessment_id)
+        question_id = data["item"].split(":")[1]
+        
+        if data["correct"] == 1.0:
+            final_list[assessment_index]["correct_question_ids"].append(question_id)
+        
+        final_list[assessment_index]["attempted_question_ids"].append(question_id)
+    
     return final_list
 
 def serialize_groups(queryset):

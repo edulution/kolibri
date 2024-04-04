@@ -22,6 +22,7 @@ from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
 from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer
 from datetime import datetime
+from itertools import groupby
 
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
@@ -373,6 +374,11 @@ class GetLearnerAssessmentViewset(ViewSet):
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Learner Assessments not found"}, status=status.HTTP_404_NOT_FOUND)
 
+def find_index(lst, key, value):
+    for i, dic in enumerate(lst):
+        if dic[key] == value:
+            return i
+    return -1
 
 class FetchAssessmentGroupData(ViewSet):
     queryset = models.ExamAssessmentGroup.objects.all()
@@ -385,6 +391,7 @@ class FetchAssessmentGroupData(ViewSet):
 
             exam_assessments = models.ExamAssessment.objects.filter(assessment_group=pk)
             exam_assessments_list = []
+            
             for assessment in exam_assessments:
                 assessment_dict = {
                     "id": assessment.id,
@@ -399,7 +406,19 @@ class FetchAssessmentGroupData(ViewSet):
                     "archive": assessment.archive,
                     "active": assessment.active,
                     "assignments": assessment.assignments,
+                    "exercises": []
                 }
+
+                for question in assessment.question_sources:
+                    exercise_id = question["exercise_id"]
+                    
+                    if find_index(assessment_dict["exercises"], "id", exercise_id) == -1:
+                        exercise_title = ContentNode.objects.get(id=question["exercise_id"]).title
+                        assessment_dict["exercises"].append({
+                            "id": question["exercise_id"],
+                            "title": exercise_title,
+                        })
+                    
                 exam_assessments_list.append(assessment_dict)
             
             # Construct response data
@@ -416,7 +435,7 @@ class FetchAssessmentGroupData(ViewSet):
                 "current_assessment_id": serializer.data['current_assessment'],
                 "last_assessment_id": serializer.data['last_assessment'],
                 "assessments": exam_assessments_list,
-                "learner_status": to_fetch_learner_status(pk),
+                "learner_status": to_fetch_learner_status(assessment_group_id=pk),
             }
 
             return Response(response_data)
