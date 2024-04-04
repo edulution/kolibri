@@ -1,9 +1,8 @@
 from django.conf.urls import include
 from django.conf.urls import url
 from rest_framework import routers
+from .api import AssessmentViewset, GroupAssessmentViewset, CreateAssessmentRecord, ExamAssessmentStartViewSet, ExamAssessmentStopViewSet, GetLearnerAssessmentViewset, FetchAssessmentGroupData, MarkAssessmentViewset
 
-from .api import AssessmentViewset, GroupAssessmentViewset, CreateAssessmentRecord, ExamAssessmentStartViewSet, ExamAssessmentStopViewSet
-from .api import GetLearnerAssessmentViewset, FetchAssessmentGroupData, MarkAssessmentViewset
 
 router = routers.SimpleRouter()
 router.register(r"assessment", CreateAssessmentRecord, basename="assessment")

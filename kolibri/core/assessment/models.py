@@ -1,17 +1,13 @@
-import json
 import uuid
-
 from django.db import models
 from django.db.utils import IntegrityError
 from django.utils import timezone
-
 from .permissions import UserCanReadExamAssignmentData
 from .permissions import UserCanReadExamData
 from kolibri.core.auth.constants import role_kinds
 from kolibri.core.auth.models import AbstractFacilityDataModel
 from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
-from kolibri.core.auth.models import FacilityDataset
 from kolibri.core.auth.permissions.base import RoleBasedPermissions
 from kolibri.core.content.utils.assignment import ContentAssignmentManager
 from kolibri.core.fields import JSONField
@@ -48,7 +44,6 @@ class ExamAssessment(AbstractFacilityDataModel):
 
     title = models.CharField(max_length=200)
 
-    # Total number of questions in the exam. Equal to the length of the question_sources array.
     question_count = models.IntegerField()
 
     question_sources = JSONField(default=[], blank=True)
@@ -59,17 +54,10 @@ class ExamAssessment(AbstractFacilityDataModel):
 
     channel_id = models.UUIDField(null=True)
 
-    # When True, learners see questions in the order they appear in 'question_sources'.
-    # When False, each learner sees questions in a random (but consistent) order seeded
-    #   by their user's UUID.
     learners_see_fixed_order = models.BooleanField(default=False)
 
-    # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)
 
-    # Exams are scoped to a particular class (usually) as they are associated with a Coach
-    # who creates them in the context of their class, this stores that relationship but does
-    # not assign exam itself to the class - for that see the ExamAssignment model.
     collection = models.ForeignKey(
         Collection, related_name="examassessment", blank=False, null=False
     )
@@ -82,25 +70,21 @@ class ExamAssessment(AbstractFacilityDataModel):
         FacilityUser, related_name="examassessment", blank=False, null=True
     )
     assessment_group = models.ForeignKey(
-        'ExamAssessmentGroup',  # String reference to the model
+        'ExamAssessmentGroup',
         related_name="exam_assessments",
         blank=True,
         null=True,
         on_delete=models.SET_NULL
     )
 
-    # To be set True when the quiz is first set to active=True
     date_activated = models.DateTimeField(default=None, null=True, blank=True)
 
     date_created = models.DateTimeField(auto_now_add=True, null=True)
 
-    # archive will be used on the frontend to indicate if a quiz is "closed"
     archive = models.BooleanField(default=False)
     date_archived = models.DateTimeField(default=None, null=True, blank=True)
 
     content_assignments = ContentAssignmentManager(
-        # one exam can contain multiple questions from multiple exercises,
-        # hence multiple content nodes
         one_to_many=True,
         filters=dict(active=True),
         lookup_field="question_sources",
@@ -226,79 +210,6 @@ class ExamAssignmentAssessment(AbstractFacilityDataModel):
     def calculate_partition(self):
         return self.dataset_id
 
-
-def individual_exam_assignment_lookup(serialized_exam):
-    """
-    Lookup function for the ContentAssignmentManager
-    :param serialized_exam: the exam in form of a dictionary
-    :return: a tuple of contentnode_id and metadata
-    """
-    try:
-        question_sources = json.loads(serialized_exam.get("question_sources", "[]"))
-        return exam_assignment_lookup(question_sources)
-    except json.JSONDecodeError:
-        return []
-
-
-class IndividualSyncableExam(AbstractFacilityDataModel):
-    """
-    Represents a Exam and its assignment to a particular user
-    in such a way that it can be synced to a single-user device.
-    Note: This is not the canonical representation of a user's
-    relation to an exam (which is captured in an ExamAssignment
-    combined with a user's Membership in an associated Collection;
-    the purpose of this model is as a derived/denormalized
-    representation of a specific user's exam assignments).
-    """
-
-    morango_model_name = "individualsyncableexam"
-
-    user = models.ForeignKey(FacilityUser, related_name='individual_syncable_exams_assessment')
-    collection = models.ForeignKey(Collection, related_name='individual_syncable_exams_assessment')
-    dataset = models.ForeignKey(FacilityDataset, related_name="individual_syncable_exams_assessment")
-    exam_id = models.UUIDField()
-
-    serialized_exam = JSONField()
-
-    content_assignments = ContentAssignmentManager(
-        # one exam can contain multiple questions from multiple exercises,
-        # hence multiple content nodes
-        one_to_many=True,
-        lookup_field="serialized_exam",
-        lookup_func=individual_exam_assignment_lookup,
-    )
-
-    def infer_dataset(self, *args, **kwargs):
-        return self.cached_related_dataset_lookup("user")
-
-    def calculate_source_id(self):
-        return self.exam_id
-
-    def calculate_partition(self):
-        return "{dataset_id}:user-ro:{user_id}".format(
-            dataset_id=self.dataset_id, user_id=self.user_id
-        )
-
-    @classmethod
-    def serialize_exam(cls, exam):
-        serialized = exam.serialize()
-        for key in [
-            "active",
-            "creator_id",
-            "date_created",
-            "date_activated",
-            "collection_id",
-        ]:
-            serialized.pop(key, None)
-        return serialized
-
-    @classmethod
-    def deserialize_exam(cls, serialized_exam):
-        exam = ExamAssessment.deserialize(serialized_exam)
-        exam.active = True
-        return exam
-    
-
 class ExamAssessmentGroup(models.Model):
 
     morango_model_name = "examassessmentgroup"
@@ -321,7 +232,6 @@ class ExamAssessmentGroup(models.Model):
     channel_id = models.UUIDField(null=True)
     new_id = models.UUIDField(null=True, default=uuid.uuid4)
 
-    # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)
 
     creator = models.ForeignKey(
@@ -338,17 +248,16 @@ class ExamAssessmentGroup(models.Model):
     date_archived = models.DateTimeField(default=None, null=True, blank=True)
     assessment_map  = JSONField(default=[], blank=True)
     last_assessment = models.ForeignKey(
-        'ExamAssessment',  # String reference to the model
+        'ExamAssessment', 
         related_name="last_assessment_group",
         blank=True,
         null=True,
         on_delete=models.SET_NULL
     )
     current_assessment = models.ForeignKey(
-        'ExamAssessment',  # String reference to the model
+        'ExamAssessment', 
         related_name="current_assessment_group",
         blank=True,
         null=True,
         on_delete=models.SET_NULL
     )
-

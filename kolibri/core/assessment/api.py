@@ -4,25 +4,21 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
 from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from rest_framework import pagination
-from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,\
-    CreateAssessmentSerializer, GetExamAssessmentSerializer, GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
+from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
 from rest_framework import status
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
 from kolibri.core.auth.api import KolibriAuthPermissionsFilter
 from kolibri.core.auth.constants.collection_kinds import ADHOCLEARNERSGROUP
 from kolibri.core.content.models import ContentNode
-from kolibri.core.content.utils.annotation import total_file_size
 from kolibri.core.assessment import models
 from kolibri.core.assessment import serializers
 from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
-from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer
+from .serializers import MarkAssessmentSerializer
 from datetime import datetime
-from itertools import groupby
 
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
@@ -142,22 +138,7 @@ class AssessmentViewset(ValuesViewset):
         if not was_archived and serializer.instance.archive:
             # It was not archived (closed), but now it is - so we set all MasteryLogs as complete
             masterylog_queryset.update(complete=True)
-
-    @action(detail=False)
-    def size(self, request, **kwargs):
-        exams = self.filter_queryset(self.get_queryset())
-        exams_sizes_set = []
-        for exam in exams:
-            quiz_size = {}
-            quiz_nodes = ContentNode.objects.filter(
-                id__in={source["exercise_id"] for source in exam.question_sources}
-            )
-            quiz_size[exam.id] = total_file_size(quiz_nodes)
-            exams_sizes_set.append(quiz_size)
-
-        return Response(exams_sizes_set)
     
-
 class GroupAssessmentViewset(ViewSet):
     queryset = models.ExamAssessmentGroup.objects.all()
     serializer_class = AssessmentSerializer
@@ -167,7 +148,7 @@ class GroupAssessmentViewset(ViewSet):
             assessment = self.queryset.filter(collection_id=pk)
             serializer = self.serializer_class(assessment, many=True)
             return Response(serializer.data)
-        except models.ExamAssessment.DoesNotExist:
+        except models.ExamAssessmentGroup.DoesNotExist:
             return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class CreateAssessmentRecord(ViewSet):
@@ -177,9 +158,7 @@ class CreateAssessmentRecord(ViewSet):
         try:
 
             request_data = request.data
-
             assessment = request_data.get('assessments')
-
             collection = request_data.get('collection')
             date_activated = request_data.get('date_activated')
             date_archived = request_data.get('date_archived')
@@ -187,10 +166,10 @@ class CreateAssessmentRecord(ViewSet):
             title = request_data.get('title')
             channel_id = request_data.get('channel_id')
             creator_id = request.user.id
+
             if not creator_id:
                 creator_id = request_data.get('creator_id')
-            # test_data = ExamAssessmentGroup.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=title, creator_id='ab8e752daeefb1fade99bf34efcafe6e')
-            
+
             id_available = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
 
             if not id_available:
@@ -220,11 +199,6 @@ class CreateAssessmentRecord(ViewSet):
                     new_title = test.get('title')
 
                     insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = obj.id, channel_id = channel_id,  creator_id=creator_id)
-
-                # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
-                # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
-                # assessment_serializer.is_valid(raise_exception=True)
-                # assessment_serializer.save(creator_id= 'ab8e752daeefb1fade99bf34efcafe6e')
                     
                 assessment_record = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
                 instance_list = []
@@ -240,10 +214,6 @@ class CreateAssessmentRecord(ViewSet):
 
                 if len(instance_list) != 0: 
                     to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
-                    # assessement_serializer = CreateAssessmentGroupSerializer(data=to_dict)
-                    # assessement_serializer.is_valid(raise_exception=True)
-                    # assessement_serializer.save()
-
                     updated_count = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
 
                 return Response(final_response_list, status=status.HTTP_200_OK)
@@ -254,31 +224,6 @@ class CreateAssessmentRecord(ViewSet):
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
         
 
-# class ExamAssessmentStartViewSet(ViewSet):
-#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
-#         try:
-#             # Fetch the instances based on the assessment_group_id
-#             update_dict = {'active': 1}
-#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
-#             if available_id:
-#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Assessment ID'})
-#             # Fetch the instance based on the primary key
-
-#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
-#             if available_group_id:
-#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Group ID'})
-
-#             # Optionally, you can return a success response indicating the update was successful
-#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
-#         except models.ExamAssessmentGroup.DoesNotExist:
-#             # Handle case where no instance with the given pk is found
-            # return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 class ExamAssessmentStartViewSet(ViewSet):
    def partial_update(self, request, pk=None):  # Ensure pk is included in the method signature
         try:
@@ -304,31 +249,6 @@ class ExamAssessmentStartViewSet(ViewSet):
             # Handle case where no instance with the given pk is found
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
         
-
-# class ExamAssessmentStopViewSet(ViewSet):
-#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
-#         try:
-#             # Fetch the instances based on the assessment_group_id
-#             update_dict = {'archive': 1}
-#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
-#             if available_id:
-#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Assessment ID'})
-#             # Fetch the instance based on the primary key
-
-#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
-#             if available_group_id:
-#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Group ID'})
-
-#             # Optionally, you can return a success response indicating the update was successful
-#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
-#         except models.ExamAssessmentGroup.DoesNotExist:
-#             # Handle case where no instance with the given pk is found
-#             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
 class ExamAssessmentStopViewSet(ViewSet):
     def partial_update(self, request, pk=None):
         try:
@@ -452,10 +372,8 @@ class MarkAssessmentViewset(ViewSet):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             learner_id = serializer.validated_data.get('learner_id')
-            # collection_id = serializer.validated_data.get('collection_id')
             assessment_id = serializer.validated_data.get('assessment_id')
             assessment_group_id = serializer.validated_data.get('assessment_group_id')
-            # assessment_map = serializer.validated_data.get('assessment_map')
 
             try:
                 assessment_group = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
@@ -467,36 +385,40 @@ class MarkAssessmentViewset(ViewSet):
             if assessment_data:
                 question_count = assessment_data.question_count
 
-            learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
+                learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
 
-            num_correct_value = learner_status[0]['num_correct']
+                if len(learner_status) == 0:
+                    return Response({"error": "Coach Not Assigned Assessment"}, status=status.HTTP_404_NOT_FOUND)
 
-            percentage = (num_correct_value/question_count)*100
-            assessment_map = assessment_group.assessment_map
-            # Find the index of the current ID in the assessment_map
-            if percentage < 75.0:
-                index = next((i for i, item in enumerate(assessment_map) if item['id'] == assessment_group.current_assessment_id), None)
-                if index is not None and index <= len(assessment_map) - 1:
-                    next_id = assessment_map[index + 1]['id']
-                    if next_id != assessment_group.current_assessment_id:
-                        assessment_group.current_assessment_id = next_id  
-                    else:
-                        assessment_group.last_assessment_id = next_id 
-                        assessment_data.archive = True
-                        assessment_data.date_archived = datetime.now()
-                        assessment_group.archive = True
-                        assessment_group.date_archived = datetime.now()
-            else:
-                assessment_group.last_assessment_id = assessment_map[-1]['id']
-                assessment_data.archive = True
-                assessment_data.date_archived = datetime.now()
-                assessment_group.archive = True
-                assessment_group.date_archived = datetime.now()
+                num_correct_value = learner_status[0]['num_correct']
 
-            assessment_group.save()
-            assessment_data.save()
+                percentage = (num_correct_value/question_count)*100
+                assessment_map = assessment_group.assessment_map
+                # Find the index of the current ID in the assessment_map
+                if percentage < 75.0:
+                    index = next((i for i, item in enumerate(assessment_map) if item['id'] == assessment_group.current_assessment_id), None)
+                    if index is not None and index <= len(assessment_map) - 1:
+                        next_id = assessment_map[index + 1]['id']
+                        if next_id != assessment_group.current_assessment_id:
+                            assessment_group.current_assessment_id = next_id  
+                        else:
+                            assessment_group.last_assessment_id = next_id 
+                            assessment_data.archive = True
+                            assessment_data.date_archived = datetime.now()
+                            assessment_group.archive = True
+                            assessment_group.date_archived = datetime.now()
+                else:
+                    assessment_group.last_assessment_id = assessment_map[-1]['id']
+                    assessment_data.archive = True
+                    assessment_data.date_archived = datetime.now()
+                    assessment_group.archive = True
+                    assessment_group.date_archived = datetime.now()
 
-            return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
+                assessment_group.save()
+                assessment_data.save()
+
+                return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
+            return Response({"error": "No Assessment ID Exist"}, status=status.HTTP_404_NOT_FOUND)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
