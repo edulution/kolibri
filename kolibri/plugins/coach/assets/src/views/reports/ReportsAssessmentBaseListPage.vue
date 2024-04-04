@@ -9,11 +9,12 @@
     <KGrid gutter="16">
       <KGridItem>
         <AssessmentLessonDetailsHeader
-          examOrLesson="exam"
+          examOrLesson="assessment"
           :backlink="classRoute('ReportsAssessmentListPage')"
           :backlinkLabel="coachString('allAssessmentsLabel')"
           optionsFor="report"
           :assessmentTitle="assessmentDetails.title"
+          :assessmentCreatedDate="assessmentDetails.date_created"
         />
       </KGridItem>
 

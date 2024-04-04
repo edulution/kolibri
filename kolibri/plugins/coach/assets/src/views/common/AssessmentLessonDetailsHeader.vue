@@ -17,7 +17,7 @@
           <h1 class="exam-title">
             <!-- KLabeledIcon does not have an 'exam' token, but rather 'quiz' -->
             <KLabeledIcon
-              :icon="examOrLesson === 'exam' ? 'quiz' : 'lesson'"
+              :icon="examOrLesson === 'assessment' ? 'quiz' : 'lesson'"
               :label="assessmentTitle"
               class="assessment-title"
             />
@@ -67,28 +67,32 @@
         type: String,
         required: true,
         validator(value) {
-          return ['exam', 'lesson'].includes(value);
+          return ['lesson', 'assessment'].includes(value);
         },
       },
       assessmentTitle:{
           type: String,
           default:''
+        },
+        assessmentCreatedDate:{
+          type: String,
+          default:''
         }
     },
     computed: {
-      ...mapState('classSummary', ['examMap', 'lessonMap']),
-      exam() {
-        return this.examMap[this.$route.params.quizId] || {};
-      },
+      ...mapState('classSummary', ['lessonMap', 'assessmentMap']),
       lesson() {
         return this.lessonMap[this.$route.params.lessonId] || {};
       },
+      assessment() {
+        return this.assessmentMap[this.$route.params.assessmentId] || {};
+      },
       resource() {
-        return this.examOrLesson === 'lesson' ? this.lesson : this.exam;
+        return this.examOrLesson === 'lesson' ? this.lesson : this.assessment;
       },
       createdDate() {
-        if (this[this.examOrLesson].date_created) {
-          return new Date(this[this.examOrLesson].date_created);
+        if (this.assessmentCreatedDate) {
+          return new Date(this.assessmentCreatedDate);
         } else {
           return null;
         }

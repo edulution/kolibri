@@ -18,7 +18,6 @@
   
   <script>
   
-    import sortBy from 'lodash/sortBy';
     import { AssessmentGroupDataResource } from 'kolibri.resources';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import { PageNames } from '../../constants';
@@ -42,6 +41,7 @@
           currentView: 'TEST_LIST',
           breakdownData: [],
           assessmentDetails: {},
+          topicData:[]
         };
       },
       computed: {
@@ -99,16 +99,26 @@
           exporter.export(this.table);
         },
         onTestTitleClick(assessmentId) {
-          console.log("assessmentId", assessmentId)
-          this.breakdownData = [{
-            id: 1,
-            title: 'Topic 1',
-            question_count: 4,
-          }, {
-            id: 2,
-            title: 'Topic 2',
-            question_count: 6,
-          }]
+          if (this.assessmentDetails.assessments) {
+              const statusData = this.assessmentDetails?.learner_status?.find(l => l.assessment_id === assessmentId)
+
+              const selectedAssessments = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
+              const selectedExcerciseId = selectedAssessments.exercises.map(i => i.id)
+
+              selectedExcerciseId.forEach(element =>{ 
+              const selectedQuestion =  selectedAssessments?.question_sources?.filter(i => i.exercise_id === element)
+              const topicTitle = [...new Set(selectedQuestion.map(i => i.title))]
+              const topicId = selectedQuestion.map(i => i.exercise_id)
+         
+              const breakdownData = {
+                      id: topicId,
+                      title: topicTitle.join(''),
+                      question_count: selectedQuestion?.length,
+                      score: statusData?.correct_question_ids?.length || null,
+                    }
+              this.breakdownData.push(breakdownData);      
+            });        
+          }
           this.currentView = 'TEST_BREAKDOWN'
         },
         onBackClick() {

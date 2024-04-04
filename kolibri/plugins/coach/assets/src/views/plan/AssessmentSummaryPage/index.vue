@@ -11,8 +11,9 @@
         <AssessmentLessonDetailsHeader
           :backlink="$router.getRoute('ASSESSMENTS')"
           :backlinkLabel="coachString('allAssessmentsLabel')"
-          examOrLesson="exam"
-          :assessmentTitle="quiz.title"
+          examOrLesson="assessment"
+          :assessmentTitle="assessment.title"
+          :assessmentCreatedDate="assessment.date_created"
         />
 
       </KGridItem>
@@ -23,8 +24,8 @@
         </h2>
         <AssessmentStatus
           :className="className"
-          :groupAndAdHocLearnerNames="getRecipientNameForAssessment(quiz)"
-          :exam="quiz"
+          :groupAndAdHocLearnerNames="getRecipientNameForAssessment(assessment)"
+          :exam="assessment"
         />
       </KGridItem>
       
@@ -36,7 +37,7 @@
           <section v-if="currentView === 'TEST_LISTING'">
             <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
               <template #headers>
-                <th>{{ coachString('topicLabel') }}</th>
+                <th>{{ $tr('titleLabel') }}</th>
               </template>
               <template #tbody>
                 <transition-group tag="tbody" name="list">
@@ -85,7 +86,7 @@
 
     <ManageExamModals
       :currentAction="currentAction"
-      :quiz="quiz"
+      :quiz="assessment"
       @submit_delete="handleSubmitDelete"
       @submit_copy="handleSubmitCopy"
       @cancel="closeModal"
@@ -117,7 +118,7 @@
     mixins: [commonCoach, coachStringsMixin, commonCoreStrings],
     data() {
       return {
-        quiz: {
+        assessment: {
           active: false,
           assignments: [],
           learners_see_fixed_order: false,
@@ -129,7 +130,7 @@
         currentAction: '',
         currentView: '',
         assessmentList: [],
-        selectedId:null 
+        selectedId:null,
       };
     },
     computed: {
@@ -137,12 +138,12 @@
       // Removing the classSummary groupMap state mapping breaks things.
       // Maybe it should live elsewhere?
       /* eslint-disable-next-line kolibri/vue-no-unused-vuex-properties */
-      ...mapState('classSummary', ['groupMap', 'learnerMap']),
+      ...mapState('classSummary', ['groupMap', 'learnerMap', 'assessmentMap']),
       selectedQuestions() {
-        return this.quiz.question_sources;
+        return this.assessment.question_sources;
       },
       quizIsRandomized() {
-        return !this.quiz.learners_see_fixed_order;
+        return !this.assessment.learners_see_fixed_order;
       },
       orderDescriptionString() {
         return this.quizIsRandomized
@@ -178,7 +179,7 @@
         this.currentView = view;
         this.selectedId = id
         const selectedQuestionSource = this.assessmentList.find(d => d.id == this.selectedId)
-        this.quiz.question_sources = selectedQuestionSource?.question_sources
+        this.assessment.question_sources = selectedQuestionSource?.question_sources
       },
       // @public
       setData(data) {
@@ -206,7 +207,7 @@
       async fetchAssessmentGroupDetails() {
           const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.assessmentId })
           this.loading = false;
-          this.quiz = {
+          this.assessment = {
             ...response,
             groups: [],
             assignments: [response.learner_id],
@@ -214,10 +215,16 @@
         },
 
         async fetchSelectedExcercise() {
-          const response = await ContentNodeResource.fetchCollection({getParams: {ids: map(this.quiz.question_sources, 'exercise_id'),}})
+          const response = await ContentNodeResource.fetchCollection({getParams: {ids: map(this.assessment.question_sources, 'exercise_id'),}})
           this.setData(response)
         }
     },
+    $trs: {
+        titleLabel: {
+          message: 'Test',
+          context: '',
+        },
+      },
   };
 
 </script>

@@ -9,7 +9,7 @@
 
     <CoreTable :emptyMessage="$tr('emptyMessage')">
       <template #headers>
-        <th>{{ $tr('titleLabel') }}</th>
+        <th>{{ coachString('topicLabel') }}</th>
         <th style="width: 120px">
           {{ $tr('scoreLabel') }}
         </th>
@@ -25,14 +25,14 @@
                 class="score-chip"
                 :style="{
                   backgroundColor: scoreColor(
-                    calcPercentage(index * 1.875, tableRow.question_count)
+                    calcPercentage(tableRow.score, tableRow.question_count)
                   ),
                   color: 'white',
                 }"
               >
                 {{
                   $formatNumber(
-                    calcPercentage(index * 1.875, tableRow.question_count),
+                    calcPercentage(tableRow.score, tableRow.question_count),
                     { style: 'percent' }
                   )
                 }}
@@ -85,13 +85,12 @@ export default {
       if (value <= 1) {
         return '#00B050';
       }
+      if (value > 1) {
+        return 'black';
+      }
     },
   },
   $trs: {
-    titleLabel: {
-      message: 'Test',
-      context: '',
-    },
     scoreLabel: {
       message: 'Score',
       context: '',
