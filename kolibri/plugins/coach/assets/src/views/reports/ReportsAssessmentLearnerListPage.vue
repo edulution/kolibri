@@ -20,7 +20,6 @@
   
     import { AssessmentGroupDataResource } from 'kolibri.resources';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-    import { PageNames } from '../../constants';
     import commonCoach from '../common';
     import CSVExporter from '../../csv/exporter';
     import * as csvFields from '../../csv/fields';
@@ -41,14 +40,10 @@
           currentView: 'TEST_LIST',
           breakdownData: [],
           assessmentDetails: {},
-          topicData:[]
+          selectedTest: '',
         };
       },
       computed: {
-        exam() {
-          return {}
-          //  this.assessmentMap[this.$route.params.quizId];
-        },
         testTable() {
           if (this.assessmentDetails.assessments) {
             return this.assessmentDetails.assessments.map(d => {
@@ -63,40 +58,36 @@
           }
           return []
         },
-        table() {
-          return []
-          // const learners = this.recipients.map(learnerId => this.learnerMap[learnerId]);
-          // const sorted = sortBy(learners, ['name']);
-          // return sorted.map(learner => {
-          //   const tableRow = {
-          //     groups: this.getGroupNamesForLearner(learner.id),
-          //     statusObj: this.getExamStatusObjForLearner(this.exam.id, learner.id),
-          //     link: this.detailLink(learner.id),
-          //   };
-          //   Object.assign(tableRow, learner);
-          //   return tableRow;
-          // });
-        },
       },
       created() {
         this.fetchAssessmentGroupDetails();
       },
       methods: {
         exportCSV() {
-          const columns = [
-            ...csvFields.name(),
-            ...csvFields.learnerProgress('statusObj.status'),
-            ...csvFields.score(),
-            ...csvFields.quizQuestionsAnswered(this.exam),
-            ...csvFields.list('groups', 'groupsLabel'),
-          ];
-  
-          const exporter = new CSVExporter(columns, this.className);
-          exporter.addNames({
-            resource: this.exam.title,
+
+          if(this.currentView === 'TEST_LIST'){
+              const columns = [
+              ...csvFields.assessmentName(),
+              ...csvFields.assessmentScore(),
+            ];
+              const exporter = new CSVExporter(columns, this.className);
+              exporter.addNames({
+              resource: this.assessmentDetails.title,
           });
+            exporter.export(this.testTable);
+
+          }else if(this.currentView === 'TEST_BREAKDOWN'){
+            const columns = [
+            ...csvFields.assessmentName(),
+            ...csvFields.assessmentScore('breakdown'),
+          ];
+          const exporter = new CSVExporter(columns, this.className);
+            exporter.addNames({
+            resource: this.selectedTest,
+          });
+            exporter.export(this.breakdownData);
+          }
   
-          exporter.export(this.table);
         },
         onTestTitleClick(assessmentId) {
           if (this.assessmentDetails.assessments) {
@@ -105,16 +96,28 @@
               const selectedAssessments = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
               const selectedExcerciseId = selectedAssessments.exercises.map(i => i.id)
 
+              const selectedTest = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
+
+              this.selectedTest = selectedTest.title
+
               selectedExcerciseId.forEach(element =>{ 
               const selectedQuestion =  selectedAssessments?.question_sources?.filter(i => i.exercise_id === element)
               const topicTitle = [...new Set(selectedQuestion.map(i => i.title))]
               const topicId = selectedQuestion.map(i => i.exercise_id)
+
+              const selectedCorrectQuestion = [] 
+
+              for(const correctQuesitons of  selectedQuestion){
+               if (statusData?.correct_question_ids.includes(correctQuesitons.question_id)){
+                  selectedCorrectQuestion.push(correctQuesitons.question_id)
+               }
+              }
          
               const breakdownData = {
                       id: topicId,
                       title: topicTitle.join(''),
                       question_count: selectedQuestion?.length,
-                      score: statusData?.correct_question_ids?.length || null,
+                      score: selectedCorrectQuestion.length || null,
                     }
               this.breakdownData.push(breakdownData);      
             });        
