@@ -1,0 +1,61 @@
+<template>
+
+  <div class="bar-wrapper">
+    <div class="bar" :style="barStyleActive"></div>
+  </div>
+  
+</template>
+  
+  
+<script>
+
+  import activeLearnersTallyMixin from './activeLearnersTallyMixin';
+
+  export default {
+    name: 'ActiveLearnerSummaryBar',
+    mixins: [activeLearnersTallyMixin],
+    computed: {
+      barStyleActive() {
+        const widthRatio = this.active / this.total;
+        return {
+          width: `${Math.ceil(100 * widthRatio)}%`,
+          backgroundColor: this.backgroundColor(),
+        };
+      },
+    },
+    methods: {
+      backgroundColor() {
+        if (this.active == this.total) {
+          return 'green';
+        } else {
+          return 'orange';
+        }
+      },
+    },
+  };
+
+</script>
+
+
+<style lang="scss" scoped>
+
+  @import '~kolibri-design-system/lib/styles/definitions';
+
+  .bar-wrapper {
+    position: relative;
+    width: 100%;
+    height: 16px;
+    overflow: hidden;
+    background-color: #dedede;
+    border-radius: $radius;
+  }
+
+  .bar {
+    position: absolute;
+    height: 100%;
+    margin-right: auto;
+    opacity: 0.75;
+    transition: all $core-time ease;
+  }
+</style>
+  

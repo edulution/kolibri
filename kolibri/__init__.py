@@ -44,4 +44,5 @@ INTERNAL_PLUGINS = [
     "kolibri.plugins.user_profile",
     "kolibri.plugins.policies",
     "kolibri.plugins.edulution",
+    "kolibri.plugins.edulutionCoach",
 ]

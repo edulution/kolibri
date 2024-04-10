@@ -3,6 +3,7 @@ from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
 from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
+from kolibri.plugins.edulutionCoach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
