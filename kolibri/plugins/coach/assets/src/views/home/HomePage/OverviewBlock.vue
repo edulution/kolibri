@@ -59,7 +59,7 @@
   import { mapGetters } from 'vuex';
   import pickBy from 'lodash/pickBy';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { ClassesPageNames } from '../../../../../../edulution/assets/src/constants';
+  import { ClassesPageNames } from '../../../../../../learn/assets/src/constants';
   import commonCoach from '../../common';
   import { LastPages } from '../../../constants/lastPagesConstants';
 
@@ -79,7 +79,7 @@
         if (this.$store.getters.userIsMultiFacilityAdmin) {
           facility_id = this.$store.state.classSummary.facility_id;
         }
-        return this.$router.getRoute('CoachClassListPage', { facility_id });
+        return this.$router.getRoute('CoachClassListPage', {}, { facility_id });
       },
       classLearnersListRoute() {
         const { query } = this.$route;

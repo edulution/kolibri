@@ -4,7 +4,7 @@
     <p>
       <BackLink
         v-if="classListPageEnabled || userIsMultiFacilityAdmin"
-        :to="$router.getRoute('HomePage', { classId: this.$route.params.classId })"
+        :to="$router.getRoute('HomePage')"
         :text="coreString('classHome')"
       />
     </p>
@@ -75,11 +75,6 @@
             to: this.classRoute(PageNames.EXAMS),
           },
           {
-            id: PlanTabs.ASSESSMENT,
-            label: this.coreString('assessmentLabel'),
-            to: this.classRoute(PageNames.ASSESSMENTS),
-          },
-          {
             id: PlanTabs.GROUPS,
             label: this.coachString('groupsLabel'),
             to: this.classRoute('GroupsPage'),
@@ -105,7 +100,7 @@
         context: "Title of the 'Plan your class' section.",
       },
       planYourClassDescription: {
-        message: 'Create and manage your lessons, quizzes, assessments and groups',
+        message: 'Create and manage your lessons, quizzes, and groups',
         context: "Description of the 'Plan your class' section.",
       },
       coachPlan: {

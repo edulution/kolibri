@@ -6,18 +6,16 @@ import GroupMembersPage from '../views/plan/GroupMembersPage';
 import GroupEnrollPage from '../views/plan/GroupEnrollPage';
 import planLessonsRoutes from './planLessonsRoutes';
 import planExamRoutes from './planExamRoutes';
-import planAssessmentRoutes from './planAssessmentRoutes';
 
 const { showGroupsPage } = useGroups();
 
 export default [
   ...planLessonsRoutes,
   ...planExamRoutes,
-  ...planAssessmentRoutes,
   {
     name: PageNames.PLAN_PAGE,
-    path: '/:classId?/plan',
-    redirect: '/:classId?/plan/lessons',
+    path: '/:classId/plan',
+    redirect: '/:classId/plan/lessons',
   },
   {
     name: GroupsPage.name,

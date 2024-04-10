@@ -53,7 +53,6 @@ export default {
    */
   getLearnersForGroups(state) {
     return function(groupIds) {
-      console.log({ groupIds })
       if (!Array.isArray(groupIds)) {
         throw new Error('getLearnersForGroups: invalid parameter(s)');
       }
@@ -89,14 +88,6 @@ export default {
       return this.getGroupNames(exam.groups).concat(
         adHocLearners.filter(name => !learnersInSelectedGroups.includes(name))
       );
-    };
-  },
-  getRecipientNameForAssessment(state) {
-    return function(exam) {
-      const adHocLearners = exam.assignments.map(
-        learnerId => state.learnerMap[learnerId].name
-      );
-      return adHocLearners
     };
   },
   /*
@@ -214,17 +205,6 @@ export default {
     };
   },
   /*
-   * Return a STATUSES constant given an exam ID and a learner ID
-   */
-  getAssessmentStatusObjForLearner(state) {
-    return function(examId, learnerId) {
-      if (!examId || !learnerId) {
-        throw new Error('getAssessmentStatusObjForLearner: invalid parameter(s)');
-      }
-      return get(state.assessmentLearnerStatusMap, [examId, learnerId], notStartedStatusObj());
-    };
-  },
-  /*
    * Return a 'tally object' given an exam ID and an array of learner IDs
    */
   getExamStatusTally(state, getters) {
@@ -240,27 +220,6 @@ export default {
       };
       learnerIds.forEach(learnerId => {
         const status = getters.getExamStatusObjForLearner(examId, learnerId);
-        tallies[keyMap[status.status]] += 1;
-      });
-      return tallies;
-    };
-  },
-  /*
-   * Return a 'tally object' given an exam ID and an array of learner IDs
-   */
-  getAssessmentStatusTally(state, getters) {
-    return function(examId, learnerIds) {
-      if (!examId || !Array.isArray(learnerIds)) {
-        throw new Error('getAssessmentStatusTally: invalid parameter(s)');
-      }
-      const tallies = {
-        started: 0,
-        notStarted: 0,
-        completed: 0,
-        helpNeeded: 0,
-      };
-      learnerIds.forEach(learnerId => {
-        const status = getters.getAssessmentStatusObjForLearner(examId, learnerId);
         tallies[keyMap[status.status]] += 1;
       });
       return tallies;
@@ -344,13 +303,4 @@ export default {
       return meanBy(statusObjects, 'score');
     };
   },
-  /*
-   * Return array of active learner IDs
-   */
-  getActiveLearners(state) {
-    return state.activeLearners
-  },
-  getLearnersInfo(state) {
-    return state.learnersInfo
-  } 
 };

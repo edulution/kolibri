@@ -17,7 +17,6 @@ import ReportsGroupReportQuizQuestionPage from './ReportsGroupReportQuizQuestion
 import ReportsLearnerActivityExercisePage from './ReportsLearnerActivityExercisePage';
 import ReportsLearnerActivityPage from './ReportsLearnerActivityPage';
 import ReportsLearnerListPage from './ReportsLearnerListPage';
-import ReportsAttendanceListPage from './ReportsAttendanceListPage';
 import ReportsLearnerReportLessonExercisePage from './ReportsLearnerReportLessonExercisePage';
 import ReportsLearnerReportLessonPage from './ReportsLearnerReportLessonPage';
 import ReportsLearnerReportPage from './ReportsLearnerReportPage';
@@ -39,13 +38,6 @@ import ReportsQuizListPage from './ReportsQuizListPage';
 import ReportsQuizPreviewPage from './ReportsQuizPreviewPage';
 import ReportsQuizQuestionListPage from './ReportsQuizQuestionListPage';
 import ReportsQuizQuestionPage from './ReportsQuizQuestionPage';
-import ReportsAssessmentListPage from './ReportsAssessmentListPage';
-import ReportsAssessmentQuestionListPage from './ReportsAssessmentQuestionListPage.vue'
-import ReportsAssessmentLearnerPage from './ReportsAssessmentLearnerPage';
-import ReportsGroupReportAssessmentLearnerPage from './ReportsGroupReportAssessmentLearnerPage';
-import ReportsAssessmentLearnerListPage from './ReportsAssessmentLearnerListPage';
-import ReportsAssessmentPreviewPage from './ReportsAssessmentPreviewPage';
-
 
 export default {
   ReportsGroupActivityPage,
@@ -67,7 +59,6 @@ export default {
   ReportsLearnerActivityExercisePage,
   ReportsLearnerActivityPage,
   ReportsLearnerListPage,
-  ReportsAttendanceListPage,
   ReportsLearnerReportLessonExercisePage,
   ReportsLearnerReportLessonPage,
   ReportsLearnerReportPage,
@@ -89,10 +80,4 @@ export default {
   ReportsQuizPreviewPage,
   ReportsQuizQuestionListPage,
   ReportsQuizQuestionPage,
-  ReportsAssessmentListPage,
-  ReportsAssessmentQuestionListPage,
-  ReportsAssessmentLearnerPage,
-  ReportsGroupReportAssessmentLearnerPage,
-  ReportsAssessmentLearnerListPage,
-  ReportsAssessmentPreviewPage
 };

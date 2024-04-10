@@ -31,11 +31,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "In the Plan > Quizzes section, coaches can create new quizzes using the 'New quiz' button.",
   },
-  newAssessmentAction: {
-    message: 'New assessment',
-    context:
-      "In the Plan > Assessments section, coaches can create new quizzes using the 'New assessment' button.",
-  },
   previewAction: {
     message: 'Preview',
     context:
@@ -64,10 +59,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   allQuizzesLabel: {
     message: 'All quizzes',
     context: 'Navigation link that takes coach back to the list of all the quizzes they manage.',
-  },
-  allAssessmentsLabel: {
-    message: 'All assessments',
-    context: 'Navigation link that takes coach back to the list of all the assessments they manage.',
   },
   avgScoreLabel: {
     message: 'Average score',
@@ -159,26 +150,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'Visible',
     context:
       'Refers to LESSON. Option in the selector used to filter and display only the lessons visible to learners. ',
-  },
-
-  filterGroupsAll: {
-    message: 'All groups',
-    context:
-      'Refers to Groups. Default option in the selector used to filter and display lessons by status.',
-  },
-  filterGroupsNotVisible: {
-    message: 'Not visible',
-    context:
-      'Refers to Groups. Option in the selector used to filter and display only the lessons not visible  to learners.',
-  },
-  filterGroupsStatus: {
-    message: 'Groups',
-    context: 'Label for the selector used to filter and display lessons by groups.',
-  },
-  filterGroupsVisible: {
-    message: 'Visible',
-    context:
-      'Refers to Groups. Option in the selector used to filter and display only the lessons visible to learners. ',
   },
 
   filterQuizAll: {
@@ -276,18 +247,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'Name',
     context: "Refers here to a learner's name.",
   },
-  usernameLabel: {
-    message: 'Username',
-    context: "Refers here to a learner's user name.",
-  },
-  fullnameLabel: {
-    message: 'Full name',
-    context: "Refers here to a learner's name.",
-  },
-  lastLoggedInLabel: {
-    message: 'Last logged in',
-    context: "Refers here to a learner's logged in date.",
-  },
   noResourcesInLessonLabel: {
     message: 'No resources in this lesson',
     context:
@@ -349,20 +308,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Indicates which quizzes have been assigned to a learner or a group in the report section.',
   },
-  assessmentClosedLabel: {
-    message: 'Assessment ended',
-    context:
-      'A label indicating that the currently viewed assessment is ended - meaning that learners will no longer be able to give answers to the assessment.',
-  },
-  assessmentsLabel: {
-    message: 'Assessments',
-    context: 'Plural of assessment.',
-  }, // Kept here for use in common.js
-  assessmentAssignedLabel: {
-    message: 'assessment assigned',
-    context:
-      'Indicates which assessments have been assigned to a learner or a group in the report section.',
-  },
   recipientsLabel: {
     message: 'Recipients',
     context:
@@ -377,11 +322,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'Reports',
     context:
       'Reports are representations of learner progress and performance data shown to coaches in a class.',
-  },
-  resultBreakdownLabel: {
-    message: 'Result Breakdown',
-    context:
-      'Result Breakdown are representations of learner progress and performance data shown to coaches in a class.',
   },
   resourcesViewedLabel: {
     message: 'Resources viewed',
@@ -404,11 +344,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   ungroupedLearnersLabel: {
     message: 'Ungrouped learners',
     context: 'Refers to learners who are not part of a specific group.',
-  },
-  topicLabel: {
-    message: 'Topics',
-    context:
-      'Topics are representations of list of topic to study in a class.',
   },
 
   // notifications
@@ -454,10 +389,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'There are no lessons',
     context: 'Message displayed when there are no lessons created in the class.',
   },
-  attendanceListEmptyState: {
-    message: 'There are no attendance',
-    context: 'Message displayed when there are no attendance created in the class.',
-  },
   questionListEmptyState: {
     message: 'There are no questions',
     context: 'Message that displays when no questions have been added to a quiz.',
@@ -466,19 +397,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'There are no quizzes',
     context:
       'When no quizzes have been created this message will display in the class information screen.',
-  },
-  assessmenListEmptyState: {
-    message: 'There are no assessments',
-    context:
-      'When no quizzes have been created this message will display in the class information screen.',
-  },
-  liveAttendanceLabel: {
-    message: 'Attendance',
-    context: "Live attendance of the users for logged in users",
-  },
-  neverLoggedInLabel: {
-    message: 'Never logged in',
-    context: "Info of never logged in user",
   },
 
   // toggles
@@ -594,24 +512,10 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'A message within a pop up modal explaining the impact of changing the quiz report visibility to learners',
   },
-  assessmentOpenedMessage: {
-    message: 'Assessment started',
-    context: 'A brief snackbar message notifying the user that the quiz was successfully started.',
-  },
-  assessmentFailedToOpenMessage: {
-    message: 'There was a problem starting the assessment. The assessment was not started.',
-    context:
-      'A brief snackbar message notifying the user that there was an error trying to start the quiz and that the quiz was not started.',
-  },
   openQuizLabel: {
     message: 'Start quiz',
     context:
       "Label for a button that, when clicked, will 'start' a quiz - making it active so that learners may take the quiz.",
-  },
-  openAssessmentLabel: {
-    message: 'Start assessment',
-    context:
-      "Label for a button that, when clicked, will 'start' a assessment - making it active so that learners may take the assessment.",
   },
   openQuizModalDetail: {
     message:
@@ -625,75 +529,12 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       "Label for a button that, when clicked, will 'end' a quiz. This makes the quiz inactive and Learners will no longer be able to give answers.",
   },
-  closeAssessmentLabel: {
-    message: 'End assessment',
-    context:
-      "Label for a button that, when clicked, will 'end' a quiz. This makes the quiz inactive and Learners will no longer be able to give answers.",
-  },
   closeQuizModalDetail: {
     message:
       'All learners will be given a final score and a quiz report. Unfinished questions will be counted as incorrect.',
 
     context:
       "Text shown on a modal pop-up window when the user clicks the 'End Quiz' button. This explains what will happen when the modal window is confirmed.",
-  },
-  openAssessmentModalDetail: {
-    message:
-      'Starting the assessment will make it visible to learners and they will be able to answer questions',
-
-    context:
-      "Text shown on a modal pop-up window when the user clicks the 'Start Assessment' button. This explains what will happen when the user confirms the action of starting the assessment.",
-  },
-  closeAssessmentModalDetail: {
-    message:
-      'All learners will be given a final score and a assessment report. Unfinished questions will be counted as incorrect.',
-
-    context:
-      "Text shown on a modal pop-up window when the user clicks the 'End Quiz' button. This explains what will happen when the modal window is confirmed.",
-  },
-  assessmentVisibleToLearners: {
-    message: 'Assessment report is visible to learners',
-    context:
-      'A brief snackbar message notifying the user that learners may view their assessment report. It will show when the user changes a setting to make the assessment visible.',
-  },
-  assessmentNotVisibleToLearners: {
-    message: 'Assessment report is not visible to learners',
-    context:
-      'A brief snackbar message notifying the user that learners may no longer view their assessment report. It will show when the user changes a setting to make the assessment no longer visible.',
-  },
-  lodAssessmentDetail: {
-    message:
-      'Resource files in this assessment will be downloaded to learn-only devices that are set up to sync with this server.',
-    context:
-      'Information provided to a coach when starting a assessment that has been assigned to learners.',
-  },
-  makeAssessmentReportNotVisibleTitle: {
-    message: 'Make assessment report not visible',
-  },
-  makeAssessmentReportNotVisibleText: {
-    message:
-      'Learners will no longer be able to see this assessment report. Resource files in this assessment will be removed from learn-only devices that are set up to sync with this server.',
-    context:
-      'A message within a pop up modal explaining the impact of changing the assessment report visibility to learners',
-  },
-  makeAssessmentReportVisibleTitle: {
-    message: 'Make assessment report visible',
-  },
-  makeAssessmentReportVisibleText: {
-    message:
-      'Learners will be able to see this assessment report. Resource files in this assessment will be downloaded to learn-only devices that are set up to sync with this server.',
-    context:
-      'A message within a pop up modal explaining the impact of changing the assessment report visibility to learners',
-  },
-  assessmentClosedMessage: {
-    message: 'Assessment ended',
-    context:
-      "A brief snackbar message notifying the user that the assessment was successfully ended. Displays when the user clicks 'End assessment'.",
-  },
-  assessmentFailedToCloseMessage: {
-    message: 'There was a problem ending the quiz. The assessment was not ended.',
-    context:
-      'A brief snackbar message notifying the user that there was an error trying to end the assessment and that the assessment was not ended.',
   },
   lessonNotVisibleToLearnersLabel: {
     message: 'Lesson is not visible to learners',
@@ -762,10 +603,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Indicates to the coach how many questions the learner answered correctly compared to the previous attempt',
   },
-  subscribeAction: {
-    message: 'Subscriptions',
-    context: '',
-  }
 });
 
 // Strings for the Missing Content modals, tooltips, alerts, etc.

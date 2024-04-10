@@ -46,7 +46,7 @@
   import { isEmbeddedWebView } from 'kolibri.utils.browserInfo';
   import pickBy from 'lodash/pickBy';
   import commonCoach from '../common';
-  import { ClassesPageNames } from '../../../../../edulution/assets/src/constants';
+  import { ClassesPageNames } from '../../../../../learn/assets/src/constants';
   import { LastPages } from '../../constants/lastPagesConstants';
 
   export default {
@@ -66,11 +66,9 @@
       isMainReport() {
         return (
           this.$route.name === 'ReportsQuizListPage' ||
-          this.$route.name === 'ReportsAssessmentListPage' ||
           this.$route.name === 'ReportsGroupListPage' ||
           this.$route.name === 'ReportsLearnerListPage' ||
-          this.$route.name === 'ReportsLessonListPage' ||
-          this.$route.name === 'ReportsAttendanceListPage'
+          this.$route.name === 'ReportsLessonListPage'
         );
       },
       classLearnersListRoute() {

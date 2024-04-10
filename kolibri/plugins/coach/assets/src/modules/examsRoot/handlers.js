@@ -30,7 +30,6 @@ export function showExamsPage(store, classId) {
         store.dispatch('notLoading');
       }
     },
-    error =>
-      shouldResolve() ? store.dispatch('handleApiError', { error, reloadOnReconnect: true }) : null
+    error => (shouldResolve() ? store.dispatch('handleError', error) : null)
   );
 }

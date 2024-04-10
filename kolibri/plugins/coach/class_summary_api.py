@@ -19,7 +19,6 @@ from kolibri.core.auth.models import Collection
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.content.models import ContentNode
 from kolibri.core.exams.models import Exam
-from kolibri.core.assessment.models import ExamAssessment
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.logger import models as logger_models
 from kolibri.core.logger.utils.quiz import annotate_response_summary
@@ -80,48 +79,6 @@ def _get_quiz_status(queryset):
             seen.add(key)
     return items
 
-
-def _get_assessment_status(queryset):
-    queryset = queryset.filter(
-        mastery_level__lt=0,
-    ).order_by("-end_timestamp")
-    queryset = queryset.annotate(
-        previous_masterylog=Subquery(
-            queryset.filter(
-                summarylog=OuterRef("summarylog"),
-                end_timestamp__lt=OuterRef("end_timestamp"),
-            ).values_list("id")[:1]
-        ),
-    )
-    queryset = annotate_response_summary(queryset)
-    items = []
-    statuses = queryset.annotate(
-        last_activity=Max("attemptlogs__end_timestamp"),
-        previous_num_correct=SQCount(
-            logger_models.AttemptLog.objects.filter(
-                masterylog=OuterRef("previous_masterylog"), correct=1
-            )
-            .order_by()
-            .values_list("item")
-            .distinct(),
-            field="item",
-        ),
-    ).values(
-        "summarylog__content_id",
-        "complete",
-        "last_activity",
-        "num_correct",
-        "num_answered",
-        "previous_num_correct",
-        learner_id=F("user_id"),
-    )
-    seen = set()
-    for item in statuses:
-        key = "{}-{}".format(item["learner_id"], item["summarylog__content_id"])
-        if key not in seen:
-            items.append(item)
-            seen.add(key)
-    return items
 
 def content_status_serializer(lesson_data, learners_data, classroom):  # noqa C901
 
@@ -269,79 +226,12 @@ def _map_exam_status(item):
     return item
 
 
-def _map_assessment_status(item):
-    complete = item.pop("complete")
-    item["status"] = COMPLETED if complete else STARTED
-    item["assessment_id"] = item.pop("summarylog__content_id")
-    return item
-
-
 def serialize_coach_assigned_quiz_status(queryset):
     queryset = logger_models.MasteryLog.objects.filter(
         summarylog__content_id__in=queryset.values("id"),
     ).order_by()
     return list(map(_map_exam_status, _get_quiz_status(queryset)))
 
-
-def serialize_coach_assigned_assessment_status(queryset):
-    queryset = logger_models.MasteryLog.objects.filter(
-        summarylog__content_id__in=queryset.values("id"),
-    ).order_by()
-    return list(map(_map_assessment_status, _get_assessment_status(queryset)))
-
-from kolibri.core.assessment import models
-from kolibri.core.logger.models import AttemptLog,ContentSessionLog
-
-def find_index(lst, key, value):
-    for i, dic in enumerate(lst):
-        if dic[key] == value:
-            return i
-    return -1
-
-def to_fetch_learner_status(assessment_group_id):
-    final_list = []
-    
-    exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
-    
-    if len(exam_assessments) == 0:
-        return final_list
-
-    assessment_id_list = []
-    for assessment in exam_assessments:
-        assessment_id_list.append(assessment.id)
-        final_list.append({
-            "assessment_id": assessment.id,
-            "correct_question_ids": [],
-            "attempted_question_ids": []
-        })
-
-    content_seesion_logs = ContentSessionLog.objects.filter(content_id__in=assessment_id_list)
-
-    if len(content_seesion_logs) == 0:
-        return final_list
-
-    object_id_list = []
-    content_sessions = {}
-
-    for object in content_seesion_logs:
-        content_sessions[object.id] = object.content_id            
-        object_id_list.append(object.id)
-
-    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values("correct","sessionlog_id","item")
-    
-    attempt_logs_list= list(attempt_logs)
-
-    for data in attempt_logs_list:
-        assessment_id = content_sessions[data["sessionlog_id"]]
-        assessment_index = find_index(final_list, "assessment_id", assessment_id)
-        question_id = data["item"].split(":")[1]
-        
-        if data["correct"] == 1.0:
-            final_list[assessment_index]["correct_question_ids"].append(question_id)
-        
-        final_list[assessment_index]["attempted_question_ids"].append(question_id)
-    
-    return final_list
 
 def serialize_groups(queryset):
     queryset = annotate_array_aggregate(queryset, member_ids="membership__user__id")
@@ -416,66 +306,6 @@ def serialize_exams(queryset):
     )
 
 
-def serialize_assessments(queryset):
-    queryset = annotate_array_aggregate(
-        queryset, exam_assignments="assignmentassessments__collection"
-    )
-    return list(
-        map(
-            _map_exam,
-            queryset.values(
-                "id",
-                "title",
-                "active",
-                "question_sources",
-                "data_model_version",
-                "question_count",
-                "learners_see_fixed_order",
-                "seed",
-                "date_created",
-                "date_archived",
-                "date_activated",
-                "archive",
-                "exam_assignments",
-            ),
-        )
-    )
-
-
-from django.db import connection
-from django.utils import timezone
-from kolibri.deployment.default.settings import base
-from datetime import timedelta
-from kolibri.core.logger.models import UserSessionLog
-from kolibri.core.auth.models import Classroom
-
-
-def get_active_learners(classroom):
-    """
-    Returns information about the sessions and users the current
-    Kolibri server has in use
-
-    """
-    active_learners = []
-    learners_info = []
-    try:
-        connection.ensure_connection()
-        last_20_minutes = timezone.now() - timedelta(seconds=base.SESSION_COOKIE_AGE)
-        classroom_members = set(map(lambda member: member.username, classroom.get_members()))
-        learners_info = UserSessionLog.objects.filter(user__username__in=classroom_members)\
-            .values('user__username').annotate(Max('last_interaction_timestamp')).all()
-
-        session_objects = UserSessionLog.objects.filter(last_interaction_timestamp__gte=last_20_minutes).all()
-        active_learners_in_class = \
-            filter(lambda session: session.user.is_member_of(Classroom.objects.get(name=classroom)),
-                   session_objects)
-        active_learners = set(map(lambda user_session: user_session.user.id, active_learners_in_class))
-    except OperationalError:
-        print('Database unavailable, impossible to retrieve users and sessions info')
-
-    return active_learners, learners_info
-
-
 class ClassSummaryPermissions(permissions.BasePermission):
     """
     Allow only users with admin/coach permissions on the classroom.
@@ -498,7 +328,6 @@ class ClassSummaryViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk):
         classroom = get_object_or_404(auth_models.Classroom, id=pk)
-        active_learners = get_active_learners(classroom)
         query_learners = FacilityUser.objects.filter(memberships__collection=classroom)
         query_lesson = Lesson.objects.filter(collection=pk)
         query_exams = Exam.objects.filter(collection=pk)
@@ -510,7 +339,7 @@ class ClassSummaryViewSet(viewsets.ViewSet):
             all_node_ids |= set(lesson.get("node_ids"))
         for exam in exam_data:
             all_node_ids |= set(exam.get("node_ids"))
-        
+
         content = list(
             ContentNode.objects.filter_by_uuids(all_node_ids).values(
                 "available",
@@ -541,7 +370,7 @@ class ClassSummaryViewSet(viewsets.ViewSet):
                 node_id not in node_lookup or not node_lookup[node_id]["available"]
                 for node_id in exam["node_ids"]
             )
-        
+
         # filter classes out of lesson assignments
         for lesson in lesson_data:
             lesson["groups"] = [
@@ -578,8 +407,6 @@ class ClassSummaryViewSet(viewsets.ViewSet):
                 lesson_data, learners_data, classroom
             ),
             "lessons": lesson_data,
-            "active_learners": active_learners[0],
-            "learners_info": active_learners[1],
         }
 
         return Response(output)

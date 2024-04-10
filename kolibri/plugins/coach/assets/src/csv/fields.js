@@ -195,38 +195,6 @@ export function score() {
   ];
 }
 
-export function assessmentScore() {
-  return [
-    {
-      name: coreStrings.$tr('scoreLabel'),
-      key: 'score',
-      format: row => {
-        if (!row.score && row.score !== 0) {
-          return coreStrings.$formatNumber(0, { style: 'percent' });
-        }
-
-        return coreStrings.$formatNumber(row.score/100, { style: 'percent' });
-      },
-    },
-  ];
-}
-
-export function assessmentName() {
-  return [
-    {
-      name: coachStrings.$tr('nameLabel'),
-      key: 'name',
-      format : row =>{
-        if (!row.title) {
-          return '';
-        }
-        return row.title
-
-      }
-    },
-  ];
-}
-
 export function tally() {
   return [
     {

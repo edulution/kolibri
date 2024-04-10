@@ -5,7 +5,7 @@ import {
   generateExerciseDetailHandler,
   exerciseRootRedirectHandler,
 } from '../modules/exerciseDetail/handlers';
-import { generateExamReportDetailHandler, generateAssessmentReportDetailHandler } from '../modules/examReportDetail/handlers';
+import { generateExamReportDetailHandler } from '../modules/examReportDetail/handlers';
 import {
   generateQuestionDetailHandler,
   questionRootRedirectHandler,
@@ -20,14 +20,11 @@ const CLASS = '/:classId/reports';
 const GROUPS = '/groups';
 const GROUP = '/groups/:groupId';
 const LEARNERS = '/learners';
-const ATTENDANCE = '/attendance';
 const LEARNER = '/learners/:learnerId';
 const LESSONS = '/lessons';
 const LESSON = '/lessons/:lessonId';
 const QUIZZES = '/quizzes';
 const QUIZ = '/quizzes/:quizId';
-const ASSESSMENTS = '/assessments';
-const ASSESSMENT = '/assessments/:quizId';
 const QUESTIONS = '/questions';
 const QUESTION = '/questions/:questionId';
 const TRY = '/try/:tryIndex';
@@ -273,14 +270,6 @@ export default [
     handler: defaultHandler,
     meta: {
       titleParts: ['learnersLabel', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, ATTENDANCE),
-    component: pages.ReportsAttendanceListPage,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['attendanceLabel', 'CLASS_NAME'],
     },
   },
   {
@@ -564,80 +553,6 @@ export default [
     meta: {
       // TODO Leaves out details about the question
       titleParts: ['QUIZ_NAME', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, ASSESSMENTS),
-    component: pages.ReportsAssessmentListPage,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['assessmentsLabel', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, GROUP, ASSESSMENT, LEARNER),
-    name: PageNames.REPORTS_GROUP_REPORT_ASSESSMENT_LEARNER_PAGE_ROOT,
-    redirect: to => {
-      const { params } = to;
-      return {
-        name: pages.ReportsGroupReportAssessmentLearnerPage.name,
-        params: {
-          ...params,
-          questionId: 0,
-          interactionIndex: 0,
-          tryIndex: 0,
-        },
-      };
-    },
-  },
-  {
-    path: path(CLASS, ASSESSMENT, LEARNERS),
-    component: pages.ReportsAssessmentLearnerListPage,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['learnersLabel', 'QUIZ_NAME', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, ASSESSMENT, QUESTIONS),
-    component: pages.ReportsAssessmentQuestionListPage,
-    handler: generateQuestionListHandler(['quizId']),
-    meta: {
-      titleParts: ['questionsLabel', 'QUIZ_NAME', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, ASSESSMENT, LEARNER),
-    name: PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT,
-    redirect: to => {
-      const { params } = to;
-      return {
-        name: pages.ReportsAssessmentLearnerPage.name,
-        params: {
-          ...params,
-          questionId: 0,
-          tryIndex: 0,
-          interactionIndex: 0,
-        },
-      };
-    },
-  },
-  {
-    path: path(CLASS, ASSESSMENT, LEARNER, TRY, QUESTION, INTERACTION),
-    component: pages.ReportsAssessmentLearnerPage,
-    handler: generateAssessmentReportDetailHandler(['learnerId', 'quizId']),
-    meta: {
-      // Leaves out question and interaction numbers
-      titleParts: ['LEARNER_NAME', 'QUIZ_NAME', 'CLASS_NAME'],
-    },
-  },
-  {
-    name: pages.ReportsAssessmentPreviewPage.name,
-    path: path(CLASS, ASSESSMENT, '/preview'),
-    component: pages.ReportsAssessmentPreviewPage,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['previewLabel', 'QUIZ_NAME', 'CLASS_NAME'],
     },
   },
 ];

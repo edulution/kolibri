@@ -38,9 +38,6 @@ import HelpNeeded from './common/status/HelpNeeded';
 import Placeholder from './common/Placeholder';
 import StatusElapsedTime from './common/StatusElapsedTime';
 import { VERBS, ICONS } from './common/status/constants';
-import AssessmentLessonDetailsHeader from './common/AssessmentLessonDetailsHeader';
-import AssessmentStatus from './common/AssessmentStatus';
-
 
 export default {
   components: {
@@ -69,8 +66,6 @@ export default {
     Placeholder,
     StatusElapsedTime,
     TimeDuration,
-    AssessmentLessonDetailsHeader,
-    AssessmentStatus
   },
   mixins: [coachStringsMixin],
   computed: {
@@ -87,17 +82,11 @@ export default {
       'contentNodeMap',
       'contentLearnerStatusMap',
       'lessonMap',
-      'activeLearnersMap',
-      'assessmentMap',
-      'assessmentLearnerStatusMap',
-      'assessmentGroupMap',
     ]),
     ...mapGetters('classSummary', [
       'coaches',
       'learners',
       'groups',
-      'assessments',
-      'assessmentGroups',
       'exams',
       'examStatuses',
       'content',
@@ -114,22 +103,15 @@ export default {
       'getLearnersForExam',
       'getLearnersForLesson',
       'getRecipientNamesForExam',
-      'getRecipientNameForAssessment',
       'getRecipientNamesForLesson',
       'getContentStatusObjForLearner',
       'getContentStatusTally',
       'getExamStatusObjForLearner',
       'getExamStatusTally',
-      'getAssessmentStatusObjForLearner',
-      'getAssessmentStatusTally',
       'getLessonStatusStringForLearner',
       'getLessonStatusTally',
       'getContentAvgTimeSpent',
       'getExamAvgScore',
-      'getAdHocLearners',
-      'activeLearners',
-      'getActiveLearners',
-      'learnersInfo',
     ]),
     userIsAuthorized() {
       if (this.isSuperuser) {

@@ -50,22 +50,6 @@
             { label: this.coreString('deleteAction'), value: 'DELETE' },
           ];
         }
-        if(this.optionsFor === 'assessment'){
-          return [
-          {
-            label: this.coachString('previewAction'),
-            value: 'PREVIEW',
-          },
-          {
-            label: this.coachString('printReportAction'),
-            value: 'PRINT_REPORT',
-          },
-          {
-            label: this.coachString('exportCSVAction'),
-            value: 'EXPORT',
-          },
-          ];
-        }
         return [
           {
             label: this.coachString('previewAction'),
