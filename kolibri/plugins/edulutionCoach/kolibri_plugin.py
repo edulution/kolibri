@@ -19,25 +19,25 @@ from kolibri.utils.translation import ugettext as _
 logger = logging.getLogger(__name__)
 
 
-class Coach(KolibriPluginBase):
+class EDULUTION_COACH(KolibriPluginBase):
     untranslated_view_urls = "api_urls"
     translated_view_urls = "urls"
     can_manage_while_running = True
 
     def name(self, lang):
         with translation.override(lang):
-            return _("Coach")
+            return _("edulutionCoach")
 
 
 @register_hook
 class CoachRedirect(RoleBasedRedirectHook):
-    roles = (COACH,)
+    roles = (EDULUTION_COACH,)
     require_full_facility = True
     require_no_on_my_own_facility = True
 
     @property
     def url(self):
-        return self.plugin_url(Coach, "coach")
+        return self.plugin_url(EDULUTION_COACH, "edulutionCoach")
 
 
 @register_hook

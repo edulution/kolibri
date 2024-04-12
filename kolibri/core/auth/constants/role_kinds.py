@@ -5,10 +5,12 @@ from __future__ import unicode_literals
 
 ADMIN = "admin"
 COACH = "coach"
+EDULUTION_COACH = "edulutionCoach"
 ASSIGNABLE_COACH = "classroom assignable coach"
 
 choices = (
     (ADMIN, "Admin"),
     (COACH, "Coach"),
     (ASSIGNABLE_COACH, "Classroom Assignable Coach"),
+    (EDULUTION_COACH, "edulutionCoach"),   
 )
