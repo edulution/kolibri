@@ -477,16 +477,17 @@ class MarkAssessmentViewset(ViewSet):
             # Find the index of the current ID in the assessment_map
             if percentage < 75.0:
                 index = next((i for i, item in enumerate(assessment_map) if item['id'] == assessment_group.current_assessment_id), None)
-                if index is not None and index < len(assessment_map) - 1:
-                    next_id = assessment_map[index + 1]['id']
+                next_index = index + 1
+                if next_index < len(assessment_map):
+                    next_id = assessment_map[next_index]['id']
                     if next_id != assessment_group.current_assessment_id:
-                        assessment_group.current_assessment_id = next_id  
-                    else:
-                        assessment_group.last_assessment_id = next_id 
-                        assessment_data.archive = True
-                        assessment_data.date_archived = datetime.now()
-                        assessment_group.archive = True
-                        assessment_group.date_archived = datetime.now()
+                        assessment_group.current_assessment_id = next_id
+                else:
+                    assessment_group.last_assessment_id = assessment_group.current_assessment_id
+                    assessment_data.archive = True
+                    assessment_data.date_archived = datetime.now()
+                    assessment_group.archive = True
+                    assessment_group.date_archived = datetime.now()
             else:
                 assessment_group.last_assessment_id = assessment_map[-1]['id']
                 assessment_data.archive = True
