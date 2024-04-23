@@ -240,6 +240,11 @@ class CreateAssessmentRecord(ViewSet):
                     insert_record_exam_assignment = ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
 
                 if len(instance_list) != 0: 
+                    if instance_list[0]['title'].upper().startswith('LEVEL 1'):
+                        instance_list = instance_list
+                    else:
+                        instance_list.reverse()
+
                     to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
                     # assessement_serializer = CreateAssessmentGroupSerializer(data=to_dict)
                     # assessement_serializer.is_valid(raise_exception=True)
