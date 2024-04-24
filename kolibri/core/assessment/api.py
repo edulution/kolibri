@@ -441,7 +441,7 @@ class FetchAssessmentGroupData(ViewSet):
                 "current_assessment_id": serializer.data['current_assessment'],
                 "last_assessment_id": serializer.data['last_assessment'],
                 "assessments": exam_assessments_list,
-                "learner_status": to_fetch_learner_status(assessment_group_id=pk),
+                "learner_status": to_fetch_learner_status(serializer.data['learner_id'], assessment_group_id=pk),
             }
 
             return Response(response_data)

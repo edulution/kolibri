@@ -290,7 +290,7 @@ def serialize_coach_assigned_assessment_status(queryset):
     return list(map(_map_assessment_status, _get_assessment_status(queryset)))
 
 from kolibri.core.assessment import models
-from kolibri.core.logger.models import AttemptLog,ContentSessionLog
+from kolibri.core.logger.models import AttemptLog,ContentSessionLog,MasteryLog
 
 def find_index(lst, key, value):
     for i, dic in enumerate(lst):
@@ -298,7 +298,7 @@ def find_index(lst, key, value):
             return i
     return -1
 
-def to_fetch_learner_status(assessment_group_id):
+def to_fetch_learner_status(learner_id, assessment_group_id):
     final_list = []
     
     exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
@@ -327,20 +327,68 @@ def to_fetch_learner_status(assessment_group_id):
         content_sessions[object.id] = object.content_id            
         object_id_list.append(object.id)
 
-    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values("correct","sessionlog_id","item")
-    
-    attempt_logs_list= list(attempt_logs)
+    # attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values("correct","sessionlog_id","item")
+    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in=object_id_list).values("id", "item", "start_timestamp", "end_timestamp", "completion_timestamp", "time_spent", "complete", "correct", "hinted", "answer", "simple_answer", "interaction_history", "user_id", "error", "masterylog_id", "sessionlog_id")
 
+    attempt_logs_list= list(attempt_logs)
+    
+    corrected_ans_count = 0
+    mastry_log_id = None
     for data in attempt_logs_list:
         assessment_id = content_sessions[data["sessionlog_id"]]
         assessment_index = find_index(final_list, "assessment_id", assessment_id)
         question_id = data["item"].split(":")[1]
+        mastry_log_id = data["masterylog_id"]
         
         if data["correct"] == 1.0:
             final_list[assessment_index]["correct_question_ids"].append(question_id)
+            corrected_ans_count += 1
+
+        response_dict = {
+                        
+                        "id": data["id"] ,
+                        "question_id": question_id ,
+                        "start_timestamp": data["start_timestamp"],
+                        "end_timestamp": data["end_timestamp"],
+                        "completion_timestamp": data["completion_timestamp"],
+                        "time_spent": data["time_spent"],
+                        "complete": data["complete"],
+                        "correct": data["correct"],
+                        "hinted": data["hinted"],
+                        "answer": data["answer"],
+                        "simple_answer": data["simple_answer"],
+                        "interaction_history": data["interaction_history"],
+                        "user": data["user_id"],
+                        "error": data["error"],
+                        "masterylog": data["masterylog_id"],
+                        "sessionlog": data["sessionlog_id"],
+                    }
+                    
         
-        final_list[assessment_index]["attempted_question_ids"].append(question_id)
+        final_list[assessment_index]["attempted_question_ids"].append(response_dict)
     
+    if mastry_log_id != None:
+
+        masterylog = MasteryLog.objects.get(id=mastry_log_id, user=learner_id)
+        
+        if masterylog:
+
+            for index, item in enumerate(final_list):
+                if len(item['attempted_question_ids']) >= 1:
+
+                    mastrylog_dict = {
+                        "id": masterylog.id,
+                        "mastery_criterion": masterylog.mastery_criterion,
+                        "start_timestamp": masterylog.start_timestamp,
+                        "end_timestamp": masterylog.end_timestamp,
+                        "completion_timestamp": masterylog.completion_timestamp,
+                        "complete": masterylog.complete,
+                        "time_spent": masterylog.time_spent,
+                        "correct": corrected_ans_count
+                        }
+                    
+                    final_list[index]['attempted_question_ids'].append({'status':mastrylog_dict})
+
     return final_list
 
 def serialize_groups(queryset):
