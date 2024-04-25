@@ -312,7 +312,8 @@ def to_fetch_learner_status(learner_id, assessment_group_id):
         final_list.append({
             "assessment_id": assessment.id,
             "correct_question_ids": [],
-            "attempted_question_ids": []
+            "attempted_question_ids": [],
+            "status" : []
         })
 
     content_seesion_logs = ContentSessionLog.objects.filter(content_id__in=assessment_id_list)
@@ -387,7 +388,7 @@ def to_fetch_learner_status(learner_id, assessment_group_id):
                         "correct": corrected_ans_count
                         }
                     
-                    final_list[index]['attempted_question_ids'].append({'status':mastrylog_dict})
+                    final_list[index]['status'].append(mastrylog_dict)
 
     return final_list
 
