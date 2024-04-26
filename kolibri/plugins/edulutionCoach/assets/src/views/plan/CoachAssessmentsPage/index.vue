@@ -279,14 +279,6 @@
           context:
             'Message displayed when there are no ended quizes. Ended assessments are those that are no longer in progress.',
         },
-        openAssessmentLabel: {
-          message: 'Assessment not started',
-          context: '',
-        },
-        closeAssessmentLabel: {
-          message: 'Assessment started',
-          context: '',
-        }
     },
   };
 

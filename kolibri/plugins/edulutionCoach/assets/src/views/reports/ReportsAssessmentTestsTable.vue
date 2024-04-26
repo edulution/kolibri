@@ -6,14 +6,20 @@
       <th style="width: 120px">
         {{ $tr('scoreLabel') }}
       </th>
+      <th 
+        :style="{
+          display: 'flex',
+          justifyContent: 'center'
+        }"
+      >
+        {{ $tr('actionLabel') }}
+      </th>
     </template>
     <template #tbody>
       <transition-group tag="tbody" name="list">
         <tr v-for="(tableRow) in entries" :key="tableRow.id">
           <td>
-            <a href="#" @click.prevent="onTestTitleClick(tableRow)">
-              {{ tableRow.title }}
-            </a>
+            {{ tableRow.title }}
           </td>
           <td>
             <span
@@ -29,6 +35,33 @@
                   { style: 'percent' }
                 )
               }}
+            </span>
+          </td>
+          <td
+            :style="{
+              display: 'flex',
+              justifyContent: 'center' ,
+              maxWidth: '370px'
+            }"
+          >
+            <span 
+              class="btn-style"
+              @click.prevent="onViewDetailClick(tableRow.id)"
+            >
+              View Details
+            </span>
+            <span 
+              class="btn-style"
+              @click.prevent="onTestTitleClick(tableRow)"
+            >
+              View Breakdown
+            </span>
+            <span 
+              v-if="tableRow.title.includes('Section')"
+              class="btn-style"
+              @click.prevent="onviewAttemptsClick(tableRow.id)"
+            >
+              View Past
             </span>
           </td>
         </tr>
@@ -59,7 +92,6 @@
           return (score / total);
         },
         scoreColor(value) {
-          console.log({ value })
           if (value <= 0) {
             return '#D9D9D9';
           }
@@ -81,6 +113,12 @@
         },
         onTestTitleClick(tableRow) {
           this.$emit('testTitleClick', tableRow.id);
+        },
+        onViewDetailClick(id){
+          this.$emit('viewDetailClick', id);
+        },
+        onviewAttemptsClick(id){
+          this.$emit('viewAttemptsClick', id);
         }
       },
       $trs: {
@@ -95,7 +133,11 @@
         emptyMessage: {
           message: 'Test list is empty',
           context: '',
-        }
+        },
+        actionLabel :{
+          message: 'Action',
+          context: '',
+        },
       },
     };
   
@@ -120,6 +162,15 @@
       border-radius: 50px;
       min-width: 100px;
     }
+
+    .btn-style{
+    color: blue;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2);
+    margin-right:8px
+  }
   
   </style>
   

@@ -5,9 +5,21 @@
       v-if="currentView === 'TEST_LIST'"
       :entries="testTable"
       @testTitleClick="onTestTitleClick"
+      @viewDetailClick="onViewDetailClick"
+      @viewAttemptsClick="onviewAttemptsClick"
     />
     <ReportsAssessmentBreakdownTable
       v-if="currentView === 'TEST_BREAKDOWN'"
+      :entries="breakdownData"
+      @backClick="onBackClick"
+    />
+    <ReportsAssessmentDetailTable
+      v-if="currentView === 'TEST_DETAIL'"
+      :entries="breakdownData"
+      @backClick="onBackClick"
+    />
+    <ReportsAssessmentAttemptsTable
+      v-if="currentView === 'TEST_ATTEMPTS'"
       :entries="breakdownData"
       @backClick="onBackClick"
     />
@@ -26,13 +38,17 @@
     import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage.vue';
     import ReportsAssessmentTestsTable from './ReportsAssessmentTestsTable.vue';
     import ReportsAssessmentBreakdownTable from './ReportsAssessmentBreakdownTable.vue';
-  
+    import ReportsAssessmentDetailTable from './ReportsAssessmentDetailTable.vue';
+    import ReportsAssessmentAttemptsTable from './ReportsAssessmentAttemptsTable.vue'
+
     export default {
       name: 'ReportsAssessmentLearnerListPage',
       components: {
         ReportsAssessmentBaseListPage,
         ReportsAssessmentTestsTable,
         ReportsAssessmentBreakdownTable,
+        ReportsAssessmentDetailTable,
+        ReportsAssessmentAttemptsTable
       },
       mixins: [commonCoach, commonCoreStrings],
       data() {
@@ -123,6 +139,18 @@
             });        
           }
           this.currentView = 'TEST_BREAKDOWN'
+        },
+        onViewDetailClick(assessmentId){
+          if (this.assessmentDetails.assessments) {
+            console.log(assessmentId,"assessmentId")       
+          }
+          this.currentView = 'TEST_DETAIL'
+        },
+        onviewAttemptsClick(assessmentId) {
+          if (this.assessmentDetails.assessments) {
+              console.log(assessmentId,"assessmentId")      
+          }
+          this.currentView = 'TEST_ATTEMPTS'
         },
         onBackClick() {
           this.breakdownData = []

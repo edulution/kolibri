@@ -38,17 +38,72 @@
             <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
               <template #headers>
                 <th>{{ $tr('titleLabel') }}</th>
+                <th>{{ $tr('scoreLabel') }}</th>
+                <th 
+                  :style="{
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }"
+                >
+                  {{ $tr('actionLabel') }}
+                </th>
               </template>
               <template #tbody>
                 <transition-group tag="tbody" name="list">
-                  <tr v-for="tableRow of assessmentList" :key="tableRow.id" data-test="entry">
-                    <KLabeledIcon
-                      :icon="'quiz'"
-                      :label="tableRow.title" 
-                      class="table-title"
-                      @click.prevent="toggleView('QUESTION_PREVIEW',tableRow.id)"
-                    />
+                  <tr v-for="tableRow of assessmentTestData" :key="tableRow.id" data-test="entry">
+                    <td>
+                      <KLabeledIcon
+                        icon="topic"
+                        :label="tableRow.title"
+                      />
+                    </td>
+                  
+                    <td>
+                      <span
+                        class="score-chip"
+                        :style="{
+                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.questionCount)),
+                          color: 'white',
+                        }"
+                      >
+                        {{
+                          $formatNumber(
+                            calcPercentage(tableRow.score, tableRow.questionCount),
+                            { style: 'percent' }
+                          )
+                        }}
+                      </span>
+                    </td>
+                     
+                    <td 
+                      :style="{
+                        display: 'flex',
+                        justifyContent: 'space-evenly'
+                      }"
+                    >
+                      <span 
+                        v-if="!tableRow.title.includes(' Pre test') && tableRow.hasRestart === true "
+                        class="btn-style"
+                        @click.prevent="restartBtn(tableRow.id)"
+                      >
+                        <KLabeledIcon
+                          icon="restart"
+                          :label="$tr('restartLabel')"
+                        />
+
+                      </span>
+                      <span v-if="tableRow.hasRestart === false">
+                        stop
+                      </span>
+                      <span 
+                        class="btn-style"
+                        @click.prevent="toggleView('QUESTION_PREVIEW',tableRow.id)"
+                      >
+                        View Details
+                      </span>
+                    </td>
                   </tr>
+                 
                 </transition-group>
               </template>
             </CoreTable>
@@ -131,6 +186,7 @@
         currentView: '',
         assessmentList: [],
         selectedId:null,
+        assessmentTestData:[]
       };
     },
     computed: {
@@ -156,8 +212,23 @@
   const fetchData = async () => {
     try {
       const d = await AssessmentGroupDataResource.fetchModel({ id: to.params.assessmentId });
+      const testData = []
+      for( const id of d.assessments){
+         
+         const totalQuestion = d.learner_status.find(i => i.assessment_id == id.id)
+         const data ={
+           id: id.id,
+           questionCount :  id.question_sources.length,
+           title : id.title,
+           score: totalQuestion.correct_question_ids.length,
+           hasRestart: true,
+         }
+
+         testData.push(data)
+       }
       next(vm => {
-        vm.assessmentList = d.assessments;
+        vm.assessmentList = d.assessments
+        vm.assessmentTestData = testData
       });
     } catch (error) {
       // Handle error
@@ -204,6 +275,32 @@
       closeModal() {
         this.currentAction = '';
       },
+      calcPercentage(score, total) {
+          return (score / total);
+        },
+      scoreColor(value) {
+          if (value <= 0) {
+            return '#D9D9D9';
+          }
+          if (value > 0 && value <= 0.25) {
+            return '#FF412A';
+          }
+          if (value > 0.25 && value <= 0.50) {
+            return '#EC9090';
+          }
+          if (value > 0.50 && value <= 0.69) {
+            return '#F5C216';
+          }
+          if (value > 0.69 && value <= 0.74) {
+            return '#99CC33';
+          }
+          if (value <= 1) {
+            return '#00B050';
+          }
+        },
+        restartBtn (id) {
+           console.log(id,"id")
+        },
       async fetchAssessmentGroupDetails() {
           const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.assessmentId })
           this.loading = false;
@@ -223,6 +320,18 @@
         titleLabel: {
           message: 'Test',
           context: '',
+        },
+        scoreLabel: {
+          message: 'Score',
+          context: '',
+        },
+        actionLabel :{
+          message: 'Action',
+          context: '',
+        },
+        restartLabel:{
+          message: 'Restart',
+          context: '', 
         },
       },
   };
@@ -253,5 +362,22 @@
   cursor: pointer ;
   margin: 2px 0px 3px 0px;
 }
+
+.score-chip {
+      display: inline-flex;
+      padding: 4px 8px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50px;
+      min-width: 100px;
+    }
+
+  .btn-style{
+    color: blue;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2)
+  }
 
 </style>
