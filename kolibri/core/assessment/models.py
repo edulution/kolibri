@@ -98,7 +98,7 @@ class ExamAssessment(AbstractFacilityDataModel):
     archive = models.BooleanField(default=False)
     date_archived = models.DateTimeField(default=None, null=True, blank=True)
 
-    extra_data  = JSONField(default=[], blank=True)
+    extra_data  = JSONField(default={}, blank=True)
 
     content_assignments = ContentAssignmentManager(
         # one exam can contain multiple questions from multiple exercises,

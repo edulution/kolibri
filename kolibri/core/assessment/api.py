@@ -486,7 +486,8 @@ class FetchAssessmentGroupData(ViewSet):
                     "archive": assessment.archive,
                     "active": assessment.active,
                     "assignments": assessment.assignments,
-                    "exercises": []
+                    "exercises": [],
+                    "extra_data": assessment.extra_data,
                 }
 
                 for question in assessment.question_sources:
