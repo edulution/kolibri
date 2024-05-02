@@ -39,17 +39,14 @@
           </td>
           <td
             :style="{
-              display: 'flex',
-              justifyContent: 'center' ,
               maxWidth: '370px'
             }"
           >
-            <span 
+            <KRouterLink
               class="btn-style"
-              @click.prevent="onViewDetailClick(tableRow.id)"
-            >
-              View Details
-            </span>
+              text="View Details"
+              :to="classRoute('ReportsAssessmentViewer')"
+            />  
             <span 
               class="btn-style"
               @click.prevent="onTestTitleClick(tableRow)"
@@ -114,9 +111,6 @@
         onTestTitleClick(tableRow) {
           this.$emit('testTitleClick', tableRow.id);
         },
-        onViewDetailClick(id){
-          this.$emit('viewDetailClick', id);
-        },
         onviewAttemptsClick(id){
           this.$emit('viewAttemptsClick', id);
         }
@@ -164,12 +158,12 @@
     }
 
     .btn-style{
-    color: blue;
+    color: blue  !important;
     cursor: pointer;
     border-radius: 8px;
     padding: 2px 9px;
     box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2);
-    margin-right:8px
+    margin-right:8px;
   }
   
   </style>

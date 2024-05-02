@@ -78,28 +78,25 @@
                     <td 
                       :style="{
                         display: 'flex',
-                        justifyContent: 'space-evenly'
+                        justifyContent: 'space-between'
                       }"
                     >
-                      <span 
-                        v-if="!tableRow.title.includes(' Pre test') && tableRow.hasRestart === true "
-                        class="btn-style"
-                        @click.prevent="restartBtn(tableRow.id)"
-                      >
-                        <KLabeledIcon
-                          icon="restart"
-                          :label="$tr('restartLabel')"
-                        />
-
-                      </span>
-                      <span v-if="tableRow.hasRestart === false">
-                        stop
-                      </span>
                       <span 
                         class="btn-style"
                         @click.prevent="toggleView('QUESTION_PREVIEW',tableRow.id)"
                       >
                         View Details
+                      </span>
+                      <span 
+                        class="btn-style"
+                        @click.prevent="restartBtn(tableRow.id)"
+                      >
+                        restart
+                      </span>
+                      <span
+                        class="btn-style"
+                      >
+                        stop
                       </span>
                     </td>
                   </tr>

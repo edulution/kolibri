@@ -640,4 +640,12 @@ export default [
       titleParts: ['previewLabel', 'QUIZ_NAME', 'CLASS_NAME'],
     },
   },
+  {
+    path: path(CLASS, ASSESSMENT, LEARNERS,TRY, QUESTION, INTERACTION),
+    component: pages.ReportAssessmentViewer,
+    handler: defaultHandler,
+    meta: {
+      titleParts: ['learnersLabel'],
+    },
+  },
 ];

@@ -45,7 +45,7 @@ import ReportsAssessmentLearnerPage from './ReportsAssessmentLearnerPage';
 import ReportsGroupReportAssessmentLearnerPage from './ReportsGroupReportAssessmentLearnerPage';
 import ReportsAssessmentLearnerListPage from './ReportsAssessmentLearnerListPage';
 import ReportsAssessmentPreviewPage from './ReportsAssessmentPreviewPage';
-
+import ReportAssessmentViewer from './ReportAssessmentViewer.vue'
 
 export default {
   ReportsGroupActivityPage,
@@ -94,5 +94,6 @@ export default {
   ReportsAssessmentLearnerPage,
   ReportsGroupReportAssessmentLearnerPage,
   ReportsAssessmentLearnerListPage,
-  ReportsAssessmentPreviewPage
+  ReportsAssessmentPreviewPage,
+  ReportAssessmentViewer
 };

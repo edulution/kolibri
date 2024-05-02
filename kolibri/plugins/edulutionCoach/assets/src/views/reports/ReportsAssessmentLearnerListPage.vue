@@ -5,16 +5,10 @@
       v-if="currentView === 'TEST_LIST'"
       :entries="testTable"
       @testTitleClick="onTestTitleClick"
-      @viewDetailClick="onViewDetailClick"
       @viewAttemptsClick="onviewAttemptsClick"
     />
     <ReportsAssessmentBreakdownTable
       v-if="currentView === 'TEST_BREAKDOWN'"
-      :entries="breakdownData"
-      @backClick="onBackClick"
-    />
-    <ReportsAssessmentDetailTable
-      v-if="currentView === 'TEST_DETAIL'"
       :entries="breakdownData"
       @backClick="onBackClick"
     />
@@ -38,7 +32,6 @@
     import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage.vue';
     import ReportsAssessmentTestsTable from './ReportsAssessmentTestsTable.vue';
     import ReportsAssessmentBreakdownTable from './ReportsAssessmentBreakdownTable.vue';
-    import ReportsAssessmentDetailTable from './ReportsAssessmentDetailTable.vue';
     import ReportsAssessmentAttemptsTable from './ReportsAssessmentAttemptsTable.vue'
 
     export default {
@@ -47,8 +40,7 @@
         ReportsAssessmentBaseListPage,
         ReportsAssessmentTestsTable,
         ReportsAssessmentBreakdownTable,
-        ReportsAssessmentDetailTable,
-        ReportsAssessmentAttemptsTable
+        ReportsAssessmentAttemptsTable,
       },
       mixins: [commonCoach, commonCoreStrings],
       data() {
@@ -140,15 +132,38 @@
           }
           this.currentView = 'TEST_BREAKDOWN'
         },
-        onViewDetailClick(assessmentId){
-          if (this.assessmentDetails.assessments) {
-            console.log(assessmentId,"assessmentId")       
-          }
-          this.currentView = 'TEST_DETAIL'
-        },
         onviewAttemptsClick(assessmentId) {
           if (this.assessmentDetails.assessments) {
-              console.log(assessmentId,"assessmentId")      
+              const statusData = this.assessmentDetails?.learner_status?.find(l => l.assessment_id === assessmentId)
+
+              const selectedAssessments = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
+              const selectedExcerciseId = selectedAssessments.exercises.map(i => i.id)
+
+              const selectedTest = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
+
+              this.selectedTest = selectedTest.title
+
+              selectedExcerciseId.forEach(element =>{ 
+              const selectedQuestion =  selectedAssessments?.question_sources?.filter(i => i.exercise_id === element)
+              const topicTitle = [...new Set(selectedQuestion.map(i => i.title))]
+              const topicId = selectedQuestion.map(i => i.exercise_id)
+
+              const selectedCorrectQuestion = [] 
+
+              for(const correctQuesitons of  selectedQuestion){
+               if (statusData?.correct_question_ids.includes(correctQuesitons.question_id)){
+                  selectedCorrectQuestion.push(correctQuesitons.question_id)
+               }
+              }
+         
+              const breakdownData = {
+                      id: topicId,
+                      title: topicTitle.join(''),
+                      question_count: selectedQuestion?.length,
+                      score: selectedCorrectQuestion.length || null,
+                    }
+              this.breakdownData.push(breakdownData);      
+            });        
           }
           this.currentView = 'TEST_ATTEMPTS'
         },
