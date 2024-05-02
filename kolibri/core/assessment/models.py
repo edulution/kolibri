@@ -100,6 +100,8 @@ class ExamAssessment(AbstractFacilityDataModel):
 
     extra_data  = JSONField(default={}, blank=True)
 
+    attempt_count = models.IntegerField(null=True)
+
     content_assignments = ContentAssignmentManager(
         # one exam can contain multiple questions from multiple exercises,
         # hence multiple content nodes

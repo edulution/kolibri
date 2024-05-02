@@ -325,8 +325,10 @@ class ExamAssessmentStartViewSet(ViewSet):
             first_assessment_map = assessment_map[0]['id']
 
             if available_id:
+                update_attempt_count = {'attempt_count': 1}
                 assessment_instance = models.ExamAssessment.objects.get(id=first_assessment_map)
                 assessment_instance.__dict__.update(update_dict)
+                assessment_instance.__dict__.update(update_attempt_count)
                 assessment_instance.save()
             else:
                 return Response({'message': 'Invalid Assessment ID'})
@@ -363,6 +365,10 @@ class AssessmentTestViewSet(ViewSet):
 
                         assessment_instance = models.ExamAssessment.objects.get(id=assessment_id)
                         assessment_instance.__dict__.update(**update_dict)
+                        attempt_count = assessment_instance.attempt_count
+                        update_attempt_count = {'attempt_count': attempt_count + 1}
+                        assessment_instance.__dict__.update(**update_attempt_count)
+
                         assessment_instance.save()
 
                     elif flag == 0:
