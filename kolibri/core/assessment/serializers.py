@@ -277,6 +277,8 @@ class GetExamAssessmentSerializer(serializers.ModelSerializer):
             'question_sources',
             'title',
             'id',
+            'active',
+            'archive',
         )
 
 class GetGroupExamAssessmentSerializer(serializers.ModelSerializer):

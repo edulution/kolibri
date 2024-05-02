@@ -540,8 +540,8 @@ class MarkAssessmentViewset(ViewSet):
                 if not assessment_group_level:
                     return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
                 
-                channel_id = assessment_group_level.channel_id
-                assessment_group = models.AssessmentConfig.objects.get(channel_id = channel_id)
+                # channel_id = assessment_group_level.channel_id
+                # assessment_group = models.AssessmentConfig.objects.get(channel_id = channel_id)
             
             except models.ExamAssessmentGroup.DoesNotExist:
                 return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -560,7 +560,7 @@ class MarkAssessmentViewset(ViewSet):
 
             percentage = (num_correct_value / question_count) * 100
             
-            assessment_map = assessment_group.assessment_map
+            assessment_map = assessment_group_level.assessment_map
             current_assessment_id = assessment_group_level.current_assessment_id
             last_assessment_id = assessment_group_level.last_assessment_id
 

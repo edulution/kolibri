@@ -48,10 +48,7 @@
         if (!props.assessments) {
           return [];
         }
-        return props.assessments.filter(assessment => {
-          console.log({ assessment })
-          return assessment.active && !assessment.archive
-        });
+        return props.assessments.filter(assessment => assessment?.current_assessment?.active && !assessment?.current_assessment?.archive);
       });
 
       function getAssessmentName(assessment) {
