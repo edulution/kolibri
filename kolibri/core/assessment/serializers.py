@@ -343,3 +343,6 @@ class MarkAssessmentSerializer(serializers.Serializer):
     assessment_group_id = serializers.CharField()
     # assessment_map = serializers.JSONField()
 
+class StartRestartTest(serializers.Serializer):
+    assessment_id = serializers.CharField()
+    flag = serializers.IntegerField()

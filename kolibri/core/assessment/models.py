@@ -352,3 +352,30 @@ class ExamAssessmentGroup(models.Model):
         on_delete=models.SET_NULL
     )
 
+    current_assessment_type = models.CharField(max_length=200, null=True)
+    current_assessment_level = models.CharField(max_length=200, null=True)
+    last_assessment_type = models.CharField(max_length=200, null=True)
+    last_assessment_level = models.CharField(max_length=200, null=True)
+
+class AssessmentConfig(models.Model):
+
+    morango_model_name = "assessmentconfig"
+
+    permissions = (
+        RoleBasedPermissions(
+            target_field="collection",
+            can_be_created_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_read_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_updated_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_deleted_by=(role_kinds.ADMIN, role_kinds.COACH),
+        )
+        | UserCanReadExamData()
+    )
+
+    channel_id = models.UUIDField(null=True)
+
+    assessment_map  = JSONField(default=[], blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    
+    updated_at = models.DateTimeField(auto_now_add=True, null=True)

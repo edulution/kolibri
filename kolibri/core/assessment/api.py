@@ -21,7 +21,7 @@ from kolibri.core.assessment import models
 from kolibri.core.assessment import serializers
 from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
-from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer
+from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer, StartRestartTest
 from datetime import datetime
 from itertools import groupby
 
@@ -311,6 +311,46 @@ class ExamAssessmentStartViewSet(ViewSet):
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
         
 
+class AssessmentTestViewSet(ViewSet):
+   serializer_class = StartRestartTest
+   def create(self, request): 
+        try:
+            serializer = self.serializer_class(data=request.data)
+            if serializer.is_valid():
+                assessment_id = serializer.validated_data.get('assessment_id')
+                flag = serializer.validated_data.get('flag')
+
+                available_id = models.ExamAssessment.objects.get(id = assessment_id)
+
+                if available_id:
+
+                    if flag == 1 or flag == 2:                     # 1: START     0: STOP      2: RETSTART
+                        
+                        update_dict = {'active': 1}                           
+
+                        assessment_instance = models.ExamAssessment.objects.get(id=assessment_id)
+                        assessment_instance.__dict__.update(**update_dict)
+                        assessment_instance.save()
+
+                    elif flag == 0:
+                        update_dict = {'active': 0}
+
+                        assessment_instance = models.ExamAssessment.objects.get(id=assessment_id)
+                        assessment_instance.__dict__.update(**update_dict)
+                        assessment_instance.save()
+                
+                    return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
+                
+                else:
+                    return Response({'message': 'Invalid Assessment ID'})
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)       
+        
+        except models.ExamAssessment.DoesNotExist:
+            # Handle case where no instance with the given pk is found
+            return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+
 # class ExamAssessmentStopViewSet(ViewSet):
 #    def update(self, request, pk=None):  # Ensure pk is included in the method signature
 #         try:
@@ -451,25 +491,32 @@ class FetchAssessmentGroupData(ViewSet):
             return Response({"error": "Exam Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+import pandas as pd
 class MarkAssessmentViewset(ViewSet):
     serializer_class = MarkAssessmentSerializer
 
     def create(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            learner_id = serializer.validated_data.get('learner_id')
-            # collection_id = serializer.validated_data.get('collection_id')
             assessment_id = serializer.validated_data.get('assessment_id')
             assessment_group_id = serializer.validated_data.get('assessment_group_id')
-            # assessment_map = serializer.validated_data.get('assessment_map')
 
             try:
-                assessment_group = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
+                assessment_ids = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
+
+                if not assessment_ids:
+                    return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
+                
+                channel_id = assessment_ids.channel_id
+                assessment_group = models.AssessmentConfig.objects.get(channel_id = channel_id)
+            
             except models.ExamAssessmentGroup.DoesNotExist:
                 return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
 
             exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
-            assessment_data = models.ExamAssessment.objects.filter(id=assessment_id).last()
+            assessment_data = models.ExamAssessment.objects.filter(id=assessment_id).last() 
+            
+            question_count  = 1
             if assessment_data:
                 question_count = assessment_data.question_count
 
@@ -477,33 +524,101 @@ class MarkAssessmentViewset(ViewSet):
 
             num_correct_value = learner_status[0]['num_correct']
 
-            percentage = (num_correct_value/question_count)*100
+            percentage = (num_correct_value / question_count) * 100
+            
             assessment_map = assessment_group.assessment_map
-            # Find the index of the current ID in the assessment_map
-            if percentage < 75.0:
-                index = next((i for i, item in enumerate(assessment_map) if item['id'] == assessment_group.current_assessment_id), None)
-                next_index = index + 1
-                if next_index < len(assessment_map):
-                    next_id = assessment_map[next_index]['id']
-                    if next_id != assessment_group.current_assessment_id:
-                        assessment_group.current_assessment_id = next_id
-                else:
-                    assessment_group.last_assessment_id = assessment_group.current_assessment_id
-                    assessment_data.archive = True
-                    assessment_data.date_archived = datetime.now()
-                    assessment_group.archive = True
-                    assessment_group.date_archived = datetime.now()
-            else:
-                assessment_group.last_assessment_id = assessment_map[-1]['id']
+            current_assessment_id = assessment_ids.current_assessment_id
+            last_assessment_id = assessment_ids.last_assessment_id
+
+            current_id, last_id, archieve_flag  = self.process_assessment_list(assessment_map, current_assessment_id, last_assessment_id, percentage )
+            
+            assessment_map_df = pd.DataFrame(assessment_map)
+            
+            current_assessment = assessment_map_df[(assessment_map_df['id'] == current_id)].reset_index(drop = True)
+            last_assessment = assessment_map_df[(assessment_map_df['id'] == last_id)].reset_index(drop = True)
+
+            if archieve_flag == True:
+                assessment_ids.current_assessment_id = current_id
+                assessment_ids.current_assessment_type = current_assessment['type'][0]
+                assessment_ids.current_assessment_level = current_assessment['level'][0]
+                assessment_ids.last_assessment_id = last_id
+                assessment_ids.last_assessment_type = last_assessment['type'][0]
+                assessment_ids.last_assessment_level = last_assessment['level'][0]
                 assessment_data.archive = True
                 assessment_data.date_archived = datetime.now()
-                assessment_group.archive = True
-                assessment_group.date_archived = datetime.now()
+                assessment_ids.archive = True
+                assessment_ids.date_archived = datetime.now()
+            
+            else:
+                assessment_ids.current_assessment_id = current_id
+                assessment_ids.current_assessment_type = current_assessment['type'][0]
+                assessment_ids.current_assessment_level = current_assessment['level'][0]
+                assessment_ids.last_assessment_id = last_id
+                assessment_ids.last_assessment_type = last_assessment['type'][0]
+                assessment_ids.last_assessment_level = last_assessment['level'][0]
 
-            assessment_group.save()
+            assessment_ids.save()
             assessment_data.save()
 
             return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+
+
+    def process_assessment_list(self, assessments, current_assessment_id, last_assessment_id, score):
+        for i, assessment in enumerate(assessments):
+            if assessment["id"] == current_assessment_id:
+                if "PRE" in assessment["type"]:
+                    if score >= 75:
+                        # If PreTest score is >= 75%, move to next PreTest
+                        next_index = i + 1
+                        while next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            if "PRE" in next_assessment["type"]:
+                                return next_assessment["id"], current_assessment_id, False
+                            next_index += 1
+                        # If no more PreTests, mark as last assessment and archive
+                        return assessment["id"], last_assessment_id, True
+                    else:
+                        # If PreTest score < 75%, move to immediate next assessment
+                        next_index = i + 1
+                        if next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            return next_assessment["id"], assessment["id"], False
+                        else:
+                            # Mark as last assessment and archive
+                            return assessment["id"], last_assessment_id, True
+                elif "POST" in assessment["type"]:
+                    if score >= 75:
+                        # If Post test score is >= 75%, move to next assessment
+                        next_index = i + 1
+                        if next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            return next_assessment["id"], assessment["id"], False
+                        else:
+                            # Mark as last assessment and archive
+                            return assessment["id"], last_assessment_id, True
+                    else:
+                        # If Post test score < 75%, no change until score >= 75%
+                        return current_assessment_id, last_assessment_id, False
+                else:
+                    if score >= 75:
+                        # If score >= 75%, move to next Level-Section
+                        next_index = i + 1
+                        while next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            if "PRE" in next_assessment["type"]:
+                                # If next assessment is PreTest, mark as last assessment and archive
+                                return assessment["id"], last_assessment_id, True
+                            elif "SECTION" in next_assessment["type"] or "POST" in next_assessment["type"]:
+                                # If next assessment is Level-Section or Post test, update current and last assessment ids
+                                return next_assessment["id"], assessment["id"], False
+                            next_index += 1
+                        # If no more assessments, mark as last assessment and archive
+                        return assessment["id"], last_assessment_id, True
+                    else:
+                        # If score < 75%, no change until score >= 75%
+                        return current_assessment_id, last_assessment_id, False
+        # If current assessment id is not found in the list, return None for both ids
+        return None, None, False
