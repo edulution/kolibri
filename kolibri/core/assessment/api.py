@@ -249,7 +249,8 @@ class CreateAssessmentRecord(ViewSet):
                             question_count = question_count ,
                             assessment_group_id = obj.id,
                             channel_id = channel_id, 
-                            creator_id=creator_id
+                            creator_id=creator_id,
+                            extra_data = {'type': test['type'], 'level': test['level']}
                         )
 
                         ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
