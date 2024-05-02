@@ -264,7 +264,11 @@ class CreateAssessmentRecord(ViewSet):
                             'date_activated': date_activated
                         }
 
-                        instance_list.append(test)
+                        instance_list.append({
+                            **test,
+                            'id': instance.id,
+                            'content_id': test['id'],
+                        })
                         final_response_list.append(final_dict)
 
                 if len(instance_list) != 0: 
