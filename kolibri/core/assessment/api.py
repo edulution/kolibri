@@ -314,15 +314,23 @@ class ExamAssessmentStartViewSet(ViewSet):
         try:
             # Fetch the instances based on the assessment_group_id
             update_dict = {'active': 1}
-            available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
             
+            available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+
+            available_group_id = models.ExamAssessmentGroup.objects.get(id=pk)
+            
+            assessment_map = available_group_id.assessment_map
+
+            first_assessment_map = assessment_map[0]['id']
+
             if available_id:
-                assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
+                assessment_instance = models.ExamAssessment.objects.get(id=first_assessment_map)
+                assessment_instance.__dict__.update(update_dict)
+                assessment_instance.save()
             else:
                 return Response({'message': 'Invalid Assessment ID'})
             # Fetch the instance based on the primary key
 
-            available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
             if available_group_id:
                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
             else:
@@ -404,6 +412,7 @@ class ExamAssessmentStopViewSet(ViewSet):
         try:
             update_dict = {'archive': 1}
             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+            
             if available_id:
                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
             else:
@@ -526,60 +535,75 @@ class MarkAssessmentViewset(ViewSet):
             assessment_group_id = serializer.validated_data.get('assessment_group_id')
 
             try:
-                assessment_ids = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
+                assessment_group_level = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
 
-                if not assessment_ids:
+                if not assessment_group_level:
                     return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
+                
+                channel_id = assessment_group_level.channel_id
+                assessment_group = models.AssessmentConfig.objects.get(channel_id = channel_id)
             
             except models.ExamAssessmentGroup.DoesNotExist:
                 return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
 
             exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
-            assessment_data = models.ExamAssessment.objects.filter(id=assessment_id).last() 
+            assessment_level = models.ExamAssessment.objects.filter(id=assessment_id).last() 
             
             question_count  = 1
-            if assessment_data:
-                question_count = assessment_data.question_count
+            
+            if assessment_level:
+                question_count = assessment_level.question_count
 
-            learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
+            learner_status = serialize_coach_assigned_assessment_status(exam_assessments)    # Recent assessment questions 
 
             num_correct_value = learner_status[0]['num_correct']
 
             percentage = (num_correct_value / question_count) * 100
             
-            assessment_map = assessment_ids.assessment_map
-            current_assessment_id = assessment_ids.current_assessment_id
-            last_assessment_id = assessment_ids.last_assessment_id
+            assessment_map = assessment_group.assessment_map
+            current_assessment_id = assessment_group_level.current_assessment_id
+            last_assessment_id = assessment_group_level.last_assessment_id
 
             current_id, last_id, archieve_flag  = self.process_assessment_list(assessment_map, current_assessment_id, last_assessment_id, percentage )
             
             assessment_map_df = pd.DataFrame(assessment_map)
-            
+           
             current_assessment = assessment_map_df[(assessment_map_df['id'] == current_id)].reset_index(drop = True)
             last_assessment = assessment_map_df[(assessment_map_df['id'] == last_id)].reset_index(drop = True)
 
             if archieve_flag == True:
-                assessment_ids.current_assessment_id = current_id
-                assessment_ids.current_assessment_type = current_assessment['type'][0]
-                assessment_ids.current_assessment_level = current_assessment['level'][0]
-                assessment_ids.last_assessment_id = last_id
-                assessment_ids.last_assessment_type = last_assessment['type'][0]
-                assessment_ids.last_assessment_level = last_assessment['level'][0]
-                assessment_data.archive = True
-                assessment_data.date_archived = datetime.now()
-                assessment_ids.archive = True
-                assessment_ids.date_archived = datetime.now()
+                assessment_group_level.current_assessment_id = current_id
+                assessment_group_level.current_assessment_type = current_assessment['type'][0]
+                assessment_group_level.current_assessment_level = current_assessment['level'][0]
+                assessment_group_level.last_assessment_id = last_id
+                assessment_group_level.last_assessment_type = last_assessment['type'][0]
+                assessment_group_level.last_assessment_level = last_assessment['level'][0]
+                assessment_level.archive = True
+                assessment_level.date_archived = datetime.now()
+                assessment_group_level.archive = True
+                assessment_group_level.date_archived = datetime.now()
             
             else:
-                assessment_ids.current_assessment_id = current_id
-                assessment_ids.current_assessment_type = current_assessment['type'][0]
-                assessment_ids.current_assessment_level = current_assessment['level'][0]
-                assessment_ids.last_assessment_id = last_id
-                assessment_ids.last_assessment_type = last_assessment['type'][0]
-                assessment_ids.last_assessment_level = last_assessment['level'][0]
+                Individual_current_assessment_level = models.ExamAssessment.objects.filter(id=current_assessment['id'][0]).last() 
+                Individual_last_assessment_level = models.ExamAssessment.objects.filter(id=last_assessment['id'][0]).last() 
 
-            assessment_ids.save()
-            assessment_data.save()
+                assessment_group_level.current_assessment_id = current_id
+                assessment_group_level.current_assessment_type = current_assessment['type'][0]
+                assessment_group_level.current_assessment_level = current_assessment['level'][0]
+                assessment_group_level.last_assessment_id = last_id
+                assessment_group_level.last_assessment_type = last_assessment['type'][0]
+                assessment_group_level.last_assessment_level = last_assessment['level'][0]
+                Individual_current_assessment_level.archive = False
+                Individual_current_assessment_level.active = False
+ 
+                if percentage >= 75:
+                    Individual_last_assessment_level.archive = True
+                    Individual_last_assessment_level.active = True
+                    Individual_last_assessment_level.save()
+
+            assessment_group_level.save()
+            assessment_level.save()
+            Individual_current_assessment_level.save()
 
             return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
         else:
