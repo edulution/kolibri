@@ -325,10 +325,8 @@ class ExamAssessmentStartViewSet(ViewSet):
             first_assessment_map = assessment_map[0]['id']
 
             if available_id:
-                update_attempt_count = {'attempt_count': 1}
                 assessment_instance = models.ExamAssessment.objects.get(id=first_assessment_map)
-                assessment_instance.__dict__.update(update_dict)
-                assessment_instance.__dict__.update(update_attempt_count)
+                assessment_instance.__dict__.update({**update_dict, 'attempt_count': 1 })
                 assessment_instance.save()
             else:
                 return Response({'message': 'Invalid Assessment ID'})
@@ -355,29 +353,24 @@ class AssessmentTestViewSet(ViewSet):
                 assessment_id = serializer.validated_data.get('assessment_id')
                 flag = serializer.validated_data.get('flag')
 
-                available_id = models.ExamAssessment.objects.get(id = assessment_id)
-
-                if available_id:
-
-                    if flag == 1 or flag == 2:                     # 1: START     0: STOP      2: RETSTART
-                        
-                        update_dict = {'active': 1}                           
-
-                        assessment_instance = models.ExamAssessment.objects.get(id=assessment_id)
-                        assessment_instance.__dict__.update(**update_dict)
-                        attempt_count = assessment_instance.attempt_count
-                        update_attempt_count = {'attempt_count': attempt_count + 1}
-                        assessment_instance.__dict__.update(**update_attempt_count)
-
-                        assessment_instance.save()
+                assessment_obj = models.ExamAssessment.objects.get(id = assessment_id)
+    
+                if assessment_obj:
+                    update_dict = {}
+                    # 0: STOP, 1: START, 2: RETSTART
+                    if flag == 1 or flag == 2:
+                        update_dict = {
+                            'active': 1,
+                            'attempt_count': assessment_obj.attempt_count + 1
+                        }
 
                     elif flag == 0:
-                        update_dict = {'active': 0}
+                        update_dict = {
+                            'active': 0
+                        }
 
-                        assessment_instance = models.ExamAssessment.objects.get(id=assessment_id)
-                        assessment_instance.__dict__.update(**update_dict)
-                        assessment_instance.save()
-                
+                    assessment_obj.__dict__.update(**update_dict)
+                    assessment_obj.save()
                     return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
                 
                 else:
@@ -494,6 +487,7 @@ class FetchAssessmentGroupData(ViewSet):
                     "assignments": assessment.assignments,
                     "exercises": [],
                     "extra_data": assessment.extra_data,
+                    "attempt_count": assessment.attempt_count,
                 }
 
                 for question in assessment.question_sources:
