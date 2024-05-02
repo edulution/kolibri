@@ -49,14 +49,8 @@
           return [];
         }
         return props.assessments.filter(assessment => {
-          if (!assessment.active) {
-            return false;
-          } else if (assessment.archive) {
-            // Closed (archived) quizzes only show if the learner started/submitted
-            return assessment.progress.started || assessment.progress.closed;
-          } else {
-            return true;
-          }
+          console.log({ assessment })
+          return assessment.active && !assessment.archive
         });
       });
 

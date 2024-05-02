@@ -247,7 +247,10 @@ class CreateAssessmentGroupSerializer(serializers.ModelSerializer):
             "learner_id",
             "creator",
             "assessment_map",
-            "channel_id"
+            "channel_id",
+            "current_assessment",
+            "current_assessment_type",
+            "current_assessment_level"
         )
 
 class CreateAssessmentSerializer(serializers.ModelSerializer):

@@ -173,7 +173,7 @@ class GroupAssessmentViewset(ViewSet):
 
 class CreateAssessmentRecord(ViewSet):
     def create(self, request, pk=None):
-        from .models import ExamAssessment, ExamAssignmentAssessment
+        from .models import ExamAssessment, ExamAssignmentAssessment, AssessmentConfig
 
         try:
 
@@ -190,13 +190,28 @@ class CreateAssessmentRecord(ViewSet):
             creator_id = request.user.id
             if not creator_id:
                 creator_id = request_data.get('creator_id')
-            # test_data = ExamAssessmentGroup.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=title, creator_id='ab8e752daeefb1fade99bf34efcafe6e')
+
+            assessment_map_obj = AssessmentConfig.objects.get(channel_id=channel_id)
+
+            if not assessment_map_obj:
+                return Response({"error": "Assessment map config not found"}, status=status.HTTP_404_NOT_FOUND)
             
-            id_available = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
+            assessment_group_obj = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id=collection)
 
-            if not id_available:
+            assessment_map_df = pd.DataFrame(assessment_map_obj.assessment_map)
+            assessment_map_df[(assessment_map_df['type'] == 'PRE') & (assessment_map_df['order'] == 1) & (assessment_map_df['level'] == 1)].reset_index(drop=True)
+            
+            if not assessment_group_obj:
 
-                field_update = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':title, 'collection':collection, 'creator': creator_id, 'channel_id': channel_id}
+                field_update = {
+                    'date_activated': date_activated,
+                    'date_archived':date_archived,
+                    'learner_id':learner_id,
+                    'title':title,
+                    'collection':collection,
+                    'creator': creator_id,
+                    'channel_id': channel_id
+                }
                 
                 group_serializer = CreateAssessmentGroupSerializer(data=field_update)
 
@@ -204,53 +219,58 @@ class CreateAssessmentRecord(ViewSet):
                 
                 group_serializer.save()
 
-            fetch_id = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
+                assessment_group_obj = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
             
             obj = None
-            if fetch_id.exists():
-                obj = fetch_id[0] 
+            if assessment_group_obj.exists():
+                obj = assessment_group_obj[0]
             
             is_available = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
 
+            instance_list = []
+            final_response_list = []
+
             if not is_available:
-            
-                for test in assessment:
+                for test in assessment_map_obj.assessment_map:
+                    map_object = next((d for d in assessment if d['content_id'] == test['id']), None)
                     
-                    question_source = test.get('question_sources')
-                    question_count = test.get('question_count')
-                    new_title = test.get('title')
+                    if map_object:
+                        question_source = map_object.get('question_sources')
+                        question_count = map_object.get('question_count')
+                        new_title = map_object.get('title')
+                        
+                        instance = ExamAssessment.objects.create(
+                            collection_id = collection,
+                            date_activated=date_activated,
+                            date_archived=date_archived,
+                            learner_id=learner_id,
+                            title=new_title,
+                            question_sources = question_source,
+                            question_count = question_count ,
+                            assessment_group_id = obj.id,
+                            channel_id = channel_id, 
+                            creator_id=creator_id
+                        )
 
-                    insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = obj.id, channel_id = channel_id,  creator_id=creator_id)
+                        ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
 
-                # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
-                # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
-                # assessment_serializer.is_valid(raise_exception=True)
-                # assessment_serializer.save(creator_id= 'ab8e752daeefb1fade99bf34efcafe6e')
-                    
-                assessment_record = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
-                instance_list = []
-                final_response_list = []
-        
-                for instance in assessment_record:
-                    assessment_dict = {'id':instance.id, 'title':instance.title}
-                    final_dict = {'id':instance.id, 'title':instance.title,'question_count': instance.question_count, 'question_sources': instance.question_sources,'seed':instance.seed, 'learners_see_fixed_order': instance.learners_see_fixed_order, 'date_activated':instance.date_activated}
-                    instance_list.append(assessment_dict)
-                    final_response_list.append(final_dict)
+                        final_dict = {
+                            'id':instance.id,
+                            'title':new_title,
+                            'question_count': question_count,
+                            'question_sources': question_source,
+                            'seed': 0,
+                            'learners_see_fixed_order': 0,
+                            'date_activated': date_activated
+                        }
 
-                    insert_record_exam_assignment = ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
+                        instance_list.append(test)
+                        final_response_list.append(final_dict)
 
                 if len(instance_list) != 0: 
-                    if instance_list[0]['title'].upper().startswith('LEVEL 1'):
-                        instance_list = instance_list
-                    else:
-                        instance_list.reverse()
-
                     to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
-                    # assessement_serializer = CreateAssessmentGroupSerializer(data=to_dict)
-                    # assessement_serializer.is_valid(raise_exception=True)
-                    # assessement_serializer.save()
+                    models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
 
-                    updated_count = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
 
                 return Response(final_response_list, status=status.HTTP_200_OK)
             
@@ -506,9 +526,6 @@ class MarkAssessmentViewset(ViewSet):
 
                 if not assessment_ids:
                     return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
-                
-                channel_id = assessment_ids.channel_id
-                assessment_group = models.AssessmentConfig.objects.get(channel_id = channel_id)
             
             except models.ExamAssessmentGroup.DoesNotExist:
                 return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -526,7 +543,7 @@ class MarkAssessmentViewset(ViewSet):
 
             percentage = (num_correct_value / question_count) * 100
             
-            assessment_map = assessment_group.assessment_map
+            assessment_map = assessment_ids.assessment_map
             current_assessment_id = assessment_ids.current_assessment_id
             last_assessment_id = assessment_ids.last_assessment_id
 

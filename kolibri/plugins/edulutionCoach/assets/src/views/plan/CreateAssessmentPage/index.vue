@@ -230,6 +230,7 @@
             assessments.push({
               id: contentNode.id,
               title: contentNode.title,
+              content_id: contentNode.content_id,
               exercises: excercises.data.map(e => ({
                 id: e.id,
                 title: e.title
