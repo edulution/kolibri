@@ -62,7 +62,7 @@
                       <span
                         class="score-chip"
                         :style="{
-                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.questionCount)),
+                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.questionCount), tableRow.attemptCount),
                           color: 'white',
                         }"
                       >
@@ -89,13 +89,13 @@
                       </span>
                       <span 
                         :class="isStartfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
-                        @click.prevent="restartBtn(tableRow.id,flag=1)"
+                        @click="toggleModal('start',tableRow.id,1)"
                       >
                         Start
                       </span>
                       <span
                         :class="isStopfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
-                        @click.prevent="restartBtn(tableRow.id,flag=0)"
+                        @click.prevent="toggleModal('stop',tableRow.id,0)"
                       >
                         Stop
                       </span>
@@ -144,6 +144,19 @@
       @submit_copy="handleSubmitCopy"
       @cancel="closeModal"
     />
+
+    <KModal
+      v-if="submitModalOpen"
+      :title="startStopText === 'start' ? $tr('startTest') : $tr('stopTest')" 
+      :submitText="startStopText === 'start' ? $tr('startTest') : $tr('stopTest')" 
+      :cancelText="coreString('goBackAction')"
+      @submit="restartBtn"
+      @cancel="toggleModal"
+    >
+      <p>{{ $tr('areYouSure') }}</p>
+    </KModal>
+
+
   </CoachAppBarPage>
 
 </template>
@@ -185,7 +198,12 @@
         assessmentList: [],
         selectedId:null,
         assessmentTestData:[],
-        currentAssessmentId:null
+        currentAssessmentId:null,
+        submitModalOpen: false,
+        startStopText:"",
+        flagData:null,
+        assessmentid:"",
+        groupActive:null
       };
     },
     computed: {
@@ -232,6 +250,7 @@
         vm.assessmentList = d.assessments
         vm.assessmentTestData = testData
         vm.currentAssessmentId = d.current_assessment_id.id
+        vm.groupActive = d.active
       });
     } catch (error) {
       // Handle error
@@ -281,9 +300,12 @@
       calcPercentage(score, total) {
           return (score / total);
         },
-      scoreColor(value) {
+      scoreColor(value,count) {
           if (value <= 0) {
             return '#D9D9D9';
+          }
+          if (count > 0 && value <= 0  ) {
+            return '#FF412A';
           }
           if (value > 0 && value <= 0.25) {
             return '#FF412A';
@@ -302,40 +324,46 @@
           }
         },
         isStartfunc(type,count,id,active){
-          if (type === 'PRE' && this.currentAssessmentId === id && count === 0){
-            return true
-          }else if((type === 'SECTION' || type == 'POST') && this.currentAssessmentId === id && !active){
-            return true
+          if(this.groupActive){
+             if (type === 'PRE' && this.currentAssessmentId === id && count === 0 && this.groupActive === true){
+                  return true
+                }else if((type === 'SECTION' || type == 'POST') && this.currentAssessmentId === id && !active && this.groupActive === true){
+                  return true
+              }
           }
           else{
             return false
           }
         },
         isStopfunc(type,count,id,active,archive){
-          if (type === 'PRE' && this.currentAssessmentId === id && active === true && archive === false){
-            return true
-          }else if((type === 'SECTION' || type === 'POST') && this.currentAssessmentId === id && active === true && archive === false){
-            return true
+          if(this.groupActive){
+              if (type === 'PRE' && this.currentAssessmentId === id && active === true && archive === false){
+                return true
+              }else if((type === 'SECTION' || type === 'POST') && this.currentAssessmentId === id && active === true && archive === false){
+                return true
+            }
           }
+          
           else{
             return false
           }
         },
-        async restartBtn(id, flag) {
-            console.log("clicked", id, flag);
-            try {
-              const data ={
-                flag: flag,
-                assessment_id: id
+        async restartBtn() {
+          const data ={
+                flag: this.flagData,
+                assessment_id: this.assessmentid
               }
-                const response = await AssessmentTest.saveModel({data});
-               
-                console.log("Assessment test updated:", response);
-                return response; 
-            } catch (error) {
-                console.error("Error updating assessment test:", error);
-              
-            }
+            const promise = AssessmentTest.saveModel({data});
+
+        return promise
+          .then(() => {
+            this.submitModalOpen = false;
+            window.location.reload();
+          })
+          .catch((error) => {
+            console.log(error)
+          });
+
         },
       async fetchAssessmentGroupDetails() {
           const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.assessmentId })
@@ -350,6 +378,13 @@
         async fetchSelectedExcercise() {
           const response = await ContentNodeResource.fetchCollection({getParams: {ids: map(this.assessment.question_sources, 'exercise_id'),}})
           this.setData(response)
+        },
+
+        toggleModal(type,id,flag){
+          this.startStopText= type
+          this.flagData = flag,
+          this.assessmentid =id
+          this.submitModalOpen = !this.submitModalOpen;
         }
     },
     $trs: {
@@ -365,6 +400,21 @@
           message: 'Action',
           context: '',
         },
+        startTest: {
+        message: 'Start Test',
+        context:
+          'Action that learner takes to submit their quiz answers so that the coach can review them.',
+      },
+      areYouSure: {
+        message: 'You cannot change your answers after you submit',
+        context:
+          "Message a learner sees when they submit answers in an exercise to their coach. It serves as a way of checking that the user is aware that once they've submitted their answers, they cannot change them afterwards.",
+      },
+      stopTest: {
+        message: 'Stop Test',
+        context:
+          'Action that learner takes to submit their quiz answers so that the coach can review them.',
+      },
       },
   };
 
