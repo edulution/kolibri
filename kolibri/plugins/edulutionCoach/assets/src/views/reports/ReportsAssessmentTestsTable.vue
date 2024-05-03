@@ -25,7 +25,7 @@
             <span
               class="score-chip"
               :style="{
-                backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.question_count)),
+                backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.question_count), tableRow.attempt_count),
                 color: 'white',
               }"
             >
@@ -54,8 +54,7 @@
               View Breakdown
             </span>
             <span 
-              v-if="tableRow.title.includes('Section')"
-              class="btn-style"
+              :class="isPastEnabled(tableRow.type , tableRow.attempt_count) ? 'btn-style' : 'disabled-btn'"
               @click.prevent="onviewAttemptsClick(tableRow.id)"
             >
               View Past
@@ -88,9 +87,12 @@
         calcPercentage(score, total) {
           return (score / total);
         },
-        scoreColor(value) {
-          if (value <= 0) {
+        scoreColor(value, count) {
+          if (value <= 0 && count === 0) {
             return '#D9D9D9';
+          }
+          if (value <= 0 && count !== 0) {
+            return '#FF412A';
           }
           if (value > 0 && value <= 0.25) {
             return '#FF412A';
@@ -113,7 +115,14 @@
         },
         onviewAttemptsClick(id){
           this.$emit('viewAttemptsClick', id);
-        }
+        },
+        isPastEnabled(type,count){
+          console.log({ type, count })
+          if ((type === 'SECTION' || type === 'POST') && count > 0) {
+            return true
+          }
+          return false
+        },
       },
       $trs: {
         titleLabel: {
@@ -164,6 +173,16 @@
     padding: 2px 9px;
     box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2);
     margin-right:8px;
+  }
+
+  .disabled-btn{
+    cursor: not-allowed;
+    opacity: 0.7;
+    filter: grayscale(8);
+    border: 1px solid #80808047;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
   }
   
   </style>

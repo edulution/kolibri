@@ -9,14 +9,64 @@
     
     <CoreTable :emptyMessage="$tr('emptyMessage')">
       <template #headers>
-        <th>{{ coachString('topicLabel') }}</th>
+        <th>Attempt Number</th>
+        <th>Attempt Date</th>
         <th style="width: 120px">
           {{ $tr('scoreLabel') }}
         </th>
+        <th>Action</th>
       </template>
       <template #tbody>
         <transition-group tag="tbody" name="list">
-          <tr v-for="(tableRow, index) in entries" :key="tableRow.id">
+          <tr>
+            <td>1</td>
+            <td>01-05-2024</td>
+            <td>
+              <!-- <span
+                class="score-chip"
+                :style="{
+                  backgroundColor: scoreColor(
+                    calcPercentage(1, 2)
+                  ),
+                  color: 'white',
+                }"
+              >
+                {{
+                  $formatNumber(
+                    calcPercentage(1, 2),
+                    { style: 'percent' }
+                  )
+                }}
+              </span> -->
+            </td>
+            <td></td>
+            
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>01-05-2024</td>
+            <td>
+              <!-- <span
+                class="score-chip"
+                :style="{
+                  backgroundColor: scoreColor(
+                    calcPercentage(1, 2)
+                  ),
+                  color: 'white',
+                }"
+              >
+                {{
+                  $formatNumber(
+                    calcPercentage(1, 2),
+                    { style: 'percent' }
+                  )
+                }}
+              </span> -->
+            </td>
+            <td></td>
+            
+          </tr>
+          <!-- <tr v-for="(tableRow, index) in entries" :key="tableRow.id">
             <td>
               {{ tableRow.title }}
             </td>
@@ -38,7 +88,7 @@
                 }}
               </span>
             </td>
-          </tr>
+          </tr> -->
         </transition-group>
       </template>
     </CoreTable>

@@ -301,10 +301,10 @@
           return (score / total);
         },
       scoreColor(value,count) {
-          if (value <= 0) {
+          if (value <= 0 && count === 0) {
             return '#D9D9D9';
           }
-          if (count > 0 && value <= 0  ) {
+          if (value <= 0 && count !== 0) {
             return '#FF412A';
           }
           if (value > 0 && value <= 0.25) {

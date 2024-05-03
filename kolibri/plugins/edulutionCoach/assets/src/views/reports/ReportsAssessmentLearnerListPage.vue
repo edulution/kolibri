@@ -61,6 +61,10 @@
                 title: d.title,
                 question_count: d.question_sources.length,
                 score: statusData?.correct_question_ids?.length || null,
+                active: d.active,
+                archive: d.archive,
+                attempt_count: d.attempt_count,
+                type: d.extra_data.type,
               }
             })
           }
