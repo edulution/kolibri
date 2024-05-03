@@ -273,9 +273,8 @@ class CreateAssessmentRecord(ViewSet):
                         final_response_list.append(final_dict)
 
                 if len(instance_list) != 0: 
-                    to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
+                    to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id'], 'current_assessment_level': instance_list[0]['level'], 'current_assessment_type': instance_list[0]['type']}
                     models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
-
 
                 return Response(final_response_list, status=status.HTTP_200_OK)
             
@@ -357,7 +356,7 @@ class AssessmentTestViewSet(ViewSet):
     
                 if assessment_obj:
                     update_dict = {}
-                    # 0: STOP, 1: START, 2: RETSTART
+                    # 0: STOP, 1: START, 2: RESTART
                     if flag == 1 or flag == 2:
                         update_dict = {
                             'active': 1,
