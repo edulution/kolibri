@@ -78,7 +78,7 @@
                     <td 
                       :style="{
                         display: 'flex',
-                        justifyContent: 'space-between'
+                        gap: '16px'
                       }"
                     >
                       <span 
@@ -88,15 +88,16 @@
                         View Details
                       </span>
                       <span 
-                        class="btn-style"
-                        @click.prevent="restartBtn(tableRow.id)"
+                        :class="isStartfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
+                        @click.prevent="restartBtn(tableRow.id,flag=1)"
                       >
-                        restart
+                        Start
                       </span>
                       <span
-                        class="btn-style"
+                        :class="isStopfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
+                        @click.prevent="restartBtn(tableRow.id,flag=0)"
                       >
-                        stop
+                        Stop
                       </span>
                     </td>
                   </tr>
@@ -149,7 +150,7 @@
 
 
 <script>
-  import { AssessmentGroupDataResource ,ContentNodeResource } from 'kolibri.resources';
+  import { AssessmentGroupDataResource ,ContentNodeResource,AssessmentTest } from 'kolibri.resources';
   import { mapState } from 'vuex';
   import fromPairs from 'lodash/fromPairs';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
@@ -183,7 +184,8 @@
         currentView: '',
         assessmentList: [],
         selectedId:null,
-        assessmentTestData:[]
+        assessmentTestData:[],
+        currentAssessmentId:null
       };
     },
     computed: {
@@ -218,7 +220,10 @@
            questionCount :  id.question_sources.length,
            title : id.title,
            score: totalQuestion.correct_question_ids.length,
-           hasRestart: true,
+           type : id.extra_data.type,
+           attemptCount: id.attempt_count,
+           active: id.active,
+           archive: id.archive
          }
 
          testData.push(data)
@@ -226,6 +231,7 @@
       next(vm => {
         vm.assessmentList = d.assessments
         vm.assessmentTestData = testData
+        vm.currentAssessmentId = d.current_assessment_id.id
       });
     } catch (error) {
       // Handle error
@@ -295,8 +301,41 @@
             return '#00B050';
           }
         },
-        restartBtn (id) {
-           console.log(id,"id")
+        isStartfunc(type,count,id,active){
+          if (type === 'PRE' && this.currentAssessmentId === id && count === 0){
+            return true
+          }else if((type === 'SECTION' || type == 'POST') && this.currentAssessmentId === id && !active){
+            return true
+          }
+          else{
+            return false
+          }
+        },
+        isStopfunc(type,count,id,active,archive){
+          if (type === 'PRE' && this.currentAssessmentId === id && active === true && archive === false){
+            return true
+          }else if((type === 'SECTION' || type === 'POST') && this.currentAssessmentId === id && active === true && archive === false){
+            return true
+          }
+          else{
+            return false
+          }
+        },
+        async restartBtn(id, flag) {
+            console.log("clicked", id, flag);
+            try {
+              const data ={
+                flag: flag,
+                assessment_id: id
+              }
+                const response = await AssessmentTest.saveModel({data});
+               
+                console.log("Assessment test updated:", response);
+                return response; 
+            } catch (error) {
+                console.error("Error updating assessment test:", error);
+              
+            }
         },
       async fetchAssessmentGroupDetails() {
           const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.assessmentId })
@@ -325,10 +364,6 @@
         actionLabel :{
           message: 'Action',
           context: '',
-        },
-        restartLabel:{
-          message: 'Restart',
-          context: '', 
         },
       },
   };
@@ -374,7 +409,18 @@
     cursor: pointer;
     border-radius: 8px;
     padding: 2px 9px;
-    box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2)
+    box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
+    border: 1px solid #80808047;
+  }
+  
+  .disabled-btn{
+    cursor: not-allowed;
+    opacity: 0.7;
+    filter: grayscale(8);
+    border: 1px solid #80808047;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
   }
 
 </style>
