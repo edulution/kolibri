@@ -61,10 +61,14 @@
                 title: d.title,
                 question_count: d.question_sources.length,
                 score: statusData?.correct_question_ids?.length || null,
+<<<<<<< Updated upstream
                 active: d.active,
                 archive: d.archive,
                 attempt_count: d.attempt_count,
                 type: d.extra_data.type,
+=======
+                type: d.extra_data.type
+>>>>>>> Stashed changes
               }
             })
           }
@@ -111,7 +115,7 @@
               const selectedTest = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
 
               this.selectedTest = selectedTest.title
-
+console.log(selectedTest,"selectedTest")
               selectedExcerciseId.forEach(element =>{ 
               const selectedQuestion =  selectedAssessments?.question_sources?.filter(i => i.exercise_id === element)
               const topicTitle = [...new Set(selectedQuestion.map(i => i.title))]

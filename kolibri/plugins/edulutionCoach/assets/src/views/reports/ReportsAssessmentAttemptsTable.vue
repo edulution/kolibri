@@ -9,12 +9,16 @@
     
     <CoreTable :emptyMessage="$tr('emptyMessage')">
       <template #headers>
-        <th>Attempt Number</th>
-        <th>Attempt Date</th>
-        <th style="width: 120px">
+        <th>{{ $tr('AttemptNumberLabel') }}</th>
+        <th>
+          {{ $tr('DateLabel') }}
+        </th>
+        <th>
           {{ $tr('scoreLabel') }}
         </th>
-        <th>Action</th>
+        <th>
+          {{ $tr('ActionLabel') }}
+        </th>
       </template>
       <template #tbody>
         <transition-group tag="tbody" name="list">
@@ -148,7 +152,19 @@
         emptyMessage: {
           message: 'Test breakdown list is empty',
           context: '',
-        }
+        },
+        DateLabel:{
+          message: 'Date of Attempt',
+          context: '',
+        },
+        ActionLabel:{
+          message: 'Action',
+          context: '',
+        },
+        AttemptNumberLabel:{
+          message: 'Attempt Number',
+          context: '',
+        },
       },
     };
     

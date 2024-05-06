@@ -39,14 +39,23 @@
           </td>
           <td
             :style="{
-              maxWidth: '370px'
+              maxWidth: '370px',
+              display: 'flex',
+              gap: '10px'
             }"
           >
-            <KRouterLink
+            <!-- <KRouterLink
               class="btn-style"
               text="View Details"
               :to="classRoute('ReportsAssessmentViewer')"
-            />  
+            />   -->
+            <span 
+              class="btn-style"
+              @click.prevent="onTestTitleClick(tableRow)"
+            >
+              View Details
+            </span>
+
             <span 
               class="btn-style"
               @click.prevent="onTestTitleClick(tableRow)"
@@ -54,7 +63,8 @@
               View Breakdown
             </span>
             <span 
-              :class="isPastEnabled(tableRow.type , tableRow.attempt_count) ? 'btn-style' : 'disabled-btn'"
+              v-if="tableRow.title.includes('Section')"
+              class="btn-style"
               @click.prevent="onviewAttemptsClick(tableRow.id)"
             >
               View Past
@@ -172,7 +182,6 @@
     border-radius: 8px;
     padding: 2px 9px;
     box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2);
-    margin-right:8px;
   }
 
   .disabled-btn{
