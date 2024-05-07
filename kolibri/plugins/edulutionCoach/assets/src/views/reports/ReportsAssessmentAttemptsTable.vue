@@ -22,33 +22,37 @@
       </template>
       <template #tbody>
         <transition-group tag="tbody" name="list">
-          <tr v-for="(tableRow, index) in attemptHistory" :key="tableRow.id">
+          <tr v-for="(tableRow, index) in attemptHistory" :key="tableRow.assessment_id">
             <td>
-              {{ tableRow.attempt_number }}
+              {{ tableRow.attempt_count }}
             </td>
             <td>
-              {{ tableRow.created_date }}
+              <!-- <StatusElapsedTime :date="tableRow.start_timestamp" actionType="created" /> -->
+              <!-- {{ tableRow.start_timestamp }} -->
+              {{ formatDate(tableRow.start_timestamp) }}
             </td>
             <td>
               <span
                 class="score-chip"
                 :style="{
                   backgroundColor: scoreColor(
-                    calcPercentage(tableRow.score, tableRow.question_count)
+                    calcPercentage(tableRow.corrected_question_count, tableRow.question_count)
                   ),
                   color: 'white',
                 }"
               >
                 {{
                   $formatNumber(
-                    calcPercentage(tableRow.score, tableRow.question_count),
+                    calcPercentage(tableRow.corrected_question_count, tableRow.question_count),
                     { style: 'percent' }
                   )
                 }}
               </span>
             </td>
             <td>
-              View Details
+              <span class="btn-style">
+                View Details
+              </span>
             </td>
           </tr>
         </transition-group>
@@ -100,6 +104,14 @@
             return 'black';
           }
         },
+        formatDate(dateStr) {
+          const date = new Date(dateStr);
+          const day = date.getDate();
+          const month = date.getMonth() + 1; // January is 0, so we add 1
+          const year = date.getFullYear();
+
+          return `${day}-${month}-${year}`;
+        }
       },
       $trs: {
         scoreLabel: {
@@ -154,4 +166,12 @@
         text-decoration: underline;
       }
     }
+
+    .btn-style{
+    color: blue  !important;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2);
+  }
     </style>
