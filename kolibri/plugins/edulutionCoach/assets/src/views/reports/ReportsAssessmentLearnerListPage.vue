@@ -14,7 +14,7 @@
     />
     <ReportsAssessmentAttemptsTable
       v-if="currentView === 'TEST_ATTEMPTS'"
-      :entries="breakdownData"
+      :attemptHistory="attemptHistory"
       @backClick="onBackClick"
     />
   </ReportsAssessmentBaseListPage>
@@ -27,6 +27,7 @@
     import { AssessmentGroupDataResource } from 'kolibri.resources';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import commonCoach from '../common';
+    import { PageNames } from '../../constants';
     import CSVExporter from '../../csv/exporter';
     import * as csvFields from '../../csv/fields';
     import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage.vue';
@@ -49,6 +50,7 @@
           breakdownData: [],
           assessmentDetails: {},
           selectedTest: '',
+          attemptHistory:[]
         };
       },
       computed: {
@@ -61,14 +63,11 @@
                 title: d.title,
                 question_count: d.question_sources.length,
                 score: statusData?.correct_question_ids?.length || null,
-<<<<<<< Updated upstream
                 active: d.active,
                 archive: d.archive,
                 attempt_count: d.attempt_count,
                 type: d.extra_data.type,
-=======
-                type: d.extra_data.type
->>>>>>> Stashed changes
+                link: this.detailLink(statusData.assessment_id)
               }
             })
           }
@@ -115,7 +114,7 @@
               const selectedTest = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
 
               this.selectedTest = selectedTest.title
-console.log(selectedTest,"selectedTest")
+
               selectedExcerciseId.forEach(element =>{ 
               const selectedQuestion =  selectedAssessments?.question_sources?.filter(i => i.exercise_id === element)
               const topicTitle = [...new Set(selectedQuestion.map(i => i.title))]
@@ -134,46 +133,46 @@ console.log(selectedTest,"selectedTest")
                       title: topicTitle.join(''),
                       question_count: selectedQuestion?.length,
                       score: selectedCorrectQuestion.length || null,
+                      link: this.detailLink(selectedAssessments.id),
                     }
               this.breakdownData.push(breakdownData);      
             });        
           }
           this.currentView = 'TEST_BREAKDOWN'
         },
-        onviewAttemptsClick(assessmentId) {
-          if (this.assessmentDetails.assessments) {
-              const statusData = this.assessmentDetails?.learner_status?.find(l => l.assessment_id === assessmentId)
-
-              const selectedAssessments = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
-              const selectedExcerciseId = selectedAssessments.exercises.map(i => i.id)
-
-              const selectedTest = this.assessmentDetails?.assessments.find(i => i.id === assessmentId)
-
-              this.selectedTest = selectedTest.title
-
-              selectedExcerciseId.forEach(element =>{ 
-              const selectedQuestion =  selectedAssessments?.question_sources?.filter(i => i.exercise_id === element)
-              const topicTitle = [...new Set(selectedQuestion.map(i => i.title))]
-              const topicId = selectedQuestion.map(i => i.exercise_id)
-
-              const selectedCorrectQuestion = [] 
-
-              for(const correctQuesitons of  selectedQuestion){
-               if (statusData?.correct_question_ids.includes(correctQuesitons.question_id)){
-                  selectedCorrectQuestion.push(correctQuesitons.question_id)
-               }
-              }
-         
-              const breakdownData = {
-                      id: topicId,
-                      title: topicTitle.join(''),
-                      question_count: selectedQuestion?.length,
-                      score: selectedCorrectQuestion.length || null,
-                    }
-              this.breakdownData.push(breakdownData);      
-            });        
+        detailLink(learnerId) {
+        return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
+          learnerId,
+        });
+      },
+        onviewAttemptsClick() {
+         const data =[
+            {
+            id:1,
+            attempt_number:1,
+            created_date:'2024-05-03T16:55:38.469026+05:30',
+            question_count:10,
+            score: 2,
+          },
+          {
+            id:2,
+            attempt_number:2,
+            created_date:'2024-05-03T16:55:38.469026+05:30',
+            question_count:10,
+            score: 4,
+          },
+          {
+            id:3,
+            attempt_number:3,
+            created_date:'2024-05-03T16:55:38.469026+05:30',
+            question_count:10,
+            score: 8,
           }
+        ]
+        
+          this.attemptHistory = data
           this.currentView = 'TEST_ATTEMPTS'
+
         },
         onBackClick() {
           this.breakdownData = []

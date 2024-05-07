@@ -22,57 +22,12 @@
       </template>
       <template #tbody>
         <transition-group tag="tbody" name="list">
-          <tr>
-            <td>1</td>
-            <td>01-05-2024</td>
+          <tr v-for="(tableRow, index) in attemptHistory" :key="tableRow.id">
             <td>
-              <!-- <span
-                class="score-chip"
-                :style="{
-                  backgroundColor: scoreColor(
-                    calcPercentage(1, 2)
-                  ),
-                  color: 'white',
-                }"
-              >
-                {{
-                  $formatNumber(
-                    calcPercentage(1, 2),
-                    { style: 'percent' }
-                  )
-                }}
-              </span> -->
+              {{ tableRow.attempt_number }}
             </td>
-            <td></td>
-            
-          </tr>
-          <tr>
-            <td>2</td>
-            <td>01-05-2024</td>
             <td>
-              <!-- <span
-                class="score-chip"
-                :style="{
-                  backgroundColor: scoreColor(
-                    calcPercentage(1, 2)
-                  ),
-                  color: 'white',
-                }"
-              >
-                {{
-                  $formatNumber(
-                    calcPercentage(1, 2),
-                    { style: 'percent' }
-                  )
-                }}
-              </span> -->
-            </td>
-            <td></td>
-            
-          </tr>
-          <!-- <tr v-for="(tableRow, index) in entries" :key="tableRow.id">
-            <td>
-              {{ tableRow.title }}
+              {{ tableRow.created_date }}
             </td>
             <td>
               <span
@@ -92,7 +47,10 @@
                 }}
               </span>
             </td>
-          </tr> -->
+            <td>
+              View Details
+            </td>
+          </tr>
         </transition-group>
       </template>
     </CoreTable>
@@ -108,10 +66,10 @@
       name: 'ReportsAssessmentAttemptsTable',
       mixins: [commonCoach, commonCoreStrings],
       props: {
-        entries: {
+        attemptHistory:{
           type: Array,
           default: () => [],
-        },
+        }
       },
       computed: {
       },
@@ -120,7 +78,6 @@
           return (score / total);
         },
         scoreColor(value) {
-          console.log({ value })
           if (value <= 0) {
             return '#D9D9D9';
           }

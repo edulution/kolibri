@@ -17,7 +17,7 @@
     </template>
     <template #tbody>
       <transition-group tag="tbody" name="list">
-        <tr v-for="(tableRow) in entries" :key="tableRow.id">
+        <tr v-for="tableRow in entries" :key="tableRow.id">
           <td>
             {{ tableRow.title }}
           </td>
@@ -44,17 +44,11 @@
               gap: '10px'
             }"
           >
-            <!-- <KRouterLink
+            <KRouterLink
               class="btn-style"
               text="View Details"
-              :to="classRoute('ReportsAssessmentViewer')"
-            />   -->
-            <span 
-              class="btn-style"
-              @click.prevent="onTestTitleClick(tableRow)"
-            >
-              View Details
-            </span>
+              :to="tableRow.link"
+            />  
 
             <span 
               class="btn-style"
@@ -63,8 +57,7 @@
               View Breakdown
             </span>
             <span 
-              v-if="tableRow.title.includes('Section')"
-              class="btn-style"
+              :class="isPastEnabled(tableRow.type , tableRow.attempt_count) ? 'btn-style' : 'disabled-btn'"
               @click.prevent="onviewAttemptsClick(tableRow.id)"
             >
               View Past
@@ -127,7 +120,6 @@
           this.$emit('viewAttemptsClick', id);
         },
         isPastEnabled(type,count){
-          console.log({ type, count })
           if ((type === 'SECTION' || type === 'POST') && count > 0) {
             return true
           }

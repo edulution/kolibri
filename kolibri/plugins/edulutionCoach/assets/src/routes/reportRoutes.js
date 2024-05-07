@@ -504,6 +504,7 @@ export default [
     name: PageNames.REPORTS_QUIZ_LEARNER_PAGE_ROOT,
     redirect: to => {
       const { params } = to;
+      console.log(params,"quiz")
       return {
         name: pages.ReportsQuizLearnerPage.name,
         params: {
@@ -611,6 +612,7 @@ export default [
     name: PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT,
     redirect: to => {
       const { params } = to;
+      console.log(params,"asssss")
       return {
         name: pages.ReportsAssessmentLearnerPage.name,
         params: {
@@ -638,14 +640,6 @@ export default [
     handler: defaultHandler,
     meta: {
       titleParts: ['previewLabel', 'QUIZ_NAME', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, ASSESSMENT, LEARNERS,TRY, QUESTION, INTERACTION),
-    component: pages.ReportAssessmentViewer,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['learnersLabel'],
     },
   },
 ];
