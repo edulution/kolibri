@@ -716,17 +716,23 @@ class AssessmentReportViewSet(ViewSet):
                     assessment_session_df = pd.merge(content_session_logs_df, get_assessment_df, on='user_id').reset_index(drop=True)
 
                     assessment_session_df['correct_questions_ids'] = None
+                    assessment_session_df['attempt_count'] = 1
+                    assessment_session_df['corrected_question_count'] = 0
 
                     for index, rows in assessment_session_df.iterrows():
+                        
                         corrected_question_ids = correct_attempts_df[correct_attempts_df['sessionlog_id'] == rows['sessionlog_id']].reset_index(drop=True)
                         
                         if corrected_question_ids.empty:
                             continue
+                            
+                        assessment_session_df.at[index, 'attempt_count'] += 1 
                         
                         corrected_question_ids_list = corrected_question_ids['item'].tolist()
          
                         if len(corrected_question_ids) == len(corrected_question_ids_list):
                             assessment_session_df.at[index, 'correct_questions_ids'] = corrected_question_ids_list
+                            assessment_session_df.at[index, 'corrected_question_count'] = len(corrected_question_ids_list)
                         
                         else:
                             assessment_session_df.at[index, 'correct_questions_ids'] = None
