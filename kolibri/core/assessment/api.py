@@ -555,9 +555,12 @@ class MarkAssessmentViewset(ViewSet):
             if assessment_level:
                 question_count = assessment_level.question_count
 
-            learner_status = serialize_coach_assigned_assessment_status(exam_assessments)    # Recent assessment questions 
+            learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
 
             num_correct_value = learner_status[0]['num_correct']
+
+            if num_correct_value == None:
+                num_correct_value = 0
 
             percentage = (num_correct_value / question_count) * 100
             
@@ -668,3 +671,63 @@ class MarkAssessmentViewset(ViewSet):
                         return current_assessment_id, last_assessment_id, False
         # If current assessment id is not found in the list, return None for both ids
         return None, None, False
+
+from kolibri.core.logger.models import AttemptLog,ContentSessionLog,MasteryLog
+class AssessmentReportViewSet(ViewSet):
+
+    def retrieve(self, request, pk=None):
+        try:
+
+            get_assessment = models.ExamAssessment.objects.get(id = pk)
+
+            if get_assessment:
+                
+                assessment_data = {
+                        'assessment_id': [get_assessment.id],
+                        'question_count': [get_assessment.question_count],
+                        'question_sources': [get_assessment.question_sources],
+                        'user_id': [get_assessment.learner_id],
+                       
+                    }
+
+                get_assessment_df = pd.DataFrame(assessment_data)
+                
+                content_session_logs = ContentSessionLog.objects.filter(content_id=pk, user_id=get_assessment.learner_id).values('id', 'content_id', 'start_timestamp', 'time_spent', 'user_id')
+                
+                if content_session_logs:
+                    
+                    content_session_logs_df = pd.DataFrame(content_session_logs)
+
+                    list_of_session_ids = content_session_logs_df['id'].to_list()
+
+                    content_session_logs_df = content_session_logs_df.rename(columns={'id': "sessionlog_id"})
+
+                    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = list_of_session_ids).values("item", "correct", "user_id","sessionlog_id")
+                    
+                    if not attempt_logs:
+                        return Response({"message": "No Assessment Attempted for this learner"}, status=status.HTTP_404_NOT_FOUND)
+                    
+                    attempt_logs_list_df = pd.DataFrame(attempt_logs)
+
+                    attempt_logs_list_df['item'] = attempt_logs_list_df["item"].str.split(":").str[1]
+
+                    correct_attempts_df = attempt_logs_list_df[attempt_logs_list_df['correct'] == 1]
+
+                    assessment_session_df = pd.merge(content_session_logs_df, get_assessment_df, on='user_id').reset_index(drop=True)
+
+                    for index, rows in assessment_session_df.iterrows():
+                        corrected_question_ids = correct_attempts_df[correct_attempts_df['sessionlog_id'] == rows['sessionlog_id']].reset_index(drop=True)
+                        corrected_question_ids_list = corrected_question_ids['item'].tolist()
+                        assessment_session_df.at[index, 'correct_questions_ids'] = corrected_question_ids_list
+
+                    assessment_session_df['start_timestamp'] = assessment_session_df['start_timestamp'].dt.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+
+                    json_string = assessment_session_df.to_json(orient='records')
+                    json_data = json.loads(json_string.replace("\\", ""))
+
+                    return Response(json_data)
+                
+                return Response({"message": "No Session Available for this learner"}, status=status.HTTP_404_NOT_FOUND)
+        
+        except models.ExamAssessment.DoesNotExist:
+            return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
