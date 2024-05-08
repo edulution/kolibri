@@ -24,7 +24,7 @@
   
   <script>
   
-    import { AssessmentGroupDataResource } from 'kolibri.resources';
+    import { AssessmentGroupDataResource, AssessmentReport } from 'kolibri.resources';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import commonCoach from '../common';
     import { PageNames } from '../../constants';
@@ -50,7 +50,7 @@
           breakdownData: [],
           assessmentDetails: {},
           selectedTest: '',
-          attemptHistory:[]
+          attemptHistory:[],
         };
       },
       computed: {
@@ -145,32 +145,11 @@
           learnerId,
         });
       },
-        onviewAttemptsClick() {
-         const data =[
-            {
-            id:1,
-            attempt_number:1,
-            created_date:'2024-05-03T16:55:38.469026+05:30',
-            question_count:10,
-            score: 2,
-          },
-          {
-            id:2,
-            attempt_number:2,
-            created_date:'2024-05-03T16:55:38.469026+05:30',
-            question_count:10,
-            score: 4,
-          },
-          {
-            id:3,
-            attempt_number:3,
-            created_date:'2024-05-03T16:55:38.469026+05:30',
-            question_count:10,
-            score: 8,
-          }
-        ]
-        
-          this.attemptHistory = data
+      async onviewAttemptsClick(assessmentId) {
+          const response = await AssessmentReport.fetchModel({ id: assessmentId })
+
+          this.attemptHistory = Object.values(response)
+
           this.currentView = 'TEST_ATTEMPTS'
 
         },
