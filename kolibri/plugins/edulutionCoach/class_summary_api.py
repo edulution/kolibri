@@ -328,11 +328,10 @@ def to_fetch_learner_status(learner_id, assessment_group_id):
         content_sessions[object.id] = object.content_id            
         object_id_list.append(object.id)
 
-    # attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = object_id_list).values("correct","sessionlog_id","item")
-    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in=object_id_list).values("id", "item", "start_timestamp", "end_timestamp", "completion_timestamp", "time_spent", "complete", "correct", "hinted", "answer", "simple_answer", "interaction_history", "user_id", "error", "masterylog_id", "sessionlog_id")
+    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in=list(set(object_id_list))).values("id", "item", "start_timestamp", "end_timestamp", "completion_timestamp", "time_spent", "complete", "correct", "hinted", "answer", "simple_answer", "interaction_history", "user_id", "error", "masterylog_id", "sessionlog_id")
 
     attempt_logs_list= list(attempt_logs)
-    
+
     corrected_ans_count = 0
     mastry_log_id = None
     for data in attempt_logs_list:
@@ -342,6 +341,8 @@ def to_fetch_learner_status(learner_id, assessment_group_id):
         mastry_log_id = data["masterylog_id"]
         
         if data["correct"] == 1.0:
+            if question_id in final_list[assessment_index]["correct_question_ids"]:
+                continue
             final_list[assessment_index]["correct_question_ids"].append(question_id)
             corrected_ans_count += 1
 

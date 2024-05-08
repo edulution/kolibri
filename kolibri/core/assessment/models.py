@@ -1,10 +1,9 @@
 import json
 import uuid
-
 from django.db import models
 from django.db.utils import IntegrityError
 from django.utils import timezone
-
+from kolibri.core.fields import DateTimeTzField
 from .permissions import UserCanReadExamAssignmentData
 from .permissions import UserCanReadExamData
 from kolibri.core.auth.constants import role_kinds
@@ -382,4 +381,24 @@ class AssessmentConfig(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     
+    updated_at = models.DateTimeField(auto_now_add=True, null=True)
+
+
+class AssessmentHistory(models.Model):
+    """
+    This model provides a history of a user's engagement with an assessment within a mastery level
+    """
+    morango_model_name = "assessmenthistory"
+
+    user_id = models.UUIDField(null=True)
+    summarylog_id = models.UUIDField(null=True)
+    assessment_id = models.UUIDField(null=True)
+    mastery_criterion = JSONField(default={})
+    start_timestamp = DateTimeTzField()
+    end_timestamp = DateTimeTzField(blank=True, null=True)
+    completion_timestamp = DateTimeTzField(blank=True, null=True)
+    mastery_level = models.IntegerField(null=True)
+    complete = models.BooleanField(default=False)
+    time_spent = models.FloatField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now_add=True, null=True)

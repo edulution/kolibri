@@ -2,14 +2,12 @@ import json
 from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
-# from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from kolibri.plugins.edulutionCoach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,\
-    CreateAssessmentSerializer, GetExamAssessmentSerializer, GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
+from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
 from rest_framework import status
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
@@ -21,9 +19,9 @@ from kolibri.core.assessment import models
 from kolibri.core.assessment import serializers
 from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
-from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer, StartRestartTest
+from .serializers import MarkAssessmentSerializer, StartRestartTest
 from datetime import datetime
-from itertools import groupby
+from kolibri.core.logger.models import AttemptLog,ContentSessionLog,MasteryLog,ContentSummaryLog
 
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
@@ -540,20 +538,19 @@ class MarkAssessmentViewset(ViewSet):
 
                 if not assessment_group_level:
                     return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
-                
-                # channel_id = assessment_group_level.channel_id
-                # assessment_group = models.AssessmentConfig.objects.get(channel_id = channel_id)
-            
+     
             except models.ExamAssessmentGroup.DoesNotExist:
                 return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
 
             exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
-            assessment_level = models.ExamAssessment.objects.filter(id=assessment_id).last() 
-            
+            assessment_level = models.ExamAssessment.objects.filter(id=assessment_id).last()
+
             question_count  = 1
+            user_id = assessment_group_level.learner_id
             
             if assessment_level:
                 question_count = assessment_level.question_count
+                user_id = assessment_level.learner_id
 
             learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
 
@@ -608,6 +605,31 @@ class MarkAssessmentViewset(ViewSet):
             assessment_group_level.save()
             assessment_level.save()
             Individual_current_assessment_level.save()
+
+            summarylog = ContentSummaryLog.objects.get(
+                    content_id = assessment_id,
+                    user=user_id,
+            )
+            summarylog = summarylog.id
+
+            masterylogs = MasteryLog.objects.get(
+                    summarylog=summarylog,
+                    user=user_id,
+            )
+
+            if masterylogs:
+                models.AssessmentHistory.objects.create(
+                    user_id = masterylogs.user_id, 
+                    summarylog_id=masterylogs.summarylog_id, 
+                    assessment_id=assessment_id,
+                    mastery_criterion=masterylogs.mastery_criterion,
+                    start_timestamp=masterylogs.start_timestamp,
+                    end_timestamp=masterylogs.end_timestamp,
+                    completion_timestamp=masterylogs.completion_timestamp,
+                    mastery_level=masterylogs.mastery_level,
+                    complete=masterylogs.complete,
+                    time_spent=masterylogs.time_spent,
+                    )
 
             return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
         else:
@@ -672,7 +694,6 @@ class MarkAssessmentViewset(ViewSet):
         # If current assessment id is not found in the list, return None for both ids
         return None, None, False
 
-from kolibri.core.logger.models import AttemptLog,ContentSessionLog,MasteryLog
 class AssessmentReportViewSet(ViewSet):
 
     def retrieve(self, request, pk=None):
@@ -716,18 +737,17 @@ class AssessmentReportViewSet(ViewSet):
                     assessment_session_df = pd.merge(content_session_logs_df, get_assessment_df, on='user_id').reset_index(drop=True)
 
                     assessment_session_df['correct_questions_ids'] = None
-                    assessment_session_df['attempt_count'] = 1
                     assessment_session_df['corrected_question_count'] = 0
+                    attempt_count_list = [] 
 
                     for index, rows in assessment_session_df.iterrows():
+                        attempt_count_list.append(index + 1)
                         
                         corrected_question_ids = correct_attempts_df[correct_attempts_df['sessionlog_id'] == rows['sessionlog_id']].reset_index(drop=True)
-                        
+
                         if corrected_question_ids.empty:
                             continue
                             
-                        assessment_session_df.at[index, 'attempt_count'] += 1 
-                        
                         corrected_question_ids_list = corrected_question_ids['item'].tolist()
          
                         if len(corrected_question_ids) == len(corrected_question_ids_list):
@@ -736,7 +756,8 @@ class AssessmentReportViewSet(ViewSet):
                         
                         else:
                             assessment_session_df.at[index, 'correct_questions_ids'] = None
-
+                    
+                    assessment_session_df['attempt_count'] = attempt_count_list
                     assessment_session_df['start_timestamp'] = assessment_session_df['start_timestamp'].dt.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
                     json_string = assessment_session_df.to_json(orient='records')
