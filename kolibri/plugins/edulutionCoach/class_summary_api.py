@@ -341,10 +341,12 @@ def to_fetch_learner_status(learner_id, assessment_group_id):
         mastry_log_id = data["masterylog_id"]
         
         if data["correct"] == 1.0:
-            if question_id in final_list[assessment_index]["correct_question_ids"]:
-                continue
-            final_list[assessment_index]["correct_question_ids"].append(question_id)
-            corrected_ans_count += 1
+            
+            latest_key = next((key for key, value in reversed(content_sessions.items()) if value == assessment_id), None)
+
+            if latest_key == data["sessionlog_id"]:
+                final_list[assessment_index]["correct_question_ids"].append(question_id)
+                corrected_ans_count += 1
 
         response_dict = {
                         
