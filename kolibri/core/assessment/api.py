@@ -323,6 +323,7 @@ class ExamAssessmentStartViewSet(ViewSet):
 
             if available_id:
                 assessment_instance = models.ExamAssessment.objects.get(id=first_assessment_map)
+                assessment_instance.previous_question_sources = assessment_instance.current_question_sources
                 assessment_instance.__dict__.update({**update_dict, 'attempt_count': AssessmentConstant.ATTEMPT_COUNT})
                 assessment_instance.save()
             else:
@@ -361,11 +362,11 @@ class AssessmentTestViewSet(ViewSet):
                             'attempt_count': assessment_obj.attempt_count + 1
                         }
 
-                        assessment_type = assessment_obj.extra_data['type']
-                        assessment_level = assessment_obj.extra_data['level']
+                        assessment_obj.previous_question_sources = assessment_obj.current_question_sources
 
                         if assessment_obj.attempt_count >= AssessmentConstant.LEVEL_AND_COUNT:
-                            assessment_obj.previous_question_sources = assessment_obj.current_question_sources
+
+                            # assessment_obj.previous_question_sources = assessment_obj.current_question_sources
                             current_question_source = []
 
                             exercise_questions = {topic['id']: [] for topic in assessment_obj.topicwise_weightage}
@@ -384,9 +385,7 @@ class AssessmentTestViewSet(ViewSet):
                                 current_question_source.extend(random_questions)
 
                             assessment_obj.current_question_sources = current_question_source
-
-                            if assessment_type == AssessmentConstant.PRE_TEST and assessment_level == AssessmentConstant.LEVEL_AND_COUNT:
-                                assessment_obj.previous_question_sources = assessment_obj.current_question_sources
+                            assessment_obj.previous_question_sources = current_question_source
 
                     elif flag == AssessmentConstant.STOP:
                         update_dict = {
@@ -481,7 +480,7 @@ class FetchAssessmentGroupData(ViewSet):
                     "date_created": assessment.date_created,
                     "date_archived": assessment.date_archived,
                     "date_activated": assessment.date_activated,
-                    "archive": assessment.archive if assessment.extra_data['type'] != AssessmentConstant.PRE_TEST else True,
+                    "archive": assessment.archive,
                     "active": assessment.active,
                     "assignments": assessment.assignments,
                     "exercises": [],
@@ -633,8 +632,12 @@ class MarkAssessmentViewset(ViewSet):
                     )
                 
                 assessment_update = models.ExamAssessment.objects.get(id=assessment_id)
+
+                if assessment_update.extra_data['type'] == AssessmentConstant.PRE_TEST:
+                    assessment_update.archive = True
                 
                 assessment_update.previous_question_sources = []
+                assessment_update.save()
 
             return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
         else:
