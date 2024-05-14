@@ -100,6 +100,11 @@ class ExamAssessment(AbstractFacilityDataModel):
     extra_data  = JSONField(default={}, blank=True)
 
     attempt_count = models.IntegerField(null=True, default=0)
+    current_question_sources = JSONField(default=[], blank=True)
+    previous_question_sources = JSONField(default=[], blank=True)
+    topicwise_weightage = JSONField(default=[], blank=True)
+    current_question_count = models.IntegerField(null=True, default=0)
+    current_questions_limit = models.IntegerField(null=True, default=0)
 
     content_assignments = ContentAssignmentManager(
         # one exam can contain multiple questions from multiple exercises,
@@ -400,5 +405,6 @@ class AssessmentHistory(models.Model):
     mastery_level = models.IntegerField(null=True)
     complete = models.BooleanField(default=False)
     time_spent = models.FloatField(null=True)
+    question_sources = JSONField(default=[], blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now_add=True, null=True)

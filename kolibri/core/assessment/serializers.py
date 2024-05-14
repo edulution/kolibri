@@ -58,6 +58,8 @@ class ExamAssessmentSerializer(ModelSerializer):
         fields = (
             "id",
             "title",
+            "current_question_count",
+            "current_question_sources",
             "question_count",
             "question_sources",
             "seed",

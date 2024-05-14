@@ -22,7 +22,9 @@ from kolibri.core.query import annotate_array_aggregate
 from .serializers import MarkAssessmentSerializer, StartRestartTest
 from datetime import datetime
 from kolibri.core.logger.models import AttemptLog,ContentSessionLog,MasteryLog,ContentSummaryLog
-
+import random
+import pandas as pd
+from .z_assessments_constant import AssessmentConstant
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
     """
@@ -72,6 +74,8 @@ class AssessmentViewset(ValuesViewset):
     values = (
         "id",
         "title",
+        "current_question_count",
+        "current_question_sources",
         "question_count",
         "question_sources",
         "seed",
@@ -178,7 +182,6 @@ class CreateAssessmentRecord(ViewSet):
             request_data = request.data
 
             assessment = request_data.get('assessments')
-
             collection = request_data.get('collection')
             date_activated = request_data.get('date_activated')
             date_archived = request_data.get('date_archived')
@@ -197,7 +200,7 @@ class CreateAssessmentRecord(ViewSet):
             assessment_group_obj = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id=collection)
 
             assessment_map_df = pd.DataFrame(assessment_map_obj.assessment_map)
-            assessment_map_df[(assessment_map_df['type'] == 'PRE') & (assessment_map_df['order'] == 1) & (assessment_map_df['level'] == 1)].reset_index(drop=True)
+            assessment_map_df[(assessment_map_df['type'] == AssessmentConstant.PRE_TEST) & (assessment_map_df['order'] == AssessmentConstant.ORDER) & (assessment_map_df['level'] == AssessmentConstant.LEVEL)].reset_index(drop=True)
             
             if not assessment_group_obj:
 
@@ -219,9 +222,9 @@ class CreateAssessmentRecord(ViewSet):
 
                 assessment_group_obj = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
             
-            obj = None
+            object = None
             if assessment_group_obj.exists():
-                obj = assessment_group_obj[0]
+                object = assessment_group_obj[0]
             
             is_available = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
 
@@ -231,12 +234,31 @@ class CreateAssessmentRecord(ViewSet):
             if not is_available:
                 for test in assessment_map_obj.assessment_map:
                     map_object = next((d for d in assessment if d['content_id'] == test['id']), None)
-                    
                     if map_object:
                         question_source = map_object.get('question_sources')
                         question_count = map_object.get('question_count')
                         new_title = map_object.get('title')
+                        current_question_limit = map_object.get('limit')
+                        assessment_topic = map_object.get('exercises')
+
+                        current_question_source = []
+
+                        exercise_questions = {topic['id']: [] for topic in assessment_topic}
+                        for source in question_source:
+                            exercise_id = source['exercise_id']
+                            exercise_questions[exercise_id].append(source)
                         
+                        current_question_count = AssessmentConstant.DEFAULT
+                        for topic in assessment_topic:
+                            exercise_id = topic['id']
+                            weightage = topic['weightage']
+                            current_question_count += weightage
+                            matched_question_ids = exercise_questions.get(exercise_id, [])
+                            random_questions = random.sample(matched_question_ids, min(weightage, len(matched_question_ids)))
+                            current_question_source.append(random_questions)
+        
+                        current_question_source_list = [item for sublist in current_question_source for item in sublist]
+
                         instance = ExamAssessment.objects.create(
                             collection_id = collection,
                             date_activated=date_activated,
@@ -245,9 +267,13 @@ class CreateAssessmentRecord(ViewSet):
                             title=new_title,
                             question_sources = question_source,
                             question_count = question_count ,
-                            assessment_group_id = obj.id,
+                            assessment_group_id = object.id,
                             channel_id = channel_id, 
                             creator_id=creator_id,
+                            current_questions_limit=current_question_limit,
+                            current_question_sources = current_question_source_list,
+                            current_question_count = current_question_count,
+                            topicwise_weightage = assessment_topic,
                             extra_data = {'type': test['type'], 'level': test['level']}
                         )
 
@@ -258,8 +284,8 @@ class CreateAssessmentRecord(ViewSet):
                             'title':new_title,
                             'question_count': question_count,
                             'question_sources': question_source,
-                            'seed': 0,
-                            'learners_see_fixed_order': 0,
+                            'seed': AssessmentConstant.DEFAULT,
+                            'learners_see_fixed_order': AssessmentConstant.DEFAULT,
                             'date_activated': date_activated
                         }
 
@@ -270,7 +296,7 @@ class CreateAssessmentRecord(ViewSet):
                         })
                         final_response_list.append(final_dict)
 
-                if len(instance_list) != 0: 
+                if len(instance_list) != AssessmentConstant.DEFAULT: 
                     to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id'], 'current_assessment_level': instance_list[0]['level'], 'current_assessment_type': instance_list[0]['type']}
                     models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
 
@@ -280,38 +306,12 @@ class CreateAssessmentRecord(ViewSet):
         
         except models.ExamAssessmentGroup.DoesNotExist:
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 
-# class ExamAssessmentStartViewSet(ViewSet):
-#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
-#         try:
-#             # Fetch the instances based on the assessment_group_id
-#             update_dict = {'active': 1}
-#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
-#             if available_id:
-#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Assessment ID'})
-#             # Fetch the instance based on the primary key
-
-#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
-#             if available_group_id:
-#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Group ID'})
-
-#             # Optionally, you can return a success response indicating the update was successful
-#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
-#         except models.ExamAssessmentGroup.DoesNotExist:
-#             # Handle case where no instance with the given pk is found
-            # return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 class ExamAssessmentStartViewSet(ViewSet):
    def partial_update(self, request, pk=None):  # Ensure pk is included in the method signature
         try:
             # Fetch the instances based on the assessment_group_id
-            update_dict = {'active': 1}
+            update_dict = {'active': AssessmentConstant.ACTIVE}
             
             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
 
@@ -323,7 +323,7 @@ class ExamAssessmentStartViewSet(ViewSet):
 
             if available_id:
                 assessment_instance = models.ExamAssessment.objects.get(id=first_assessment_map)
-                assessment_instance.__dict__.update({**update_dict, 'attempt_count': 1 })
+                assessment_instance.__dict__.update({**update_dict, 'attempt_count': AssessmentConstant.ATTEMPT_COUNT})
                 assessment_instance.save()
             else:
                 return Response({'message': 'Invalid Assessment ID'})
@@ -354,16 +354,43 @@ class AssessmentTestViewSet(ViewSet):
     
                 if assessment_obj:
                     update_dict = {}
-                    # 0: STOP, 1: START, 2: RESTART
-                    if flag == 1 or flag == 2:
+                    
+                    if flag == AssessmentConstant.START or flag == AssessmentConstant.RESTART:
                         update_dict = {
-                            'active': 1,
+                            'active': AssessmentConstant.ACTIVE,
                             'attempt_count': assessment_obj.attempt_count + 1
                         }
 
-                    elif flag == 0:
+                        assessment_type = assessment_obj.extra_data['type']
+                        assessment_level = assessment_obj.extra_data['level']
+
+                        if assessment_obj.attempt_count >= AssessmentConstant.LEVEL_AND_COUNT:
+                            assessment_obj.previous_question_sources = assessment_obj.current_question_sources
+                            current_question_source = []
+
+                            exercise_questions = {topic['id']: [] for topic in assessment_obj.topicwise_weightage}
+
+                            # Populate exercise_questions dictionary with question sources
+                            for source in assessment_obj.question_sources:
+                                exercise_id = source['exercise_id']
+                                exercise_questions[exercise_id].append(source)
+
+                            # Loop through each topic and select random questions
+                            for topic in assessment_obj.topicwise_weightage:
+                                exercise_id = topic['id']
+                                weightage = topic['weightage']
+                                matched_question_ids = exercise_questions.get(exercise_id, [])
+                                random_questions = random.sample(matched_question_ids, min(weightage, len(matched_question_ids)))
+                                current_question_source.extend(random_questions)
+
+                            assessment_obj.current_question_sources = current_question_source
+
+                            if assessment_type == AssessmentConstant.PRE_TEST and assessment_level == AssessmentConstant.LEVEL_AND_COUNT:
+                                assessment_obj.previous_question_sources = assessment_obj.current_question_sources
+
+                    elif flag == AssessmentConstant.STOP:
                         update_dict = {
-                            'active': 0
+                            'active': AssessmentConstant.STOP
                         }
 
                     assessment_obj.__dict__.update(**update_dict)
@@ -378,36 +405,11 @@ class AssessmentTestViewSet(ViewSet):
         except models.ExamAssessment.DoesNotExist:
             # Handle case where no instance with the given pk is found
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 
-# class ExamAssessmentStopViewSet(ViewSet):
-#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
-#         try:
-#             # Fetch the instances based on the assessment_group_id
-#             update_dict = {'archive': 1}
-#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
-#             if available_id:
-#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Assessment ID'})
-#             # Fetch the instance based on the primary key
-
-#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
-#             if available_group_id:
-#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Group ID'})
-
-#             # Optionally, you can return a success response indicating the update was successful
-#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
-#         except models.ExamAssessmentGroup.DoesNotExist:
-#             # Handle case where no instance with the given pk is found
-#             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
 class ExamAssessmentStopViewSet(ViewSet):
     def partial_update(self, request, pk=None):
         try:
-            update_dict = {'archive': 1}
+            update_dict = {'archive': AssessmentConstant.ARCHIVE}
             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
             
             if available_id:
@@ -479,7 +481,7 @@ class FetchAssessmentGroupData(ViewSet):
                     "date_created": assessment.date_created,
                     "date_archived": assessment.date_archived,
                     "date_activated": assessment.date_activated,
-                    "archive": assessment.archive,
+                    "archive": assessment.archive if assessment.extra_data['type'] != AssessmentConstant.PRE_TEST else True,
                     "active": assessment.active,
                     "assignments": assessment.assignments,
                     "exercises": [],
@@ -522,8 +524,6 @@ class FetchAssessmentGroupData(ViewSet):
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Exam Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
 
-
-import pandas as pd
 class MarkAssessmentViewset(ViewSet):
     serializer_class = MarkAssessmentSerializer
 
@@ -557,7 +557,7 @@ class MarkAssessmentViewset(ViewSet):
             num_correct_value = learner_status[0]['num_correct']
 
             if num_correct_value == None:
-                num_correct_value = 0
+                num_correct_value = AssessmentConstant.DEFAULT
 
             percentage = (num_correct_value / question_count) * 100
             
@@ -629,12 +629,16 @@ class MarkAssessmentViewset(ViewSet):
                     mastery_level=masterylogs.mastery_level,
                     complete=masterylogs.complete,
                     time_spent=masterylogs.time_spent,
+                    question_sources = assessment_level.previous_question_sources
                     )
+                
+                assessment_update = models.ExamAssessment.objects.get(id=assessment_id)
+                
+                assessment_update.previous_question_sources = []
 
             return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
     def process_assessment_list(self, assessments, current_assessment_id, last_assessment_id, score):
