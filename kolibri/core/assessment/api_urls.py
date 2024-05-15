@@ -15,6 +15,6 @@ router.register(r"learnerassessments", GetLearnerAssessmentViewset, basename="le
 router.register(r"fetchbyassessmentgroupid", FetchAssessmentGroupData, basename="fetchassessmentdata")
 router.register(r"markassessment", MarkAssessmentViewset, basename="markassessment")
 router.register(r"assessmenttest", AssessmentTestViewSet, basename="assessmenttest")
-router.register(r"assessmentreport", AssessmentReportViewSet, basename="assessmentreport")
+router.register(r"assessmentpastreport", AssessmentReportViewSet, basename="assessmentpastreport")
 
 urlpatterns = [url(r"^", include(router.urls))]
