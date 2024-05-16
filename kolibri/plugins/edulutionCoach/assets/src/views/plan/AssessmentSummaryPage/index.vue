@@ -62,7 +62,7 @@
                       <span
                         class="score-chip"
                         :style="{
-                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.questionCount), tableRow.attemptCount),
+                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.questionCount), tableRow.attemptCount,tableRow.type,tableRow.active,tableRow.archive),
                           color: 'white',
                         }"
                       >
@@ -89,13 +89,15 @@
                       </span>
                       <span 
                         :class="isStartfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
-                        @click="toggleModal('start',tableRow.id,1)"
+                        @click.prevent="isStartfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) && 
+                          toggleModal('start',tableRow.id,1)"
                       >
                         Start
                       </span>
                       <span
                         :class="isStopfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
-                        @click.prevent="toggleModal('stop',tableRow.id,0)"
+                        @click.prevent="isStopfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) && 
+                          toggleModal('stop',tableRow.id,0)"
                       >
                         Stop
                       </span>
@@ -300,13 +302,25 @@
       calcPercentage(score, total) {
           return (score / total);
         },
-      scoreColor(value,count) {
+      scoreColor(value,count,type,active,archive) {
+          if (type ==='PRE' && archive === true) {
+            return '#FF412A';
+          }
+          if (type ==='PRE' && value <= 0 && count === 1 ) {
+            return '#D9D9D9';
+          }
+          if (value <= 0 && count >= 1 && active == true) {
+            return '#D9D9D9';
+          }
+          if (value <= 0 && count >= 1 && active == false) {
+            return '#FF412A';
+          }
           if (value <= 0 && count === 0) {
             return '#D9D9D9';
           }
-          if (value <= 0 && count !== 0) {
-            return '#FF412A';
-          }
+          if (value <= 0 && count >= 1) {
+          return '#D9D9D9';
+        }
           if (value > 0 && value <= 0.25) {
             return '#FF412A';
           }
@@ -319,7 +333,7 @@
           if (value > 0.69 && value <= 0.74) {
             return '#99CC33';
           }
-          if (value <= 1) {
+          if (value <= 1 ) {
             return '#00B050';
           }
         },
