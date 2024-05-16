@@ -172,6 +172,30 @@ class GroupAssessmentViewset(ViewSet):
             return Response(serializer.data)
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+def fetch_random_question_source(question_source, assessment_topic):
+    try:
+        current_question_source = []
+
+        exercise_questions = {topic['id']: [] for topic in assessment_topic}
+        for source in question_source:
+            exercise_id = source['exercise_id']
+            exercise_questions[exercise_id].append(source)
+        
+        current_question_count = AssessmentConstant.DEFAULT
+        for topic in assessment_topic:
+            exercise_id = topic['id']
+            weightage = topic['weightage']
+            current_question_count += weightage
+            matched_question_ids = exercise_questions.get(exercise_id, [])
+            random_questions = random.sample(matched_question_ids, min(weightage, len(matched_question_ids)))
+            current_question_source.extend(random_questions)
+
+        return current_question_source, current_question_count
+
+    except Exception as e:
+        return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class CreateAssessmentRecord(ViewSet):
     def create(self, request, pk=None):
@@ -241,23 +265,7 @@ class CreateAssessmentRecord(ViewSet):
                         current_question_limit = map_object.get('limit')
                         assessment_topic = map_object.get('exercises')
 
-                        current_question_source = []
-
-                        exercise_questions = {topic['id']: [] for topic in assessment_topic}
-                        for source in question_source:
-                            exercise_id = source['exercise_id']
-                            exercise_questions[exercise_id].append(source)
-                        
-                        current_question_count = AssessmentConstant.DEFAULT
-                        for topic in assessment_topic:
-                            exercise_id = topic['id']
-                            weightage = topic['weightage']
-                            current_question_count += weightage
-                            matched_question_ids = exercise_questions.get(exercise_id, [])
-                            random_questions = random.sample(matched_question_ids, min(weightage, len(matched_question_ids)))
-                            current_question_source.append(random_questions)
-        
-                        current_question_source_list = [item for sublist in current_question_source for item in sublist]
+                        current_question_source, current_question_count = fetch_random_question_source(question_source, assessment_topic)
 
                         instance = ExamAssessment.objects.create(
                             collection_id = collection,
@@ -271,7 +279,7 @@ class CreateAssessmentRecord(ViewSet):
                             channel_id = channel_id, 
                             creator_id=creator_id,
                             current_questions_limit=current_question_limit,
-                            current_question_sources = current_question_source_list,
+                            current_question_sources = current_question_source,
                             current_question_count = current_question_count,
                             topicwise_weightage = assessment_topic,
                             extra_data = {'type': test['type'], 'level': test['level']}
@@ -366,23 +374,7 @@ class AssessmentTestViewSet(ViewSet):
 
                         if assessment_obj.attempt_count >= AssessmentConstant.LEVEL_AND_COUNT:
 
-                            # assessment_obj.previous_question_sources = assessment_obj.current_question_sources
-                            current_question_source = []
-
-                            exercise_questions = {topic['id']: [] for topic in assessment_obj.topicwise_weightage}
-
-                            # Populate exercise_questions dictionary with question sources
-                            for source in assessment_obj.question_sources:
-                                exercise_id = source['exercise_id']
-                                exercise_questions[exercise_id].append(source)
-
-                            # Loop through each topic and select random questions
-                            for topic in assessment_obj.topicwise_weightage:
-                                exercise_id = topic['id']
-                                weightage = topic['weightage']
-                                matched_question_ids = exercise_questions.get(exercise_id, [])
-                                random_questions = random.sample(matched_question_ids, min(weightage, len(matched_question_ids)))
-                                current_question_source.extend(random_questions)
+                            current_question_source, _ = fetch_random_question_source(assessment_obj.question_sources, assessment_obj.topicwise_weightage)
 
                             assessment_obj.current_question_sources = current_question_source
                             assessment_obj.previous_question_sources = current_question_source
