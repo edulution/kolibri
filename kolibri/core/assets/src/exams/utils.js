@@ -101,13 +101,13 @@ export function convertExamQuestionSources(exam, extraArgs = {}) {
       questionIds[node.id] = assessmentMetaDataState(node).assessmentIds;
     });
     return annotateQuestionsWithItem(
-      convertExamQuestionSourcesV0V2(exam.question_sources, exam.seed, questionIds)
+      convertExamQuestionSourcesV0V2(exam.current_question_sources, exam.seed, questionIds)
     );
   }
   if (data_model_version === 1) {
-    return annotateQuestionsWithItem(convertExamQuestionSourcesV1V2(exam.question_sources));
+    return annotateQuestionsWithItem(convertExamQuestionSourcesV1V2(exam.current_question_sources));
   }
-  return annotateQuestionsWithItem(exam.question_sources);
+  return annotateQuestionsWithItem(exam.current_question_sources);
 }
 
 export function fetchNodeDataAndConvertExam(exam) {

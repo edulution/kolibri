@@ -150,10 +150,10 @@ export function showAssessment(store, params, alreadyOnQuiz) {
           store.commit('classAssignments/SET_CURRENT_CLASSROOM', classroom);
 
           let contentPromise;
-          if (exam.question_sources.length) {
+          if (exam.current_question_sources.length) {
             contentPromise = ContentNodeResource.fetchCollection({
               getParams: {
-                ids: exam.question_sources.map(item => item.exercise_id),
+                ids: exam.current_question_sources.map(item => item.exercise_id),
               },
             });
           } else {
