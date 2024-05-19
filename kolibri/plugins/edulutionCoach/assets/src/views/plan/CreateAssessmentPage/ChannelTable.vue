@@ -1,5 +1,8 @@
 <template>
-  <div>
+  <div v-if="!assessmentArray.length" class="loading">
+    Loading...
+  </div>
+  <div v-else>
     <div :style="{ display: 'flex' , gap: '16%' }">
       <p>Title</p>
       <p>Limit</p>
@@ -150,15 +153,14 @@ export default {
 
 <style lang="scss" scoped>
 
-  .btn-style{
-    color: blue;
-    cursor: pointer;
-    border-radius: 8px;
-    padding: 2px 9px;
-    box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
-    border: 1px solid #80808047;
-    background-color: whitesmoke;
-  }
+.loading {
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 25px;
+    padding: 10px;
+}
   
 
 </style>

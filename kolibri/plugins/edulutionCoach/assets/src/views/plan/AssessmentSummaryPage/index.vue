@@ -121,7 +121,7 @@
             </div>
 
             <h2>
-              {{ coachString('numberOfQuestions', { value: selectedQuestions.length }) }}
+              {{ coachString('numberOfQuestions', { value: assessment.question_sources.length }) }}
             </h2>
 
             <p>
@@ -131,7 +131,7 @@
             <QuestionListPreview
               :fixedOrder="!quizIsRandomized"
               :readOnly="true"
-              :selectedQuestions="selectedQuestions"
+              :selectedQuestions="assessment.question_sources"
               :selectedExercises="selectedExercises"
             />
           </section>
@@ -214,9 +214,6 @@
       // Maybe it should live elsewhere?
       /* eslint-disable-next-line kolibri/vue-no-unused-vuex-properties */
       ...mapState('classSummary', ['groupMap', 'learnerMap', 'assessmentMap']),
-      selectedQuestions() {
-        return this.assessment.question_sources;
-      },
       quizIsRandomized() {
         return !this.assessment.learners_see_fixed_order;
       },
