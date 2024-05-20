@@ -144,7 +144,7 @@
         return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
           quizId,
           learnerId: this.assessmentDetails.learner_id,
-        });
+        }, { assessmentGroupId: this.assessmentDetails.id });
       },
       async onviewAttemptsClick(assessmentId) {
           const response = await AssessmentReport.fetchModel({ id: assessmentId })

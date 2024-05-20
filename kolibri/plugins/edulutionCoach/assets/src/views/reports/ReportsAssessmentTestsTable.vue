@@ -44,11 +44,12 @@
               gap: '10px'
             }"
           >
-            <KRouterLink
-              class="btn-style"
-              text="View Details"
-              :to="tableRow.link"
-            />  
+            <span 
+              :class="tableRow.active ? 'btn-style' : 'disabled-btn'"
+              @click.prevent="tableRow.active && onViewDetailsClick(tableRow)"
+            >
+              View Details
+            </span>
 
             <span 
               class="btn-style"
@@ -57,8 +58,8 @@
               View Breakdown
             </span>
             <span 
-              :class="isPastEnabled(tableRow.type , tableRow.attempt_count) ? 'btn-style' : 'disabled-btn'"
-              @click.prevent="onviewAttemptsClick(tableRow.id)"
+              :class="isPastEnabled(tableRow.type , tableRow.attempt_count, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
+              @click.prevent="isPastEnabled(tableRow.type , tableRow.attempt_count, tableRow.archive) && onviewAttemptsClick(tableRow.id)"
             >
               View Past
             </span>
@@ -119,12 +120,15 @@
         onviewAttemptsClick(id){
           this.$emit('viewAttemptsClick', id);
         },
-        isPastEnabled(type,count){
-          if ((type === 'SECTION' || type === 'POST') && count > 0) {
+        isPastEnabled(type,count,isArchive){
+          if ((type === 'SECTION' || type === 'POST') && (count > 1 || isArchive)) {
             return true
           }
           return false
         },
+        onViewDetailsClick(tableRow) {
+          this.$router.push(tableRow.link)
+        }
       },
       $trs: {
         titleLabel: {
