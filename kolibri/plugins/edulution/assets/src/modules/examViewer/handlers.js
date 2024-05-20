@@ -162,7 +162,7 @@ export function showAssessment(store, params, alreadyOnQuiz) {
           contentPromise.then(
             contentNodes => {
               if (shouldResolve()) {
-                const questions = convertExamQuestionSources(exam, { contentNodes });
+                const questions = convertExamQuestionSources(exam, { contentNodes, type: 'ASSESSMENT' });
 
                 // Exam is drawing solely on malformed exercise data, best to quit now
                 if (questions.some(question => !question.question_id)) {

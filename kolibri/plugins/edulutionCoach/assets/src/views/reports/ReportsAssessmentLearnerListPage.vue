@@ -140,9 +140,10 @@
           }
           this.currentView = 'TEST_BREAKDOWN'
         },
-        detailLink(learnerId) {
+        detailLink(quizId) {
         return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
-          learnerId,
+          quizId,
+          learnerId: this.assessmentDetails.learner_id,
         });
       },
       async onviewAttemptsClick(assessmentId) {

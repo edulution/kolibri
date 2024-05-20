@@ -84,6 +84,7 @@ function annotateQuestionsWithItem(questions) {
 
 export function convertExamQuestionSources(exam, extraArgs = {}) {
   const { data_model_version } = exam;
+  const questionSources = extraArgs.type === 'ASSESSMENT' ? exam.current_question_source : exam.question_sources
   if (data_model_version === 0) {
     // TODO contentNodes are only needed for V0 -> V2 conversion, but a request to the
     // ContentNode API is made regardless of the version being converted
@@ -101,13 +102,13 @@ export function convertExamQuestionSources(exam, extraArgs = {}) {
       questionIds[node.id] = assessmentMetaDataState(node).assessmentIds;
     });
     return annotateQuestionsWithItem(
-      convertExamQuestionSourcesV0V2(exam.current_question_sources, exam.seed, questionIds)
+      convertExamQuestionSourcesV0V2(questionSources, exam.seed, questionIds)
     );
   }
   if (data_model_version === 1) {
-    return annotateQuestionsWithItem(convertExamQuestionSourcesV1V2(exam.current_question_sources));
+    return annotateQuestionsWithItem(convertExamQuestionSourcesV1V2(questionSources));
   }
-  return annotateQuestionsWithItem(exam.current_question_sources);
+  return annotateQuestionsWithItem(questionSources);
 }
 
 export function fetchNodeDataAndConvertExam(exam) {
