@@ -84,7 +84,8 @@ function annotateQuestionsWithItem(questions) {
 
 export function convertExamQuestionSources(exam, extraArgs = {}) {
   const { data_model_version } = exam;
-  const questionSources = extraArgs.type === 'ASSESSMENT' ? exam.current_question_source : exam.question_sources
+  const questionSources = extraArgs.type === 'ASSESSMENT' ? exam.current_question_sources : exam.question_sources
+
   if (data_model_version === 0) {
     // TODO contentNodes are only needed for V0 -> V2 conversion, but a request to the
     // ContentNode API is made regardless of the version being converted
