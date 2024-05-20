@@ -466,6 +466,7 @@ class FetchAssessmentGroupData(ViewSet):
                     "id": assessment.id,
                     "title": assessment.title,
                     "question_sources": assessment.question_sources,
+                    "current_question_sources": assessment.current_question_sources,
                     "data_model_version": assessment.data_model_version,
                     "learners_see_fixed_order": assessment.learners_see_fixed_order,
                     "seed": assessment.seed,
