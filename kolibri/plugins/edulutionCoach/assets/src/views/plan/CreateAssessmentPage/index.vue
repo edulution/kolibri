@@ -32,7 +32,7 @@
         </KGridItem>
       </KGrid>
 
-      <h2>{{ $tr('chooseChannel') }}</h2>
+      <h2 v-if="toggleTable === 'SHOW_CHANNEL'">{{ $tr('chooseChannel') }}</h2>
 
       <div v-if="toggleTable === 'SHOW_CHANNEL'">
         <div>
@@ -105,6 +105,7 @@
         </div>
       </div>
 
+      <h2 v-if="toggleTable === 'SHOW_TABLE'">Configure weightage for assessment</h2>
       <ChannelTable 
         v-if="toggleTable === 'SHOW_TABLE'"
         :tableData="tableData"
