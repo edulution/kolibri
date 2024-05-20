@@ -39,6 +39,7 @@
               <template #headers>
                 <th>{{ $tr('titleLabel') }}</th>
                 <th>{{ $tr('scoreLabel') }}</th>
+                <th>{{ $tr('weightageLabel') }}</th>
                 <th 
                   :style="{
                     display: 'flex',
@@ -73,6 +74,10 @@
                           )
                         }}
                       </span>
+                    </td>
+
+                    <td :style="{ textAlign: 'center' }">
+                      {{ tableRow.currentQuestionCount }}
                     </td>
                      
                     <td 
@@ -120,9 +125,39 @@
               <span>Back To Listing</span>
             </div>
 
-            <h2>
-              {{ coachString('numberOfQuestions', { value: assessment.question_sources.length }) }}
-            </h2>
+            <div :style="{ display: 'flex',justifyContent: 'space-between' }">
+              <h2>
+                {{ coachString('numberOfQuestions', { value: getSelectedQuestions().length }) }}
+              </h2>
+              <div :style="{ display: 'flex',justifyContent: 'space-between', gap: '10px' }">
+                <p
+                  :style="{ padding: '2px 5px',
+                            border: '1px solid grey',
+                            borderRadius: '9px' ,
+                            backgroundColor: activeView === 'All' ? 'blue' : 'white' ,
+                            color: activeView === 'All' ? 'white' : 'blue',
+                            cursor: 'pointer'
+                            
+                  }"
+                  @click.prevent="toggleQuestionSources('All')"
+                >
+                  Show All
+                </p>
+                <p 
+                  :style="{ padding: '2px 5px',
+                            border: '1px solid grey',
+                            borderRadius: '9px' ,
+                            backgroundColor: activeView === 'CURRENT' ? 'blue' : 'white' ,
+                            color: activeView === 'CURRENT' ? 'white' : 'blue',
+                            cursor: 'pointer'
+                  }"
+                  @click.prevent="toggleQuestionSources('CURRENT')" 
+                >
+                  Show Current
+                </p>
+              </div>
+
+            </div>
 
             <p>
               {{ orderDescriptionString }}
@@ -131,7 +166,7 @@
             <QuestionListPreview
               :fixedOrder="!quizIsRandomized"
               :readOnly="true"
-              :selectedQuestions="assessment.question_sources"
+              :selectedQuestions="getSelectedQuestions()"
               :selectedExercises="selectedExercises"
             />
           </section>
@@ -192,6 +227,7 @@
           learners_see_fixed_order: false,
           question_sources: [],
           title: '',
+          current_question_sources:[]
         },
         selectedExercises: {},
         loading: true,
@@ -205,7 +241,10 @@
         startStopText:"",
         flagData:null,
         assessmentid:"",
-        groupActive:null
+        groupActive:null,
+        selectedQuestions : [],
+        incrementQuestions: 0,
+        activeView: 'CURRENT',
       };
     },
     computed: {
@@ -240,7 +279,8 @@
            type : id.extra_data.type,
            attemptCount: id.attempt_count,
            active: id.active,
-           archive: id.archive
+           archive: id.archive,
+           currentQuestionCount: id.current_question_sources.length
          }
 
          testData.push(data)
@@ -271,7 +311,8 @@
         this.currentView = view;
         this.selectedId = id
         const selectedQuestionSource = this.assessmentList.find(d => d.id == this.selectedId)
-        this.assessment.question_sources = selectedQuestionSource?.question_sources
+        this.assessment = selectedQuestionSource
+        this.selectedQuestions = selectedQuestionSource?.current_question_sources
       },
       // @public
       setData(data) {
@@ -396,7 +437,16 @@
           this.flagData = flag,
           this.assessmentid =id
           this.submitModalOpen = !this.submitModalOpen;
-        }
+        } ,
+        getSelectedQuestions() {
+          if(this.activeView === 'All'){
+            return this.assessment.question_sources
+          }
+          return this.assessment.current_question_sources
+        },
+        toggleQuestionSources(data){
+         this.activeView = data
+            },
     },
     $trs: {
         titleLabel: {
@@ -426,6 +476,10 @@
         context:
           'Action that learner takes to submit their quiz answers so that the coach can review them.',
       },
+      weightageLabel:{
+        message:'Weightage',
+        context: 'weightage of questions'
+      }
       },
   };
 
