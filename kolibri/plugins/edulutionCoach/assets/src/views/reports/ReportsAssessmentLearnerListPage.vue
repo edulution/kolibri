@@ -67,7 +67,8 @@
                 archive: d.archive,
                 attempt_count: d.attempt_count,
                 type: d.extra_data.type,
-                link: this.detailLink(statusData.assessment_id)
+                link: this.detailLink(statusData.assessment_id),
+                currentQuestionCount: d.current_question_sources.length
               }
             })
           }

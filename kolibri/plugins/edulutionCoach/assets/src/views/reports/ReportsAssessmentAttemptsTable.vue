@@ -17,6 +17,9 @@
           {{ $tr('scoreLabel') }}
         </th>
         <th>
+          {{ $tr('weightageLabel') }}
+        </th>
+        <th>
           {{ $tr('ActionLabel') }}
         </th>
       </template>
@@ -48,6 +51,9 @@
                   )
                 }}
               </span>
+            </td>
+            <td>
+              {{ tableRow.current_question_sources ? tableRow.current_question_sources.length : 0 }}
             </td>
             <td>
               <span class="btn-style">
@@ -134,6 +140,10 @@
           message: 'Attempt Number',
           context: '',
         },
+        weightageLabel:{
+          message: 'Weightage',
+          context: '',
+        }
       },
     };
     

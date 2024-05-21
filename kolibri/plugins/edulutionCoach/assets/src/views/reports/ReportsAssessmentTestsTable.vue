@@ -6,6 +6,9 @@
       <th style="width: 120px">
         {{ $tr('scoreLabel') }}
       </th>
+      <th>
+        {{ $tr('weightageLabel') }}
+      </th>
       <th 
         :style="{
           display: 'flex',
@@ -36,6 +39,9 @@
                 )
               }}
             </span>
+          </td>
+          <td :style="{ textAlign: 'center' }">
+            {{ tableRow.currentQuestionCount }}
           </td>
           <td
             :style="{
@@ -147,6 +153,10 @@
           message: 'Action',
           context: '',
         },
+        weightageLabel:{
+          message: 'Weightage',
+          context: '',
+        }
       },
     };
   
@@ -178,6 +188,7 @@
     border-radius: 8px;
     padding: 2px 9px;
     box-shadow: 0 2px 3px 1px rgba(0, 0, 0, 0.2);
+    text-align:center
   }
 
   .disabled-btn{
@@ -188,6 +199,7 @@
     border-radius: 8px;
     padding: 2px 9px;
     box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
+    text-align:center
   }
   
   </style>

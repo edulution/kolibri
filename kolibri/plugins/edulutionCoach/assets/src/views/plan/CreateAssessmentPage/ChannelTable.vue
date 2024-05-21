@@ -45,7 +45,10 @@
       <div 
         v-for="topicData of tableD.exercises" 
         :key="topicData.id"
-        :style="{ display: 'flex', gap: '30px', backgroundColor: 'whitesmoke', borderRadius: '4px', padding: '12px', paddingBottom: 0 }"
+        :style="{ display: expandedRowIds.includes(tableD.id) ? 'flex' : 'none',
+                  gap: '30px', backgroundColor: 'whitesmoke',
+                  borderRadius: '4px', padding: '12px', paddingBottom: 0 
+        }"
       >
         <p style="flex: 1 1 auto;">{{ topicData.title }}</p>
         <p style="flex: 0 1 auto;">{{ topicData.limit }}</p>
@@ -120,13 +123,17 @@ export default {
   },
   methods:{
     handleTableExpansionClick(tableRowId) {
-      console.log({ tableRowId, e: this.expandedRowIds })
-      if (this.expandedRowIds.includes(tableRowId)) {
-        this.expandedRowIds = this.expandedRowIds.filter(id => id !== tableRowId)
-      } else {
-        this.expandedRowIds = this.expandedRowIds.push(tableRowId)
-      }
-    },
+
+    const index = this.expandedRowIds.indexOf(tableRowId);
+    if (index === -1) {
+      // Add the ID to the array
+      this.expandedRowIds.push(tableRowId);
+    } else {
+      // Remove the ID from the array
+      this.expandedRowIds.splice(index, 1);
+    }
+
+  },
     validateLevelInput(data) {
       
       let limitValue = parseInt(data.value)

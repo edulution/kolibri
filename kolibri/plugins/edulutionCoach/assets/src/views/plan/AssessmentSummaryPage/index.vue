@@ -134,7 +134,7 @@
                   :style="{ padding: '2px 5px',
                             border: '1px solid grey',
                             borderRadius: '9px' ,
-                            backgroundColor: activeView === 'All' ? 'blue' : 'white' ,
+                            backgroundColor: activeView === 'All' ? '#0000ff96' : 'white' ,
                             color: activeView === 'All' ? 'white' : 'blue',
                             cursor: 'pointer'
                             
@@ -147,7 +147,7 @@
                   :style="{ padding: '2px 5px',
                             border: '1px solid grey',
                             borderRadius: '9px' ,
-                            backgroundColor: activeView === 'CURRENT' ? 'blue' : 'white' ,
+                            backgroundColor: activeView === 'CURRENT' ? '#0000ff96' : 'white' ,
                             color: activeView === 'CURRENT' ? 'white' : 'blue',
                             cursor: 'pointer'
                   }"
