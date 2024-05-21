@@ -51,8 +51,8 @@
             }"
           >
             <span 
-              :class="tableRow.active ? 'btn-style' : 'disabled-btn'"
-              @click.prevent="tableRow.active && onViewDetailsClick(tableRow)"
+              :class="tableRow.attempt_count >= 1 ? 'btn-style' : 'disabled-btn'"
+              @click.prevent="tableRow.attempt_count >= 1 && onViewDetailsClick(tableRow)"
             >
               View Details
             </span>
