@@ -708,6 +708,7 @@ class AssessmentReportViewSet(ViewSet):
                         'question_count': [get_assessment.question_count],
                         'question_sources': [get_assessment.question_sources],
                         'user_id': [get_assessment.learner_id],
+                        'current_question_sources': [get_assessment.current_question_sources]
                        
                     }
 
