@@ -56,7 +56,10 @@
               {{ tableRow.current_question_sources ? tableRow.current_question_sources.length : 0 }}
             </td>
             <td>
-              <span class="btn-style">
+              <span 
+                class="btn-style"
+                @click.prevent=" onViewDetailsClick(tableRow)"
+              >
                 View Details
               </span>
             </td>
@@ -117,7 +120,10 @@
           const year = date.getFullYear();
 
           return `${day}-${month}-${year}`;
-        }
+        },
+        onViewDetailsClick(tableRow) {
+          this.$router.push(tableRow.link)
+        },
       },
       $trs: {
         scoreLabel: {

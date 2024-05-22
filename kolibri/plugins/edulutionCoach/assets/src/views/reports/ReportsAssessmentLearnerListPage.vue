@@ -150,7 +150,12 @@
       async onviewAttemptsClick(assessmentId) {
           const response = await AssessmentReport.fetchModel({ id: assessmentId })
 
-          this.attemptHistory = Object.values(response)
+          const histoyData = Object.values(response).map((item) =>({
+            ...item,
+            link: this.detailLink(item.assessment_id)
+          }))
+
+          this.attemptHistory = histoyData
 
           this.currentView = 'TEST_ATTEMPTS'
 
