@@ -771,6 +771,18 @@ class AssessmentReportViewSet(ViewSet):
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+def paginate_dataframe(df, page_no, page_limit):
+    # Calculate start and end indices
+    page_no = int(page_no)
+    page_limit = int(page_limit)
+    start_idx = (page_no - 1) * page_limit
+    end_idx = start_idx + page_limit
+    
+    # Slice the DataFrame
+    paginated_df = df[start_idx:end_idx]
+    
+    return paginated_df
 class AssessmentHistoryReportViewSet(ViewSet):
 
     def retrieve(self, request, pk=None):
@@ -780,6 +792,8 @@ class AssessmentHistoryReportViewSet(ViewSet):
             to_date = request.query_params.get('to_date')
             assessment_id = request.query_params.get('assessment_id')
             learner_ids = request.query_params.get('learner_ids')
+            page_no = request.query_params.get('page_no')
+            page_limit = request.query_params.get('page_limit')
 
             if not learner_ids:
                 return Response({"error": "learner_id is mandatory"}, status=status.HTTP_404_NOT_FOUND)
@@ -787,7 +801,7 @@ class AssessmentHistoryReportViewSet(ViewSet):
             assessment_history = models.AssessmentHistory.objects.filter(user_id=learner_ids).values('user_id','assessment_id','completion_timestamp')
             assessment = models.ExamAssessment.objects.filter(learner_id=learner_ids).values('learner_id','id','title','current_question_count')
 
-            json_data= []
+            response= {}
             
             if assessment_history and assessment:
                 
@@ -868,10 +882,19 @@ class AssessmentHistoryReportViewSet(ViewSet):
                 if from_date and to_date:
                     result_df = result_df[(result_df['date'] >= from_date) & (result_df['date'] <= to_date)]
         
-                json_string = result_df.to_json(orient='records')
+                paginated_result_df = paginate_dataframe(result_df, page_no, page_limit)        
+                
+                total_count = len(paginated_result_df)
+                json_string = paginated_result_df.to_json(orient='records')
                 json_data = json.loads(json_string.replace("\\", ""))
 
-            return Response(json_data)
+                response = {
+                            
+                            "object": json_data,
+                            "total_object": total_count
+                        }
+
+            return Response(response)
 
         except models.AssessmentHistory.DoesNotExist:
             return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
