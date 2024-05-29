@@ -3,7 +3,7 @@ from django.conf.urls import url
 from rest_framework import routers
 
 from .api import AssessmentViewset, GroupAssessmentViewset, CreateAssessmentRecord, ExamAssessmentStartViewSet, ExamAssessmentStopViewSet
-from .api import GetLearnerAssessmentViewset, FetchAssessmentGroupData, MarkAssessmentViewset, AssessmentTestViewSet, AssessmentReportViewSet
+from .api import GetLearnerAssessmentViewset, FetchAssessmentGroupData, MarkAssessmentViewset, AssessmentTestViewSet, AssessmentReportViewSet,AssessmentHistoryReportViewSet
 
 router = routers.SimpleRouter()
 router.register(r"assessment", CreateAssessmentRecord, basename="assessment")
@@ -16,5 +16,6 @@ router.register(r"fetchbyassessmentgroupid", FetchAssessmentGroupData, basename=
 router.register(r"markassessment", MarkAssessmentViewset, basename="markassessment")
 router.register(r"assessmenttest", AssessmentTestViewSet, basename="assessmenttest")
 router.register(r"assessmentpastreport", AssessmentReportViewSet, basename="assessmentpastreport")
+router.register(r"assessmenthistoryreport", AssessmentHistoryReportViewSet, basename="assessmenthistoryreport")
 
 urlpatterns = [url(r"^", include(router.urls))]

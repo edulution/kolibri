@@ -770,3 +770,108 @@ class AssessmentReportViewSet(ViewSet):
         
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class AssessmentHistoryReportViewSet(ViewSet):
+
+    def retrieve(self, request, pk=None):
+        try:
+
+            from_date = request.query_params.get('from_date')
+            to_date = request.query_params.get('to_date')
+            assessment_id = request.query_params.get('assessment_id')
+            learner_ids = request.query_params.get('learner_ids')
+
+            if not learner_ids:
+                return Response({"error": "learner_id is mandatory"}, status=status.HTTP_404_NOT_FOUND)
+
+            assessment_history = models.AssessmentHistory.objects.filter(user_id=learner_ids).values('user_id','assessment_id','completion_timestamp')
+            assessment = models.ExamAssessment.objects.filter(learner_id=learner_ids).values('learner_id','id','title','current_question_count')
+
+            json_data= []
+            
+            if assessment_history and assessment:
+                
+                assessment_history_list = list(assessment_history)
+                assessment_list = list(assessment)
+              
+                assessment_history_df = pd.DataFrame(assessment_history_list)
+                assessment_df = pd.DataFrame(assessment_list)
+
+                assessment_history_df['user_id'] = assessment_history_df['user_id'].astype(str).str.replace('-', '')
+                assessment_history_df['assessment_id'] = assessment_history_df['assessment_id'].astype(str).str.replace('-', '')
+
+                content_session_logs = ContentSessionLog.objects.filter(content_id__in=list(set(assessment_history_df['assessment_id'].to_list()))).values('id','content_id')
+
+                content_session_logs_list= list(content_session_logs)
+                content_session_logs__df = pd.DataFrame(content_session_logs_list)
+
+                merged_df = pd.merge(assessment_history_df, content_session_logs__df, left_on='assessment_id', right_on='content_id', how='left')
+
+                merged_df = merged_df.drop_duplicates(subset='id', keep='first')
+
+                merged_df.drop(columns=['content_id'], inplace=True)
+
+                merged_df = merged_df.rename(columns={'id': 'session_id'})
+
+                assessment_history_df = merged_df
+
+                attempt_logs = AttemptLog.objects.filter(sessionlog_id__in=list(set(assessment_history_df['session_id'].to_list()))).values("id", "item", "start_timestamp", "end_timestamp", "completion_timestamp", "time_spent","correct", "user_id", "sessionlog_id")
+
+                attempt_logs_list= list(attempt_logs)
+
+                attempt_logs_df = pd.DataFrame(attempt_logs_list)
+            
+                if attempt_logs_df.empty:
+                    return Response({"error": "No attempt assessment for this learner"}, status=status.HTTP_404_NOT_FOUND)
+        
+                result_df = pd.DataFrame()
+                previous_assessment_id = None
+                attempt_count = 0
+
+                for _, row in assessment_history_df.iterrows():
+                    filter_df = assessment_df[assessment_df['id'] == row['assessment_id']].reset_index(drop=True)
+                    attempt_df = attempt_logs_df[attempt_logs_df['sessionlog_id'] == row['session_id']].reset_index(drop=True)
+
+                    if filter_df.empty:
+                        continue
+                    
+                    if row['assessment_id'] != previous_assessment_id:
+                        attempt_count = 1
+                    else:
+                        attempt_count += 1
+
+                    filter_df['answer_count'] = attempt_df['correct'].sum() if not attempt_df.empty else 0
+                    filter_df['attempt_count'] = attempt_count
+                    filter_df['completion_timestamp'] = row['completion_timestamp']
+                    # filter_df['question_sources'] = [row['question_sources']] * len(filter_df)
+                    filter_df['completion_timestamp'] = filter_df['completion_timestamp'].dt.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+
+                    result_df = pd.concat([result_df, filter_df], ignore_index=True)
+
+                    previous_assessment_id = row['assessment_id']
+
+                result_df = result_df.rename(columns={'id': 'assessment_id', 'current_question_count' :'question_count','completion_timestamp' :'date','attempt_count':'attempts'})
+
+                if result_df.empty:
+                    return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                result_df['date'] = pd.to_datetime(result_df['date'])
+                result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+                
+                if from_date and to_date:
+                    from_date = pd.to_datetime(from_date).strftime('%Y-%m-%d')
+                    to_date = pd.to_datetime(to_date).strftime('%Y-%m-%d')
+                
+                if assessment_id:
+                    result_df = result_df[result_df['assessment_id'] == assessment_id]
+
+                if from_date and to_date:
+                    result_df = result_df[(result_df['date'] >= from_date) & (result_df['date'] <= to_date)]
+        
+                json_string = result_df.to_json(orient='records')
+                json_data = json.loads(json_string.replace("\\", ""))
+
+            return Response(json_data)
+
+        except models.AssessmentHistory.DoesNotExist:
+            return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
