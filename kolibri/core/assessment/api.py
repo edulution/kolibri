@@ -890,8 +890,8 @@ class AssessmentHistoryReportViewSet(ViewSet):
 
                 response = {
                             
-                            "object": json_data,
-                            "total_object": total_count
+                            "list": json_data,
+                            "total_count": total_count
                         }
 
             return Response(response)
