@@ -801,7 +801,10 @@ class AssessmentHistoryReportViewSet(ViewSet):
             assessment_history = models.AssessmentHistory.objects.filter(user_id=learner_ids).values('user_id','assessment_id','completion_timestamp')
             assessment = models.ExamAssessment.objects.filter(learner_id=learner_ids).values('learner_id','id','title','current_question_count')
 
-            response= {}
+            response= {
+                'list' : [],
+                'total_count' : 0
+            }
             
             if assessment_history and assessment:
                 
@@ -895,6 +898,43 @@ class AssessmentHistoryReportViewSet(ViewSet):
                         }
 
             return Response(response)
+
+        except models.AssessmentHistory.DoesNotExist:
+            return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
+class GetAssessmentViewSet(ViewSet):
+
+    def retrieve(self, request, pk=None):
+        try:
+
+            assessment_history = models.AssessmentHistory.objects.filter(user_id=pk).values('user_id','assessment_id')
+            assessment = models.ExamAssessment.objects.filter(learner_id=pk).values('learner_id','id','title')
+
+            json_data= []
+            
+            if assessment_history and assessment:
+                
+                assessment_history_list = list(assessment_history)
+                assessment_list = list(assessment)
+              
+                assessment_history_df = pd.DataFrame(assessment_history_list)
+                assessment_df = pd.DataFrame(assessment_list)
+
+                assessment_history_df['user_id'] = assessment_history_df['user_id'].astype(str).str.replace('-', '')
+                assessment_history_df['assessment_id'] = assessment_history_df['assessment_id'].astype(str).str.replace('-', '')
+
+                merged_df = pd.merge(assessment_history_df, assessment_df, left_on='assessment_id', right_on='id')
+
+                if not merged_df.empty:
+
+                    merged_df = merged_df.drop_duplicates(subset='id', keep='first')
+
+                    merged_df = merged_df.rename(columns={'title': 'label','assessment_id' :'value'})
+                    merged_df = merged_df.drop(['learner_id', 'id'], axis=1)
+
+                    json_string = merged_df.to_json(orient='records')
+                    json_data = json.loads(json_string.replace("\\", ""))
+
+            return Response(json_data)
 
         except models.AssessmentHistory.DoesNotExist:
             return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
