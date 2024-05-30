@@ -887,7 +887,7 @@ class AssessmentHistoryReportViewSet(ViewSet):
         
                 paginated_result_df = paginate_dataframe(result_df, page_no, page_limit)        
                 
-                total_count = len(paginated_result_df)
+                total_count = len(result_df)
                 json_string = paginated_result_df.to_json(orient='records')
                 json_data = json.loads(json_string.replace("\\", ""))
 
