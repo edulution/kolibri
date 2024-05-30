@@ -909,7 +909,9 @@ class GetAssessmentViewSet(ViewSet):
             assessment_history = models.AssessmentHistory.objects.filter(user_id=pk).values('user_id','assessment_id')
             assessment = models.ExamAssessment.objects.filter(learner_id=pk).values('learner_id','id','title')
 
-            json_data= []
+            response = {
+                    'list': []
+                    }
             
             if assessment_history and assessment:
                 
@@ -933,8 +935,11 @@ class GetAssessmentViewSet(ViewSet):
 
                     json_string = merged_df.to_json(orient='records')
                     json_data = json.loads(json_string.replace("\\", ""))
+                    response = {
+                                'list': json_data
+                                }
 
-            return Response(json_data)
+            return Response(response)
 
         except models.AssessmentHistory.DoesNotExist:
             return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
