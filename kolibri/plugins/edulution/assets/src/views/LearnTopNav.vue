@@ -57,6 +57,13 @@
             icon: 'bookmark',
             color: this.$themeTokens.textInverted,
           },
+          {
+            isHidden: !this.getUserKind === UserKinds.LEARNER,
+            title: this.coreString('assessmentHistoryLabel'),
+            link: this.$router.getRoute(PageNames.ASSESSMENT_HISTORY),
+            icon: 'history',
+            color: this.$themeTokens.textInverted,
+          },
         ];
       },
     },
