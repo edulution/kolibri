@@ -133,9 +133,9 @@ export default {
             currentPage:1,
             totalPages:1,
             tableData: [],
-            pageLimit: 9,
+            pageLimit: 10,
             isResetButtonDisabled:true,
-            showloading:true
+            showloading:false
         }
     },
     computed: {
@@ -158,7 +158,7 @@ export default {
         ]
       },
       async fetchTableData(){
-
+        this.showloading = true
         const params={
           from_date: this.getStartDate,
           to_date: this.getEndDate,
