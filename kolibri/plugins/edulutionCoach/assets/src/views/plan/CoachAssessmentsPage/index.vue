@@ -97,7 +97,6 @@
         >
           <p>{{ coachString('openAssessmentModalDetail') }}</p>
           <p>{{ coachString('lodAssessmentDetail') }}</p>
-          <p>{{ coachString('fileSizeToDownload', { size: activeQuiz.size_string }) }}</p>
         </KModal>
 
         <KModal

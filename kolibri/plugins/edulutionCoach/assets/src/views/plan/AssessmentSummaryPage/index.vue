@@ -63,13 +63,13 @@
                       <span
                         class="score-chip"
                         :style="{
-                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.questionCount), tableRow.attemptCount,tableRow.type,tableRow.active,tableRow.archive),
+                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.currentQuestionCount), tableRow.attemptCount,tableRow.type,tableRow.active,tableRow.archive),
                           color: 'white',
                         }"
                       >
                         {{
                           $formatNumber(
-                            calcPercentage(tableRow.score, tableRow.questionCount),
+                            calcPercentage(tableRow.score, tableRow.currentQuestionCount),
                             { style: 'percent' }
                           )
                         }}
@@ -243,7 +243,6 @@
         assessmentid:"",
         groupActive:null,
         selectedQuestions : [],
-        incrementQuestions: 0,
         activeView: 'CURRENT',
       };
     },

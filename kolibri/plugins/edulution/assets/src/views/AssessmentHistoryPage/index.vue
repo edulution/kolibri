@@ -1,6 +1,6 @@
 <template>
   <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
-    <div style="display: flex; justify-content: space-between;align-items: center;">
+    <div style="display: flex; justify-content: space-between;align-items: center;margin-top:8px;">
       <div style="display: flex; gap:30px;align-items: end;">
         <p 
           class="select-date"
@@ -14,6 +14,9 @@
           :lastAllowedDate="lastAllowedDate"
           :submitText="$tr('submitText')"
           :cancelText="coreString('cancelAction')"
+          title="Select a date Range"
+          startDateLegendText="Start Date"
+          endDateLegendText="End Date"
           @cancel="openDateRangeModal"
           @submit="onSubmit"
         />
@@ -29,12 +32,12 @@
         <KButton
           :text="'Apply Filter'"
           primary
-          :disabled="isApplyButtonDisabled"
           @click.prevent="onApplyFilter"
         />
         <KButton
           appearance="raised-button"
           text="Reset Filter"
+          :disabled="isResetButtonDisabled"
           @click.prevent="onClear"
         />
       </KButtonGroup>
@@ -89,10 +92,12 @@
       <Pagination
         :currentPage="currentPage"
         :totalPages="totalPages" 
-        @pageChanged="onApply"
+        @pageChanged="onApplyPagination"
       />
     </div>
-
+<div>
+  Loading...
+</div>
   </LearnAppBarPage>
 </template>
 
@@ -117,7 +122,7 @@ export default {
     mixins: [commonLearnStrings,commonCoreStrings],
     data(){
         return {
-            selectedItem: null,
+            selectedItem: { label: 'All', value: 0},
             selectOptions: { label: 'All', value: 0},
             ShowDateRangeModal:false,
             firstAllowedDate:null,
@@ -127,16 +132,14 @@ export default {
             showDateText: 'Select Date',
             currentPage:1,
             totalPages:1,
-            selectLabel:"Assessment Dropdwon",
             tableData: [],
-            pageLimit: 10,
+            pageLimit: 9,
+            isResetButtonDisabled:true,
+            shiowloading:true
         }
     },
     computed: {
       ...mapGetters(['currentUserId']),
-      isApplyButtonDisabled() {
-          return !this.selectedItem && !this.getStartDate && !this.getEndDate;
-    },
     },
     async beforeMount() {
       await this.fetchDropdwnList()
@@ -168,7 +171,7 @@ export default {
         const response = await AssessmentHistoryReport.fetchModel({ id: this.currentUserId, getParams: params})
         this.tableData = response.list || []
         this.totalPages = Math.ceil(response?.total_count / this.pageLimit)
-
+        this.shiowloading = false
       },
       calcPercentage(score, total) {
           return (score / total);
@@ -209,7 +212,6 @@ export default {
         this.getStartDate = null;
         this.getEndDate = null;
         this.showDateText = 'Select Date';
-        this.selectLabel="Assessment Dropdown"
         this.currentPage = 1;
         this.fetchTableData()
       },
@@ -217,16 +219,17 @@ export default {
         this.ShowDateRangeModal = !this.ShowDateRangeModal
       },
       onSubmit(dates){
-        this.getStartDate = dates.start?.toISOString().split('T')[0];
-        this.getEndDate = dates.end?.toISOString().split('T')[0];
+        this.getStartDate = new Date(dates.start.setHours(12, 0, 0, 0)).toISOString().split('T')[0];
+        this.getEndDate = new Date(dates.end.setHours(12, 0, 0, 0)).toISOString().split('T')[0];
         this.showDateText = `${this.getStartDate} - ${this.getEndDate}`
         this.ShowDateRangeModal = !this.ShowDateRangeModal
       },
       async onApplyFilter() {
         this.currentPage = 1
+        this.isResetButtonDisabled = false
         await this.fetchTableData()
       },
-      async onApply(pageNumber) {
+      async onApplyPagination(pageNumber) {
         this.currentPage = pageNumber
         await this.fetchTableData()
       },
@@ -253,7 +256,7 @@ export default {
           context: '',
         },
         title:{
-          message: 'Assessment Historical',
+          message: 'Assessment Name',
           context: '',
         },
         questions:{
@@ -278,10 +281,10 @@ export default {
   @import '~kolibri-design-system/lib/styles/definitions';
 
   .select-date {
-    padding: 2px 8px;
-    border: 1px solid grey;
+    padding: 2px 3px;
+    border-bottom: 1px solid #0000001f;
     cursor: pointer;
-    border-radius: 5px;
+    color:#000000DE,
   }
 
   .score-chip {
@@ -292,4 +295,12 @@ export default {
       border-radius: 50px;
       min-width: 100px;
     }
+  
+    .loading {
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+}
 </style>
