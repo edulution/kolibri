@@ -249,7 +249,7 @@ export default {
         message: 'Select'
       },
       PercentageLabel: {
-          message: 'Percentage',
+          message: 'Score',
           context: '',
         },
         emptyMessage: {
