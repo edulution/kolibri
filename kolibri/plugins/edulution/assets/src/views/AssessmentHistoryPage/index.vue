@@ -57,7 +57,7 @@
         </template>
         <template #tbody>
           <transition-group tag="tbody" name="list">
-            <tr v-for="(tableRow, index) in tableData" :key="tableRow.assessment_id">
+            <tr v-for="(tableRow, index) in tableData" :key="tableRow.assessment_id + index">
               <td>
                 {{ formatDate(tableRow.date) }}
               </td>
@@ -168,10 +168,15 @@ export default {
           page_limit:this.pageLimit ,
         }
        
-        const response = await AssessmentHistoryReport.fetchModel({ id: this.currentUserId, getParams: params})
-        this.tableData = response.list || []
-        this.totalPages = Math.ceil(response?.total_count / this.pageLimit)
-        this.showloading = false
+        try {
+          const response = await AssessmentHistoryReport.fetchModel({ id: this.currentUserId, getParams: params})
+          this.tableData = response.list || []
+          this.totalPages = Math.ceil(response?.total_count / this.pageLimit)
+          this.showloading = false  
+        } catch (error) {
+          console.log(" error ", error)
+        }
+        
       },
       calcPercentage(score, total) {
           return (score / total);
