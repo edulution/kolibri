@@ -43,7 +43,7 @@
       </KButtonGroup>
     </div>
 
-    <div>
+    <div v-if="tableData && tableData.length">
       <CoreTable :emptyMessage="$tr('emptyMessage')" :style="{ backgroundColor: 'white',marginBottom: '10px' }">
         <template #headers>
           <th>
@@ -95,9 +95,9 @@
         @pageChanged="onApplyPagination"
       />
     </div>
-<div>
-  Loading...
-</div>
+    <div v-if="showloading">
+      Loading...
+    </div>
   </LearnAppBarPage>
 </template>
 
@@ -135,7 +135,7 @@ export default {
             tableData: [],
             pageLimit: 9,
             isResetButtonDisabled:true,
-            shiowloading:true
+            showloading:true
         }
     },
     computed: {
@@ -171,7 +171,7 @@ export default {
         const response = await AssessmentHistoryReport.fetchModel({ id: this.currentUserId, getParams: params})
         this.tableData = response.list || []
         this.totalPages = Math.ceil(response?.total_count / this.pageLimit)
-        this.shiowloading = false
+        this.showloading = false
       },
       calcPercentage(score, total) {
           return (score / total);
