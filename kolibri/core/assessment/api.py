@@ -857,7 +857,9 @@ class AssessmentHistoryReportViewSet(ViewSet):
                     else:
                         attempt_count += 1
 
-                    filter_df['answer_count'] = attempt_df['correct'].sum() if not attempt_df.empty else 0
+                    filter_df['corrected_answer_count'] = attempt_df['correct'].sum() if not attempt_df.empty else 0
+                    filter_df['question_attempted_count'] = len(attempt_df)
+                    filter_df['unattempted_count'] = (filter_df['current_question_count'][0] - len(attempt_df)) if not attempt_df.empty else 0
                     filter_df['attempt_count'] = attempt_count
                     filter_df['completion_timestamp'] = row['completion_timestamp']
                     # filter_df['question_sources'] = [row['question_sources']] * len(filter_df)
@@ -885,7 +887,7 @@ class AssessmentHistoryReportViewSet(ViewSet):
                 if from_date and to_date:
                     result_df = result_df[(result_df['date'] >= from_date) & (result_df['date'] <= to_date)]
         
-                paginated_result_df = paginate_dataframe(result_df, page_no, page_limit)        
+                paginated_result_df = paginate_dataframe(result_df, page_no, page_limit)
                 
                 total_count = len(result_df)
                 json_string = paginated_result_df.to_json(orient='records')
