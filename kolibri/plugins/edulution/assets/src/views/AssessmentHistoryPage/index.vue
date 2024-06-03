@@ -52,7 +52,9 @@
           <th>{{ $tr('title') }}</th>
           <th>{{ $tr('questions') }}</th>
           <th>{{ $tr('answers') }}</th>
-          <th>{{ $tr('PercentageLabel') }}</th>
+          <th>{{ $tr('CorrectAnswers') }}</th>
+          <th>{{ $tr('UnAnswered') }}</th>
+          <th>{{ $tr('scoreLabel') }}</th>
           <th>{{ $tr('attemptLabel') }}</th>
         </template>
         <template #tbody>
@@ -65,20 +67,22 @@
                 {{ tableRow.title }}
               </td>
               <td>{{ tableRow.question_count }}</td>
-              <td>{{ tableRow.answer_count }}</td>
+              <td>{{ tableRow.question_attempted_count }}</td>
+              <td>{{ tableRow.corrected_answer_count }}</td>
+              <td>{{ tableRow.unattempted_count }}</td>
               <td>
                 <span
                   class="score-chip"
                   :style="{
                     backgroundColor: scoreColor(
-                      calcPercentage(tableRow.answer_count, tableRow.question_count)
+                      calcPercentage(tableRow.corrected_answer_count, tableRow.question_count)
                     ),
                     color: 'white',
                   }"
                 >
                   {{
                     $formatNumber(
-                      calcPercentage(tableRow.answer_count, tableRow.question_count),
+                      calcPercentage(tableRow.corrected_answer_count, tableRow.question_count),
                       { style: 'percent' }
                     )
                   }}
@@ -207,7 +211,7 @@ export default {
         formatDate(dateStr) {
           const date = new Date(dateStr);
           const day = date.getDate();
-          const month = date.getMonth() + 1; 
+          const month = date.toLocaleString('default', { month: 'long' });
           const year = date.getFullYear();
 
           return `${day}-${month}-${year}`;
@@ -248,7 +252,7 @@ export default {
       submitText:{
         message: 'Select'
       },
-      PercentageLabel: {
+      scoreLabel: {
           message: 'Score',
           context: '',
         },
@@ -269,7 +273,15 @@ export default {
           context: '',
         },
         answers:{
-          message: 'Answers',
+          message: 'Answered',
+          context: '',
+        },
+        CorrectAnswers:{
+          message: 'Correct Answers',
+          context: '',
+        },
+        UnAnswered:{
+          message: 'Unanswered',
           context: '',
         },
         attemptLabel:{
