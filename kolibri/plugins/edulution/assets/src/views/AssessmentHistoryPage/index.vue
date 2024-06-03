@@ -43,34 +43,38 @@
       </KButtonGroup>
     </div>
 
-    <div v-if="tableData && tableData.length">
+    <div>
       <CoreTable :emptyMessage="$tr('emptyMessage')" :style="{ backgroundColor: 'white',marginBottom: '10px' }">
         <template #headers>
-          <th>
+          <th style="text-align: center">
             {{ $tr('DateLabel') }}
           </th>
-          <th>{{ $tr('title') }}</th>
-          <th>{{ $tr('questions') }}</th>
-          <th>{{ $tr('answers') }}</th>
-          <th>{{ $tr('CorrectAnswers') }}</th>
-          <th>{{ $tr('UnAnswered') }}</th>
-          <th>{{ $tr('scoreLabel') }}</th>
-          <th>{{ $tr('attemptLabel') }}</th>
+          <th style="text-align: center">{{ $tr('title') }}</th>
+          <th style="text-align: center">{{ $tr('questions') }}</th>
+          <th style="text-align: center">{{ $tr('UnAnswered') }}</th>
+          <th style="text-align: center">{{ $tr('answers') }}</th>
+          <th style="text-align: center">{{ $tr('CorrectAnswers') }}</th>
+          <th style="text-align: center">{{ $tr('scoreLabel') }}</th>
+          <th style="text-align: center">{{ $tr('attemptLabel') }}</th>
         </template>
         <template #tbody>
           <transition-group tag="tbody" name="list">
-            <tr v-for="(tableRow, index) in tableData" :key="tableRow.assessment_id + index">
-              <td>
+            <tr 
+              v-for="(tableRow, index) in tableData" 
+              :key="tableRow.assessment_id + index" 
+              style="text-align: center"
+            >
+              <td style="text-align: center">
                 {{ formatDate(tableRow.date) }}
               </td>
-              <td>
+              <td style="text-align: center">
                 {{ tableRow.title }}
               </td>
-              <td>{{ tableRow.question_count }}</td>
-              <td>{{ tableRow.question_attempted_count }}</td>
-              <td>{{ tableRow.corrected_answer_count }}</td>
-              <td>{{ tableRow.unattempted_count }}</td>
-              <td>
+              <td style="text-align: center">{{ tableRow.question_count }}</td>
+              <td style="text-align: center">{{ tableRow.unattempted_count }}</td>
+              <td style="text-align: center">{{ tableRow.question_attempted_count }}</td>
+              <td style="text-align: center">{{ tableRow.corrected_answer_count }}</td>
+              <td style="text-align: center">
                 <span
                   class="score-chip"
                   :style="{
@@ -88,7 +92,7 @@
                   }}
                 </span>
               </td>
-              <td>{{ ordinalNumber(tableRow.attempts) }}</td>
+              <td style="text-align: center">{{ ordinalNumber(tableRow.attempts) }}</td>
             </tr>
           </transition-group>
         </template>
@@ -214,7 +218,7 @@ export default {
           const month = date.toLocaleString('default', { month: 'long' });
           const year = date.getFullYear();
 
-          return `${day}-${month}-${year}`;
+          return `${day} ${month} ${year}`;
         },
       onClear(){
         this.selectedItem = { label: 'All', value: 0 };
