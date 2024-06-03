@@ -48,16 +48,7 @@
         if (!props.assessments) {
           return [];
         }
-        return props.assessments.filter(assessment => {
-          if (!assessment.active) {
-            return false;
-          } else if (assessment.archive) {
-            // Closed (archived) quizzes only show if the learner started/submitted
-            return assessment.progress.started || assessment.progress.closed;
-          } else {
-            return true;
-          }
-        });
+        return props.assessments.filter(assessment => assessment?.current_assessment?.active && !assessment?.current_assessment?.archive);
       });
 
       function getAssessmentName(assessment) {

@@ -46,7 +46,6 @@ import ReportsGroupReportAssessmentLearnerPage from './ReportsGroupReportAssessm
 import ReportsAssessmentLearnerListPage from './ReportsAssessmentLearnerListPage';
 import ReportsAssessmentPreviewPage from './ReportsAssessmentPreviewPage';
 
-
 export default {
   ReportsGroupActivityPage,
   ReportsGroupLearnerListPage,
@@ -94,5 +93,5 @@ export default {
   ReportsAssessmentLearnerPage,
   ReportsGroupReportAssessmentLearnerPage,
   ReportsAssessmentLearnerListPage,
-  ReportsAssessmentPreviewPage
+  ReportsAssessmentPreviewPage,
 };

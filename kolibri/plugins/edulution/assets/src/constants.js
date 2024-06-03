@@ -14,6 +14,7 @@ export const PageNames = {
   EXAM_ROOT: 'EXAM_ROOT',
   BOOKMARKS: 'BOOKMARKS',
   EXPLORE_LIBRARIES: 'EXPLORE_LIBRARIES',
+  ASSESSMENT_HISTORY: 'ASSESSMENT_HISTORY'
 };
 
 export const ExternalPageNames = {

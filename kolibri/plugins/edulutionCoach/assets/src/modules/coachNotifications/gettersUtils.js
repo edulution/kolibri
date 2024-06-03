@@ -88,6 +88,14 @@ const pageNameToNotificationPropsMap = [
   },
   {
     key: {
+      object: 'Quiz',
+      isMultiple: true,
+      isWholeClass: true,
+    },
+    value: 'ReportsAssessmentLearnerListPage',
+  },
+  {
+    key: {
       object: 'Exercise',
       isMultiple: false,
       isWholeClass: false,
@@ -133,6 +141,14 @@ const pageNameToNotificationPropsMap = [
       isWholeClass: true,
     },
     value: 'ReportsQuizLearnerPage',
+  },
+  {
+    key: {
+      object: 'Assessment',
+      isMultiple: false,
+      isWholeClass: true,
+    },
+    value: 'ReportsAssessmentLearnerPage',
   },
 ];
 

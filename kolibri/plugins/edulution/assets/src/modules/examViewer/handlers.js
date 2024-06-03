@@ -150,10 +150,10 @@ export function showAssessment(store, params, alreadyOnQuiz) {
           store.commit('classAssignments/SET_CURRENT_CLASSROOM', classroom);
 
           let contentPromise;
-          if (exam.question_sources.length) {
+          if (exam.current_question_sources.length) {
             contentPromise = ContentNodeResource.fetchCollection({
               getParams: {
-                ids: exam.question_sources.map(item => item.exercise_id),
+                ids: exam.current_question_sources.map(item => item.exercise_id),
               },
             });
           } else {
@@ -162,7 +162,7 @@ export function showAssessment(store, params, alreadyOnQuiz) {
           contentPromise.then(
             contentNodes => {
               if (shouldResolve()) {
-                const questions = convertExamQuestionSources(exam, { contentNodes });
+                const questions = convertExamQuestionSources(exam, { contentNodes, type: 'ASSESSMENT' });
 
                 // Exam is drawing solely on malformed exercise data, best to quit now
                 if (questions.some(question => !question.question_id)) {

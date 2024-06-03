@@ -48,7 +48,7 @@
           <KPageContainer>
 
             <h1>
-              {{ $tr('question', { num: questionNumber + 1, total: exam.question_count }) }}
+              {{ $tr('question', { num: questionNumber + 1, total: exam.current_question_count }) }}
             </h1>
             <KContentRenderer
               v-if="content && itemId"
@@ -69,7 +69,7 @@
           <BottomAppBar :dir="bottomBarLayoutDirection" :maxWidth="null">
             <component :is="windowIsSmall ? 'div' : 'KButtonGroup'">
               <KButton
-                :disabled="questionNumber === exam.question_count - 1"
+                :disabled="questionNumber === exam.current_question_count - 1"
                 :primary="true"
                 :dir="layoutDirReset"
                 :aria-label="$tr('nextQuestion')"
@@ -254,7 +254,7 @@
       answeredText() {
         return this.$tr('questionsAnswered', {
           numAnswered: this.questionsAnswered,
-          numTotal: this.exam.question_count,
+          numTotal: this.exam.current_question_count,
         });
       },
       backPageLink() {
@@ -311,7 +311,7 @@
         ).length;
       },
       questionsUnanswered() {
-        return this.exam.question_count - this.questionsAnswered;
+        return this.exam.current_question_count - this.questionsAnswered;
       },
       debouncedSetAndSaveCurrentExamAttemptLog() {
         // So as not to share debounced functions between instances of the same component

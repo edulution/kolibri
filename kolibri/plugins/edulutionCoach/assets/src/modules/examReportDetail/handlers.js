@@ -10,6 +10,7 @@ const translator = createTranslator('ExamReportPageTitles', {
 });
 
 export function generateExamReportDetailHandler(paramsToCheck) {
+  console.log(paramsToCheck,"paramsToCheckrexam")
   return function showExamReportDetailPage({ params }, from) {
     const { learnerId, quizId, questionId, interactionIndex, tryIndex } = params;
     const fromParams = from.params;
@@ -33,6 +34,7 @@ export function generateExamReportDetailHandler(paramsToCheck) {
 }
 
 export function generateAssessmentReportDetailHandler(paramsToCheck) {
+  console.log(paramsToCheck,"paramsToCheckassss")
   return function showExamReportDetailPage({ params }, from) {
     const { learnerId, quizId, questionId, interactionIndex, tryIndex } = params;
     const fromParams = from.params;

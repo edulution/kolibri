@@ -32,9 +32,9 @@
         </KGridItem>
       </KGrid>
 
-      <h2>{{ $tr('chooseChannel') }}</h2>
+      <h2 v-if="toggleTable === 'SHOW_CHANNEL'">{{ $tr('chooseChannel') }}</h2>
 
-      <div>
+      <div v-if="toggleTable === 'SHOW_CHANNEL'">
         <div>
           <ul class="content-list">
             <li
@@ -49,7 +49,10 @@
                 style="flex: 0;"
               />
               
-              <div class="content-card" :style="{ backgroundColor: $themeTokens.surface }">
+              <div 
+                class="content-card" 
+                :style="{ backgroundColor: $themeTokens.surface }"
+              >
                 <CardThumbnail
                   class="thumbnail"
                   :thumbnail="content.thumbnail"
@@ -102,13 +105,29 @@
         </div>
       </div>
 
+      <h2 v-if="toggleTable === 'SHOW_TABLE'">Configure weightage for assessment</h2>
+      <ChannelTable 
+        v-if="toggleTable === 'SHOW_TABLE'"
+        :tableData="tableData"
+        :newData="newData"
+        @update-new-data="updateNewData"
+      />
+
       <BottomAppBar>
         <KButtonGroup>
           <KButton
+            v-if="toggleTable === 'SHOW_TABLE'"
             :text="coreString('finishAction')"
             primary
             :disabled="isInvalidSubmission"
             @click="onSubmit"
+          />
+          <KButton
+            v-if="toggleTable === 'SHOW_CHANNEL'"
+            :text="$tr('continueLabel')"
+            primary
+            :disabled="isInvalidSubmission"
+            @click="onSelectChannel"
           />
         </KButtonGroup>
       </BottomAppBar>
@@ -136,6 +155,7 @@
   
   import { PageNames } from '../../../constants';
   import commonCoach from '../../common';
+  import ChannelTable from './ChannelTable.vue';
 
   export default {
     name: 'CreateAssessmentPage',
@@ -145,6 +165,7 @@
       CardThumbnail,
       ContentIcon,
       TextTruncatorCss,
+      ChannelTable
     },
     mixins: [commonCoreStrings, commonCoach, responsiveWindowMixin],
     data() {
@@ -152,6 +173,9 @@
         assessmentTitle: '',
         selectedLearner: {},
         selectedContent: '',
+        toggleTable:'SHOW_CHANNEL',
+        tableData:[],
+        newData:[]
       };
     },
     computed: {
@@ -230,21 +254,40 @@
             assessments.push({
               id: contentNode.id,
               title: contentNode.title,
+              content_id: contentNode.content_id,
+              limit: questionSources.length,
               exercises: excercises.data.map(e => ({
                 id: e.id,
-                title: e.title
+                title: e.title,
+                weightage: questionSources.filter(i => i.exercise_id === e.id).length
               })),
               question_sources: questionSources,
               question_count: questionSources.length,
             })
           }
         }
-
-        return [...assessments.reverse()];
+        return assessments;
       },
       async onSubmit() {
-        const assessments = await this.prepareAssessments();
-        
+
+        for (let i = 0; i < this.tableData.length; i++) {
+
+        const tableDataItem = this.tableData[i]
+
+        const matchingNewItem = this.newData.find(item => item.id === tableDataItem.id);
+
+        if (matchingNewItem) {
+          tableDataItem.limit = matchingNewItem.value;
+          tableDataItem.exercises = tableDataItem.exercises.map(ex => {
+            const exI = matchingNewItem.exercises.find(d => d.id === ex.id)
+            return {
+              ...ex,
+              weightage: exI.value
+            }
+          })
+        }
+      }
+
         const data = {
           collection: this.classId,
           title: this.assessmentTitle,
@@ -252,7 +295,7 @@
           date_activated: null,
           channel_id: this.selectedContent,
           learner_id: this.selectedLearner.value,
-          assessments,
+          assessments: [...this.tableData.reverse()],
           creator_id: this.userId,
         };
 
@@ -265,7 +308,16 @@
             this.$store.dispatch('createSnackbar', error.response.data.error);
           }
         }
-      }
+      },
+        // @public
+      async onSelectChannel() {
+        this.toggleTable = 'SHOW_TABLE'
+        const assessments = await this.prepareAssessments();
+        this.tableData = assessments
+      },
+      updateNewData(newData) {
+        this.newData = newData; 
+      },
     },
     $trs: {
       learnerLabel: {
@@ -280,6 +332,10 @@
         message: 'Select channel to map assessment',
         context:
           'When creating a new quiz, coaches can choose which folders or exercises they want to include in the quiz from the channels that contain exercise resources.',
+      },
+      continueLabel: {
+        message: 'Continue',
+        context: '',
       },
     },
   };

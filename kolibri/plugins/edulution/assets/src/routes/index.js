@@ -12,6 +12,8 @@ import ContentUnavailablePage from '../views/ContentUnavailablePage';
 import BookmarkPage from '../views/BookmarkPage.vue';
 import ExploreLibrariesPage from '../views/ExploreLibrariesPage';
 import { showKnowledgemap } from '../modules/examViewer/handlers';
+import AssessmentHistoryPage from '../views/AssessmentHistoryPage';
+
 import classesRoutes from './classesRoutes';
 
 const { channelsMap, fetchChannels } = useChannels();
@@ -173,6 +175,11 @@ export default [
         return;
       }
     },
+  },
+  {
+    name: PageNames.ASSESSMENT_HISTORY,
+    path:'/assessmentHistory',
+    component: AssessmentHistoryPage
   },
   {
     path: '*',

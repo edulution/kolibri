@@ -66,7 +66,6 @@ export default {
       return (score / total);
     },
     scoreColor(value) {
-      console.log({ value })
       if (value <= 0) {
         return '#D9D9D9';
       }

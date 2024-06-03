@@ -38,17 +38,77 @@
             <CoreTable :emptyMessage="coachString('learnerListEmptyState')">
               <template #headers>
                 <th>{{ $tr('titleLabel') }}</th>
+                <th>{{ $tr('scoreLabel') }}</th>
+                <th>{{ $tr('weightageLabel') }}</th>
+                <th 
+                  :style="{
+                    display: 'flex',
+                    justifyContent: 'center'
+                  }"
+                >
+                  {{ $tr('actionLabel') }}
+                </th>
               </template>
               <template #tbody>
                 <transition-group tag="tbody" name="list">
-                  <tr v-for="tableRow of assessmentList" :key="tableRow.id" data-test="entry">
-                    <KLabeledIcon
-                      :icon="'quiz'"
-                      :label="tableRow.title" 
-                      class="table-title"
-                      @click.prevent="toggleView('QUESTION_PREVIEW',tableRow.id)"
-                    />
+                  <tr v-for="tableRow of assessmentTestData" :key="tableRow.id" data-test="entry">
+                    <td>
+                      <KLabeledIcon
+                        icon="topic"
+                        :label="tableRow.title"
+                      />
+                    </td>
+                  
+                    <td>
+                      <span
+                        class="score-chip"
+                        :style="{
+                          backgroundColor: scoreColor(calcPercentage(tableRow.score, tableRow.currentQuestionCount), tableRow.attemptCount,tableRow.type,tableRow.active,tableRow.archive),
+                          color: 'white',
+                        }"
+                      >
+                        {{
+                          $formatNumber(
+                            calcPercentage(tableRow.score, tableRow.currentQuestionCount),
+                            { style: 'percent' }
+                          )
+                        }}
+                      </span>
+                    </td>
+
+                    <td :style="{ textAlign: 'center' }">
+                      {{ tableRow.currentQuestionCount }}
+                    </td>
+                     
+                    <td 
+                      :style="{
+                        display: 'flex',
+                        gap: '16px'
+                      }"
+                    >
+                      <span 
+                        class="btn-style"
+                        @click.prevent="toggleView('QUESTION_PREVIEW',tableRow.id)"
+                      >
+                        View Details
+                      </span>
+                      <span 
+                        :class="isStartfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
+                        @click.prevent="isStartfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) && 
+                          toggleModal('start',tableRow.id,1)"
+                      >
+                        Start
+                      </span>
+                      <span
+                        :class="isStopfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) ? 'btn-style' : 'disabled-btn'"
+                        @click.prevent="isStopfunc(tableRow.type , tableRow.attemptCount , tableRow.id , tableRow.active, tableRow.archive) && 
+                          toggleModal('stop',tableRow.id,0)"
+                      >
+                        Stop
+                      </span>
+                    </td>
                   </tr>
+                 
                 </transition-group>
               </template>
             </CoreTable>
@@ -65,9 +125,39 @@
               <span>Back To Listing</span>
             </div>
 
-            <h2>
-              {{ coachString('numberOfQuestions', { value: selectedQuestions.length }) }}
-            </h2>
+            <div :style="{ display: 'flex',justifyContent: 'space-between' }">
+              <h2>
+                {{ coachString('numberOfQuestions', { value: getSelectedQuestions().length }) }}
+              </h2>
+              <div :style="{ display: 'flex',justifyContent: 'space-between', gap: '10px' }">
+                <p
+                  :style="{ padding: '2px 5px',
+                            border: '1px solid grey',
+                            borderRadius: '9px' ,
+                            backgroundColor: activeView === 'All' ? '#0000ff96' : 'white' ,
+                            color: activeView === 'All' ? 'white' : 'blue',
+                            cursor: 'pointer'
+                            
+                  }"
+                  @click.prevent="toggleQuestionSources('All')"
+                >
+                  Show All
+                </p>
+                <p 
+                  :style="{ padding: '2px 5px',
+                            border: '1px solid grey',
+                            borderRadius: '9px' ,
+                            backgroundColor: activeView === 'CURRENT' ? '#0000ff96' : 'white' ,
+                            color: activeView === 'CURRENT' ? 'white' : 'blue',
+                            cursor: 'pointer'
+                  }"
+                  @click.prevent="toggleQuestionSources('CURRENT')" 
+                >
+                  Show Current
+                </p>
+              </div>
+
+            </div>
 
             <p>
               {{ orderDescriptionString }}
@@ -76,7 +166,7 @@
             <QuestionListPreview
               :fixedOrder="!quizIsRandomized"
               :readOnly="true"
-              :selectedQuestions="selectedQuestions"
+              :selectedQuestions="getSelectedQuestions()"
               :selectedExercises="selectedExercises"
             />
           </section>
@@ -91,13 +181,26 @@
       @submit_copy="handleSubmitCopy"
       @cancel="closeModal"
     />
+
+    <KModal
+      v-if="submitModalOpen"
+      :title="startStopText === 'start' ? $tr('startTest') : $tr('stopTest')" 
+      :submitText="startStopText === 'start' ? $tr('startTest') : $tr('stopTest')" 
+      :cancelText="coreString('goBackAction')"
+      @submit="restartBtn"
+      @cancel="toggleModal"
+    >
+      <p>{{ $tr('areYouSure') }}</p>
+    </KModal>
+
+
   </CoachAppBarPage>
 
 </template>
 
 
 <script>
-  import { AssessmentGroupDataResource ,ContentNodeResource } from 'kolibri.resources';
+  import { AssessmentGroupDataResource ,ContentNodeResource,AssessmentTest } from 'kolibri.resources';
   import { mapState } from 'vuex';
   import fromPairs from 'lodash/fromPairs';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
@@ -124,6 +227,7 @@
           learners_see_fixed_order: false,
           question_sources: [],
           title: '',
+          current_question_sources:[]
         },
         selectedExercises: {},
         loading: true,
@@ -131,6 +235,15 @@
         currentView: '',
         assessmentList: [],
         selectedId:null,
+        assessmentTestData:[],
+        currentAssessmentId:null,
+        submitModalOpen: false,
+        startStopText:"",
+        flagData:null,
+        assessmentid:"",
+        groupActive:null,
+        selectedQuestions : [],
+        activeView: 'CURRENT',
       };
     },
     computed: {
@@ -139,9 +252,6 @@
       // Maybe it should live elsewhere?
       /* eslint-disable-next-line kolibri/vue-no-unused-vuex-properties */
       ...mapState('classSummary', ['groupMap', 'learnerMap', 'assessmentMap']),
-      selectedQuestions() {
-        return this.assessment.question_sources;
-      },
       quizIsRandomized() {
         return !this.assessment.learners_see_fixed_order;
       },
@@ -156,8 +266,29 @@
   const fetchData = async () => {
     try {
       const d = await AssessmentGroupDataResource.fetchModel({ id: to.params.assessmentId });
+      const testData = []
+      for( const id of d.assessments){
+         
+         const totalQuestion = d.learner_status.find(i => i.assessment_id == id.id)
+         const data ={
+           id: id.id,
+           questionCount :  id.question_sources.length,
+           title : id.title,
+           score: totalQuestion.correct_question_ids.length,
+           type : id.extra_data.type,
+           attemptCount: id.attempt_count,
+           active: id.active,
+           archive: id.archive,
+           currentQuestionCount: id.current_question_sources.length
+         }
+
+         testData.push(data)
+       }
       next(vm => {
-        vm.assessmentList = d.assessments;
+        vm.assessmentList = d.assessments
+        vm.assessmentTestData = testData
+        vm.currentAssessmentId = d.current_assessment_id.id
+        vm.groupActive = d.active
       });
     } catch (error) {
       // Handle error
@@ -179,7 +310,8 @@
         this.currentView = view;
         this.selectedId = id
         const selectedQuestionSource = this.assessmentList.find(d => d.id == this.selectedId)
-        this.assessment.question_sources = selectedQuestionSource?.question_sources
+        this.assessment = selectedQuestionSource
+        this.selectedQuestions = selectedQuestionSource?.current_question_sources
       },
       // @public
       setData(data) {
@@ -204,6 +336,86 @@
       closeModal() {
         this.currentAction = '';
       },
+      calcPercentage(score, total) {
+          return (score / total);
+        },
+      scoreColor(value,count,type,active,archive) {
+          if (type ==='PRE' && archive === true) {
+            return '#FF412A';
+          }
+          if (type ==='PRE' && value <= 0 && count === 1 ) {
+            return '#D9D9D9';
+          }
+          if (value <= 0 && count >= 1 && active == true) {
+            return '#D9D9D9';
+          }
+          if (value <= 0 && count >= 1 && active == false) {
+            return '#FF412A';
+          }
+          if (value <= 0 && count === 0) {
+            return '#D9D9D9';
+          }
+          if (value <= 0 && count >= 1) {
+          return '#D9D9D9';
+        }
+          if (value > 0 && value <= 0.25) {
+            return '#FF412A';
+          }
+          if (value > 0.25 && value <= 0.50) {
+            return '#EC9090';
+          }
+          if (value > 0.50 && value <= 0.69) {
+            return '#F5C216';
+          }
+          if (value > 0.69 && value <= 0.74) {
+            return '#99CC33';
+          }
+          if (value <= 1 ) {
+            return '#00B050';
+          }
+        },
+        isStartfunc(type,count,id,active){
+          if(this.groupActive){
+             if (type === 'PRE' && this.currentAssessmentId === id && count === 0 && this.groupActive === true){
+                  return true
+                }else if((type === 'SECTION' || type == 'POST') && this.currentAssessmentId === id && !active && this.groupActive === true){
+                  return true
+              }
+          }
+          else{
+            return false
+          }
+        },
+        isStopfunc(type,count,id,active,archive){
+          if(this.groupActive){
+              if (type === 'PRE' && this.currentAssessmentId === id && active === true && archive === false){
+                return true
+              }else if((type === 'SECTION' || type === 'POST') && this.currentAssessmentId === id && active === true && archive === false){
+                return true
+            }
+          }
+          
+          else{
+            return false
+          }
+        },
+        async restartBtn() {
+          const data ={
+                flag: this.flagData,
+                assessment_id: this.assessmentid
+              }
+            const promise = AssessmentTest.saveModel({data});
+
+        return promise
+          .then(() => {
+            this.submitModalOpen = false;
+            window.location.reload();
+          })
+          .catch((error) => {
+            console.log(error)
+          });
+
+        },
       async fetchAssessmentGroupDetails() {
           const response = await AssessmentGroupDataResource.fetchModel({ id: this.$route.params.assessmentId })
           this.loading = false;
@@ -217,13 +429,56 @@
         async fetchSelectedExcercise() {
           const response = await ContentNodeResource.fetchCollection({getParams: {ids: map(this.assessment.question_sources, 'exercise_id'),}})
           this.setData(response)
-        }
+        },
+
+        toggleModal(type,id,flag){
+          this.startStopText= type
+          this.flagData = flag,
+          this.assessmentid =id
+          this.submitModalOpen = !this.submitModalOpen;
+        } ,
+        getSelectedQuestions() {
+          if(this.activeView === 'All'){
+            return this.assessment.question_sources
+          }
+          return this.assessment.current_question_sources
+        },
+        toggleQuestionSources(data){
+         this.activeView = data
+            },
     },
     $trs: {
         titleLabel: {
           message: 'Test',
           context: '',
         },
+        scoreLabel: {
+          message: 'Score',
+          context: '',
+        },
+        actionLabel :{
+          message: 'Action',
+          context: '',
+        },
+        startTest: {
+        message: 'Start Test',
+        context:
+          'Action that learner takes to submit their quiz answers so that the coach can review them.',
+      },
+      areYouSure: {
+        message: 'You cannot change your answers after you submit',
+        context:
+          "Message a learner sees when they submit answers in an exercise to their coach. It serves as a way of checking that the user is aware that once they've submitted their answers, they cannot change them afterwards.",
+      },
+      stopTest: {
+        message: 'Stop Test',
+        context:
+          'Action that learner takes to submit their quiz answers so that the coach can review them.',
+      },
+      weightageLabel:{
+        message:'Weightage',
+        context: 'weightage of questions'
+      }
       },
   };
 
@@ -253,5 +508,33 @@
   cursor: pointer ;
   margin: 2px 0px 3px 0px;
 }
+
+.score-chip {
+      display: inline-flex;
+      padding: 4px 8px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50px;
+      min-width: 100px;
+    }
+
+  .btn-style{
+    color: blue;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
+    border: 1px solid #80808047;
+  }
+  
+  .disabled-btn{
+    cursor: not-allowed;
+    opacity: 0.7;
+    filter: grayscale(8);
+    border: 1px solid #80808047;
+    border-radius: 8px;
+    padding: 2px 9px;
+    box-shadow: 0 1px 2px 0px rgba(0, 0, 0, 0.2);
+  }
 
 </style>

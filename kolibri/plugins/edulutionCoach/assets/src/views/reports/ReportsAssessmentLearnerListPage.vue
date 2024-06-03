@@ -5,10 +5,16 @@
       v-if="currentView === 'TEST_LIST'"
       :entries="testTable"
       @testTitleClick="onTestTitleClick"
+      @viewAttemptsClick="onviewAttemptsClick"
     />
     <ReportsAssessmentBreakdownTable
       v-if="currentView === 'TEST_BREAKDOWN'"
       :entries="breakdownData"
+      @backClick="onBackClick"
+    />
+    <ReportsAssessmentAttemptsTable
+      v-if="currentView === 'TEST_ATTEMPTS'"
+      :attemptHistory="attemptHistory"
       @backClick="onBackClick"
     />
   </ReportsAssessmentBaseListPage>
@@ -18,21 +24,24 @@
   
   <script>
   
-    import { AssessmentGroupDataResource } from 'kolibri.resources';
+    import { AssessmentGroupDataResource, AssessmentReport } from 'kolibri.resources';
     import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
     import commonCoach from '../common';
+    import { PageNames } from '../../constants';
     import CSVExporter from '../../csv/exporter';
     import * as csvFields from '../../csv/fields';
     import ReportsAssessmentBaseListPage from './ReportsAssessmentBaseListPage.vue';
     import ReportsAssessmentTestsTable from './ReportsAssessmentTestsTable.vue';
     import ReportsAssessmentBreakdownTable from './ReportsAssessmentBreakdownTable.vue';
-  
+    import ReportsAssessmentAttemptsTable from './ReportsAssessmentAttemptsTable.vue'
+
     export default {
       name: 'ReportsAssessmentLearnerListPage',
       components: {
         ReportsAssessmentBaseListPage,
         ReportsAssessmentTestsTable,
         ReportsAssessmentBreakdownTable,
+        ReportsAssessmentAttemptsTable,
       },
       mixins: [commonCoach, commonCoreStrings],
       data() {
@@ -41,6 +50,7 @@
           breakdownData: [],
           assessmentDetails: {},
           selectedTest: '',
+          attemptHistory:[],
         };
       },
       computed: {
@@ -53,6 +63,12 @@
                 title: d.title,
                 question_count: d.question_sources.length,
                 score: statusData?.correct_question_ids?.length || null,
+                active: d.active,
+                archive: d.archive,
+                attempt_count: d.attempt_count,
+                type: d.extra_data.type,
+                link: this.detailLink(statusData.assessment_id),
+                currentQuestionCount: d.current_question_sources.length
               }
             })
           }
@@ -118,11 +134,31 @@
                       title: topicTitle.join(''),
                       question_count: selectedQuestion?.length,
                       score: selectedCorrectQuestion.length || null,
+                      link: this.detailLink(selectedAssessments.id),
                     }
               this.breakdownData.push(breakdownData);      
             });        
           }
           this.currentView = 'TEST_BREAKDOWN'
+        },
+        detailLink(quizId) {
+        return this.classRoute(PageNames.REPORTS_ASSESSMENT_LEARNER_PAGE_ROOT, {
+          quizId,
+          learnerId: this.assessmentDetails.learner_id,
+        }, { assessmentGroupId: this.assessmentDetails.id });
+      },
+      async onviewAttemptsClick(assessmentId) {
+          const response = await AssessmentReport.fetchModel({ id: assessmentId })
+
+          const histoyData = Object.values(response).map((item) =>({
+            ...item,
+            link: this.detailLink(item.assessment_id)
+          }))
+
+          this.attemptHistory = histoyData
+
+          this.currentView = 'TEST_ATTEMPTS'
+
         },
         onBackClick() {
           this.breakdownData = []

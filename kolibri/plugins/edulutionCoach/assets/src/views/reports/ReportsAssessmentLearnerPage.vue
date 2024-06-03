@@ -32,7 +32,8 @@
         ...mapState('examReportDetail', ['exam']),
         toolbarRoute() {
           const backRoute = this.backRouteForQuery(this.$route.query);
-          return backRoute || this.classRoute('ReportsAssessmentLearnerListPage', {});
+          const assessmentGroupId = this.$route.query.assessmentGroupId || ''
+          return backRoute || this.classRoute('ReportsAssessmentLearnerListPage', { quizId: assessmentGroupId });
         },
       },
       methods: {

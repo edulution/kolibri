@@ -58,6 +58,8 @@ class ExamAssessmentSerializer(ModelSerializer):
         fields = (
             "id",
             "title",
+            "current_question_count",
+            "current_question_sources",
             "question_count",
             "question_sources",
             "seed",
@@ -247,7 +249,10 @@ class CreateAssessmentGroupSerializer(serializers.ModelSerializer):
             "learner_id",
             "creator",
             "assessment_map",
-            "channel_id"
+            "channel_id",
+            "current_assessment",
+            "current_assessment_type",
+            "current_assessment_level"
         )
 
 class CreateAssessmentSerializer(serializers.ModelSerializer):
@@ -274,6 +279,8 @@ class GetExamAssessmentSerializer(serializers.ModelSerializer):
             'question_sources',
             'title',
             'id',
+            'active',
+            'archive',
         )
 
 class GetGroupExamAssessmentSerializer(serializers.ModelSerializer):
@@ -343,3 +350,6 @@ class MarkAssessmentSerializer(serializers.Serializer):
     assessment_group_id = serializers.CharField()
     # assessment_map = serializers.JSONField()
 
+class StartRestartTest(serializers.Serializer):
+    assessment_id = serializers.CharField()
+    flag = serializers.IntegerField()
