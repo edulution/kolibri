@@ -16,4 +16,8 @@ export default {
     name: PageNames.BOOKMARKS,
     path: '/bookmarks',
   },
+  assessmentHistory:{
+    name: PageNames.ASSESSMENT_HISTORY,
+    path: '/assessmentHistory',
+  }
 };

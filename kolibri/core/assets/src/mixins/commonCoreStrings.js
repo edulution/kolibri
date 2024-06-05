@@ -226,6 +226,10 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'Bookmarks are used to give all users a way of saving a reference for a specific resource or topic to come back to later.',
   },
+  assessmentHistoryLabel:{
+    message: 'Assessment History',
+    context: 'Assessment History give the data of all attempted assessments'
+  },
   bookmarkedTimeAgoLabel: {
     message: 'Bookmarked { time }',
     context:

@@ -344,10 +344,11 @@
           .then(() => {
             this.$store.dispatch('classSummary/refreshClassSummary');
             this.showConfirmationModal = false;
-            this.$store.dispatch('createSnackbar', this.coachString('quizOpenedMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentOpenedMessage'));
+            this.$router.go(this.$router.currentRoute)
           })
           .catch(() => {
-            this.$store.dispatch('createSnackbar', this.coachString('quizFailedToOpenMessage'));
+            this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToOpenMessage'));
           });
       },
       handleCloseQuiz() {
@@ -365,6 +366,7 @@
             this.$store.dispatch('classSummary/refreshClassSummary');
             this.showCancellationModal = false;
             this.$store.dispatch('createSnackbar', this.coachString('assessmentClosedMessage'));
+            this.$router.go(this.$router.currentRoute)
           })
           .catch(() => {
             this.$store.dispatch('createSnackbar', this.coachString('assessmentFailedToCloseMessage'));
@@ -419,6 +421,7 @@
           this.showRemoveReportVisibilityModal = false;
           this.showMakeReportVisibleModal = false;
           this.$store.dispatch('createSnackbar', snackbarMessage);
+          this.$router.go(this.$router.currentRoute)
         });
       },
     },

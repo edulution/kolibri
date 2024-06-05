@@ -2,14 +2,12 @@ import json
 from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters.rest_framework import FilterSet
-# from kolibri.plugins.coach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from kolibri.plugins.edulutionCoach.class_summary_api import serialize_coach_assigned_assessment_status, to_fetch_learner_status
 from rest_framework import pagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,\
-    CreateAssessmentSerializer, GetExamAssessmentSerializer, GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
+from kolibri.core.assessment.serializers import AssessmentSerializer, CreateAssessmentGroupSerializer,GroupAssessmentSerializer, GetGroupExamAssessmentSerializer
 from rest_framework import status
 from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.api import KolibriAuthPermissions
@@ -21,10 +19,12 @@ from kolibri.core.assessment import models
 from kolibri.core.assessment import serializers
 from kolibri.core.logger.models import MasteryLog
 from kolibri.core.query import annotate_array_aggregate
-from .serializers import ExamAssessmentSerializer, MarkAssessmentSerializer
+from .serializers import MarkAssessmentSerializer, StartRestartTest
 from datetime import datetime
-from itertools import groupby
-
+from kolibri.core.logger.models import AttemptLog,ContentSessionLog,MasteryLog,ContentSummaryLog
+import random
+import pandas as pd
+from .z_assessments_constant import AssessmentConstant
 
 class OptionalPageNumberPagination(pagination.PageNumberPagination):
     """
@@ -74,6 +74,8 @@ class AssessmentViewset(ValuesViewset):
     values = (
         "id",
         "title",
+        "current_question_count",
+        "current_question_sources",
         "question_count",
         "question_sources",
         "seed",
@@ -170,17 +172,40 @@ class GroupAssessmentViewset(ViewSet):
             return Response(serializer.data)
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+def fetch_random_question_source(question_source, assessment_topic):
+    try:
+        current_question_source = []
+
+        exercise_questions = {topic['id']: [] for topic in assessment_topic}
+        for source in question_source:
+            exercise_id = source['exercise_id']
+            exercise_questions[exercise_id].append(source)
+        
+        current_question_count = AssessmentConstant.DEFAULT
+        for topic in assessment_topic:
+            exercise_id = topic['id']
+            weightage = topic['weightage']
+            current_question_count += weightage
+            matched_question_ids = exercise_questions.get(exercise_id, [])
+            random_questions = random.sample(matched_question_ids, min(weightage, len(matched_question_ids)))
+            current_question_source.extend(random_questions)
+
+        return current_question_source, current_question_count
+
+    except Exception as e:
+        return Response({"error": "Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class CreateAssessmentRecord(ViewSet):
     def create(self, request, pk=None):
-        from .models import ExamAssessment, ExamAssignmentAssessment
+        from .models import ExamAssessment, ExamAssignmentAssessment, AssessmentConfig
 
         try:
 
             request_data = request.data
 
             assessment = request_data.get('assessments')
-
             collection = request_data.get('collection')
             date_activated = request_data.get('date_activated')
             date_archived = request_data.get('date_archived')
@@ -190,13 +215,28 @@ class CreateAssessmentRecord(ViewSet):
             creator_id = request.user.id
             if not creator_id:
                 creator_id = request_data.get('creator_id')
-            # test_data = ExamAssessmentGroup.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=title, creator_id='ab8e752daeefb1fade99bf34efcafe6e')
+
+            assessment_map_obj = AssessmentConfig.objects.get(channel_id=channel_id)
+
+            if not assessment_map_obj:
+                return Response({"error": "Assessment map config not found"}, status=status.HTTP_404_NOT_FOUND)
             
-            id_available = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
+            assessment_group_obj = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id=collection)
 
-            if not id_available:
+            assessment_map_df = pd.DataFrame(assessment_map_obj.assessment_map)
+            assessment_map_df[(assessment_map_df['type'] == AssessmentConstant.PRE_TEST) & (assessment_map_df['order'] == AssessmentConstant.ORDER) & (assessment_map_df['level'] == AssessmentConstant.LEVEL)].reset_index(drop=True)
+            
+            if not assessment_group_obj:
 
-                field_update = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':title, 'collection':collection, 'creator': creator_id, 'channel_id': channel_id}
+                field_update = {
+                    'date_activated': date_activated,
+                    'date_archived':date_archived,
+                    'learner_id':learner_id,
+                    'title':title,
+                    'collection':collection,
+                    'creator': creator_id,
+                    'channel_id': channel_id
+                }
                 
                 group_serializer = CreateAssessmentGroupSerializer(data=field_update)
 
@@ -204,48 +244,69 @@ class CreateAssessmentRecord(ViewSet):
                 
                 group_serializer.save()
 
-            fetch_id = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
+                assessment_group_obj = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
             
-            obj = None
-            if fetch_id.exists():
-                obj = fetch_id[0] 
+            object = None
+            if assessment_group_obj.exists():
+                object = assessment_group_obj[0]
             
             is_available = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
 
+            instance_list = []
+            final_response_list = []
+
             if not is_available:
-            
-                for test in assessment:
-                    
-                    question_source = test.get('question_sources')
-                    question_count = test.get('question_count')
-                    new_title = test.get('title')
+                for test in assessment_map_obj.assessment_map:
+                    map_object = next((d for d in assessment if d['content_id'] == test['id']), None)
+                    if map_object:
+                        question_source = map_object.get('question_sources')
+                        question_count = map_object.get('question_count')
+                        new_title = map_object.get('title')
+                        current_question_limit = map_object.get('limit')
+                        assessment_topic = map_object.get('exercises')
 
-                    insert_record = ExamAssessment.objects.create(collection_id = collection, date_activated=date_activated, date_archived=date_archived, learner_id=learner_id, title=new_title, question_sources = question_source, question_count = question_count , assessment_group_id = obj.id, channel_id = channel_id,  creator_id=creator_id)
+                        current_question_source, current_question_count = fetch_random_question_source(question_source, assessment_topic)
 
-                # asess_dict = {'date_activated': date_activated, 'date_archived':date_archived, 'learner_id':learner_id,'title':new_title, 'collection':collection,'question_sources':str(question_source), 'question_count':question_count}
-                # assessment_serializer = CreateAssessmentSerializer(data = asess_dict)
-                # assessment_serializer.is_valid(raise_exception=True)
-                # assessment_serializer.save(creator_id= 'ab8e752daeefb1fade99bf34efcafe6e')
-                    
-                assessment_record = models.ExamAssessment.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection)
-                instance_list = []
-                final_response_list = []
-        
-                for instance in assessment_record:
-                    assessment_dict = {'id':instance.id, 'title':instance.title}
-                    final_dict = {'id':instance.id, 'title':instance.title,'question_count': instance.question_count, 'question_sources': instance.question_sources,'seed':instance.seed, 'learners_see_fixed_order': instance.learners_see_fixed_order, 'date_activated':instance.date_activated}
-                    instance_list.append(assessment_dict)
-                    final_response_list.append(final_dict)
+                        instance = ExamAssessment.objects.create(
+                            collection_id = collection,
+                            date_activated=date_activated,
+                            date_archived=date_archived,
+                            learner_id=learner_id,
+                            title=new_title,
+                            question_sources = question_source,
+                            question_count = question_count ,
+                            assessment_group_id = object.id,
+                            channel_id = channel_id, 
+                            creator_id=creator_id,
+                            current_questions_limit=current_question_limit,
+                            current_question_sources = current_question_source,
+                            current_question_count = current_question_count,
+                            topicwise_weightage = assessment_topic,
+                            extra_data = {'type': test['type'], 'level': test['level']}
+                        )
 
-                    insert_record_exam_assignment = ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
+                        ExamAssignmentAssessment.objects.create(collection_id = collection, exam_id=instance.id, assigned_by_id=creator_id)
 
-                if len(instance_list) != 0: 
-                    to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id']}
-                    # assessement_serializer = CreateAssessmentGroupSerializer(data=to_dict)
-                    # assessement_serializer.is_valid(raise_exception=True)
-                    # assessement_serializer.save()
+                        final_dict = {
+                            'id':instance.id,
+                            'title':new_title,
+                            'question_count': question_count,
+                            'question_sources': question_source,
+                            'seed': AssessmentConstant.DEFAULT,
+                            'learners_see_fixed_order': AssessmentConstant.DEFAULT,
+                            'date_activated': date_activated
+                        }
 
-                    updated_count = models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
+                        instance_list.append({
+                            **test,
+                            'id': instance.id,
+                            'content_id': test['id'],
+                        })
+                        final_response_list.append(final_dict)
+
+                if len(instance_list) != AssessmentConstant.DEFAULT: 
+                    to_dict = {'assessment_map': json.dumps(instance_list), 'current_assessment_id': instance_list[0]['id'], 'current_assessment_level': instance_list[0]['level'], 'current_assessment_type': instance_list[0]['type']}
+                    models.ExamAssessmentGroup.objects.filter(learner_id=learner_id, channel_id=channel_id, collection_id = collection).update(**to_dict)
 
                 return Response(final_response_list, status=status.HTTP_200_OK)
             
@@ -253,47 +314,30 @@ class CreateAssessmentRecord(ViewSet):
         
         except models.ExamAssessmentGroup.DoesNotExist:
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 
-# class ExamAssessmentStartViewSet(ViewSet):
-#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
-#         try:
-#             # Fetch the instances based on the assessment_group_id
-#             update_dict = {'active': 1}
-#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
-#             if available_id:
-#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Assessment ID'})
-#             # Fetch the instance based on the primary key
-
-#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
-#             if available_group_id:
-#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Group ID'})
-
-#             # Optionally, you can return a success response indicating the update was successful
-#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
-#         except models.ExamAssessmentGroup.DoesNotExist:
-#             # Handle case where no instance with the given pk is found
-            # return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 class ExamAssessmentStartViewSet(ViewSet):
    def partial_update(self, request, pk=None):  # Ensure pk is included in the method signature
         try:
             # Fetch the instances based on the assessment_group_id
-            update_dict = {'active': 1}
-            available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+            update_dict = {'active': AssessmentConstant.ACTIVE}
             
+            available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+
+            available_group_id = models.ExamAssessmentGroup.objects.get(id=pk)
+            
+            assessment_map = available_group_id.assessment_map
+
+            first_assessment_map = assessment_map[0]['id']
+
             if available_id:
-                assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
+                assessment_instance = models.ExamAssessment.objects.get(id=first_assessment_map)
+                assessment_instance.previous_question_sources = assessment_instance.current_question_sources
+                assessment_instance.__dict__.update({**update_dict, 'attempt_count': AssessmentConstant.ATTEMPT_COUNT})
+                assessment_instance.save()
             else:
                 return Response({'message': 'Invalid Assessment ID'})
             # Fetch the instance based on the primary key
 
-            available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
             if available_group_id:
                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
             else:
@@ -306,35 +350,59 @@ class ExamAssessmentStartViewSet(ViewSet):
             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
         
 
-# class ExamAssessmentStopViewSet(ViewSet):
-#    def update(self, request, pk=None):  # Ensure pk is included in the method signature
-#         try:
-#             # Fetch the instances based on the assessment_group_id
-#             update_dict = {'archive': 1}
-#             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
-            
-#             if available_id:
-#                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Assessment ID'})
-#             # Fetch the instance based on the primary key
+class AssessmentTestViewSet(ViewSet):
+   serializer_class = StartRestartTest
+   def create(self, request): 
+        try:
+            serializer = self.serializer_class(data=request.data)
+            if serializer.is_valid():
+                assessment_id = serializer.validated_data.get('assessment_id')
+                flag = serializer.validated_data.get('flag')
 
-#             available_group_id = models.ExamAssessmentGroup.objects.filter(id=pk)
-#             if available_group_id:
-#                 group_assessment_instance_count = models.ExamAssessmentGroup.objects.filter(id=pk).update(**update_dict)
-#             else:
-#                 return Response({'message': 'Invalid Group ID'})
+                assessment_obj = models.ExamAssessment.objects.get(id = assessment_id)
+    
+                if assessment_obj:
+                    update_dict = {}
+                    
+                    if flag == AssessmentConstant.START or flag == AssessmentConstant.RESTART:
+                        update_dict = {
+                            'active': AssessmentConstant.ACTIVE,
+                            'attempt_count': assessment_obj.attempt_count + 1
+                        }
 
-#             # Optionally, you can return a success response indicating the update was successful
-#             return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
-#         except models.ExamAssessmentGroup.DoesNotExist:
-#             # Handle case where no instance with the given pk is found
-#             return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
+                        assessment_obj.previous_question_sources = assessment_obj.current_question_sources
+
+                        if assessment_obj.attempt_count >= AssessmentConstant.LEVEL_AND_COUNT:
+
+                            current_question_source, _ = fetch_random_question_source(assessment_obj.question_sources, assessment_obj.topicwise_weightage)
+
+                            assessment_obj.current_question_sources = current_question_source
+                            assessment_obj.previous_question_sources = current_question_source
+
+                    elif flag == AssessmentConstant.STOP:
+                        update_dict = {
+                            'active': AssessmentConstant.STOP
+                        }
+
+                    assessment_obj.__dict__.update(**update_dict)
+                    assessment_obj.save()
+                    return Response({'message': 'Instances updated successfully'}, status=status.HTTP_200_OK)
+                
+                else:
+                    return Response({'message': 'Invalid Assessment ID'})
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)       
+        
+        except models.ExamAssessment.DoesNotExist:
+            # Handle case where no instance with the given pk is found
+            return Response({"error": "Instance not found"}, status=status.HTTP_404_NOT_FOUND)
+
 class ExamAssessmentStopViewSet(ViewSet):
     def partial_update(self, request, pk=None):
         try:
-            update_dict = {'archive': 1}
+            update_dict = {'archive': AssessmentConstant.ARCHIVE}
             available_id = models.ExamAssessment.objects.filter(assessment_group_id=pk)
+            
             if available_id:
                 assessment_instance_count = models.ExamAssessment.objects.filter(assessment_group_id=pk).update(**update_dict)
             else:
@@ -398,6 +466,7 @@ class FetchAssessmentGroupData(ViewSet):
                     "id": assessment.id,
                     "title": assessment.title,
                     "question_sources": assessment.question_sources,
+                    "current_question_sources": assessment.current_question_sources,
                     "data_model_version": assessment.data_model_version,
                     "learners_see_fixed_order": assessment.learners_see_fixed_order,
                     "seed": assessment.seed,
@@ -407,7 +476,9 @@ class FetchAssessmentGroupData(ViewSet):
                     "archive": assessment.archive,
                     "active": assessment.active,
                     "assignments": assessment.assignments,
-                    "exercises": []
+                    "exercises": [],
+                    "extra_data": assessment.extra_data,
+                    "attempt_count": assessment.attempt_count,
                 }
 
                 for question in assessment.question_sources:
@@ -436,7 +507,7 @@ class FetchAssessmentGroupData(ViewSet):
                 "current_assessment_id": serializer.data['current_assessment'],
                 "last_assessment_id": serializer.data['last_assessment'],
                 "assessments": exam_assessments_list,
-                "learner_status": to_fetch_learner_status(assessment_group_id=pk),
+                "learner_status": to_fetch_learner_status(serializer.data['learner_id'], assessment_group_id=pk),
             }
 
             return Response(response_data)
@@ -445,60 +516,432 @@ class FetchAssessmentGroupData(ViewSet):
         except models.ExamAssessment.DoesNotExist:
             return Response({"error": "Exam Assessment not found"}, status=status.HTTP_404_NOT_FOUND)
 
-
 class MarkAssessmentViewset(ViewSet):
     serializer_class = MarkAssessmentSerializer
 
     def create(self, request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            learner_id = serializer.validated_data.get('learner_id')
-            # collection_id = serializer.validated_data.get('collection_id')
             assessment_id = serializer.validated_data.get('assessment_id')
             assessment_group_id = serializer.validated_data.get('assessment_group_id')
-            # assessment_map = serializer.validated_data.get('assessment_map')
 
             try:
-                assessment_group = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
+                assessment_group_level = models.ExamAssessmentGroup.objects.get(id=assessment_group_id)
+
+                if not assessment_group_level:
+                    return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
+     
             except models.ExamAssessmentGroup.DoesNotExist:
                 return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
 
             exam_assessments = models.ExamAssessment.objects.filter(assessment_group=assessment_group_id)
-            assessment_data = models.ExamAssessment.objects.filter(id=assessment_id).last()
-            if assessment_data:
-                question_count = assessment_data.question_count
+            assessment_level = models.ExamAssessment.objects.filter(id=assessment_id).last()
+
+            question_count  = 1
+            user_id = assessment_group_level.learner_id
+            
+            if assessment_level:
+                question_count = assessment_level.question_count
+                user_id = assessment_level.learner_id
 
             learner_status = serialize_coach_assigned_assessment_status(exam_assessments)
 
             num_correct_value = learner_status[0]['num_correct']
 
-            percentage = (num_correct_value/question_count)*100
-            assessment_map = assessment_group.assessment_map
-            # Find the index of the current ID in the assessment_map
-            if percentage < 75.0:
-                index = next((i for i, item in enumerate(assessment_map) if item['id'] == assessment_group.current_assessment_id), None)
-                next_index = index + 1
-                if next_index < len(assessment_map):
-                    next_id = assessment_map[next_index]['id']
-                    if next_id != assessment_group.current_assessment_id:
-                        assessment_group.current_assessment_id = next_id
-                else:
-                    assessment_group.last_assessment_id = assessment_group.current_assessment_id
-                    assessment_data.archive = True
-                    assessment_data.date_archived = datetime.now()
-                    assessment_group.archive = True
-                    assessment_group.date_archived = datetime.now()
-            else:
-                assessment_group.last_assessment_id = assessment_map[-1]['id']
-                assessment_data.archive = True
-                assessment_data.date_archived = datetime.now()
-                assessment_group.archive = True
-                assessment_group.date_archived = datetime.now()
+            if num_correct_value == None:
+                num_correct_value = AssessmentConstant.DEFAULT
 
-            assessment_group.save()
-            assessment_data.save()
+            percentage = (num_correct_value / question_count) * 100
+            
+            assessment_map = assessment_group_level.assessment_map
+            current_assessment_id = assessment_group_level.current_assessment_id
+            last_assessment_id = assessment_group_level.last_assessment_id
+
+            current_id, last_id, archieve_flag  = self.process_assessment_list(assessment_map, current_assessment_id, last_assessment_id, percentage )
+            
+            assessment_map_df = pd.DataFrame(assessment_map)
+           
+            current_assessment = assessment_map_df[(assessment_map_df['id'] == current_id)].reset_index(drop = True)
+            last_assessment = assessment_map_df[(assessment_map_df['id'] == last_id)].reset_index(drop = True)
+
+            if archieve_flag == True:
+                assessment_group_level.current_assessment_id = current_id
+                assessment_group_level.current_assessment_type = current_assessment['type'][0]
+                assessment_group_level.current_assessment_level = current_assessment['level'][0]
+                assessment_group_level.last_assessment_id = last_id
+                assessment_group_level.last_assessment_type = last_assessment['type'][0]
+                assessment_group_level.last_assessment_level = last_assessment['level'][0]
+                assessment_level.archive = True
+                assessment_level.date_archived = datetime.now()
+                assessment_group_level.archive = True
+                assessment_group_level.date_archived = datetime.now()
+            
+            else:
+                Individual_current_assessment_level = models.ExamAssessment.objects.filter(id=current_assessment['id'][0]).last() 
+                Individual_last_assessment_level = models.ExamAssessment.objects.filter(id=last_assessment['id'][0]).last() 
+
+                assessment_group_level.current_assessment_id = current_id
+                assessment_group_level.current_assessment_type = current_assessment['type'][0]
+                assessment_group_level.current_assessment_level = current_assessment['level'][0]
+                assessment_group_level.last_assessment_id = last_id
+                assessment_group_level.last_assessment_type = last_assessment['type'][0]
+                assessment_group_level.last_assessment_level = last_assessment['level'][0]
+                Individual_current_assessment_level.archive = False
+                Individual_current_assessment_level.active = False
+ 
+                if percentage >= 75:
+                    Individual_last_assessment_level.archive = True
+                    Individual_last_assessment_level.active = True
+                    Individual_last_assessment_level.save()
+
+            assessment_group_level.save()
+            assessment_level.save()
+            Individual_current_assessment_level.save()
+
+            summarylog = ContentSummaryLog.objects.get(
+                    content_id = assessment_id,
+                    user=user_id,
+            )
+            summarylog = summarylog.id
+
+            masterylogs = MasteryLog.objects.get(
+                    summarylog=summarylog,
+                    user=user_id,
+            )
+
+            if masterylogs:
+                models.AssessmentHistory.objects.create(
+                    user_id = masterylogs.user_id, 
+                    summarylog_id=masterylogs.summarylog_id, 
+                    assessment_id=assessment_id,
+                    mastery_criterion=masterylogs.mastery_criterion,
+                    start_timestamp=masterylogs.start_timestamp,
+                    end_timestamp=masterylogs.end_timestamp,
+                    completion_timestamp=masterylogs.completion_timestamp,
+                    mastery_level=masterylogs.mastery_level,
+                    complete=masterylogs.complete,
+                    time_spent=masterylogs.time_spent,
+                    question_sources = assessment_level.previous_question_sources
+                    )
+                
+                assessment_update = models.ExamAssessment.objects.get(id=assessment_id)
+
+                if assessment_update.extra_data['type'] == AssessmentConstant.PRE_TEST:
+                    assessment_update.archive = True
+                
+                assessment_update.previous_question_sources = []
+                assessment_update.save()
 
             return Response({"message": "Assessment marked successfully"}, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    def process_assessment_list(self, assessments, current_assessment_id, last_assessment_id, score):
+        for i, assessment in enumerate(assessments):
+            if assessment["id"] == current_assessment_id:
+                if "PRE" in assessment["type"]:
+                    if score >= 75:
+                        # If PreTest score is >= 75%, move to next PreTest
+                        next_index = i + 1
+                        while next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            if "PRE" in next_assessment["type"]:
+                                return next_assessment["id"], current_assessment_id, False
+                            next_index += 1
+                        # If no more PreTests, mark as last assessment and archive
+                        return assessment["id"], last_assessment_id, True
+                    else:
+                        # If PreTest score < 75%, move to immediate next assessment
+                        next_index = i + 1
+                        if next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            return next_assessment["id"], assessment["id"], False
+                        else:
+                            # Mark as last assessment and archive
+                            return assessment["id"], last_assessment_id, True
+                elif "POST" in assessment["type"]:
+                    if score >= 75:
+                        # If Post test score is >= 75%, move to next assessment
+                        next_index = i + 1
+                        if next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            return next_assessment["id"], assessment["id"], False
+                        else:
+                            # Mark as last assessment and archive
+                            return assessment["id"], last_assessment_id, True
+                    else:
+                        # If Post test score < 75%, no change until score >= 75%
+                        return current_assessment_id, last_assessment_id, False
+                else:
+                    if score >= 75:
+                        # If score >= 75%, move to next Level-Section
+                        next_index = i + 1
+                        while next_index < len(assessments):
+                            next_assessment = assessments[next_index]
+                            if "PRE" in next_assessment["type"]:
+                                # If next assessment is PreTest, mark as last assessment and archive
+                                return assessment["id"], last_assessment_id, True
+                            elif "SECTION" in next_assessment["type"] or "POST" in next_assessment["type"]:
+                                # If next assessment is Level-Section or Post test, update current and last assessment ids
+                                return next_assessment["id"], assessment["id"], False
+                            next_index += 1
+                        # If no more assessments, mark as last assessment and archive
+                        return assessment["id"], last_assessment_id, True
+                    else:
+                        # If score < 75%, no change until score >= 75%
+                        return current_assessment_id, last_assessment_id, False
+        # If current assessment id is not found in the list, return None for both ids
+        return None, None, False
+
+class AssessmentReportViewSet(ViewSet):
+
+    def retrieve(self, request, pk=None):
+        try:
+
+            get_assessment = models.ExamAssessment.objects.get(id = pk)
+
+            if get_assessment:
+                
+                assessment_data = {
+                        'assessment_id': [get_assessment.id],
+                        'question_count': [get_assessment.question_count],
+                        'question_sources': [get_assessment.question_sources],
+                        'user_id': [get_assessment.learner_id],
+                        'current_question_sources': [get_assessment.current_question_sources]
+                       
+                    }
+
+                get_assessment_df = pd.DataFrame(assessment_data)
+                
+                content_session_logs = ContentSessionLog.objects.filter(content_id=pk, user_id=get_assessment.learner_id).values('id', 'content_id', 'start_timestamp', 'time_spent', 'user_id')
+                
+                if content_session_logs:
+                    
+                    content_session_logs_df = pd.DataFrame(content_session_logs)
+
+                    list_of_session_ids = content_session_logs_df['id'].to_list()
+
+                    content_session_logs_df = content_session_logs_df.rename(columns={'id': "sessionlog_id"})
+
+                    attempt_logs = AttemptLog.objects.filter(sessionlog_id__in = list_of_session_ids).values("item", "correct", "user_id","sessionlog_id")
+                    
+                    if not attempt_logs:
+                        return Response({"message": "No Assessment Attempted for this learner"}, status=status.HTTP_404_NOT_FOUND)
+                    
+                    attempt_logs_list_df = pd.DataFrame(attempt_logs)
+
+                    attempt_logs_list_df['item'] = attempt_logs_list_df["item"].str.split(":").str[1]
+
+                    correct_attempts_df = attempt_logs_list_df[attempt_logs_list_df['correct'] == 1]
+
+                    assessment_session_df = pd.merge(content_session_logs_df, get_assessment_df, on='user_id').reset_index(drop=True)
+
+                    assessment_session_df['correct_questions_ids'] = None
+                    assessment_session_df['corrected_question_count'] = 0
+                    attempt_count_list = [] 
+
+                    for index, rows in assessment_session_df.iterrows():
+                        attempt_count_list.append(index + 1)
+                        
+                        corrected_question_ids = correct_attempts_df[correct_attempts_df['sessionlog_id'] == rows['sessionlog_id']].reset_index(drop=True)
+
+                        if corrected_question_ids.empty:
+                            continue
+                            
+                        corrected_question_ids_list = corrected_question_ids['item'].tolist()
+         
+                        if len(corrected_question_ids) == len(corrected_question_ids_list):
+                            assessment_session_df.at[index, 'correct_questions_ids'] = corrected_question_ids_list
+                            assessment_session_df.at[index, 'corrected_question_count'] = len(corrected_question_ids_list)
+                        
+                        else:
+                            assessment_session_df.at[index, 'correct_questions_ids'] = None
+                    
+                    assessment_session_df['attempt_count'] = attempt_count_list
+                    assessment_session_df['start_timestamp'] = assessment_session_df['start_timestamp'].dt.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+
+                    json_string = assessment_session_df.to_json(orient='records')
+                    json_data = json.loads(json_string.replace("\\", ""))
+
+                    return Response(json_data)
+                
+                return Response({"message": "No Session Available for this learner"}, status=status.HTTP_404_NOT_FOUND)
+        
+        except models.ExamAssessment.DoesNotExist:
+            return Response({"error": "Assessment group not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+def paginate_dataframe(df, page_no, page_limit):
+    # Calculate start and end indices
+    page_no = int(page_no)
+    page_limit = int(page_limit)
+    start_idx = (page_no - 1) * page_limit
+    end_idx = start_idx + page_limit
     
+    # Slice the DataFrame
+    paginated_df = df[start_idx:end_idx]
+    
+    return paginated_df
+class AssessmentHistoryReportViewSet(ViewSet):
+
+    def retrieve(self, request, pk=None):
+        try:
+
+            from_date = request.query_params.get('from_date')
+            to_date = request.query_params.get('to_date')
+            assessment_id = request.query_params.get('assessment_id')
+            learner_ids = request.query_params.get('learner_ids')
+            page_no = request.query_params.get('page_no')
+            page_limit = request.query_params.get('page_limit')
+
+            if not learner_ids:
+                return Response({"error": "learner_id is mandatory"}, status=status.HTTP_404_NOT_FOUND)
+
+            assessment_history = models.AssessmentHistory.objects.filter(user_id=learner_ids).values('user_id','assessment_id','completion_timestamp')
+            assessment = models.ExamAssessment.objects.filter(learner_id=learner_ids).values('learner_id','id','title','current_question_count')
+
+            response= {
+                'list' : [],
+                'total_count' : 0
+            }
+            
+            if assessment_history and assessment:
+                
+                assessment_history_list = list(assessment_history)
+                assessment_list = list(assessment)
+              
+                assessment_history_df = pd.DataFrame(assessment_history_list)
+                assessment_df = pd.DataFrame(assessment_list)
+
+                assessment_history_df['user_id'] = assessment_history_df['user_id'].astype(str).str.replace('-', '')
+                assessment_history_df['assessment_id'] = assessment_history_df['assessment_id'].astype(str).str.replace('-', '')
+
+                content_session_logs = ContentSessionLog.objects.filter(content_id__in=list(set(assessment_history_df['assessment_id'].to_list()))).values('id','content_id')
+
+                content_session_logs_list= list(content_session_logs)
+                content_session_logs__df = pd.DataFrame(content_session_logs_list)
+
+                merged_df = pd.merge(assessment_history_df, content_session_logs__df, left_on='assessment_id', right_on='content_id', how='left')
+
+                merged_df = merged_df.drop_duplicates(subset='id', keep='first')
+
+                merged_df.drop(columns=['content_id'], inplace=True)
+
+                merged_df = merged_df.rename(columns={'id': 'session_id'})
+
+                assessment_history_df = merged_df
+
+                attempt_logs = AttemptLog.objects.filter(sessionlog_id__in=list(set(assessment_history_df['session_id'].to_list()))).values("id", "item", "start_timestamp", "end_timestamp", "completion_timestamp", "time_spent","correct", "user_id", "sessionlog_id")
+
+                attempt_logs_list= list(attempt_logs)
+
+                attempt_logs_df = pd.DataFrame(attempt_logs_list)
+            
+                if attempt_logs_df.empty:
+                    return Response({"error": "No attempt assessment for this learner"}, status=status.HTTP_404_NOT_FOUND)
+        
+                result_df = pd.DataFrame()
+                previous_assessment_id = None
+                attempt_count = 0
+
+                for _, row in assessment_history_df.iterrows():
+                    filter_df = assessment_df[assessment_df['id'] == row['assessment_id']].reset_index(drop=True)
+                    attempt_df = attempt_logs_df[attempt_logs_df['sessionlog_id'] == row['session_id']].reset_index(drop=True)
+
+                    if filter_df.empty:
+                        continue
+                    
+                    if row['assessment_id'] != previous_assessment_id:
+                        attempt_count = 1
+                    else:
+                        attempt_count += 1
+
+                    filter_df['corrected_answer_count'] = attempt_df['correct'].sum() if not attempt_df.empty else 0
+                    filter_df['question_attempted_count'] = len(attempt_df)
+                    filter_df['unattempted_count'] = (filter_df['current_question_count'][0] - len(attempt_df)) if not attempt_df.empty else 0
+                    filter_df['attempt_count'] = attempt_count
+                    filter_df['completion_timestamp'] = row['completion_timestamp']
+                    # filter_df['question_sources'] = [row['question_sources']] * len(filter_df)
+                    filter_df['completion_timestamp'] = filter_df['completion_timestamp'].dt.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
+
+                    result_df = pd.concat([result_df, filter_df], ignore_index=True)
+
+                    previous_assessment_id = row['assessment_id']
+
+                result_df = result_df.rename(columns={'id': 'assessment_id', 'current_question_count' :'question_count','completion_timestamp' :'date','attempt_count':'attempts'})
+
+                if result_df.empty:
+                    return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                result_df['date'] = pd.to_datetime(result_df['date'])
+                result_df['date'] = result_df['date'].dt.strftime('%Y-%m-%d')
+                
+                if from_date and to_date:
+                    from_date = pd.to_datetime(from_date).strftime('%Y-%m-%d')
+                    to_date = pd.to_datetime(to_date).strftime('%Y-%m-%d')
+                
+                if assessment_id:
+                    result_df = result_df[result_df['assessment_id'] == assessment_id]
+
+                if from_date and to_date:
+                    result_df = result_df[(result_df['date'] >= from_date) & (result_df['date'] <= to_date)]
+        
+                paginated_result_df = paginate_dataframe(result_df, page_no, page_limit)
+                
+                total_count = len(result_df)
+                json_string = paginated_result_df.to_json(orient='records')
+                json_data = json.loads(json_string.replace("\\", ""))
+
+                response = {
+                            
+                            "list": json_data,
+                            "total_count": total_count
+                        }
+
+            return Response(response)
+
+        except models.AssessmentHistory.DoesNotExist:
+            return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
+class GetAssessmentViewSet(ViewSet):
+
+    def retrieve(self, request, pk=None):
+        try:
+
+            assessment_history = models.AssessmentHistory.objects.filter(user_id=pk).values('user_id','assessment_id')
+            assessment = models.ExamAssessment.objects.filter(learner_id=pk).values('learner_id','id','title')
+
+            response = {
+                    'list': []
+                    }
+            
+            if assessment_history and assessment:
+                
+                assessment_history_list = list(assessment_history)
+                assessment_list = list(assessment)
+              
+                assessment_history_df = pd.DataFrame(assessment_history_list)
+                assessment_df = pd.DataFrame(assessment_list)
+
+                assessment_history_df['user_id'] = assessment_history_df['user_id'].astype(str).str.replace('-', '')
+                assessment_history_df['assessment_id'] = assessment_history_df['assessment_id'].astype(str).str.replace('-', '')
+
+                merged_df = pd.merge(assessment_history_df, assessment_df, left_on='assessment_id', right_on='id')
+
+                if not merged_df.empty:
+
+                    merged_df = merged_df.drop_duplicates(subset='id', keep='first')
+
+                    merged_df = merged_df.rename(columns={'title': 'label','assessment_id' :'value'})
+                    merged_df = merged_df.drop(['learner_id', 'id'], axis=1)
+
+                    json_string = merged_df.to_json(orient='records')
+                    json_data = json.loads(json_string.replace("\\", ""))
+                    response = {
+                                'list': json_data
+                                }
+
+            return Response(response)
+
+        except models.AssessmentHistory.DoesNotExist:
+            return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)

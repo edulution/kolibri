@@ -28,6 +28,12 @@ const sideNavConfig = {
         icon: 'bookmark',
         route: baseRoutes.bookmarks.path,
         name: baseRoutes.bookmarks.name,
+      }, 
+      {
+        label: coreStrings.$tr('assessmentHistoryLabel'),
+        icon: 'history',
+        route: baseRoutes.assessmentHistory.path,
+        name: baseRoutes.assessmentHistory.name,
       },
     ];
   },

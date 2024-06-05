@@ -254,9 +254,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             raise PermissionDenied("User does not have access to this quiz_id")
         
     def _check_assessment_permissions(self, user, assessment_id):
-        print('_check_assessment_permissions1 =====================+++++++++++++++++++++++==================')
         if user.is_anonymous:
-            print('_check_assessment_permissions2 =====================+++++++++++++++++++++++==================')
             raise PermissionDenied("Cannot access a assessment if not logged in")
         if not ExamAssessment.objects.filter(
             active=True,
@@ -265,9 +263,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             # ),
             id=assessment_id,
         ).exists():
-            print(assessment_id, '_check_assessment_permissions3 =====================+++++++++++++++++++++++==================')
             raise PermissionDenied("User does not have access to this assessment_id")
-        print('_check_assessment_permissions4 =====================+++++++++++++++++++++++==================')
 
     def _check_lesson_permissions(self, user, lesson_id):
         if user.is_anonymous:
@@ -287,7 +283,6 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         assessment_id = validated_data.get("assessment_id")
 
         context = LogContext()
-        print('_get_context1 =====================+++++++++++++++++++++++==================')
         if node_id is not None:
             mastery_model = validated_data.get("mastery_model")
             content_id = validated_data.get("content_id")
@@ -305,9 +300,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             kind = content_kinds.QUIZ
             context["quiz_id"] = quiz_id
         elif assessment_id is not None:
-            print('_get_context2 =====================+++++++++++++++++++++++==================')
             self._check_assessment_permissions(user, assessment_id)
-            print('_get_context3 =====================+++++++++++++++++++++++==================')
             mastery_model = {"type": 'assessment', "coach_assigned": True}
             content_id = assessment_id
             channel_id = None
@@ -414,15 +407,12 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         serializer = StartSessionSerializer(
             data=request.data, context={"request": request}
         )
-        print('called1 =====================+++++++++++++++++++++++==================')
         serializer.is_valid(raise_exception=True)
         start_timestamp = local_now()
         repeat = serializer.validated_data["repeat"]
-        print('called2 =====================+++++++++++++++++++++++==================')
         content_id, channel_id, kind, mastery_model, context = self._get_context(
             request.user, serializer.validated_data
         )
-        print('called3 =====================+++++++++++++++++++++++==================')
 
         with transaction.atomic(), dataset_cache:
 
@@ -491,14 +481,6 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             and masterylog.mastery_criterion.get("coach_assigned")
         ):
             raise PermissionDenied("Cannot update a finished coach assigned quiz")
-        
-        if (
-            masterylog
-            and masterylog.complete
-            and masterylog.mastery_criterion.get("type") == 'assessment'
-            and masterylog.mastery_criterion.get("coach_assigned")
-        ):
-            raise PermissionDenied("Cannot update a finished coach assigned assessment")
 
     def _get_or_create_masterylog(
         self,
@@ -604,10 +586,9 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
         elif exercise_type == exercises.QUIZ:
             attemptlogs = attemptlogs.order_by()
         elif exercise_type == 'assessment':
-            attemptlogs = attemptlogs.order_by()
+            attemptlogs = []
         else:
             attemptlogs = attemptlogs[:10]
-
         return {
             "mastery_criterion": mastery_criterion,
             "pastattempts": attemptlogs,
@@ -738,6 +719,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
                 return AttemptLog.objects.get(
                     id=interaction["id"],
                     masterylog_id=masterylog_id,
+                    sessionlog_id = session_id,
                     user=user,
                 )
             except AttemptLog.DoesNotExist:
@@ -746,6 +728,7 @@ class ProgressTrackingViewSet(viewsets.GenericViewSet):
             try:
                 if user:
                     return AttemptLog.objects.get(
+                        sessionlog_id = session_id,
                         masterylog_id=masterylog_id,
                         user=user,
                         item=interaction["item"],

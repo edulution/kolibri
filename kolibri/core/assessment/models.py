@@ -1,10 +1,9 @@
 import json
 import uuid
-
 from django.db import models
 from django.db.utils import IntegrityError
 from django.utils import timezone
-
+from kolibri.core.fields import DateTimeTzField
 from .permissions import UserCanReadExamAssignmentData
 from .permissions import UserCanReadExamData
 from kolibri.core.auth.constants import role_kinds
@@ -97,6 +96,15 @@ class ExamAssessment(AbstractFacilityDataModel):
     # archive will be used on the frontend to indicate if a quiz is "closed"
     archive = models.BooleanField(default=False)
     date_archived = models.DateTimeField(default=None, null=True, blank=True)
+
+    extra_data  = JSONField(default={}, blank=True)
+
+    attempt_count = models.IntegerField(null=True, default=0)
+    current_question_sources = JSONField(default=[], blank=True)
+    previous_question_sources = JSONField(default=[], blank=True)
+    topicwise_weightage = JSONField(default=[], blank=True)
+    current_question_count = models.IntegerField(null=True, default=0)
+    current_questions_limit = models.IntegerField(null=True, default=0)
 
     content_assignments = ContentAssignmentManager(
         # one exam can contain multiple questions from multiple exercises,
@@ -352,3 +360,51 @@ class ExamAssessmentGroup(models.Model):
         on_delete=models.SET_NULL
     )
 
+    current_assessment_type = models.CharField(max_length=200, null=True)
+    current_assessment_level = models.CharField(max_length=200, null=True)
+    last_assessment_type = models.CharField(max_length=200, null=True)
+    last_assessment_level = models.CharField(max_length=200, null=True)
+
+class AssessmentConfig(models.Model):
+
+    morango_model_name = "assessmentconfig"
+
+    permissions = (
+        RoleBasedPermissions(
+            target_field="collection",
+            can_be_created_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_read_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_updated_by=(role_kinds.ADMIN, role_kinds.COACH),
+            can_be_deleted_by=(role_kinds.ADMIN, role_kinds.COACH),
+        )
+        | UserCanReadExamData()
+    )
+
+    channel_id = models.UUIDField(null=True)
+
+    assessment_map  = JSONField(default=[], blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    
+    updated_at = models.DateTimeField(auto_now_add=True, null=True)
+
+
+class AssessmentHistory(models.Model):
+    """
+    This model provides a history of a user's engagement with an assessment within a mastery level
+    """
+    morango_model_name = "assessmenthistory"
+
+    user_id = models.UUIDField(null=True)
+    summarylog_id = models.UUIDField(null=True)
+    assessment_id = models.UUIDField(null=True)
+    mastery_criterion = JSONField(default={})
+    start_timestamp = DateTimeTzField()
+    end_timestamp = DateTimeTzField(blank=True, null=True)
+    completion_timestamp = DateTimeTzField(blank=True, null=True)
+    mastery_level = models.IntegerField(null=True)
+    complete = models.BooleanField(default=False)
+    time_spent = models.FloatField(null=True)
+    question_sources = JSONField(default=[], blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now_add=True, null=True)
