@@ -41,6 +41,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from kolibri.core.api import BaseValuesViewset
 from kolibri.core.api import CreateModelMixin
@@ -56,6 +57,7 @@ from kolibri.core.content.models import ContentDownloadRequest
 from kolibri.core.content.models import ContentRemovalRequest
 from kolibri.core.content.models import ContentRequestReason
 from kolibri.core.content.models import ContentRequestStatus
+from kolibri.core.content.models import ContentNode
 from kolibri.core.content.permissions import CanManageContent
 from kolibri.core.content.tasks import automatic_resource_import
 from kolibri.core.content.utils.content_types_tools import (
@@ -89,6 +91,7 @@ from kolibri.core.utils.pagination import ValuesViewsetPageNumberPagination
 from kolibri.core.utils.urls import join_url
 from kolibri.utils.conf import OPTIONS
 from kolibri.utils.urls import validator
+from kolibri.core.content.serializers import ContentNodeSlimSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -1875,3 +1878,50 @@ class RemoteChannelViewSet(viewsets.ViewSet):
                 return Response(data)
         except requests.ConnectionError:
             return Response({"status": "offline", "available": False})
+
+class KnowledgeMapViewset(ReadOnlyModelViewSet):
+    def retrieve(self, request, pk=None):
+        def get_progress(node):
+            serializer = ContentNodeProgressViewsetForKnowledge.serializer_class(node)
+            serializer.context['request'] = request
+            return serializer.data['progress_fraction']
+
+        def get_progress_by_id(id):
+            nodes = ContentNode.objects.filter(id=id)
+            return 0.0 if len(nodes) == 0 else get_progress(nodes[0])
+
+        def filter_pending(prereqs):
+            return filter(lambda p: p['progress'] < 1.0, prereqs)
+
+        def info(nodes):
+            return map(lambda n: {'title': n.title,
+                                  'content_id': n.content_id,
+                                  'progress': get_progress(n),
+                                  'id': n.id}, nodes)
+
+        def get_children(parent_id):
+            children = ContentNode.objects.filter(parent=parent_id, available=True)
+            serialized = ContentNodeSlimSerializer(children, many=True).data
+            for c, s in zip(children, serialized):
+                s['progress_fraction'] = get_progress(c)
+                s['pendingPrerequisites'] = filter_pending(info(c.has_prerequisite.all()))
+            return serialized
+
+        children = get_children(pk)
+        for child in children:
+            grand_children = get_children(child['id'])
+            child['children'] = grand_children
+        return Response({'results': children, 'progress': get_progress_by_id(pk)})
+
+class ContentNodeProgressFilter(IdFilter):
+    class Meta:
+        model = models.ContentNode
+        fields = ['ids', ]
+
+class ContentNodeProgressViewsetForKnowledge(viewsets.ReadOnlyModelViewSet):
+    serializer_class = serializers.ContentNodeProgressSerializer
+    filter_backends = (DjangoFilterBackend,)
+    filter_class = ContentNodeProgressFilter
+
+    def get_queryset(self):
+        return models.ContentNode.objects.all()

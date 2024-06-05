@@ -64,8 +64,8 @@
     },
     props: {
       topicMore: {
-        type: Object,
-        default: null,
+        type: Function,
+        default: () => null,
       },
       topics: {
         type: Array,

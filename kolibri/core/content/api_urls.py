@@ -13,6 +13,7 @@ from .api import ContentRequestViewset
 from .api import FileViewset
 from .api import RemoteChannelViewSet
 from .api import UserContentNodeViewset
+from .api import KnowledgeMapViewset
 
 router = routers.SimpleRouter()
 router.register("channel", ChannelMetadataViewSet, basename="channel")
@@ -48,5 +49,6 @@ router.register(
     basename="contentnode_granular",
 )
 router.register(r"remotechannel", RemoteChannelViewSet, basename="remotechannel")
+router.register(r"knowledgemap", KnowledgeMapViewset, basename="knowledgemap")
 
 urlpatterns = [url(r"^", include(router.urls))]

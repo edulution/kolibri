@@ -7,7 +7,7 @@ import HomePage from '../views/home/HomePage';
 import CoachPrompts from '../views/CoachPrompts';
 import HomeActivityPage from '../views/home/HomeActivityPage';
 import StatusTestPage from '../views/common/status/StatusTestPage';
-import { ClassesPageNames } from '../../../../learn/assets/src/constants';
+import { ClassesPageNames } from '../../../../edulution/assets/src/constants';
 import { PageNames } from '../constants';
 import reportRoutes from './reportRoutes';
 import planRoutes from './planRoutes';

@@ -116,7 +116,7 @@
         this.$store.commit('SET_WELCOME_MODAL_VISIBLE', false);
       },
       closePinModal() {
-        redirectBrowser(urls['kolibri:kolibri.plugins.learn:learn']());
+        redirectBrowser(urls['kolibri:kolibri.plugins.edulution:edulution']());
         return (this.showModal = false);
       },
       submit() {

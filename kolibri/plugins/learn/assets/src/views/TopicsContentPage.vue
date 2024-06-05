@@ -153,32 +153,27 @@
 
 <script>
 
-  import { mapState } from 'vuex';
-  import { set } from '@vueuse/core';
-  import lodashGet from 'lodash/get';
+  import { mapGetters, mapState } from 'vuex';
+  import get from 'lodash/get';
   import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import { getCurrentInstance, ref, watch } from 'kolibri.lib.vueCompositionApi';
   import Modalities from 'kolibri-constants/Modalities';
 
   import AuthMessage from 'kolibri.coreVue.components.AuthMessage';
   import { ContentNodeResource } from 'kolibri.resources';
-  import useUser from 'kolibri.coreVue.composables.useUser';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { AddDeviceForm } from 'kolibri.coreVue.componentSets.sync';
   import { ContentNodeKinds, ContentErrorConstants } from 'kolibri.coreVue.vuex.constants';
   import { crossComponentTranslator } from 'kolibri.utils.i18n';
-  import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
   import client from 'kolibri.client';
   import urls from 'kolibri.urls';
   import AppError from 'kolibri-common/components/AppError';
   import GlobalSnackbar from 'kolibri-common/components/GlobalSnackbar';
   import { PageNames, ClassesPageNames } from '../constants';
   import SkipNavigationLink from '../../../../../../kolibri/core/assets/src/views/SkipNavigationLink';
-  import useChannels from '../composables/useChannels';
   import useContentLink from '../composables/useContentLink';
   import useCoreLearn from '../composables/useCoreLearn';
   import useContentNodeProgress from '../composables/useContentNodeProgress';
-  import useDevices, { setCurrentDevice, StudioNotAllowedError } from '../composables/useDevices';
+  import useDevices from '../composables/useDevices';
   import useLearnerResources from '../composables/useLearnerResources';
   import useDownloadRequests from '../composables/useDownloadRequests';
   import commonLearnStrings from './commonLearnStrings';
@@ -221,17 +216,13 @@
       SkipNavigationLink,
     },
     mixins: [responsiveWindowMixin, commonCoreStrings, commonLearnStrings],
-    setup(props) {
-      const currentInstance = getCurrentInstance().proxy;
-      const store = currentInstance.$store;
-      const router = currentInstance.$router;
+    setup() {
       const { canDownloadExternally } = useCoreLearn();
       const {
         fetchContentNodeProgress,
         fetchContentNodeTreeProgress,
         contentNodeProgressMap,
       } = useContentNodeProgress();
-      const { channelsMap, fetchChannels } = useChannels();
       const { fetchLesson } = useLearnerResources();
       const { back, genExternalBackURL } = useContentLink();
       const { baseurl, deviceName } = useDevices();
@@ -242,74 +233,6 @@
         downloadRequestsTranslator,
       } = useDownloadRequests();
       const deviceFormTranslator = crossComponentTranslator(AddDeviceForm);
-      const { currentUserId, isUserLoggedIn, isCoach, isAdmin, isSuperuser } = useUser();
-
-      const channel = ref(null);
-      const content = ref(null);
-      const loading = ref(false);
-
-      function _loadTopicsContent(shouldResolve, baseurl) {
-        const id = props.id;
-        return Promise.all([
-          ContentNodeResource.fetchModel({ id, getParams: { baseurl } }),
-          fetchChannels({ baseurl }),
-        ]).then(
-          ([fetchedContent]) => {
-            if (shouldResolve()) {
-              const currentChannel = channelsMap[fetchedContent.channel_id];
-              if (!currentChannel) {
-                router.replace({ name: PageNames.CONTENT_UNAVAILABLE });
-                return;
-              }
-              set(channel, currentChannel);
-              set(content, fetchedContent);
-              set(loading, false);
-              store.commit('CORE_SET_ERROR', null);
-            }
-          },
-          error => {
-            shouldResolve()
-              ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
-              : null;
-          }
-        );
-      }
-
-      function showTopicsContent() {
-        const deviceId = props.deviceId;
-        set(loading, true);
-        store.commit('SET_PAGE_NAME', PageNames.TOPICS_CONTENT);
-        set(channel, null);
-        set(content, null);
-        const shouldResolve = samePageCheckGenerator(store);
-        let promise;
-        if (deviceId) {
-          promise = setCurrentDevice(deviceId).then(device => {
-            const baseurl = device.base_url;
-            const { fetchUserDownloadRequests } = useDownloadRequests(store);
-            fetchUserDownloadRequests({ page: 1, pageSize: 20 });
-            return _loadTopicsContent(shouldResolve, baseurl);
-          });
-        } else {
-          promise = _loadTopicsContent(shouldResolve);
-        }
-        return promise.catch(error => {
-          if (shouldResolve()) {
-            if (
-              error === StudioNotAllowedError ||
-              (error.response && error.response.status === 410)
-            ) {
-              router.replace({ name: PageNames.LIBRARY });
-              return;
-            }
-            store.dispatch('handleApiError', { error, reloadOnReconnect: true });
-          }
-        });
-      }
-
-      watch(() => props.id, showTopicsContent);
-      showTopicsContent();
-
       return {
         baseurl,
         deviceName,
@@ -325,14 +248,6 @@
         isDownloadingByLearner,
         downloadRequestsTranslator,
         deviceFormTranslator,
-        content,
-        channel,
-        loading,
-        isUserLoggedIn,
-        isCoach,
-        isAdmin,
-        isSuperuser,
-        currentUserId,
       };
     },
     props: {
@@ -350,12 +265,6 @@
         type: String,
         default: null,
       },
-      // Our linting doesn't detect usage in the setup function yet.
-      // eslint-disable-next-line kolibri/vue-no-unused-properties
-      id: {
-        type: String,
-        required: true,
-      },
     },
     data() {
       return {
@@ -372,13 +281,15 @@
       };
     },
     computed: {
+      ...mapGetters(['currentUserId', 'isUserLoggedIn']),
       ...mapState({
         error: state => state.core.error,
         blockDoubleClicks: state => state.core.blockDoubleClicks,
       }),
-      isCoachContent() {
-        return this.content && this.content.coach_content ? 1 : 0;
-      },
+      ...mapState('topicsTree', ['content']),
+      ...mapState('topicsTree', {
+        isCoachContent: state => (state.content && state.content.coach_content ? 1 : 0),
+      }),
       contentProgress() {
         return this.content ? this.contentNodeProgressMap[this.content.content_id] : null;
       },
@@ -391,8 +302,11 @@
       contentLearningActivities() {
         return this.content ? this.content.learning_activities : [];
       },
+      loading() {
+        return this.$store.state.core.loading;
+      },
       practiceQuiz() {
-        return lodashGet(this, ['content', 'options', 'modality']) === Modalities.QUIZ;
+        return get(this, ['content', 'options', 'modality']) === Modalities.QUIZ;
       },
       notAuthorized() {
         // catch "not authorized" error, display AuthMessage
@@ -410,17 +324,13 @@
         return this.content ? this.content.title : '';
       },
       allowMarkComplete() {
-        return lodashGet(
-          this,
-          ['content', 'options', 'completion_criteria', 'learner_managed'],
-          false
-        );
+        return get(this, ['content', 'options', 'completion_criteria', 'learner_managed'], false);
       },
       lessonContext() {
         return Boolean(this.lessonId);
       },
       lessonId() {
-        return lodashGet(this.back, 'params.lessonId', null);
+        return get(this.back, 'params.lessonId', null);
       },
       viewResourcesTitle() {
         /* eslint-disable kolibri/vue-no-undefined-string-uses */
@@ -457,7 +367,7 @@
     },
     watch: {
       content(newContent, oldContent) {
-        if (newContent && (!oldContent || newContent.id !== oldContent.id)) {
+        if ((newContent && !oldContent) || newContent.id !== oldContent.id) {
           this.initializeState();
         }
       },
@@ -553,13 +463,16 @@
         const treeParams = {
           id: fetchGrandparent ? this.content.ancestors.slice(-2)[0].id : this.content.parent,
           params: {
-            include_coach_content: this.isAdmin || this.isCoach || this.isSuperuser,
+            include_coach_content:
+              this.$store.getters.isAdmin ||
+              this.$store.getters.isCoach ||
+              this.$store.getters.isSuperuser,
             depth: fetchGrandparent ? 2 : 1,
             baseurl: this.baseurl,
           },
         };
         // Fetch and map the progress for the nodes if logged in
-        if (this.isUserLoggedIn && !this.baseurl) {
+        if (this.$store.getters.isUserLoggedIn && !this.baseurl) {
           this.fetchContentNodeTreeProgress(treeParams);
         }
         return ContentNodeResource.fetchTree(treeParams).then(ancestor => {

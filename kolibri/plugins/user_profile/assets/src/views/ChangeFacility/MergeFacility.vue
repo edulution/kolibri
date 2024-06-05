@@ -249,7 +249,7 @@
           method: 'POST',
           data: params,
         }).then(() => {
-          redirectBrowser(urls['kolibri:kolibri.plugins.learn:learn']());
+          redirectBrowser(urls['kolibri:kolibri.plugins.edulution:edulution']());
         });
       }
 

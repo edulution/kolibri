@@ -349,13 +349,52 @@ class ContentDownloadRequestSerializer(serializers.ModelSerializer):
         automatic_resource_import.enqueue_if_not()
         return content_request
 
+class FileThumbnailSerializer(serializers.ModelSerializer):
+    """
+    Serializer used only in ContentNodeSlimSerializer (at the moment) to return minimum data
+    for frontend to be able to render thumbnails for content browsing
+    """
+    storage_url = serializers.SerializerMethodField()
+
+    def get_storage_url(self, target_node):
+        # Avoid doing an extra db query if the file is not even a thumbnail
+        if not target_node.thumbnail:
+            return None
+
+        return target_node.get_storage_url()
+
+    class Meta:
+        model = File
+        fields = ('storage_url', 'available', 'thumbnail',)
+
+class ContentNodeSlimSerializer(DynamicFieldsModelSerializer):
+    """
+    Lighter version of the ContentNodeSerializer whose purpose is to provide a minimum
+    subset of ContentNode fields necessary for functional content browsing
+    """
+    parent = serializers.PrimaryKeyRelatedField(read_only=True)
+    files = FileThumbnailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ContentNode
+        fields = (
+            'id',
+            'parent',
+            'description',
+            'channel_id',
+            'content_id',
+            'kind',
+            'files',
+            'title',
+        )
+
 def get_summary_logs(content_ids, user):
     from kolibri.core.logger.models import ContentSummaryLog
     if not content_ids:
         return ContentSummaryLog.objects.none()
     # get all summary logs for the current user that correspond to the descendant content nodes
     return ContentSummaryLog.objects.filter(user=user, content_id__in=content_ids)
-    
+
 def get_topic_progress_fraction(topic, user):
     from django.db.models import Sum
     leaf_ids = topic.get_descendants(include_self=False).order_by()\
@@ -366,7 +405,7 @@ def get_topic_progress_fraction(topic, user):
         (get_summary_logs(leaf_ids, user).aggregate(Sum('progress'))['progress__sum'] or 0) / (len(leaf_ids) or 1),
         4
     )
-    
+
 def get_content_progress_fraction(content, user):
     from kolibri.core.logger.models import ContentSummaryLog
     try:
@@ -410,7 +449,7 @@ def get_topic_and_content_progress_fractions(nodes, user):
             ) if topic_leaf_ids else 0.0
 
     return overall_progress
-    
+
 class ContentNodeProgressListSerializer(serializers.ListSerializer):
 
     def to_representation(self, data):
@@ -437,7 +476,7 @@ class ContentNodeProgressListSerializer(serializers.ListSerializer):
                 annotate_progress_fraction=False
             ) for item in iterable
         ]
-    
+
 class ContentNodeProgressSerializer(serializers.Serializer):
 
     def to_representation(self, instance, progress_fraction=None, annotate_progress_fraction=True):

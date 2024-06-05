@@ -41,7 +41,6 @@ const MOCK_DEFAULTS = {
   isDownloadedByLearner: jest.fn(),
   isDownloadingByLearner: jest.fn(),
   addDownloadRequest: jest.fn(),
-  fetchUserDownloadRequests: jest.fn(() => Promise.resolve([])),
 };
 
 export function useDownloadRequestsMock(overrides = {}) {

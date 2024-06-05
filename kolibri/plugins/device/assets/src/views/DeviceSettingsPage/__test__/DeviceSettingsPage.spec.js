@@ -179,7 +179,7 @@ describe('DeviceSettingsPage', () => {
 
     it('if Learn page is the landing page, sign-in page options are disabled', async () => {
       getDeviceSettings.mockResolvedValue({
-        landingPage: 'learn',
+        landingPage: 'edulution',
         // The guest access button should not be checked
         allowGuestAccess: true,
       });
@@ -201,7 +201,7 @@ describe('DeviceSettingsPage', () => {
 
     it('if switching  from Learn to Sign-In, "Allow users to explore..." is selected', async () => {
       getDeviceSettings.mockResolvedValue({
-        landingPage: 'learn',
+        landingPage: 'edulution',
       });
       const { wrapper } = await makeWrapper();
       const { signInPage, allowGuestAccess } = getButtons(wrapper);
@@ -230,7 +230,7 @@ describe('DeviceSettingsPage', () => {
       await global.flushPromises();
       expect(saveSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          landingPage: 'learn',
+          landingPage: 'edulution',
           allowGuestAccess: true,
           allowLearnerUnassignedResourceAccess: true,
         })

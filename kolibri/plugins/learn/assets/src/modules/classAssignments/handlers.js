@@ -12,7 +12,7 @@ export function showClassAssignmentsPage(store, classId) {
         store.dispatch('notLoading');
       })
       .catch(error => {
-        return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        return store.dispatch('handleApiError', error);
       });
   });
 }

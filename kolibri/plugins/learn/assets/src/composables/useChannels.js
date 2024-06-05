@@ -1,26 +1,27 @@
 /**
  * A composable function containing logic related to channels
  */
-import pickBy from 'lodash/pickBy';
+
 import { ref, reactive } from 'kolibri.lib.vueCompositionApi';
 import { ChannelResource } from 'kolibri.resources';
 import { get, set } from '@vueuse/core';
-import { LearnerClassroomResource } from '../apiResources';
-import { ClassroomResource, LearnerGroupResource } from '../../../../../core/assets/src/api-resources';
+import plugin_data from 'plugin_data';
+
+const channelsArray = plugin_data.channels ? plugin_data.channels : [];
+const chanMap = {};
+
+for (const channel of channelsArray) {
+  chanMap[channel.id] = channel;
+}
 
 // The refs are defined in the outer scope so they can be used as a shared store
-const channelsMap = reactive({});
-
-const localChannelsCache = ref([]);
+const channels = ref(channelsArray);
+const channelsMap = reactive(chanMap);
 
 function fetchChannels(params) {
-  params = pickBy(params || {});
-  return ChannelResource.list({ available: true, ...params }).then(channels => {
+  return ChannelResource.list(params).then(channels => {
     for (const channel of channels) {
       set(channelsMap, channel.id, channel);
-    }
-    if (Object.keys(params).length === 0) {
-      set(localChannelsCache, channels);
     }
     return channels;
   });
@@ -42,50 +43,12 @@ function getChannelTitle(channelId) {
   return '';
 }
 
-async function fetchLearnerChannels({ isLearner, userId }) {
-  const channels = await ChannelResource.list();
-  let subscribedChannelIds = []
-  
-  if (isLearner) {
-    const learnerGroups = await LearnerGroupResource.fetchCollection();
-    const learnerClassrooms = await LearnerClassroomResource.fetchCollection();
-    
-    for (const group of learnerGroups) {
-      if (group.user_ids.includes(userId)) {
-        subscribedChannelIds = [
-          ...subscribedChannelIds,
-          ...(JSON.parse(group.subscriptions || []))
-        ];
-      }
-    }
-
-    for(const learnerClassroom of learnerClassrooms) {
-      try {
-        const classroom = await ClassroomResource.fetchModel({ id: learnerClassroom.id });  
-        if (classroom && classroom.subscriptions) {
-          subscribedChannelIds = [
-            ...subscribedChannelIds,
-            ...(JSON.parse(classroom.subscriptions || []))
-          ];
-        }
-      } catch (error) {
-        console.log("error", error)
-      }
-    }
-
-    return channels.filter(c => subscribedChannelIds.includes(c.id));
-  }
-  
-  return channels
-}
-
 export default function useChannels() {
   return {
+    channels,
     channelsMap,
-    localChannelsCache,
     fetchChannels,
     getChannelThumbnail,
     getChannelTitle,
-    fetchLearnerChannels,
   };
 }

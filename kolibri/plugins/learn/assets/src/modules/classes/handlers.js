@@ -12,11 +12,11 @@ export function showAllClassesPage(store) {
       })
       .catch(error => {
         if (error instanceof Error) {
-          return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          return store.dispatch('handleApiError', error);
         }
 
         // Allows triggering of AuthMessage.vue
-        return store.dispatch('handleError', { error, reloadOnReconnect: true });
+        return store.dispatch('handleError', error);
       });
   });
 }

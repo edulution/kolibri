@@ -40,6 +40,7 @@ from morango.models.fields import UUIDField
 from mptt.managers import TreeManager
 from mptt.querysets import TreeQuerySet
 from mptt.models import MPTTModel 
+
 from .utils import paths
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
