@@ -209,16 +209,30 @@ class RemoteViewSet(ReadOnlyValuesViewset, RemoteMixin):
 class ChannelMetadataFilter(FilterSet):
     available = BooleanFilter(method="filter_available", label="Available")
     has_exercise = BooleanFilter(method="filter_has_exercise", label="Has exercises")
+    has_assessment = BooleanFilter(method="filter_has_assessment", label="Has assessments")
 
     class Meta:
         model = models.ChannelMetadata
-        fields = ("available", "has_exercise")
+        fields = ("available", "has_exercise", "has_assessment")
 
     def filter_has_exercise(self, queryset, name, value):
         queryset = queryset.annotate(
             has_exercise=Exists(
                 models.ContentNode.objects.filter(
                     kind=content_kinds.EXERCISE,
+                    available=True,
+                    channel_id=OuterRef("id"),
+                )
+            )
+        )
+
+        return queryset.filter(has_exercise=True)
+
+    def filter_has_assessment(self, queryset, name, value):
+        queryset = queryset.annotate(
+            has_exercise=Exists(
+                models.ContentNode.objects.filter(
+                    kind=content_kinds.ASSESSMENT,
                     available=True,
                     channel_id=OuterRef("id"),
                 )

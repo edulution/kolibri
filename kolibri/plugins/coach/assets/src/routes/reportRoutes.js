@@ -20,7 +20,6 @@ const CLASS = '/:classId/reports';
 const GROUPS = '/groups';
 const GROUP = '/groups/:groupId';
 const LEARNERS = '/learners';
-const ATTENDANCE = '/attendance';
 const LEARNER = '/learners/:learnerId';
 const LESSONS = '/lessons';
 const LESSON = '/lessons/:lessonId';
@@ -271,14 +270,6 @@ export default [
     handler: defaultHandler,
     meta: {
       titleParts: ['learnersLabel', 'CLASS_NAME'],
-    },
-  },
-  {
-    path: path(CLASS, ATTENDANCE),
-    component: pages.ReportsAttendanceListPage,
-    handler: defaultHandler,
-    meta: {
-      titleParts: ['attendanceLabel', 'CLASS_NAME'],
     },
   },
   {

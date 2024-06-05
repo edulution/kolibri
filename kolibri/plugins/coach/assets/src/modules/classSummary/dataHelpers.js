@@ -303,13 +303,4 @@ export default {
       return meanBy(statusObjects, 'score');
     };
   },
-  /*
-   * Return array of active learner IDs
-   */
-  getActiveLearners(state) {
-    return state.activeLearners
-  },
-  getLearnersInfo(state) {
-    return state.learnersInfo
-  } 
 };

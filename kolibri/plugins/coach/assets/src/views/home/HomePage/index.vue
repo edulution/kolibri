@@ -1,9 +1,11 @@
 <template>
+
   <CoachAppBarPage
     :authorized="userIsAuthorized"
     authorizedRole="adminOrCoach"
     :showSubNav="true"
   >
+
     <KGrid gutter="16">
       <KGridItem>
         <OverviewBlock />
@@ -19,17 +21,11 @@
         </KGrid>
       </KGridItem>
       <KGridItem :layout12="{ span: 6 }">
-        <KGrid gutter="16">
-          <KGridItem>
-            <AttendanceBlock />
-          </KGridItem>
-          <KGridItem>
-            <ActivityBlock />
-          </KGridItem>
-        </KGrid>
+        <ActivityBlock />
       </KGridItem>
     </KGrid>
   </CoachAppBarPage>
+
 </template>
 
 
@@ -41,18 +37,16 @@
   import ActivityBlock from './ActivityBlock';
   import LessonsBlock from './LessonsBlock';
   import QuizzesBlock from './QuizzesBlock';
-  import AttendanceBlock from './AttendanceBlock';
 
   export default {
     name: 'HomePage',
     components: {
-    CoachAppBarPage,
-    OverviewBlock,
-    ActivityBlock,
-    LessonsBlock,
-    QuizzesBlock,
-    AttendanceBlock
-},
+      CoachAppBarPage,
+      OverviewBlock,
+      ActivityBlock,
+      LessonsBlock,
+      QuizzesBlock,
+    },
     mixins: [commonCoach],
   };
 

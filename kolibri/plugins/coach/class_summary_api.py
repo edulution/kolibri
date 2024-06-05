@@ -306,40 +306,6 @@ def serialize_exams(queryset):
     )
 
 
-from django.db import connection
-from django.utils import timezone
-from kolibri.deployment.default.settings import base
-from datetime import timedelta
-from kolibri.core.logger.models import UserSessionLog
-from kolibri.core.auth.models import Classroom
-
-
-def get_active_learners(classroom):
-    """
-    Returns information about the sessions and users the current
-    Kolibri server has in use
-
-    """
-    active_learners = []
-    learners_info = []
-    try:
-        connection.ensure_connection()
-        last_20_minutes = timezone.now() - timedelta(seconds=base.SESSION_COOKIE_AGE)
-        classroom_members = set(map(lambda member: member.username, classroom.get_members()))
-        learners_info = UserSessionLog.objects.filter(user__username__in=classroom_members)\
-            .values('user__username').annotate(Max('last_interaction_timestamp')).all()
-
-        session_objects = UserSessionLog.objects.filter(last_interaction_timestamp__gte=last_20_minutes).all()
-        active_learners_in_class = \
-            filter(lambda session: session.user.is_member_of(Classroom.objects.get(name=classroom)),
-                   session_objects)
-        active_learners = set(map(lambda user_session: user_session.user.id, active_learners_in_class))
-    except OperationalError:
-        print('Database unavailable, impossible to retrieve users and sessions info')
-
-    return active_learners, learners_info
-
-
 class ClassSummaryPermissions(permissions.BasePermission):
     """
     Allow only users with admin/coach permissions on the classroom.
@@ -362,7 +328,6 @@ class ClassSummaryViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk):
         classroom = get_object_or_404(auth_models.Classroom, id=pk)
-        active_learners = get_active_learners(classroom)
         query_learners = FacilityUser.objects.filter(memberships__collection=classroom)
         query_lesson = Lesson.objects.filter(collection=pk)
         query_exams = Exam.objects.filter(collection=pk)
@@ -442,8 +407,6 @@ class ClassSummaryViewSet(viewsets.ViewSet):
                 lesson_data, learners_data, classroom
             ),
             "lessons": lesson_data,
-            "active_learners": active_learners[0],
-            "learners_info": active_learners[1],
         }
 
         return Response(output)

@@ -5,14 +5,15 @@ import { ClassesPageNames, PageNames } from '../constants';
 import { showLessonPlaylist } from '../modules/lessonPlaylist/handlers';
 import { showClassAssignmentsPage } from '../modules/classAssignments/handlers';
 import { showAllClassesPage } from '../modules/classes/handlers';
-import { showExam } from '../modules/examViewer/handlers';
+import { showExam, showAssessment } from '../modules/examViewer/handlers';
 import { showExamReport } from '../modules/examReportViewer/handlers';
 import { inClasses } from '../composables/useCoreLearn';
 import ExamPage from '../views/ExamPage';
 import ExamReportViewer from '../views/LearnExamReportViewer';
 import AllClassesPage from '../views/classes/AllClassesPage';
-import ClassAssignmentsPage from '../views/classes/ClassAssignmentsPage';
+import ClassAssignmentsPage from '../views/classes/ClassAssignmentsPage.vue';
 import LessonPlaylistPage from '../views/classes/LessonPlaylistPage';
+import AssessmentPage from '../views/AssessmentPage/index.vue';
 
 function noClassesGuard() {
   const { canAccessUnassignedContent } = store.getters;
@@ -76,5 +77,21 @@ export default [
       showExamReport(store, toRoute.params);
     },
     component: ExamReportViewer,
+  },
+  {
+    name: ClassesPageNames.ASSESSMENT_VIEWER,
+    path: '/classes/:classId/assessment/:examId/:questionNumber/:assessmentGroupId',
+    handler: (toRoute, fromRoute) => {
+      if (noClassesGuard()) {
+        return noClassesGuard();
+      }
+      const alreadyOnAssessment =
+        fromRoute.name === ClassesPageNames.ASSESSMENT_VIEWER &&
+        toRoute.params.examId === fromRoute.params.examId &&
+        toRoute.params.classId === fromRoute.params.classId &&
+        toRoute.params.assessmentGroupId === fromRoute.params.assessmentGroupId;
+      showAssessment(store, toRoute.params, alreadyOnAssessment);
+    },
+    component: AssessmentPage,
   },
 ];

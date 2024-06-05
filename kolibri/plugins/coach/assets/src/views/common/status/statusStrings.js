@@ -193,34 +193,6 @@ export function isValidVerb(value) {
   return output;
 }
 
-export const activeLearnersTranslators = {
-  active: createTranslator('LearnersActive', {
-    label: '{count, plural, one {Learner is logged in} other {Learners are logged in}',
-    labelShort: '{count, plural, other {Logged in}}',
-    count: 'Logged in: {count, number, integer} {count, plural, one {learner} other {learners}}',
-    countShort: '{count, number, integer} {count, plural, other {logged in}}',
-    allOfMoreThanTwo: 'All {total, number, integer} learners are logged in',
-    allOfMoreThanTwoShort: 'All {total, number, integer} are logged in',
-    ratio:
-      '{count, number, integer} of {total, number, integer} {total, plural, one {learner} other {learners}} {count, plural, one {is logged in} other {are logged in}}',
-    ratioShort:
-      '{count, number, integer} of {total, number, integer} {count, plural, one {is logged in} other {are logged in}}',
-  }),
-  notActive: createTranslator('LearnersNotActive', {
-    label: '{count, plural, one {Learner is not logged in} other {Learners are not logged in}}',
-    labelShort: '{count, plural, other {Not logged in}}',
-    count:
-      'Not logged in: {count, number, integer} {count, plural, one {learner} other {learners}}',
-    countShort: '{count, number, integer} {count, plural, other {not logged in}}',
-    allOfMoreThanTwo: 'All {total, number, integer} learners are not logged in',
-    allOfMoreThanTwoShort: 'All {total, number, integer} are not logged in',
-    ratio:
-      '{count, number, integer} of {total, number, integer} {total, plural, one {learner} other {learners}} {count, plural, one {is not logged in} other {are not logged in}}',
-    ratioShort:
-      '{count, number, integer} of {total, number, integer} {count, plural, one {is not logged in} other {are not logged in}}',
-  }),
-}
-
 export const statusStringsMixin = {
   props: {
     count: {
@@ -269,8 +241,5 @@ export const statusStringsMixin = {
     learnerProgressTranslators() {
       return learnerProgressTranslators;
     },
-    activeLearnersTranslators() {
-      return activeLearnersTranslators;
-    }
   },
 };

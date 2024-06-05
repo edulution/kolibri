@@ -81,6 +81,7 @@ class NotificationObjectType(ChoicesEnum):
     Quiz = "Quiz"
     Help = "Help"
     Lesson = "Lesson"
+    Assessment = "Assessment"
 
 
 class NotificationEventType(ChoicesEnum):
@@ -115,6 +116,9 @@ class LearnerProgressNotification(models.Model):
     quiz_id = UUIDField(null=True)
     quiz_num_correct = models.IntegerField(null=True)
     quiz_num_answered = models.IntegerField(null=True)
+    assessment_id = UUIDField(null=True)
+    assessment_num_correct = models.IntegerField(null=True)
+    assessment_num_answered = models.IntegerField(null=True)
     reason = models.CharField(max_length=200, choices=HelpReason.choices(), blank=True)
     timestamp = DateTimeTzField(default=local_now)
 

@@ -28,7 +28,6 @@ class CoachToolsModule extends KolibriApp {
         redirectBrowser();
         return;
       }
-      this.store.dispatch('loading');
       const promises = [];
       // Clear the snackbar at every navigation to prevent it from re-appearing
       // when the next page component mounts.
@@ -42,8 +41,7 @@ class CoachToolsModule extends KolibriApp {
           to.name
         )
       ) {
-        if (to.params.classId)
-          promises.push(this.store.dispatch('initClassInfo', to.params.classId));
+        promises.push(this.store.dispatch('initClassInfo', to.params.classId));
       } else {
         this.store.dispatch('coachNotifications/stopPolling');
       }
@@ -52,7 +50,7 @@ class CoachToolsModule extends KolibriApp {
       }
       if (promises.length > 0) {
         Promise.all(promises).then(next, error => {
-          this.store.dispatch('handleApiError', { error });
+          this.store.dispatch('handleApiError', error);
         });
       } else {
         next();

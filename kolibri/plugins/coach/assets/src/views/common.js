@@ -82,7 +82,6 @@ export default {
       'contentNodeMap',
       'contentLearnerStatusMap',
       'lessonMap',
-      'activeLearnersMap',
     ]),
     ...mapGetters('classSummary', [
       'coaches',
@@ -113,10 +112,6 @@ export default {
       'getLessonStatusTally',
       'getContentAvgTimeSpent',
       'getExamAvgScore',
-      'getAdHocLearners',
-      'activeLearners',
-      'getActiveLearners',
-      'learnersInfo',
     ]),
     userIsAuthorized() {
       if (this.isSuperuser) {

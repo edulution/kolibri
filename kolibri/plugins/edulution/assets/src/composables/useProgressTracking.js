@@ -176,12 +176,12 @@ export default function useProgressTracking(store) {
    * Initialize a content session for progress tracking
    * To be called on page load for content renderers
    */
-  function initContentSession({ node, lessonId, quizId, repeat = false } = {}) {
+  function initContentSession({ node, lessonId, assessmentId, quizId, repeat = false } = {}) {
     const data = {};
-    if (!node && !quizId) {
+    if (!node && !quizId && !assessmentId) {
       throw TypeError('Must define either node or quizId');
     }
-    if ((node || lessonId) && quizId) {
+    if ((node || lessonId) && (quizId || assessmentId)) {
       throw TypeError('quizId must be the only defined parameter if defined');
     }
     let sessionStarted = false;
@@ -189,6 +189,11 @@ export default function useProgressTracking(store) {
     if (quizId) {
       sessionStarted = get(context) && get(context).quiz_id === quizId;
       data.quiz_id = quizId;
+    }
+
+    if (assessmentId) {
+      sessionStarted = get(context) && get(context).assessment_id === assessmentId;
+      data.assessment_id = assessmentId;
     }
 
     if (node) {

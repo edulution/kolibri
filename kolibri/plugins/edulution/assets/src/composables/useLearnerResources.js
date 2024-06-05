@@ -10,7 +10,7 @@ import { get, set } from '@vueuse/core';
 import flatMap from 'lodash/flatMap';
 import flatMapDepth from 'lodash/flatMapDepth';
 
-import { ContentNodeResource } from 'kolibri.resources';
+import { ContentNodeResource, LearnerAssessmentResource } from 'kolibri.resources';
 import { deduplicateResources } from '../utils/contentNode';
 import { LearnerClassroomResource, LearnerLessonResource } from '../apiResources';
 import { ClassesPageNames } from '../constants';
@@ -59,6 +59,41 @@ export function setClasses(classData) {
   }
 }
 
+export async function getLearnerAssessments(learnerId, classroomId) {
+  try {
+    const getParams = {
+      learner_id: learnerId
+    }
+    if (classroomId) {
+      getParams['classroom_id'] = classroomId
+    }
+    const response = await LearnerAssessmentResource.fetchCollection({ 
+      getParams,
+      force: true
+    })
+    
+    return response.map(r => {
+      return {
+        ...r,
+        "group_id": r.id,
+        "id": r.current_assessment.id,
+        "group_title": r.title,
+        "title": r.current_assessment.title,
+        "question_sources": r.current_assessment.question_sources,
+        "missing_resource": false,
+        "progress": {
+          "score": null,
+          "answer_count": null,
+          "closed": null,
+          "started": null,
+        }
+      }
+    });
+  } catch (error) {
+    console.log("error", { error }) 
+  }
+}
+
 export default function useLearnerResources() {
   /**
    * @returns {Array} - All quizzes assigned to a learner in all their classes
@@ -66,6 +101,14 @@ export default function useLearnerResources() {
    */
   const _classesQuizzes = computed(() => {
     return flatMap(get(classes), c => c.assignments.exams);
+  });
+
+   /**
+   * @returns {Array} - All quizzes assigned to a learner in all their classes
+   * @private
+   */
+   const _classesAssessments = computed(() => {
+    return flatMap(get(classes), c => c.assignments.assessments);
   });
 
   /**
@@ -108,12 +151,30 @@ export default function useLearnerResources() {
   });
 
   /**
+   * @returns {Array} - All active Assessments assigned to a learner in all their classes
+   * @public
+   */
+  const activeClassesAssessments = computed(() => {
+    return get(_classesAssessments).filter(assessment => assessment.active);
+  });
+
+  /**
    * @returns {Array} - Active and in progress quizzes assigned to a learner
    *                    in all their classes
    * @public
    */
   const resumableClassesQuizzes = computed(() => {
     return get(activeClassesQuizzes).filter(quiz => quiz.progress.started && !quiz.progress.closed);
+  });
+
+   /**
+   * @returns {Array} - Active and in progress assessments assigned to a learner
+   *                    in all their classes
+   * @public
+   */
+   const resumableClassesAssessments = computed(() => {
+    return get(activeClassesAssessments).filter(quiz => 
+      quiz.progress.started && !quiz.progress.closed);
   });
 
   /**
@@ -177,6 +238,19 @@ export default function useLearnerResources() {
     return classroom.assignments.exams.filter(exam => exam.active);
   }
 
+   /**
+   * @param {String} classId
+   * @returns {Array} All active assessments of a class
+   * @public
+   */
+   function getClassActiveAssessments(classId) {
+    const classroom = getClass(classId);
+    if (!classroom || !classroom.assignments || !classroom.assignments.assessments) {
+      return [];
+    }
+    return classroom.assignments.assessments.filter(exam => exam.active && !exam.archive);
+  }
+
   /**
    * @param {Object} lesson
    * @returns {Object} vue-router link to a lesson page
@@ -223,6 +297,39 @@ export default function useLearnerResources() {
         classId: quiz.collection,
         examId: quiz.id,
         questionNumber: 0,
+      },
+    };
+  }
+
+  /**
+   * @param {Object} assessment
+   * @returns {Object} vue-router link to a assessment report page when the assessment
+   *                   is closed. Otherwise returns a link to a assessment page.
+   * @public
+   */
+  function getClassAssessmentLink(assessment) {
+    if (!assessment || !assessment.progress) {
+      return undefined;
+    }
+    if (assessment.progress.closed) {
+      return {
+        name: ClassesPageNames.ASSESSMENT_REPORT_VIEWER,
+        params: {
+          classId: assessment.collection,
+          examId: assessment.id,
+          questionNumber: 0,
+          questionInteraction: 0,
+          tryIndex: 0,
+        },
+      };
+    }
+    return {
+      name: ClassesPageNames.ASSESSMENT_VIEWER,
+      params: {
+        classId: assessment.collection,
+        examId: assessment.id,
+        questionNumber: 0,
+        assessmentGroupId: assessment.group_id,
       },
     };
   }
@@ -315,7 +422,9 @@ export default function useLearnerResources() {
     classes,
     activeClassesLessons,
     activeClassesQuizzes,
+    activeClassesAssessments,
     resumableClassesQuizzes,
+    resumableClassesAssessments,
     resumableClassesResources,
     learnerFinishedAllClasses,
     getClass,
@@ -323,6 +432,7 @@ export default function useLearnerResources() {
     getClassActiveQuizzes,
     getClassLessonLink,
     getClassQuizLink,
+    getClassAssessmentLink,
     fetchClass,
     fetchClasses,
     fetchLesson,
@@ -330,5 +440,6 @@ export default function useLearnerResources() {
     fetchMoreResumableContentNodes,
     resumableContentNodes,
     moreResumableContentNodes,
+    getClassActiveAssessments
   };
 }

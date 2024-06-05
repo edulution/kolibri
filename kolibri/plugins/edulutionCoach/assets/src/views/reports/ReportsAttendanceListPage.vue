@@ -58,7 +58,10 @@
                 
                 <td>
                   <span>
-                    <span class="labeled-icon-wrapper" :class="{ active: tableRow.isActiveLearner }">
+                    <span 
+                      class="labeled-icon-wrapper" 
+                      :class="{ active: tableRow.isActiveLearner }"
+                    >
                       <div class="icon">
                         <svg
                           role="presentation"
@@ -83,7 +86,11 @@
                 <td>
                   <KOptionalText
                     :text="
-                      tableRow.lastInteractionTimestamp ? $formatDate(tableRow.lastInteractionTimestamp, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '-'"
+                      tableRow.lastInteractionTimestamp ? 
+                        $formatDate(tableRow.lastInteractionTimestamp, 
+                                    { weekday: 'short',month: 'short',
+                                      day: 'numeric',year: 'numeric' }) 
+                        : '-'"
                   />
                 </td>
               </tr>
@@ -146,7 +153,8 @@
         let sorted = this.learners.map(l => ({
           ...l,
           isActiveLearner: this.activeLearners.includes(l.id),
-          lastInteractionTimestamp: this.learnersInfo.find(d => d.user__username === l.username)?.last_interaction_timestamp__max,
+          lastInteractionTimestamp: this.learnersInfo.find(d => d.user__username === l.username)
+          ?.last_interaction_timestamp__max,
         }));
         
         if (this.filterInput) {

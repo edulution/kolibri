@@ -152,26 +152,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
       'Refers to LESSON. Option in the selector used to filter and display only the lessons visible to learners. ',
   },
 
-  filterGroupsAll: {
-    message: 'All groups',
-    context:
-      'Refers to Groups. Default option in the selector used to filter and display lessons by status.',
-  },
-  filterGroupsNotVisible: {
-    message: 'Not visible',
-    context:
-      'Refers to Groups. Option in the selector used to filter and display only the lessons not visible  to learners.',
-  },
-  filterGroupsStatus: {
-    message: 'Groups',
-    context: 'Label for the selector used to filter and display lessons by groups.',
-  },
-  filterGroupsVisible: {
-    message: 'Visible',
-    context:
-      'Refers to Groups. Option in the selector used to filter and display only the lessons visible to learners. ',
-  },
-
   filterQuizAll: {
     message: 'All',
     context:
@@ -266,18 +246,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
   nameLabel: {
     message: 'Name',
     context: "Refers here to a learner's name.",
-  },
-  usernameLabel: {
-    message: 'Username',
-    context: "Refers here to a learner's user name.",
-  },
-  fullnameLabel: {
-    message: 'Full name',
-    context: "Refers here to a learner's name.",
-  },
-  lastLoggedInLabel: {
-    message: 'Last logged in',
-    context: "Refers here to a learner's logged in date.",
   },
   noResourcesInLessonLabel: {
     message: 'No resources in this lesson',
@@ -421,10 +389,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'There are no lessons',
     context: 'Message displayed when there are no lessons created in the class.',
   },
-  attendanceListEmptyState: {
-    message: 'There are no attendance',
-    context: 'Message displayed when there are no attendance created in the class.',
-  },
   questionListEmptyState: {
     message: 'There are no questions',
     context: 'Message that displays when no questions have been added to a quiz.',
@@ -433,14 +397,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'There are no quizzes',
     context:
       'When no quizzes have been created this message will display in the class information screen.',
-  },
-  liveAttendanceLabel: {
-    message: 'Attendance',
-    context: "Live attendance of the users for logged in users",
-  },
-  neverLoggedInLabel: {
-    message: 'Never logged in',
-    context: "Info of never logged in user",
   },
 
   // toggles
@@ -647,10 +603,6 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     context:
       'Indicates to the coach how many questions the learner answered correctly compared to the previous attempt',
   },
-  subscribeAction: {
-    message: 'Subscriptions',
-    context: '',
-  }
 });
 
 // Strings for the Missing Content modals, tooltips, alerts, etc.

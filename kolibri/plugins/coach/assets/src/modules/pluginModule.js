@@ -15,7 +15,6 @@ import coachNotifications from './coachNotifications';
 import questionDetail from './questionDetail';
 import questionList from './questionList';
 import resourceDetail from './resourceDetail';
-import subscriptions from './subscriptions';
 
 const logging = logger.getLogger(__filename);
 
@@ -77,7 +76,7 @@ export default {
           store.commit('SET_DATA_LOADING', false);
         })
         .catch(error => {
-          store.dispatch('handleApiError', { error });
+          store.dispatch('handleApiError', error);
           store.commit('SET_DATA_LOADING', false);
         });
     },
@@ -90,9 +89,9 @@ export default {
       const authErrorCodes = [401, 403, 404, 407];
       logging.error(errorObject);
       if (errorObject.response.status && authErrorCodes.includes(errorObject.response.status)) {
-        store.dispatch('handleApiError', { error: '' });
+        store.dispatch('handleApiError', '');
       } else {
-        store.dispatch('handleApiError', { error: errorObject, reloadOnReconnect: true });
+        store.dispatch('handleApiError', errorObject);
       }
     },
     resetModuleState(store, { toRoute, fromRoute }) {
@@ -124,13 +123,13 @@ export default {
             .then(summary => store.dispatch('setClassList', summary.facility_id)),
           store.dispatch('coachNotifications/fetchNotificationsForClass', classId),
         ]).catch(error => {
-          store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+          store.dispatch('handleError', error);
         });
       } else {
         // otherwise refresh but don't block
         return store
           .dispatch('classSummary/loadClassSummary', classId)
-          .catch(error => store.dispatch('handleApiError', { error }));
+          .catch(error => store.dispatch('handleApiError', error));
       }
     },
   },
@@ -148,6 +147,5 @@ export default {
     questionDetail,
     questionList,
     resourceDetail,
-    subscriptions,
   },
 };

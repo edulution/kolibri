@@ -17,7 +17,6 @@ import ReportsGroupReportQuizQuestionPage from './ReportsGroupReportQuizQuestion
 import ReportsLearnerActivityExercisePage from './ReportsLearnerActivityExercisePage';
 import ReportsLearnerActivityPage from './ReportsLearnerActivityPage';
 import ReportsLearnerListPage from './ReportsLearnerListPage';
-import ReportsAttendanceListPage from './ReportsAttendanceListPage';
 import ReportsLearnerReportLessonExercisePage from './ReportsLearnerReportLessonExercisePage';
 import ReportsLearnerReportLessonPage from './ReportsLearnerReportLessonPage';
 import ReportsLearnerReportPage from './ReportsLearnerReportPage';
@@ -60,7 +59,6 @@ export default {
   ReportsLearnerActivityExercisePage,
   ReportsLearnerActivityPage,
   ReportsLearnerListPage,
-  ReportsAttendanceListPage,
   ReportsLearnerReportLessonExercisePage,
   ReportsLearnerReportLessonPage,
   ReportsLearnerReportPage,

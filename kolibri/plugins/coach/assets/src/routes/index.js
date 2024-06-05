@@ -7,47 +7,43 @@ import HomePage from '../views/home/HomePage';
 import CoachPrompts from '../views/CoachPrompts';
 import HomeActivityPage from '../views/home/HomeActivityPage';
 import StatusTestPage from '../views/common/status/StatusTestPage';
-import { ClassesPageNames } from '../../../../edulution/assets/src/constants';
+import { ClassesPageNames } from '../../../../learn/assets/src/constants';
 import { PageNames } from '../constants';
 import reportRoutes from './reportRoutes';
 import planRoutes from './planRoutes';
-import { classIdParamRequiredGuard } from './utils';
 
 export default [
   ...planRoutes,
   ...reportRoutes,
   {
-    name: 'AllFacilitiesPage',
-    path: '/facilities/:subtopicName?',
+    path: '/facilities',
     component: AllFacilitiesPage,
-    props: true,
     handler() {
       store.dispatch('notLoading');
     },
   },
   {
-    path: '/:facility_id?/classes/:subtopicName?',
+    path: '/classes',
     component: CoachClassListPage,
-    props: true,
     handler(toRoute) {
-      // loading state is handled locally
-      store.dispatch('notLoading');
+      store.dispatch('loading');
       // if user only has access to one facility, facility_id will not be accessible from URL,
       // but always defaulting to userFacilityId would cause problems for multi-facility admins
-      const facilityId = toRoute.params.facility_id || store.getters.userFacilityId;
+      const facilityId = toRoute.query.facility_id || store.getters.userFacilityId;
       store.dispatch('setClassList', facilityId).then(
         () => {
           if (!store.getters.classListPageEnabled) {
-            // If no class list page, redirect to the first (and only) class and
-            // to the originally-selected subtopic, if available
+            // If no class list page, redirect to
+            // the first (and only) class.
             router.replace({
-              name: toRoute.params.subtopicName || HomePage.name,
+              name: HomePage.name,
               params: { classId: store.state.classList[0].id },
             });
             return;
           }
+          store.dispatch('notLoading');
         },
-        error => store.dispatch('handleApiError', { error, reloadOnReconnect: true })
+        error => store.dispatch('handleApiError', error)
       );
     },
     meta: {
@@ -56,12 +52,9 @@ export default [
   },
   {
     name: PageNames.HOME_PAGE,
-    path: '/:classId?/home',
+    path: '/:classId/home',
     component: HomePage,
-    handler: (toRoute, fromRoute, next) => {
-      if (classIdParamRequiredGuard(toRoute, HomePage.name, next)) {
-        return;
-      }
+    handler() {
       store.dispatch('notLoading');
     },
     meta: {
@@ -78,6 +71,7 @@ export default [
       titleParts: ['activityLabel', 'CLASS_NAME'],
     },
   },
+
   {
     name: ClassesPageNames.CLASS_LEARNERS_LIST_VIEWER,
     path: '/:classId/learners',
