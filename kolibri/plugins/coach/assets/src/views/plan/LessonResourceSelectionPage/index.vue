@@ -3,8 +3,6 @@
   <component
     :is="page"
     :appBarTitle="$tr('manageResourcesAction')"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
     icon="close"
     :pageTitle="pageTitle"
     :route="exitButtonRoute"
@@ -117,11 +115,12 @@
   import pickBy from 'lodash/pickBy';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoach from '../../common';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import CoachImmersivePage from '../../CoachImmersivePage';
   import { LessonsPageNames } from '../../../constants/lessonsConstants';
+  import { ViewMoreButtonStates } from '../../../constants/index';
   import LessonsSearchBox from './SearchTools/LessonsSearchBox';
   import LessonsSearchFilters from './SearchTools/LessonsSearchFilters';
   import ResourceSelectionBreadcrumbs from './SearchTools/ResourceSelectionBreadcrumbs';
@@ -146,7 +145,13 @@
       BottomAppBar,
       BookmarkIcon,
     },
-    mixins: [commonCoach, commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoach, commonCoreStrings],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsSmall,
+      };
+    },
     data() {
       return {
         // null corresponds to 'All' filter value
@@ -246,13 +251,16 @@
         );
       },
       viewMoreButtonState() {
-        if (this.moreResultsState === 'waiting' || this.moreResultsState === 'error') {
+        if (
+          this.moreResultsState === ViewMoreButtonStates.LOADING ||
+          this.moreResultsState === ViewMoreButtonStates.ERROR
+        ) {
           return this.moreResultsState;
         }
         if (!this.inSearchMode || this.numRemainingSearchResults === 0) {
-          return 'no_more_results';
+          return ViewMoreButtonStates.NO_MORE;
         }
-        return 'visible';
+        return ViewMoreButtonStates.HAS_MORE;
       },
       contentIsInLesson() {
         return ({ id }) =>
@@ -513,7 +521,7 @@
         });
       },
       handleMoreResults() {
-        this.moreResultsState = 'waiting';
+        this.moreResultsState = ViewMoreButtonStates.LOADING;
         this.fetchAdditionalSearchResults({
           searchTerm: this.searchTerm,
           kind: this.filters.kind,
@@ -524,7 +532,7 @@
             this.moreResultsState = null;
           })
           .catch(() => {
-            this.moreResultsState = 'error';
+            this.moreResultsState = ViewMoreButtonStates.ERROR;
           });
       },
       topicsLink(topicId) {

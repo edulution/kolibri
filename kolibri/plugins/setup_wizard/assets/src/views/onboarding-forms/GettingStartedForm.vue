@@ -6,13 +6,13 @@
   >
     <KRadioButton
       v-model="selected"
-      :value="Options.PERSONAL"
+      :buttonValue="Options.PERSONAL"
       :label="$tr('quickStartLabel')"
       :description="getCommonSyncString('onMyOwn')"
     />
     <KRadioButton
       v-model="selected"
-      :value="Options.PUBLIC"
+      :buttonValue="Options.PUBLIC"
       :label="$tr('advancedSetupLabel')"
       :description="$tr('advancedSetupDescription')"
     />
@@ -24,7 +24,7 @@
 <script>
 
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import { Presets } from '../../constants';
+  import { Presets } from 'kolibri.coreVue.vuex.constants';
   import OnboardingForm from './OnboardingForm';
 
   const Options = Object.freeze({

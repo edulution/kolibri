@@ -14,11 +14,6 @@
 
 import vue from 'vue';
 import vuex from 'vuex';
-import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
-import responsiveWindowMixin from 'kolibri-design-system/lib/KResponsiveWindowMixin';
-import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
-import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
-import UiIconButton from 'kolibri-design-system/lib/keen/UiIconButton'; // temp hack
 import * as vueCompositionApi from '@vue/composition-api';
 import logging from '../logging';
 import * as apiResource from '../api-resource';
@@ -33,18 +28,11 @@ import ContentIcon from '../views/ContentIcon';
 import ProgressIcon from '../views/ProgressIcon';
 import PermissionsIcon from '../views/PermissionsIcon';
 import AppBarPage from '../views/CorePage/AppBarPage';
-import AppBar from '../views/AppBar';
 import ImmersivePage from '../views/CorePage/ImmersivePage';
-import ScrollingHeader from '../views/ScrollingHeader';
-import SideNav from '../views/SideNav';
-import Navbar from '../views/Navbar';
-import NavbarLink from '../views/Navbar/NavbarLink';
-import HorizontalNavBarWithOverflowMenu from '../views/HorizontalNavBarWithOverflowMenu';
 import CoreLogo from '../views/CoreLogo';
 import LanguageSwitcherList from '../views/language-switcher/LanguageSwitcherList';
 import LanguageSwitcherModal from '../views/language-switcher/LanguageSwitcherModal';
 import ElapsedTime from '../views/ElapsedTime';
-import PointsIcon from '../views/PointsIcon';
 import TotalPoints from '../views/TotalPoints';
 import AuthMessage from '../views/AuthMessage';
 import FilterTextbox from '../views/FilterTextbox';
@@ -101,10 +89,12 @@ import LearnOnlyDeviceNotice from '../views/LearnOnlyDeviceNotice';
 import themeConfig from '../styles/themeConfig';
 import sortLanguages from '../utils/sortLanguages';
 import * as sync from '../views/sync/syncComponentSet';
-import PageRoot from '../views/PageRoot';
 import NotificationsRoot from '../views/NotificationsRoot';
 import useMinimumKolibriVersion from '../composables/useMinimumKolibriVersion';
+import useUserSyncStatus from '../composables/useUserSyncStatus';
 import useUser from '../composables/useUser';
+import { registerNavItem } from '../composables/useNav';
+import useNow from '../composables/useNow';
 
 // webpack optimization
 import CoreInfoIcon from '../views/CoreInfoIcon';
@@ -112,14 +102,12 @@ import * as contentNode from '../utils/contentNodeUtils';
 import InteractionList from '../views/InteractionList';
 import ExamReport from '../views/ExamReport';
 import SlotTruncator from '../views/SlotTruncator';
-import TextTruncator from '../views/TextTruncator';
 import TextTruncatorCss from '../views/TextTruncatorCss';
 import TimeDuration from '../views/TimeDuration';
 import SuggestedTime from '../views/SuggestedTime';
 
 import MultiPaneLayout from '../views/MultiPaneLayout';
 import filterUsersByNames from '../utils/filterUsersByNames';
-import navComponents from '../utils/navComponents';
 import loginComponents from '../utils/loginComponents';
 import coreBannerContent from '../utils/coreBannerContent';
 import CatchErrors from '../utils/CatchErrors';
@@ -150,7 +138,6 @@ export default {
       mappers,
     },
     components: {
-      ScrollingHeader,
       Backdrop,
       CoachContentLabel,
       DownloadButton,
@@ -158,17 +145,11 @@ export default {
       ContentIcon,
       ProgressIcon,
       PermissionsIcon,
-      AppBar,
       AppBarPage,
       ImmersivePage,
-      SideNav,
-      Navbar,
-      NavbarLink,
-      HorizontalNavBarWithOverflowMenu,
       LanguageSwitcherModal,
       LanguageSwitcherList,
       ElapsedTime,
-      PointsIcon,
       TotalPoints,
       AuthMessage,
       FilterTextbox,
@@ -182,14 +163,11 @@ export default {
       InteractionList,
       ExamReport,
       SlotTruncator,
-      TextTruncator,
       TextTruncatorCss,
       TimeDuration,
       MultiPaneLayout,
       CoreFullscreen,
       CoreLogo,
-      UiAlert,
-      UiIconButton,
       UiToolbar,
       PrivacyInfoModal,
       UserTypeDisplay,
@@ -211,7 +189,6 @@ export default {
       PrivacyLinkAndModal,
       LearnOnlyDeviceNotice,
       SuggestedTime,
-      PageRoot,
       MasteryModel,
       NotificationsRoot,
       KolibriLoadingSnippet,
@@ -221,17 +198,16 @@ export default {
     },
     router,
     mixins: {
-      responsiveWindowMixin,
-      responsiveElementMixin,
       commonCoreStrings,
       commonTaskStrings,
       commonSyncElements,
       translatedUserKinds,
     },
     composables: {
-      useKResponsiveWindow,
       useMinimumKolibriVersion,
+      useNow,
       useUser,
+      useUserSyncStatus,
     },
   },
   resources,
@@ -250,7 +226,7 @@ export default {
     i18n,
     licenseTranslations,
     loginComponents,
-    navComponents,
+    registerNavItem,
     redirectBrowser,
     samePageCheckGenerator,
     serverClock,

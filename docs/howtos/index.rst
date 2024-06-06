@@ -12,3 +12,6 @@ These guides are step by step guides for common tasks in getting started and wor
   installing_pyenv
   pyenv_virtualenv
   nodeenv
+  rebasing_a_pull_request
+  another_kolibri_instance
+  development_with_kds

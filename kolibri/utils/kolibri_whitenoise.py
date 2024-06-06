@@ -3,13 +3,14 @@ import re
 import stat
 from collections import OrderedDict
 from io import BufferedIOBase
+from urllib.parse import parse_qs
+from urllib.parse import urljoin
 from wsgiref.headers import Headers
 
 from django.contrib.staticfiles import finders
+from django.core.exceptions import SuspiciousFileOperation
 from django.core.files.storage import FileSystemStorage
 from django.utils._os import safe_join
-from six.moves.urllib.parse import parse_qs
-from six.moves.urllib.parse import urljoin
 from whitenoise import WhiteNoise
 from whitenoise.httpstatus_backport import HTTPStatus
 from whitenoise.responders import MissingFileError
@@ -294,10 +295,13 @@ class DynamicWhiteNoise(WhiteNoise):
         return self.files.get(url)
 
     def get_dynamic_path(self, url):
-        if self.static_prefix is not None and url.startswith(self.static_prefix):
-            return finders.find(url[len(self.static_prefix) :])
-        if self.dynamic_check is not None and self.dynamic_check.match(url):
-            return self.dynamic_finder.find(url)
+        try:
+            if self.static_prefix is not None and url.startswith(self.static_prefix):
+                return finders.find(url[len(self.static_prefix) :])
+            if self.dynamic_check is not None and self.dynamic_check.match(url):
+                return self.dynamic_finder.find(url)
+        except SuspiciousFileOperation:
+            pass
 
     def candidate_paths_for_url(self, url):
         paths = super(DynamicWhiteNoise, self).candidate_paths_for_url(url)

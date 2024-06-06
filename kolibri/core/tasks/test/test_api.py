@@ -8,6 +8,8 @@ from mock import Mock
 from mock import patch
 from pytz import utc
 from rest_framework import serializers
+from rest_framework import status
+from rest_framework.test import APIClient
 from rest_framework.test import APITestCase
 
 from kolibri.core.auth.models import Facility
@@ -644,6 +646,14 @@ class EnqueueArgsCreateAPITestCase(BaseAPITestCase):
                 "enqueue_at": self.enqueue_at_datetime,
                 "repeat": None,
             },
+            {  # Invalid priority specified.
+                "enqueue_at": self.enqueue_at_datetime,
+                "priority": 1,
+            },
+            {  # Priority set to None
+                "enqueue_at": self.enqueue_at_datetime,
+                "priority": None,
+            },
         ]
 
         for err_enq_arg in erroneous_enqueue_args:
@@ -693,6 +703,10 @@ class EnqueueArgsCreateAPITestCase(BaseAPITestCase):
             },
             {
                 "retry_interval": 900,
+            },
+            {
+                "enqueue_at": self.enqueue_at_datetime,
+                "priority": 10,
             },
         ]
 
@@ -1470,3 +1484,14 @@ class TaskAPIPermissionsTestCase(APITestCase):
     def test_list_permissions(self, job_storage_mock):
         response = self.client.get(reverse("kolibri:core:task-list"), format="json")
         self.assertEqual(response.status_code, 200)
+
+
+class CSRFProtectedTaskTestCase(APITestCase):
+    def setUp(self):
+        self.client_csrf = APIClient(enforce_csrf_checks=True)
+
+    def test_csrf_protected_task(self):
+        response = self.client_csrf.post(
+            reverse("kolibri:core:task-list"), {}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

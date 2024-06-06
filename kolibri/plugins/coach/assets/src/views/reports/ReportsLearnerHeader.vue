@@ -53,13 +53,13 @@
       </HeaderTableRow>
     </HeaderTable>
     <HeaderTabs :enablePrint="enablePrint">
-      <HeaderTab
-        :text="coachString('reportsLabel')"
-        :to="classRoute('ReportsLearnerReportPage', {})"
-      />
-      <HeaderTab
-        :text="coachString('activityLabel')"
-        :to="classRoute('ReportsLearnerActivityPage', {})"
+      <KTabsList
+        ref="tabList"
+        :tabsId="REPORTS_LEARNERS_TABS_ID"
+        :ariaLabel="$tr('reportLearners')"
+        :activeTabId="activeTabId"
+        :tabs="tabs"
+        @click="() => saveTabsClick(REPORTS_LEARNERS_TABS_ID)"
       />
     </HeaderTabs>
   </div>
@@ -71,16 +71,34 @@
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonCoach from '../common';
+  import { REPORTS_LEARNERS_TABS_ID, ReportsLearnersTabs } from '../../constants/tabsConstants';
+  import { useCoachTabs } from '../../composables/useCoachTabs';
 
   export default {
     name: 'ReportsLearnerHeader',
     mixins: [commonCoach, commonCoreStrings],
+    setup() {
+      const { saveTabsClick, wereTabsClickedRecently } = useCoachTabs();
+      return {
+        saveTabsClick,
+        wereTabsClickedRecently,
+      };
+    },
     props: {
       enablePrint: {
         type: Boolean,
         required: false,
         default: false,
       },
+      activeTabId: {
+        type: String,
+        required: true,
+      },
+    },
+    data() {
+      return {
+        REPORTS_LEARNERS_TABS_ID,
+      };
     },
     computed: {
       learner() {
@@ -115,12 +133,42 @@
         );
         return statuses.length;
       },
+      tabs() {
+        return [
+          {
+            id: ReportsLearnersTabs.REPORTS,
+            label: this.coachString('reportsLabel'),
+            to: this.classRoute('ReportsLearnerReportPage', {}),
+          },
+          {
+            id: ReportsLearnersTabs.ACTIVITY,
+            label: this.coachString('activityLabel'),
+            to: this.classRoute('ReportsLearnerActivityPage', {}),
+          },
+        ];
+      },
+    },
+    mounted() {
+      // focus the active tab but only when it's likely
+      // that this header was re-mounted as a result
+      // of navigation after clicking a tab (focus shouldn't
+      // be manipulated programatically in other cases, e.g.
+      // when visiting the page for the first time)
+      if (this.wereTabsClickedRecently(this.REPORTS_LEARNERS_TABS_ID)) {
+        this.$nextTick(() => {
+          this.$refs.tabList.focusActiveTab();
+        });
+      }
     },
     $trs: {
       back: {
         message: 'All learners',
         context:
           "Link that takes user back to the list of learners on the 'Reports' tab, from the individual learner's information page.",
+      },
+      reportLearners: {
+        message: 'Report learners',
+        context: 'Labels the Reports > Learners tab for screen reader users',
       },
     },
   };

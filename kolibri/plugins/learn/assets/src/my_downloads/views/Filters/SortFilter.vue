@@ -17,11 +17,17 @@
 
   import pickBy from 'lodash/pickBy';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
 
   export default {
     name: 'SortFilter',
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
+    setup() {
+      const { windowIsLarge } = useKResponsiveWindow();
+      return {
+        windowIsLarge,
+      };
+    },
     data() {
       return {
         sortOptions: [
@@ -47,8 +53,6 @@
     computed: {
       selectorStyle() {
         return {
-          color: this.$themeTokens.text,
-          backgroundColor: this.$themePalette.grey.v_200,
           borderRadius: '2px',
           marginTop: '16px',
           marginBottom: 0,
@@ -70,6 +74,7 @@
             query: pickBy({
               ...this.$route.query,
               sort: value,
+              page: 1,
             }),
           });
         },

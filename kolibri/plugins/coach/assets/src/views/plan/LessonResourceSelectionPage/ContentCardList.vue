@@ -13,6 +13,7 @@
         v-for="content in contentList"
         :key="content.id"
         class="content-list-item"
+        :aria-selected="contentIsChecked(content)"
       >
         <KCheckbox
           v-if="contentHasCheckbox(content)"
@@ -23,8 +24,15 @@
           :indeterminate="contentIsIndeterminate(content)"
           @change="handleCheckboxChange(content, $event)"
         />
+        <!--
+          disabled, tabindex, is-leaf class set here to hack making the card not clickable
+          if you're trying to make the card clickable remove these properties
+        -->
         <LessonContentCard
-          :class="{ 'with-checkbox': needCheckboxes }"
+          class="content-card"
+          :disabled="content.is_leaf"
+          :tabindex="content.is_leaf ? -1 : 0"
+          :class="{ 'with-checkbox': needCheckboxes, 'is-leaf': content.is_leaf }"
           :title="content.title"
           :thumbnail="content.thumbnail"
           :description="content.description"
@@ -33,29 +41,33 @@
           :link="contentCardLink(content)"
           :numCoachContents="content.num_coach_contents"
           :isLeaf="content.is_leaf"
-        />
+        >
+          <template #notice>
+            <slot name="notice" :content="content"></slot>
+          </template>
+        </LessonContentCard>
       </li>
     </ul>
 
     <template>
       <KButton
-        v-if="showButton"
+        v-if="showButton && !loadingMoreState"
         :text="coreString('viewMoreAction')"
         :primary="false"
         @click="$emit('moreresults')"
       />
       <KCircularLoader
-        v-if="viewMoreButtonState === 'waiting'"
+        v-if="viewMoreButtonState === ViewMoreButtonStates.LOADING & loadingMoreState"
         :delay="false"
       />
       <!-- TODO introduce messages in next version -->
-      <p v-else-if="viewMoreButtonState === 'error'">
+      <p v-else-if="viewMoreButtonState === ViewMoreButtonStates.ERROR">
         <KIcon icon="error" />
         <!-- {{ $tr('moreResultsError') }} -->
       </p>
-      <!-- <p v-else-if="viewMoreButtonState === 'no_more_results'">
-        {{ $tr('noMoreResults') }}
-      </p> -->
+      <p v-else-if="contentList.length === 0">
+        {{ coreString('noResultsLabel') }}
+      </p>
     </template>
   </div>
 
@@ -64,7 +76,10 @@
 
 <script>
 
+  import { computed, toRefs } from 'kolibri.lib.vueCompositionApi';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import { ViewMoreButtonStates } from '../../../constants/index';
+
   import LessonContentCard from './LessonContentCard';
 
   export default {
@@ -73,6 +88,18 @@
       LessonContentCard,
     },
     mixins: [commonCoreStrings],
+
+    setup(props) {
+      const { selectAllChecked, selectAllIndeterminate } = toRefs(props);
+      // Code too long to display in template
+      const ariaChecked = computed(() => {
+        return selectAllChecked.value ? true : selectAllIndeterminate.value ? 'mixed' : false;
+      });
+      return {
+        ariaChecked,
+        ViewMoreButtonStates,
+      };
+    },
     props: {
       showSelectAll: {
         type: Boolean,
@@ -120,12 +147,15 @@
         type: Function, // ContentNode => Route
         required: true,
       },
+      loadingMoreState: {
+        type: Boolean,
+        default: false,
+      },
     },
+
     computed: {
       showButton() {
-        return (
-          this.viewMoreButtonState !== 'waiting' && this.viewMoreButtonState !== 'no_more_results'
-        );
+        return this.viewMoreButtonState === this.ViewMoreButtonStates.HAS_MORE;
       },
       needCheckboxes() {
         return this.contentList.some(c => this.contentHasCheckbox(c));

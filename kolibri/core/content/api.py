@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import re
 from collections import OrderedDict
@@ -14,10 +15,13 @@ from django.db.models import Subquery
 from django.db.models import Sum
 from django.db.models.aggregates import Count
 from django.http import Http404
-from django.utils.cache import patch_response_headers
+from django.utils.cache import add_never_cache_headers
 from django.utils.decorators import method_decorator
-from django.utils.translation import ugettext as _
+from django.utils.encoding import force_bytes
+from django.utils.encoding import iri_to_uri
+from django.utils.translation import gettext as _
 from django.views.decorators.cache import cache_page
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import etag
 from django_filters.rest_framework import BaseInFilter
 from django_filters.rest_framework import BooleanFilter
@@ -36,6 +40,7 @@ from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from kolibri.core.api import BaseValuesViewset
@@ -53,7 +58,7 @@ from kolibri.core.content.models import ContentRemovalRequest
 from kolibri.core.content.models import ContentRequestReason
 from kolibri.core.content.models import ContentRequestStatus
 from kolibri.core.content.permissions import CanManageContent
-from kolibri.core.content.tasks import automatic_resource_import
+from kolibri.core.content.tasks import automatic_user_imported_resource_cleanup
 from kolibri.core.content.utils.content_types_tools import (
     renderable_contentnodes_q_filter,
 )
@@ -89,53 +94,87 @@ from kolibri.utils.urls import validator
 logger = logging.getLogger(__name__)
 
 
+REMOTE_ETAG_CACHE_KEY = "remote_content_etag_{}"
+
+REMOTE_URL_PARAM = "baseurl"
+
+
 def get_cache_key(*args, **kwargs):
     return str(ContentCacheKey.get_cache_key())
 
 
-def metadata_cache(some_func):
+def metadata_cache(view_func, cache_key_func=get_cache_key):
     """
-    Decorator for patch_response_headers function
+    Decorator to apply an Etag sensitive page cache
     """
-    # Approximately 1 year
-    # Source: https://stackoverflow.com/a/3001556/405682
-    cache_timeout = 31556926
 
-    @etag(get_cache_key)
+    @etag(cache_key_func)
     def wrapper_func(*args, **kwargs):
-        response = some_func(*args, **kwargs)
         try:
             request = args[0]
             request = kwargs.get("request", request)
         except IndexError:
             request = kwargs.get("request", None)
-        if response.status_code < 400 or response.status_code == 404:
-            # By default cache for 60 seconds to prevent repeated requests
-            # and we are returning a non-error response.
-            # or if there was a 404.
-
-            timeout = 60
-            if "contentCacheKey" in request.GET:
-                # Do long running caching if the contentCacheKey is explicitly
-                # set in the URL.
-                timeout = cache_timeout
-            patch_response_headers(response, cache_timeout=timeout)
-
+        # Prevent the Django caching middleware from caching
+        # this response, as we want to cache it ourselves
+        request._cache_update_cache = False
+        key_prefix = cache_key_func(request)
+        url_key = hashlib.md5(
+            force_bytes(iri_to_uri(request.build_absolute_uri()))
+        ).hexdigest()
+        response = None
+        if key_prefix is not None:
+            cache_key = "{}:{}".format(key_prefix, url_key)
+            response = cache.get(cache_key)
+        if response is None:
+            response = view_func(*args, **kwargs)
+            if response.status_code == 200:
+                if key_prefix is None:
+                    key_prefix = cache_key_func(request)
+                if (
+                    key_prefix is not None
+                    and hasattr(response, "render")
+                    and callable(response.render)
+                ):
+                    cache_key = "{}:{}".format(key_prefix, url_key)
+                    response.add_post_render_callback(
+                        lambda r: cache.set(cache_key, r, timeout=3600)
+                    )
+            else:
+                # Don't cache responses that returned an error code
+                add_never_cache_headers(response)
         return response
 
-    return session_exempt(wrapper_func)
+    return wrapper_func
+
+
+def get_remote_cache_key(request, *args, **kwargs):
+    if REMOTE_URL_PARAM in request.GET:
+        return cache.get(REMOTE_ETAG_CACHE_KEY.format(request.GET[REMOTE_URL_PARAM]))
+    return get_cache_key(*args, **kwargs)
+
+
+def remote_metadata_cache(view_func):
+    return session_exempt(
+        metadata_cache(view_func, cache_key_func=get_remote_cache_key)
+    )
+
+
+def no_cache_on_method(view_func):
+    """
+    Decorator to disable caching for a particular method
+    """
+    return method_decorator(never_cache, name="dispatch")(view_func)
 
 
 class RemoteMixin(object):
-    remote_url_param = "baseurl"
-
     def _should_proxy_request(self, request):
-        return self.remote_url_param in request.GET
+        return REMOTE_URL_PARAM in request.GET
 
     def _get_request_headers(self, request):
         return {
             "Accept": request.META.get("HTTP_ACCEPT"),
-            # Don't proxy client's accept headers as it may include br for brotli
+            # Don't proxy client's accept encoding headers as it may include br for brotli
             # that we cannot rely on having decompression for available on the server.
             "Accept-Language": request.META.get("HTTP_ACCEPT_LANGUAGE"),
             "Content-Type": request.META.get("CONTENT_TYPE"),
@@ -143,10 +182,16 @@ class RemoteMixin(object):
         }
 
     def _get_response_headers(self, response):
-        return {
-            "Cache-Control": response.headers.get("cache-control"),
-            "Etag": response.headers.get("etag"),
-        }
+        headers = {}
+        header_names = ["Cache-Control", "Etag", "Expires", "Date", "Last-Modified"]
+        for header_name in header_names:
+            if header_name in response.headers:
+                headers[header_name] = response.headers[header_name.lower()]
+        return headers
+
+    def _cache_etag(self, baseurl, headers):
+        cache_key = REMOTE_ETAG_CACHE_KEY.format(baseurl)
+        cache.set(cache_key, headers["Etag"], 3600)
 
     def update_data(self, response_data, baseurl):
         return response_data
@@ -159,10 +204,9 @@ class RemoteMixin(object):
             ),
             "/api/public/v2/",
         )
-        baseurl = request.GET[self.remote_url_param]
+        baseurl = request.GET[REMOTE_URL_PARAM]
         qs = request.GET.copy()
-        del qs[self.remote_url_param]
-        qs.pop("contentCacheKey", None)
+        del qs[REMOTE_URL_PARAM]
         try:
             validator(baseurl)
         except ValidationError:
@@ -181,10 +225,12 @@ class RemoteMixin(object):
                 content = self.update_data(response.json(), baseurl)
             except ValueError:
                 content = response.content
+            headers = self._get_response_headers(response)
+            self._cache_etag(baseurl, headers)
             return Response(
                 content,
                 status=response.status_code,
-                headers=self._get_response_headers(response),
+                headers=headers,
             )
         except RequestException:
             # If any sort of error due to connection or timeout, raise a resource gone error
@@ -232,7 +278,7 @@ class ChannelMetadataFilter(FilterSet):
 
 class BaseChannelMetadataMixin(object):
     filter_backends = (DjangoFilterBackend,)
-    filter_class = ChannelMetadataFilter
+    filterset_class = ChannelMetadataFilter
 
     values = (
         "author",
@@ -312,7 +358,7 @@ class BaseChannelMetadataMixin(object):
         return Response(data)
 
 
-@method_decorator(metadata_cache, name="dispatch")
+@method_decorator(remote_metadata_cache, name="dispatch")
 class ChannelMetadataViewSet(BaseChannelMetadataMixin, RemoteViewSet):
     pass
 
@@ -536,7 +582,7 @@ class BaseContentNodeMixin(object):
     """
 
     filter_backends = (DjangoFilterBackend,)
-    filter_class = ContentNodeFilter
+    filterset_class = ContentNodeFilter
 
     values = (
         "id",
@@ -694,9 +740,9 @@ class InternalContentNodeMixin(BaseContentNodeMixin):
                 # This is a paginated object
                 if response_data["more"] is not None:
                     if type(response_data["more"].get("params", None)) is dict:
-                        response_data["more"]["params"][self.remote_url_param] = baseurl
+                        response_data["more"]["params"][REMOTE_URL_PARAM] = baseurl
                     else:
-                        response_data["more"][self.remote_url_param] = baseurl
+                        response_data["more"][REMOTE_URL_PARAM] = baseurl
                 response_data["results"] = self.update_data(
                     response_data["results"], baseurl
                 )
@@ -717,7 +763,7 @@ class InternalContentNodeMixin(BaseContentNodeMixin):
         return response_data
 
     def add_base_url_to_node(self, node, baseurl):
-        baseurl_querystring = "?{}={}".format(self.remote_url_param, baseurl)
+        baseurl_querystring = "?{}={}".format(REMOTE_URL_PARAM, baseurl)
         if node["thumbnail"]:
             node["thumbnail"] += baseurl_querystring
         for file in node["files"]:
@@ -770,7 +816,7 @@ class OptionalContentNodePagination(OptionalPagination):
         }
 
 
-@method_decorator(metadata_cache, name="dispatch")
+@method_decorator(remote_metadata_cache, name="dispatch")
 class ContentNodeViewset(InternalContentNodeMixin, RemoteMixin, ReadOnlyValuesViewset):
     pagination_class = OptionalContentNodePagination
 
@@ -1114,7 +1160,7 @@ class BaseContentNodeTreeViewset(
         return Response(parent)
 
 
-@method_decorator(metadata_cache, name="dispatch")
+@method_decorator(remote_metadata_cache, name="dispatch")
 class ContentNodeTreeViewset(BaseContentNodeTreeViewset, RemoteMixin):
     def retrieve(self, request, pk=None):
         if pk is None:
@@ -1303,7 +1349,7 @@ class ContentNodeBookmarksViewset(
         KolibriAuthPermissionsFilter,
         DjangoFilterBackend,
     )
-    filter_class = BookmarkFilter
+    filterset_class = BookmarkFilter
     pagination_class = ValuesViewsetLimitOffsetPagination
 
     def get_queryset(self):
@@ -1333,10 +1379,21 @@ class ContentNodeBookmarksViewset(
         return sorted_items
 
 
+class ContentRequestFilter(FilterSet):
+    contentnode_id = UUIDFilter()
+    contentnode_id__in = UUIDInFilter(field_name="contentnode_id")
+
+    class Meta:
+        model = ContentDownloadRequest
+        fields = ("contentnode_id", "contentnode_id__in")
+
+
 class ContentRequestViewset(ReadOnlyValuesViewset, CreateModelMixin):
     serializer_class = serializers.ContentDownloadRequestSerializer
-
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = ContentRequestFilter
     pagination_class = OptionalPageNumberPagination
+    permission_classes = [IsAuthenticated]
 
     values = (
         "id",
@@ -1362,6 +1419,7 @@ class ContentRequestViewset(ReadOnlyValuesViewset, CreateModelMixin):
                     source_id=OuterRef("source_id"),
                     contentnode_id=OuterRef("contentnode_id"),
                     requested_at__gte=OuterRef("requested_at"),
+                    reason=OuterRef("reason"),
                 ).exclude(status=ContentRequestStatus.Failed)
             )
         ).filter(has_removal=False)
@@ -1404,7 +1462,7 @@ class ContentRequestViewset(ReadOnlyValuesViewset, CreateModelMixin):
             content_request.contentnode_id = existing_download_request.contentnode_id
             content_request.save()
 
-        automatic_resource_import.enqueue_if_not()
+        automatic_user_imported_resource_cleanup.enqueue_if_not()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -1422,7 +1480,8 @@ class ContentNodeGranularViewset(mixins.RetrieveModelMixin, viewsets.GenericView
 
     def get_serializer_context(self):
         context = super(ContentNodeGranularViewset, self).get_serializer_context()
-        context.update({"channel_stats": self.channel_stats})
+        if hasattr(self, "channel_stats"):
+            context.update({"channel_stats": self.channel_stats})
         return context
 
     def retrieve(self, request, pk):
@@ -1475,15 +1534,15 @@ class UserContentNodeFilter(ContentNodeFilter):
     popular = BooleanFilter(method="filter_by_popular")
 
     def filter_by_lesson(self, queryset, name, value):
-        try:
-            lesson = Lesson.objects.filter(
-                lesson_assignments__collection__membership__user=self.request.user,
-                is_active=True,
-            ).get(pk=value)
-            node_ids = list(map(lambda x: x["contentnode_id"], lesson.resources))
-            return queryset.filter(pk__in=node_ids)
-        except Lesson.DoesNotExist:
+        lesson = Lesson.objects.filter(
+            lesson_assignments__collection__membership__user=self.request.user,
+            is_active=True,
+            pk=value,
+        ).first()
+        if lesson is None:
             return queryset.none()
+        node_ids = list(map(lambda x: x["contentnode_id"], lesson.resources))
+        return queryset.filter(pk__in=node_ids)
 
     def filter_by_resume(self, queryset, name, value):
         user = self.request.user
@@ -1607,7 +1666,7 @@ class UserContentNodeViewset(
     filter_backends = (DjangoFilterBackend, filters.OrderingFilter)
     ordering_fields = ["last_interacted"]
     ordering = ("lft", "id")
-    filter_class = UserContentNodeFilter
+    filterset_class = UserContentNodeFilter
     pagination_class = OptionalPagination
 
     def get_queryset(self):
@@ -1638,13 +1697,11 @@ def mean(data):
     return mean
 
 
-class ContentNodeProgressViewset(
-    TreeQueryMixin, viewsets.GenericViewSet, ListModelMixin
-):
+class ContentNodeProgressViewset(TreeQueryMixin, BaseValuesViewset, ListModelMixin):
     filter_backends = (DjangoFilterBackend, filters.OrderingFilter)
     ordering_fields = ["last_interacted"]
     ordering = ("lft", "id")
-    filter_class = UserContentNodeFilter
+    filterset_class = UserContentNodeFilter
     # Use same pagination class as ContentNodeViewset so we can
     # return identically paginated responses.
     # The only deviation is that we only return the results
@@ -1652,6 +1709,7 @@ class ContentNodeProgressViewset(
     # that the pagination object generated by the ContentNodeViewset
     # will be used to make subsequent page requests.
     pagination_class = OptionalPagination
+    values = ("content_id", "progress")
 
     def get_queryset(self):
         user = self.request.user
@@ -1678,7 +1736,7 @@ class ContentNodeProgressViewset(
                 content_id__in=queryset.exclude(kind=content_kinds.TOPIC).values_list(
                     "content_id", flat=True
                 ),
-            ).values("content_id", "progress")
+            ).values(*self.values)
         )
         return Response(logs)
 
@@ -1712,7 +1770,11 @@ class RemoteChannelViewSet(viewsets.ViewSet):
     def _make_channel_endpoint_request(
         self, identifier=None, baseurl=None, keyword=None, language=None
     ):
-
+        if baseurl is not None:
+            try:
+                validator(baseurl)
+            except ValidationError:
+                baseurl = None
         url = get_channel_lookup_url(
             identifier=identifier, baseurl=baseurl, keyword=keyword, language=language
         )
@@ -1817,6 +1879,7 @@ class RemoteChannelViewSet(viewsets.ViewSet):
         return Response(channels[0])
 
     @action(detail=False)
+    @no_cache_on_method
     def kolibri_studio_status(self, request, **kwargs):
         try:
             resp = requests.get(get_info_url())

@@ -32,18 +32,19 @@
   import pickBy from 'lodash/pickBy';
   import { LearningActivities } from 'kolibri.coreVue.vuex.constants';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useLearningActivities from '../../../composables/useLearningActivities';
 
   export default {
     name: 'ActivityFilter',
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
     setup() {
       const { getLearningActivityLabel, getLearningActivityIcon } = useLearningActivities();
-
+      const { windowIsLarge } = useKResponsiveWindow();
       return {
         getLearningActivityLabel,
         getLearningActivityIcon,
+        windowIsLarge,
       };
     },
     data() {
@@ -73,8 +74,6 @@
     computed: {
       selectorStyle() {
         return {
-          color: this.$themeTokens.text,
-          backgroundColor: this.$themePalette.grey.v_200,
           borderRadius: '2px',
           marginTop: '16px',
           marginBottom: 0,
@@ -98,6 +97,7 @@
             query: pickBy({
               ...this.$route.query,
               activity: value,
+              page: 1,
             }),
           });
         },

@@ -4,7 +4,6 @@ import hashlib
 import json
 import logging
 import math
-import sys
 
 import requests
 from dateutil import parser
@@ -64,15 +63,6 @@ facility_settings = [
     "show_download_button_in_learn",
     "registered",
 ]
-
-if sys.version_info[0] >= 3:
-    # encodestring is a deprecated alias for
-    # encodebytes, which was finally removed
-    # in Python 3.9
-    encodestring = base64.encodebytes
-else:
-    # encodebytes does not exist in Python 2.7
-    encodestring = base64.encodestring
 
 
 def calculate_list_stats(data):
@@ -236,7 +226,7 @@ def extract_facility_statistics(facility):
     # fmt: off
     data = {
         # facility_id
-        "fi": encodestring(hashlib.md5(facility.id.encode()).digest())[:10].decode(),
+        "fi": base64.encodebytes(hashlib.md5(facility.id.encode()).digest())[:10].decode(),
         # settings
         "s": settings,
         # learners_count
@@ -295,12 +285,14 @@ def extract_facility_statistics(facility):
     # fmt: on
 
     # conditionally calculate and add soud_hash
-    if get_device_setting("subset_of_users_device", False):
+    if get_device_setting("subset_of_users_device"):
         user_ids = ":".join(
             facility.facilityuser_set.order_by("id").values_list("id", flat=True)
         )
         # soud_hash
-        data["sh"] = encodestring(hashlib.md5(user_ids.encode()).digest())[:10].decode()
+        data["sh"] = base64.encodebytes(hashlib.md5(user_ids.encode()).digest())[
+            :10
+        ].decode()
 
     return data
 
@@ -427,7 +419,7 @@ def perform_ping(started, server=DEFAULT_SERVER_URL):
 
     instance, _ = InstanceIDModel.get_or_create_current_instance()
 
-    language = get_device_setting("language_id", "")
+    language = get_device_setting("language_id") or ""
 
     started = parser.isoparse(started)
 

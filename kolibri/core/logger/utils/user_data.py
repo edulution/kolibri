@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import datetime
 import logging
 import random
@@ -46,12 +42,12 @@ def logger_info(message, verbosity=1):
     # doesn't work on Windows, see: https://github.com/learningequality/kolibri/issues/7077
     try:
         # MUST: Follow the verbosity mechanism of Django's management commands
-        # https://docs.djangoproject.com/en/1.11/ref/django-admin/#cmdoption-verbosity
+        # https://docs.djangoproject.com/en/3.2/ref/django-admin/#cmdoption-verbosity
         # and only show when it's > 0.
         # print("====> verbosity %s" % verbosity)
         if verbosity > 0:
             # REF: [Python, Unicode, and the Windows console](https://stackoverflow.com/a/32176732/845481)
-            print(message)
+            print(message)  # noqa: T201
     except Exception:
         # TODO(cpauya): Don't just pass on everything, capture only specific ones.
         pass

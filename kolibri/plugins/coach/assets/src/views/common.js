@@ -16,7 +16,6 @@ import orderBy from 'lodash/orderBy';
 import { PageNames } from '../constants';
 import { LastPages } from '../constants/lastPagesConstants';
 import { STATUSES } from '../modules/classSummary/constants';
-import TopNavbar from './TopNavbar';
 import { coachStringsMixin } from './common/commonCoachStrings';
 import AverageScoreTooltip from './common/AverageScoreTooltip';
 import BackLink from './common/BackLink';
@@ -43,7 +42,6 @@ export default {
   components: {
     CoreTable,
     ContentIcon,
-    TopNavbar,
     AverageScoreTooltip,
     BackLink,
     TruncatedItemList,
@@ -98,7 +96,6 @@ export default {
       'notificationModuleData',
       'getGroupNames',
       'getGroupNamesForLearner',
-      'getAdHocLearners',
       'getLearnersForGroups',
       'getLearnersForExam',
       'getLearnersForLesson',
@@ -114,12 +111,6 @@ export default {
       'getExamAvgScore',
     ]),
     userIsAuthorized() {
-      if (this.isSuperuser) {
-        return true;
-      }
-      if (this.$route.name === 'CoachClassListPage') {
-        return this.isCoach || this.isAdmin;
-      }
       return this.$store.getters.userIsAuthorizedForCoach;
     },
     PageNames() {

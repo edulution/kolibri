@@ -1,9 +1,9 @@
 import { createLocalVue, mount } from '@vue/test-utils';
 import Vuex from 'vuex';
-import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
+import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
 import AppBarPage from '../../src/views/CorePage/AppBarPage';
 
-jest.mock('kolibri-design-system/lib/useKResponsiveWindow');
+jest.mock('kolibri-design-system/lib/composables/useKResponsiveWindow');
 
 const localVue = createLocalVue();
 localVue.use(Vuex);
@@ -62,22 +62,6 @@ describe('AppBarPage', () => {
       await wrapper.setData({ navShown: true });
       await wrapper.vm.$refs.sideNav.$emit('toggleSideNav');
       expect(wrapper.findComponent({ name: 'SideNav' }).vm.navShown).toBe(false);
-    });
-  });
-
-  describe('Toggling the language switcher modal', () => {
-    it('should show the side nav when the AppBar.showLanguageModal event is emitted', async () => {
-      const wrapper = createWrapper();
-      expect(wrapper.findComponent({ name: 'LanguageSwitcherModal' }).exists()).toBe(false);
-      await wrapper.vm.$refs.appBar.$emit('showLanguageModal');
-      expect(wrapper.findComponent({ name: 'LanguageSwitcherModal' }).exists()).toBe(true);
-    });
-    it('should hide the language switcher modal when LanguageSwitcherModal.cancel is emitted', async () => {
-      const wrapper = createWrapper();
-      await wrapper.setData({ languageModalShown: true });
-      expect(wrapper.findComponent({ name: 'LanguageSwitcherModal' }).exists()).toBe(true);
-      await wrapper.vm.$refs.languageSwitcherModal.$emit('cancel');
-      expect(wrapper.findComponent({ name: 'LanguageSwitcherModal' }).exists()).toBe(false);
     });
   });
 });

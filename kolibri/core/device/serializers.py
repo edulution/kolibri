@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.utils.translation import check_for_language
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.exceptions import ParseError
 
@@ -13,6 +13,7 @@ from kolibri.core.content.tasks import automatic_resource_import
 from kolibri.core.content.tasks import automatic_synchronize_content_requests_and_import
 from kolibri.core.device.models import DevicePermissions
 from kolibri.core.device.models import DeviceSettings
+from kolibri.core.device.models import OSUser
 from kolibri.core.device.utils import APP_AUTH_TOKEN_COOKIE_NAME
 from kolibri.core.device.utils import provision_device
 from kolibri.core.device.utils import provision_single_user_device
@@ -51,7 +52,7 @@ class DeviceSerializerMixin(object):
 class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
     facility = FacilitySerializer(required=False, allow_null=True)
     facility_id = serializers.CharField(max_length=50, required=False, allow_null=True)
-    preset = serializers.ChoiceField(choices=choices)
+    preset = serializers.ChoiceField(choices=choices, required=False, allow_null=True)
     superuser = NoFacilityFacilityUserSerializer(required=False)
     language_id = serializers.CharField(max_length=15)
     device_name = serializers.CharField(max_length=50, allow_null=True)
@@ -76,8 +77,7 @@ class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
 
     def validate(self, data):
         if (
-            "superuser" not in data
-            and GET_OS_USER in interface
+            GET_OS_USER in interface
             and "request" in self.context
             and valid_app_key_on_request(self.context["request"])
         ):
@@ -143,6 +143,8 @@ class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
 
             custom_settings = validated_data.pop("settings")
 
+            allow_learner_download_resources = False
+
             if facility_created:
                 # We only want to update things about the facility or the facility dataset in the case
                 # that we are creating the facility during this provisioning process.
@@ -154,6 +156,10 @@ class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
 
                 if "on_my_own_setup" in custom_settings:
                     facility.on_my_own_setup = custom_settings.pop("on_my_own_setup")
+                    # If we are in on my own setup, then we want to allow learners to download resources
+                    # to give them a seamless onboarding experience, without the need to use the device
+                    # plugin to download resources en masse.
+                    allow_learner_download_resources = True
 
                 # overwrite the settings in dataset_data with validated_data.settings
                 for key, value in custom_settings.items():
@@ -163,7 +169,7 @@ class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
 
             auth_token = validated_data.pop("auth_token", None)
 
-            if not auth_token:
+            if "superuser" in validated_data:
                 superuser_data = validated_data["superuser"]
                 # We've imported a facility if the username exists
                 try:
@@ -183,10 +189,21 @@ class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
                         raise ParseError(
                             "`username`, `password`, or `full_name` are missing in `superuser`"
                         )
+                if auth_token:
+                    # If we have an auth token, we need to create an OSUser for the superuser
+                    # so that we can associate the user with the OSUser
+                    os_username, _ = interface.get_os_user(auth_token)
+                    OSUser.objects.update_or_create(
+                        os_username=os_username, defaults={"user": superuser}
+                    )
 
-            else:
+            elif auth_token:
                 superuser = FacilityUser.objects.get_or_create_os_user(
                     auth_token, facility=facility
+                )
+            else:
+                raise ParseError(
+                    "Either `superuser` or `auth_token` must be provided for provisioning"
                 )
 
             is_soud = validated_data.pop("is_soud")
@@ -216,6 +233,7 @@ class DeviceProvisionSerializer(DeviceSerializerMixin, serializers.Serializer):
                 "language_id": language_id,
                 "default_facility": facility,
                 "allow_guest_access": allow_guest_access,
+                "allow_learner_download_resources": allow_learner_download_resources,
             }
 
             if is_soud:

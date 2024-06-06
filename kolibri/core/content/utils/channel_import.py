@@ -6,7 +6,6 @@ from itertools import islice
 
 from django.apps import apps
 from django.db.models.fields.related import ForeignKey
-from six import string_types
 from sqlalchemy import and_
 from sqlalchemy import or_
 from sqlalchemy.dialects.postgresql import insert
@@ -49,12 +48,17 @@ merge_models = [ContentTag, LocalFile, Language]
 
 models_not_to_overwrite = [LocalFile]
 
-models_to_exclude = [
-    apps.get_model(CONTENT_APP_NAME, "ChannelMetadata_included_languages"),
+# Models that are in the content app, but for which we do not want to generate a schema
+# using SQLAlchemy.
+no_schema_models = [
     apps.get_model(CONTENT_APP_NAME, "ContentRequest"),
     apps.get_model(CONTENT_APP_NAME, "ContentDownloadRequest"),
     apps.get_model(CONTENT_APP_NAME, "ContentRemovalRequest"),
 ]
+
+models_to_exclude = [
+    apps.get_model(CONTENT_APP_NAME, "ChannelMetadata_included_languages"),
+] + no_schema_models
 
 
 SOURCE_DB_ALIAS = "sourcedb"
@@ -235,12 +239,16 @@ class ChannelImport(object):
     ):
         self.channel_id = channel_id
         self.channel_version = channel_version
+        try:
+            self.current_channel = ChannelMetadata.objects.get(id=self.channel_id)
+        except ChannelMetadata.DoesNotExist:
+            self.current_channel = None
 
         self.cancel_check = cancel_check
 
         self.partial = partial
 
-        if isinstance(source, string_types):
+        if isinstance(source, str):
             if self.partial:
                 raise ValueError(
                     "partial init argument to channel import class can only be used with dict imports"
@@ -714,37 +722,36 @@ class ChannelImport(object):
         return result
 
     def check_and_delete_existing_channel(self):
-        ChannelMetadataTable = self.destination.get_table(ChannelMetadata)
-        existing_channel = self.destination.execute(
-            select(ChannelMetadataTable).where(
-                ChannelMetadataTable.c.id == self.channel_id
-            )
-        ).fetchone()
 
-        if existing_channel:
+        if self.current_channel:
+            current_version = self.current_channel.version
+            current_partial = self.current_channel.partial
             if self.partial:
-                if existing_channel["version"] != self.channel_version:
+                if current_version != self.channel_version:
                     # We have previously loaded this channel, with a different version to the metadata we are trying to insert
                     logger.warning(
                         (
                             "Version {channel_version} of channel {channel_id} already exists in database; cancelling partial import of "
                             + "version {new_channel_version}"
                         ).format(
-                            channel_version=existing_channel["version"],
+                            channel_version=current_version,
                             channel_id=self.channel_id,
                             new_channel_version=self.channel_version,
                         )
                     )
                     return False
                 return True
-            elif existing_channel["version"] < self.channel_version:
+            elif current_version is not None and (
+                current_version < self.channel_version or current_partial
+            ):
                 # We have an older version of this channel, so let's clean out the old stuff first
+                # Or we only have a partial import of this channel.
                 logger.info(
                     (
                         "Older version {channel_version} of channel {channel_id} already exists in database; removing old entries "
                         + "so we can upgrade to version {new_channel_version}"
                     ).format(
-                        channel_version=existing_channel["version"],
+                        channel_version=current_version,
                         channel_id=self.channel_id,
                         new_channel_version=self.channel_version,
                     )
@@ -754,7 +761,7 @@ class ChannelImport(object):
 
                 root_node = self.destination.execute(
                     select(ContentNodeTable).where(
-                        ContentNodeTable.c.id == existing_channel["root_id"]
+                        ContentNodeTable.c.id == self.current_channel.root_id
                     )
                 ).fetchone()
 
@@ -762,13 +769,13 @@ class ChannelImport(object):
                 if root_node:
                     self.delete_old_channel_tree_data(root_node["tree_id"])
             else:
-                # We have previously loaded this channel, with the same or newer version, so our work here is done
+                # We have previously fully loaded this channel, with the same or newer version, so our work here is done
                 logger.warning(
                     (
                         "Version {channel_version} of channel {channel_id} already exists in database; cancelling import of "
                         + "version {new_channel_version}"
                     ).format(
-                        channel_version=existing_channel["version"],
+                        channel_version=current_version,
                         channel_id=self.channel_id,
                         new_channel_version=self.channel_version,
                     )
@@ -911,6 +918,11 @@ class ChannelImport(object):
         try:
             self.try_attaching_sqlite_database()
             transaction = self.destination.connection.begin()
+            if self.destination.engine.name == "sqlite":
+                # turn off foreign key integrity checking for the duration of the transaction
+                # so that we get similar behaviour to Postgresql, where the integrity of foreign
+                # keys is checked at the end of the transaction, rather than after each statement
+                self.destination.execute("PRAGMA foreign_keys=OFF")
             if self.check_and_delete_existing_channel():
                 for model in self.content_models:
                     model_start = time.time()
@@ -926,6 +938,9 @@ class ChannelImport(object):
                         )
                     )
                 import_ran = True
+            if self.destination.engine.name == "sqlite":
+                # reenable foreign key integrity checking before we commit the transaction
+                self.destination.execute("PRAGMA foreign_keys=ON")
 
             transaction.commit()
             self.try_detaching_sqlite_database()
@@ -949,11 +964,9 @@ class ChannelImport(object):
         return import_ran
 
     def run_and_annotate(self):
-        try:
-            old_order = ChannelMetadata.objects.values("order").get(id=self.channel_id)[
-                "order"
-            ]
-        except ChannelMetadata.DoesNotExist:
+        if self.current_channel:
+            old_order = self.current_channel.order
+        else:
             old_order = None
 
         import_ran = self.import_channel_data()

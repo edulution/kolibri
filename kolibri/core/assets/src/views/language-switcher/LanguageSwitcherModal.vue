@@ -26,7 +26,7 @@
             :key="language.id"
             ref="languageItem"
             v-model="selectedLanguage"
-            :value="language.id"
+            :buttonValue="language.id"
             :label="language.lang_name"
             :title="language.english_name"
             class="language-name"
@@ -44,7 +44,7 @@
 <script>
 
   import { currentLanguage } from 'kolibri.utils.i18n';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import FocusTrap from 'kolibri.coreVue.components.FocusTrap';
   import languageSwitcherMixin from './mixin';
@@ -52,7 +52,13 @@
   export default {
     name: 'LanguageSwitcherModal',
     components: { FocusTrap },
-    mixins: [commonCoreStrings, languageSwitcherMixin, responsiveWindowMixin],
+    mixins: [commonCoreStrings, languageSwitcherMixin],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsSmall,
+      };
+    },
     data() {
       return {
         selectedLanguage: currentLanguage,

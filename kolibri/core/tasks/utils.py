@@ -2,7 +2,6 @@ import concurrent.futures
 import logging
 import os
 import sqlite3
-import sys
 import time
 import uuid
 from threading import Thread
@@ -10,7 +9,6 @@ from threading import Thread
 import click
 from django.utils.functional import SimpleLazyObject
 from django.utils.module_loading import import_string
-from six import string_types
 from sqlalchemy import create_engine
 from sqlalchemy import event
 from sqlalchemy import exc
@@ -33,6 +31,9 @@ current_state_tracker = SimpleLazyObject(compat.local)
 
 
 def get_current_job():
+    """
+    :rtype: kolibri.core.tasks.job.Job
+    """
     return getattr(current_state_tracker, "job", None)
 
 
@@ -41,7 +42,7 @@ def callable_to_import_path(func):
         funcstring = "{module}.{funcname}".format(
             module=func.__module__, funcname=func.__name__
         )
-    elif isinstance(func, string_types):
+    elif isinstance(func, str):
         funcstring = func
     else:
         raise TypeError("Can't handle a function of type {}".format(type(func)))
@@ -225,28 +226,40 @@ class ProgressTracker:
         # store provided arguments
         self.total = total
 
-        # Also check that we are not running Python 2:
-        # https://github.com/learningequality/kolibri/issues/6597
-        if sys.version_info[0] == 2:
+        # Check that we are executing inside a click context
+        # as we only want to display progress bars from the command line.
+        try:
+            click.get_current_context()
+            # Coerce to an integer for safety, as click uses Python `range` on this
+            # value, which requires an integer argument
+            # N.B. because we are only doing this in Python3, safe to just use int,
+            # as long is Py2 only
+            self.progressbar = click.progressbar(length=int(total), width=0)
+        except RuntimeError:
             self.progressbar = None
-        else:
-            # Check that we are executing inside a click context
-            # as we only want to display progress bars from the command line.
-            try:
-                click.get_current_context()
-                # Coerce to an integer for safety, as click uses Python `range` on this
-                # value, which requires an integer argument
-                # N.B. because we are only doing this in Python3, safe to just use int,
-                # as long is Py2 only
-                self.progressbar = click.progressbar(length=int(total), width=0)
-            except RuntimeError:
-                self.progressbar = None
+
+    def set_progress(self, current_progress, message):
+        increment = current_progress - self.progress
+        self.progress = current_progress
+        self._update_progress_state(increment, message)
 
     def update_progress(self, increment, message):
         self.progress += increment
+        self._update_progress_state(increment, message)
+
+    def _update_progress_state(self, increment, message):
+        # Ensure that we don't go over the total
+        if self.progress > self.total:
+            logger.debug(
+                "Attempted to increment progress by {} on current progress {} and total progress {}".format(
+                    increment, self.progress - increment, self.total
+                )
+            )
+            self.progress = min(self.progress, self.total)
 
         if self.progressbar:
             # Click only enforces integers on the total (because it is implemented assuming a length)
+            # it also handles clamping to the total internally.
             self.progressbar.update(increment)
             if message:
                 self.progressbar.label = message
@@ -267,13 +280,31 @@ class JobProgressMixin(object):
         self.job = get_current_job()
         super(JobProgressMixin, self).__init__(*args, **kwargs)
 
-    def update_progress(self, increment=1, message="", extra_data=None):
+    def update_progress(
+        self, increment=None, message="", current_progress=None, extra_data=None
+    ):
+        if current_progress is None and increment is None:
+            increment = 1
         if self.progresstracker:
-            self.progresstracker.update_progress(increment, message)
+            if current_progress is not None:
+                self.progresstracker.set_progress(current_progress, message)
+            else:
+                self.progresstracker.update_progress(increment, message)
         if self.job:
-            self.job.update_progress(
-                self.job.progress + increment, self.job.total_progress
+            new_progress = (
+                self.job.progress + increment
+                if increment is not None
+                else current_progress
             )
+            if new_progress > self.job.total_progress:
+                logger.debug(
+                    "Attempted to increment progress by {} on current progress {} and total progress {}".format(
+                        increment, self.job.progress, self.job.total_progress
+                    )
+                )
+                # Only set the job progress to a max of the total progress
+                new_progress = self.job.total_progress
+            self.job.update_progress(new_progress, self.job.total_progress)
             if extra_data and isinstance(extra_data, dict):
                 self.job.update_metadata(**extra_data)
 

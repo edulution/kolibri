@@ -1,10 +1,6 @@
 <template>
 
-  <CoachAppBarPage
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="true"
-  >
+  <CoachAppBarPage>
 
     <KPageContainer>
       <ReportsResourceHeader :resource="resource" @previewClick="onPreviewClick" />

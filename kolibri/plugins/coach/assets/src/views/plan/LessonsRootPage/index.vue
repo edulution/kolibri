@@ -1,6 +1,6 @@
 <template>
 
-  <CoachAppBarPage :authorized="userIsAuthorized" authorizedRole="adminOrCoach" :showSubNav="true">
+  <CoachAppBarPage :showSubNav="true">
     <KPageContainer>
       <PlanHeader :activeTabId="PlanTabs.LESSONS" />
       <KTabsPanel
@@ -58,25 +58,38 @@
                   <Recipients
                     :groupNames="getRecipientNamesForLesson(lesson)"
                     :hasAssignments="
-                      lesson.lesson_assignments.length > 0 || lesson.learner_ids.length > 0
+                      lesson.assignments.length > 0 || lesson.learner_ids.length > 0
                     "
                   />
                 </td>
                 <td>
-                  <KSwitch
-                    name="toggle-lesson-visibility"
-                    label=""
-                    :checked="lesson.is_active"
-                    :value="lesson.is_active"
-                    @change="toggleModal(lesson)"
-                  />
+                  <div :style="{ height: '28px' }">
+                    <KTransition kind="component-fade-out-in">
+                      <KCircularLoader
+                        v-if="show(lesson.id, isUpdatingVisibility(lesson.id), 2000)"
+                        :key="`loader-${lesson.id}`"
+                        disableDefaultTransition
+                        :style="{ display: 'inline-block', marginLeft: '6px' }"
+                        :size="26"
+                      />
+                      <KSwitch
+                        v-else
+                        :key="`switch-${lesson.id}`"
+                        name="toggle-lesson-visibility"
+                        label=""
+                        :checked="lesson.active"
+                        :value="lesson.active"
+                        @change="toggleModal(lesson)"
+                      />
+                    </KTransition>
+                  </div>
                 </td>
               </tr>
             </transition-group>
           </template>
         </CoreTable>
 
-        <p v-if="!hasVisibleLessons">
+        <p v-if="showNoResultsLabel">
           {{ coreString('noResultsLabel') }}
         </p>
 
@@ -126,12 +139,8 @@
         >
           <AssignmentDetailsModal
             ref="detailsModal"
-            assignmentType="new_lesson"
-            :modalTitleErrorMessage="coachString('duplicateLessonTitleError')"
-            :submitErrorMessage="coachString('saveLessonError')"
-            :initialDescription="''"
-            :initialTitle="''"
-            :initialSelectedCollectionIds="[classId]"
+            assignmentType="lesson"
+            :assignment="{ assignments: [classId] }"
             :classId="classId"
             :groups="learnerGroups"
             :disabled="detailsModalIsDisabled"
@@ -148,6 +157,7 @@
 
 <script>
 
+  import Vue from 'vue';
   import { mapState, mapActions } from 'vuex';
   import { LessonResource } from 'kolibri.resources';
   import countBy from 'lodash/countBy';
@@ -159,6 +169,7 @@
   import CoreTable from 'kolibri.coreVue.components.CoreTable';
   import CatchErrors from 'kolibri.utils.CatchErrors';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
+  import useKShow from 'kolibri-design-system/lib/composables/useKShow';
   import bytesForHumans from 'kolibri.utils.bytesForHumans';
   import CoachAppBarPage from '../../CoachAppBarPage';
   import { LessonsPageNames } from '../../../constants/lessonsConstants';
@@ -179,8 +190,9 @@
     },
     mixins: [commonCoach, commonCoreStrings],
     setup() {
+      const { show } = useKShow();
       const { lessonsAreLoading } = useLessons();
-      return { lessonsAreLoading };
+      return { show, lessonsAreLoading };
     },
     data() {
       return {
@@ -194,6 +206,9 @@
         detailsModalIsDisabled: false,
         dontShowAgainChecked: false,
         learnOnlyDevicesExist: false,
+        // contains ids of lessons whose visibility
+        // status is currently being updated
+        updatingVisibilityLessons: {},
       };
     },
     computed: {
@@ -213,22 +228,34 @@
         }));
       },
       activeLessonCounts() {
-        return countBy(this.lessons, 'is_active');
+        return countBy(this.lessons, 'active');
       },
       newLessonRoute() {
         return { name: LessonsPageNames.LESSON_CREATION_ROOT };
       },
       hasVisibleLessons() {
-        return !(
-          !this.activeLessonCounts.true && this.filterSelection.value === 'filterLessonVisible'
-        );
+        return this.activeLessonCounts.true;
+      },
+      hasNonVisibleLessons() {
+        return this.activeLessonCounts.false;
+      },
+      showNoResultsLabel() {
+        if (!this.lessons.length) {
+          return false;
+        } else if (this.filterSelection.value === 'filterLessonVisible') {
+          return !this.hasVisibleLessons;
+        } else if (this.filterSelection.value === 'filterLessonNotVisible') {
+          return !this.hasNonVisibleLessons;
+        } else {
+          return false;
+        }
       },
       calcTotalSizeOfVisibleLessons() {
         if (this.lessons && this.lessons.length) {
           const sum = this.lessons
             .filter(
               // only include visible lessons
-              lesson => lesson.is_active
+              lesson => lesson.active
             )
             .reduce((acc, lesson) => {
               return acc + (lesson.size || 0);
@@ -250,9 +277,9 @@
       showLesson(lesson) {
         switch (this.filterSelection.value) {
           case 'filterLessonVisible':
-            return lesson.is_active;
+            return lesson.active;
           case 'filterLessonNotVisible':
-            return !lesson.is_active;
+            return !lesson.active;
           default:
             return true;
         }
@@ -286,29 +313,46 @@
         });
       },
       handleToggleVisibility(lesson) {
-        const newActiveState = !lesson.is_active;
+        const newActiveState = !lesson.active;
         const snackbarMessage = newActiveState
           ? this.coachString('lessonVisibleToLearnersLabel')
           : this.coachString('lessonNotVisibleToLearnersLabel');
-        const promise = LessonResource.saveModel({
+        this.manageModalVisibilityAndPreferences();
+
+        Vue.set(this.updatingVisibilityLessons, lesson.id, lesson.id);
+        return LessonResource.saveModel({
           id: lesson.id,
           data: {
-            is_active: newActiveState,
+            active: newActiveState,
           },
           exists: true,
-        });
-        this.manageModalVisibilityAndPreferences();
-        return promise.then(() => {
-          this.$store.dispatch('lessonsRoot/refreshClassLessons', this.$route.params.classId);
-          this.$store.dispatch('createSnackbar', snackbarMessage);
-        });
+        })
+          .then(() => {
+            return this.$store.dispatch(
+              'lessonsRoot/refreshClassLessons',
+              this.$route.params.classId
+            );
+          })
+          .then(() => {
+            Vue.delete(this.updatingVisibilityLessons, lesson.id);
+            // slightly delay to sync a bit better with the toggle loader
+            setTimeout(() => {
+              this.$store.dispatch('createSnackbar', snackbarMessage);
+            }, 1000);
+          })
+          .catch(() => {
+            Vue.delete(this.updatingVisibilityLessons, lesson.id);
+          });
+      },
+      isUpdatingVisibility(lessonId) {
+        return Object.keys(this.updatingVisibilityLessons).includes(lessonId);
       },
       toggleModal(lesson) {
         // has the user set their preferences to not have a modal confirmation?
         const hideModalConfirmation = Lockr.get(LESSON_VISIBILITY_MODAL_DISMISSED);
         this.activeLesson = lesson;
         if (!hideModalConfirmation && this.learnOnlyDevicesExist) {
-          if (lesson.is_active) {
+          if (lesson.active) {
             this.showLessonIsVisibleModal = false;
             this.showLessonIsNotVisibleModal = true;
           } else {

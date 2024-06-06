@@ -1,13 +1,8 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 import os
 import shutil
 
 from django.core.management.base import BaseCommand
-from six.moves import input
 
 from kolibri.utils import server
 from kolibri.utils.conf import KOLIBRI_HOME
@@ -23,8 +18,7 @@ class Command(BaseCommand):
             dest="command", help="The following subcommands are available."
         )
         movedir_subparser = subparsers.add_parser(
-            name="movedirectory",
-            cmd=self,
+            "movedirectory",
             help="Migrates the content to a specific folder defined by users.",
         )
         movedir_subparser.add_argument(

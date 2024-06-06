@@ -1,6 +1,6 @@
 /* eslint-disable */
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const resolve = require('resolve');
 const espree = require('espree');
 const escodegen = require('escodegen');
@@ -15,6 +15,8 @@ const ensureDist = require('./ensureDist');
  * requires contained therein, which include references to files that are not amenable to a vanilla
  * node js require - however, they are properly handled by our webpack build process.
  */
+
+const ecmaVersion = 2023;
 
 // Find the API specification file relative to this file.
 const specFilePath = path.resolve(
@@ -36,7 +38,7 @@ function specModule(filePath) {
   // Our strict linting rules should ensure that this regex suffices.
   const apiSpecFile = fs.readFileSync(filePath, { encoding: 'utf-8' });
 
-  const apiSpecTree = espree.parse(apiSpecFile, { sourceType: 'module', ecmaVersion: 2018 });
+  const apiSpecTree = espree.parse(apiSpecFile, { sourceType: 'module', ecmaVersion });
 
   const pathLookup = {};
 
@@ -152,7 +154,7 @@ function recurseAndCopySpecObject(specObj, targetPath) {
   const files = [];
 
   function parseJSDependencies(sourceContents, destinationFolder, sourceFolder) {
-    const sourceTree = espree.parse(sourceContents, { sourceType: 'module', ecmaVersion: 2018 });
+    const sourceTree = espree.parse(sourceContents, { sourceType: 'module', ecmaVersion });
     const importNodes = esquery.query(
       sourceTree,
       '[type=/(ImportDeclaration|ExportNamedDeclaration|ExportAllDeclaration)/]'

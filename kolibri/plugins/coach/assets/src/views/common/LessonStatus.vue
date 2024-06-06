@@ -21,8 +21,8 @@
           <KSwitch
             name="toggle-lesson-visibility"
             label=""
-            :checked="lesson.is_active"
-            :value="lesson.is_active"
+            :checked="lesson.active"
+            :value="lesson.active"
             @change="toggleModal(lesson)"
           />
         </KGridItem>
@@ -63,9 +63,10 @@
           {{ coachString('sizeLabel') }}
         </KGridItem>
         <KGridItem :layout12="layout12Value">
-          <p>
+          <p v-if="lesson.size">
             {{ bytesForHumans(lesson.size) }}
           </p>
+          <KEmptyPlaceholder v-else />
         </KGridItem>
       </div>
     </KGrid>
@@ -147,9 +148,7 @@
     },
     computed: {
       assignments() {
-        return this.lesson.lesson_assignments
-          ? this.lesson.lesson_assignments
-          : this.lesson.assignments;
+        return this.lesson.assignments;
       },
       layout12Label() {
         return { span: this.$isPrint ? 3 : 12 };
@@ -177,7 +176,7 @@
         });
       },
       handleToggleVisibility() {
-        const newActiveState = !this.lesson.is_active;
+        const newActiveState = !this.lesson.active;
         const snackbarMessage = newActiveState
           ? this.coachString('lessonVisibleToLearnersLabel')
           : this.coachString('lessonNotVisibleToLearnersLabel');
@@ -185,7 +184,7 @@
         const promise = LessonResource.saveModel({
           id: this.lesson.id,
           data: {
-            is_active: newActiveState,
+            active: newActiveState,
           },
           exists: true,
         });
@@ -203,7 +202,7 @@
         const hideModalConfirmation = Lockr.get(LESSON_VISIBILITY_MODAL_DISMISSED);
         this.activeLesson = lesson;
         if (!hideModalConfirmation && this.learnOnlyDevicesExist) {
-          if (lesson.is_active) {
+          if (lesson.active) {
             this.showLessonIsVisibleModal = false;
             this.showLessonIsNotVisibleModal = true;
           } else {

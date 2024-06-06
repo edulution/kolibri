@@ -10,7 +10,7 @@
           v-if="userIsMultiFacilityAdmin"
           :to="{
             name: facilityPageLinks.AllFacilitiesPage.name,
-            params: { subtopicName: 'FacilitiesConfigPage' }
+            params: { subtopicName: 'FacilityConfigPage' }
           }"
           icon="back"
           :text="coreString('changeLearningFacility')"
@@ -107,6 +107,7 @@
             <template #menu>
               <KDropdownMenu
                 :options="dropdownOption"
+                :constrainToScrollParent="false"
                 class="options-btn"
                 @select="handleSelect"
               />
@@ -186,23 +187,36 @@
         v-if="!isAppContext"
         style="margin-top: 8px;"
       >
-        <KButton
-          :primary="false"
-          appearance="flat-button"
-          :text="$tr('resetToDefaultSettings')"
-          name="reset-settings"
-          @click="showModal = true"
-        />
-
-        <KButton
-          :primary="true"
-          :class="windowIsSmall ? 'mobile-button' : ''"
-          appearance="raised-button"
-          :text="coreString('saveChangesAction')"
-          name="save-settings"
-          :disabled="!settingsHaveChanged"
-          @click="saveConfig()"
-        />
+        <KGrid>
+          <KGridItem
+            :layout12="{ span: 6 }"
+            :layout8="{ span: 4 }"
+            :layout4="{ span: 2 }"
+          >
+            <KButton
+              :primary="false"
+              appearance="flat-button"
+              :text="$tr('resetToDefaultSettings')"
+              name="reset-settings"
+              @click="showModal = true"
+            />
+          </KGridItem>
+          <KGridItem
+            :layout12="{ span: 6 }"
+            :layout8="{ span: 4 }"
+            :layout4="{ span: 2 }"
+          >
+            <KButton
+              :primary="true"
+              :class="windowIsSmall ? 'mobile-button' : ''"
+              appearance="raised-button"
+              :text="coreString('saveChangesAction')"
+              name="save-settings"
+              :disabled="!settingsHaveChanged"
+              @click="saveConfig()"
+            />
+          </KGridItem>
+        </KGrid>
       </KButtonGroup>
     </BottomAppBar>
   </FacilityAppBarPage>
@@ -213,7 +227,7 @@
 <script>
 
   import { mapActions, mapGetters, mapState } from 'vuex';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import { createTranslator } from 'kolibri.utils.i18n';
 
   import camelCase from 'lodash/camelCase';
@@ -273,7 +287,11 @@
       ChangePinModal,
       RemovePinModal,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return { windowIsSmall };
+    },
     data() {
       return {
         showModal: false,
@@ -526,7 +544,7 @@
   }
 
   .mobile-button {
-    margin-top: 16px;
+    margin-top: 0;
   }
 
   .facility-loader {

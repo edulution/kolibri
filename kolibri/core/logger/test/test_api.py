@@ -6,7 +6,6 @@ Also tests whether the users with permissions can create logs.
 import csv
 import datetime
 import os
-import sys
 import tempfile
 import uuid
 
@@ -40,6 +39,8 @@ from kolibri.utils.time_utils import local_now
 
 class ContentSummaryLogCSVExportTestCase(APITestCase):
 
+    databases = "__all__"
+
     fixtures = ["content_test.json"]
 
     @classmethod
@@ -72,11 +73,7 @@ class ContentSummaryLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for row in results[1:]:
             self.assertEqual(len(results[0]), len(row))
@@ -100,11 +97,7 @@ class ContentSummaryLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for row in results[1:]:
             self.assertEqual(len(results[0]), len(row))
@@ -136,11 +129,7 @@ class ContentSummaryLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for row in results[1:]:
             self.assertEqual(len(results[0]), len(row))
@@ -213,6 +202,7 @@ class ContentSummaryLogCSVExportTestCase(APITestCase):
 
 
 class ContentSessionLogCSVExportTestCase(APITestCase):
+    databases = "__all__"
 
     fixtures = ["content_test.json"]
 
@@ -246,11 +236,7 @@ class ContentSessionLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for row in results[1:]:
             self.assertEqual(len(results[0]), len(row))
@@ -274,11 +260,7 @@ class ContentSessionLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for row in results[1:]:
             self.assertEqual(len(results[0]), len(row))
@@ -310,11 +292,7 @@ class ContentSessionLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for row in results[1:]:
             self.assertEqual(len(results[0]), len(row))
@@ -335,11 +313,7 @@ class ContentSessionLogCSVExportTestCase(APITestCase):
             start_date=self.start_date,
             end_date=self.end_date,
         )
-        if sys.version_info[0] < 3:
-            csv_file = open(filepath, "rb")
-        else:
-            csv_file = open(filepath, "r", newline="")
-        with csv_file as f:
+        with open(filepath, "r", newline="") as f:
             results = list(csv.reader(f))
         for column_label in results[0]:
             self.assertNotEqual(column_label, labels["completion_timestamp"])

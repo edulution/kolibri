@@ -1,21 +1,23 @@
 <template>
 
   <div class="full-page">
-    <UiAlert
-      v-if="coreError"
-      :dismissible="false"
-      class="alert"
-      type="error"
+    <AppError v-if="coreError" :hideParagraphs="true">
+      <template #buttons>
+        <KButton
+          :text="coreString('startOverAction')"
+          @click="startOver"
+        />
+        <KButton
+          :primary="true"
+          :text="coreString('retryAction')"
+          @click="provisionDevice"
+        />
+      </template>
+    </AppError>
+    <main
+      v-else
+      class="content"
     >
-      <span>{{ coreError }}</span><br>
-      <KButton
-        v-if="restart"
-        appearance="basic-link"
-        :text="coreString('startOverAction')"
-        @click="startOver"
-      />
-    </UiAlert>
-    <main class="content">
       <KolibriLoadingSnippet />
       <h1 class="page-title">
         {{ $tr('pageTitle') }}
@@ -33,27 +35,23 @@
 
   import omitBy from 'lodash/omitBy';
   import get from 'lodash/get';
+  import AppError from 'kolibri-common/components/AppError';
   import { currentLanguage } from 'kolibri.utils.i18n';
   import { checkCapability } from 'kolibri.utils.appCapabilities';
   import redirectBrowser from 'kolibri.utils.redirectBrowser';
   import KolibriLoadingSnippet from 'kolibri.coreVue.components.KolibriLoadingSnippet';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
+  import { Presets } from 'kolibri.coreVue.vuex.constants';
   import urls from 'kolibri.urls';
   import client from 'kolibri.client';
   import Lockr from 'lockr';
-  import { DeviceTypePresets, UsePresets } from '../../constants';
+  import { DeviceTypePresets } from '../../constants';
 
   export default {
     name: 'SettingUpKolibri',
-    components: { UiAlert, KolibriLoadingSnippet },
+    components: { AppError, KolibriLoadingSnippet },
     inject: ['wizardService'],
     mixins: [commonCoreStrings],
-    data() {
-      return {
-        restart: false,
-      };
-    },
     computed: {
       coreError() {
         if (this.$store) {
@@ -120,9 +118,9 @@
       /** The data we will use to initialize the device during provisioning */
       deviceProvisioningData() {
         let superuser = null;
-        // We only need a superuser if we cannot get the OS user; null valued keys will be omitted
-        // in the eventual API call
-        if (!checkCapability('get_os_user')) {
+        // We need the superuser information unless the superuser will be created at login,
+        // based on the os user - this is only the case for on my own setup.
+        if (!(this.isOnMyOwnSetup && checkCapability('get_os_user'))) {
           // Here we see if we've set a firstImportedLodUser -- if they exist, they must be the
           // superuser as they were the first imported user.
           if (this.wizardContext('firstImportedLodUser')) {
@@ -146,7 +144,7 @@
           ...this.facilityData,
           superuser,
           settings: omitBy(settings, v => v === null),
-          preset: this.wizardContext('formalOrNonformal') || 'nonformal',
+          preset: this.presetValue,
           language_id: currentLanguage,
           device_name:
             this.wizardContext('deviceName') ||
@@ -154,7 +152,6 @@
             this.$tr('onMyOwnDeviceName', { name: get(superuser, 'full_name', '') }).slice(0, 50),
           allow_guest_access: Boolean(this.wizardContext('guestAccess')),
           is_provisioned: true,
-          os_user: checkCapability('get_os_user'),
           is_soud: this.wizardContext('fullOrLOD') === DeviceTypePresets.LOD,
         };
 
@@ -164,10 +161,20 @@
 
       /** Introspecting the machine via it's `state.context` properties */
       isOnMyOwnSetup() {
-        return this.wizardContext('onMyOwnOrGroup') == UsePresets.ON_MY_OWN;
+        return this.wizardContext('onMyOwnOrGroup') == Presets.PERSONAL;
+      },
+      presetValue() {
+        // this computed prop was to guard against a strange edge case where a mismatched
+        // preset was inadvertently being sent to the backend, where the values
+        // were not valid, including an incorrect fallback, and 'on my own' being sent as a value
+        if (this.isOnMyOwnSetup) {
+          return Presets.PERSONAL;
+        } else {
+          return this.wizardContext('formalOrNonformal');
+        }
       },
     },
-    mounted() {
+    created() {
       this.provisionDevice();
     },
     methods: {
@@ -180,6 +187,7 @@
         return this.wizardService.state.context[key];
       },
       provisionDevice() {
+        this.$store.dispatch('clearError');
         client({
           url: urls['kolibri:core:deviceprovision'](),
           method: 'POST',
@@ -187,14 +195,18 @@
         })
           .then(() => {
             const welcomeDismissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
+            const facilityImported = 'FACILITY_IS_IMPORTED';
             window.sessionStorage.setItem(welcomeDismissalKey, false);
+            window.sessionStorage.setItem(
+              facilityImported,
+              this.wizardContext('isImportedFacility')
+            );
 
             Lockr.rm('savedState'); // Clear out saved state machine
             redirectBrowser();
           })
           .catch(e => {
-            this.restart = e.response.status === 400;
-            this.$store.dispatch('handleApiError', e);
+            this.$store.dispatch('handleApiError', { error: e });
           });
       },
     },

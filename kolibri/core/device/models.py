@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.db.models import QuerySet
+from django.db.utils import IntegrityError
 from morango.models import UUIDField
 from morango.models.core import InstanceIDModel
 from morango.models.core import SyncSession
@@ -13,6 +14,11 @@ from morango.models.core import SyncSession
 from .utils import LANDING_PAGE_LEARN
 from .utils import LANDING_PAGE_SIGN_IN
 from kolibri.core.auth.constants import role_kinds
+from kolibri.core.auth.constants.demographics import custom_demographics_schema
+from kolibri.core.auth.constants.demographics import DescriptionTranslationValidator
+from kolibri.core.auth.constants.demographics import EnumValuesValidator
+from kolibri.core.auth.constants.demographics import LabelTranslationValidator
+from kolibri.core.auth.constants.demographics import UniqueIdsValidator
 from kolibri.core.auth.models import AbstractFacilityDataModel
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
@@ -21,7 +27,9 @@ from kolibri.core.auth.permissions.general import IsOwn
 from kolibri.core.device.utils import device_provisioned
 from kolibri.core.device.utils import get_device_setting
 from kolibri.core.fields import JSONField
+from kolibri.core.public.constants.user_sync_options import STALE_QUEUE_TIME
 from kolibri.core.utils.cache import process_cache as cache
+from kolibri.core.utils.lock import retry_on_db_lock
 from kolibri.core.utils.validators import JSON_Schema_Validator
 from kolibri.deployment.default.sqlite_db_names import SYNC_QUEUE
 from kolibri.plugins.app.utils import interface
@@ -60,11 +68,16 @@ class DeviceSettingsQuerySet(QuerySet):
 
 class DeviceSettingsManager(models.Manager.from_queryset(DeviceSettingsQuerySet)):
     def get(self, **kwargs):
-        if DEVICE_SETTINGS_CACHE_KEY not in cache:
+        model = None
+
+        # load from cache
+        if DEVICE_SETTINGS_CACHE_KEY in cache:
+            model = cache.get(DEVICE_SETTINGS_CACHE_KEY)
+
+        # ensure cached value is of correct type, otherwise allow .get to raise if not created
+        if not isinstance(model, DeviceSettings):
             model = super(DeviceSettingsManager, self).get(**kwargs)
             cache.set(DEVICE_SETTINGS_CACHE_KEY, model, 600)
-        else:
-            model = cache.get(DEVICE_SETTINGS_CACHE_KEY)
         return model
 
 
@@ -81,6 +94,9 @@ def app_is_enabled():
     return interface.enabled
 
 
+DEFAULT_DEMOGRAPHIC_FIELDS_KEY = "default_demographic_field_schema"
+
+
 # '"optional":True' is obsolete but needed while we keep using an
 # old json_schema_validator version compatible with python 2.7
 extra_settings_schema = {
@@ -91,6 +107,7 @@ extra_settings_schema = {
         "allow_learner_download_resources": {"type": "boolean", "optional": True},
         "set_limit_for_autodownload": {"type": "boolean", "optional": True},
         "limit_for_autodownload": {"type": "integer", "optional": True},
+        DEFAULT_DEMOGRAPHIC_FIELDS_KEY: custom_demographics_schema,
     },
     "required": [
         "allow_download_on_metered_connection",
@@ -148,7 +165,13 @@ class DeviceSettings(models.Model):
 
     extra_settings = JSONField(
         null=False,
-        validators=[JSON_Schema_Validator(extra_settings_schema)],
+        validators=[
+            JSON_Schema_Validator(extra_settings_schema),
+            UniqueIdsValidator(DEFAULT_DEMOGRAPHIC_FIELDS_KEY),
+            DescriptionTranslationValidator(DEFAULT_DEMOGRAPHIC_FIELDS_KEY),
+            EnumValuesValidator(DEFAULT_DEMOGRAPHIC_FIELDS_KEY),
+            LabelTranslationValidator(DEFAULT_DEMOGRAPHIC_FIELDS_KEY),
+        ],
         default=extra_settings_default_values,
     )
 
@@ -186,27 +209,21 @@ class DeviceSettings(models.Model):
         :param name: A str name of the `extra_settings` field
         :return: mixed
         """
-        return self.extra_settings.get(name, extra_settings_default_values[name])
+        try:
+            return self.extra_settings[name]
+        except KeyError:
+            return extra_settings_default_values.get(name)
 
-    @property
-    def allow_download_on_metered_connection(self):
-        return self._get_extra("allow_download_on_metered_connection")
+    def __getattribute__(self, name):
+        if name in extra_settings_schema["properties"]:
+            return self._get_extra(name)
+        return super(DeviceSettings, self).__getattribute__(name)
 
-    @property
-    def enable_automatic_download(self):
-        return self._get_extra("enable_automatic_download")
-
-    @property
-    def allow_learner_download_resources(self):
-        return self._get_extra("allow_learner_download_resources")
-
-    @property
-    def set_limit_for_autodownload(self):
-        return self._get_extra("set_limit_for_autodownload")
-
-    @property
-    def limit_for_autodownload(self):
-        return self._get_extra("limit_for_autodownload")
+    def __setattr__(self, name, value):
+        if name in extra_settings_schema["properties"]:
+            self.extra_settings[name] = value
+        else:
+            super(DeviceSettings, self).__setattr__(name, value)
 
 
 CONTENT_CACHE_KEY_CACHE_KEY = "content_cache_key"
@@ -290,6 +307,46 @@ class SQLiteLock(models.Model):
         super(SQLiteLock, self).save(*args, **kwargs)
 
 
+class SyncQueueStatus(ChoicesEnum):
+    Pending = "PENDING"
+    Queued = "QUEUED"
+    Ready = "READY"
+    Syncing = "SYNCING"
+    Stale = "STALE"
+    Ineligible = "INELIGIBLE"
+    Unavailable = "UNAVAILABLE"
+
+
+class SyncQueueQuerySet(QuerySet):
+    def annotate_score(self):
+        """
+        This method will annotate the queryset with a score that can be used to sort them in
+        priority order. The score is based on the time since the last successful sync, and the
+        time until the next rendezvous time.
+        """
+        return (
+            self.annotate(
+                # time_to_attempt is the number of seconds until the next rendezvous time,
+                # if the next attempt is in the future, then this will be positive,
+                # otherwise negative, which affects the score mathematically below
+                time_to_attempt=F("updated") + F("keep_alive") - time.time(),
+                # time_since_last_sync is the number of seconds since the last successful sync
+                time_since_last_sync=time.time() - F("last_sync"),
+            )
+            .annotate(
+                # so a record's score is promoted by up to half the sync interval if it has
+                # missed its rendezvous time
+                score=F("time_since_last_sync")
+                - F("time_to_attempt"),
+            )
+            .order_by("-score", "datetime")
+        )
+
+
+class SyncQueueManager(models.Manager.from_queryset(SyncQueueQuerySet)):
+    pass
+
+
 class SyncQueue(models.Model):
     """
     This class maintains the queue of the devices that try to sync
@@ -303,14 +360,95 @@ class SyncQueue(models.Model):
     updated = models.FloatField(default=time.time)
     # polling interval is 5 seconds by default
     keep_alive = models.FloatField(default=5.0)
+    # the epoch time of the last successful sync
+    last_sync = models.FloatField(null=True, blank=True)
+
+    status = models.CharField(
+        blank=False,
+        null=False,
+        max_length=20,
+        choices=SyncQueueStatus.choices(),
+        default=SyncQueueStatus.Pending,
+    )
+    sync_session_id = UUIDField(blank=True, null=True)
+    # number of failed attempts
+    attempts = models.IntegerField(default=0)
+
+    objects = SyncQueueManager()
+
+    @classmethod
+    def find_next_id_in_queue(cls):
+        """
+        This method will find the next device in the queue that is ready to sync
+        """
+        # find the next device that is ready to sync
+        return (
+            cls.objects.filter(status=SyncQueueStatus.Queued)
+            .annotate_score()
+            .values_list("id", flat=True)
+            .first()
+        )
 
     @classmethod
     def clean_stale(cls):
         """
-        This method will delete all the devices from the queue
-        with the expire time (in seconds) exhausted
+        This method will delete all the devices from the queue that have missed their
+        rendezvous time by more than STALE_QUEUE_TIME seconds, and will mark as stale
+        the devices that have missed their rendezvous time by more than half the sync
+        interval
         """
-        cls.objects.filter(updated__lte=time.time() - F("keep_alive") * 2).delete()
+        half_life = OPTIONS["Deployment"]["SYNC_INTERVAL"] / 2
+
+        # update records that have missed their rendezvous time by more than half the sync interval
+        cls.objects.filter(
+            updated__lt=time.time() - F("keep_alive") - half_life
+        ).update(status=SyncQueueStatus.Stale)
+
+        # delete records that have missed their rendezvous time by more than the stale queue time
+        cls.objects.filter(
+            updated__lt=time.time() - F("keep_alive") - STALE_QUEUE_TIME
+        ).delete()
+
+    @property
+    def is_active(self):
+        # if the status is stale, or if the device has made unsuccessful attempts
+        if (
+            self.status in (SyncQueueStatus.Stale, SyncQueueStatus.Unavailable)
+            or self.attempts > 0
+        ):
+            return False
+        # if the device has missed its rendezvous time by more than half the sync interval
+        half_life = OPTIONS["Deployment"]["SYNC_INTERVAL"] / 2
+        if self.attempt_at < (time.time() - half_life):
+            return False
+        return True
+
+    @property
+    def attempt_at(self):
+        """ Returns the time in seconds since epoch for the next rendezvous """
+        return self.updated + self.keep_alive
+
+    def set_next_attempt(self, seconds):
+        self.keep_alive = seconds
+        self.updated = time.time()
+
+    def reset_next_attempt(self, seconds):
+        self.attempts = 0
+        self.set_next_attempt(seconds)
+
+    def increment_and_backoff_next_attempt(self):
+        self.attempts += 1
+        # exponential backoff with min of 30 seconds
+        self.set_next_attempt(28 + 2 ** self.attempts)
+
+    # Saving these models seems unusually prone to hitting database locks, so we'll retry
+    # the save operation if we hit a lock.
+    @retry_on_db_lock
+    def save(self, *args, **kwargs):
+        return super(SyncQueue, self).save(*args, **kwargs)
+
+    class Meta:
+        unique_together = ("user_id", "instance_id")
 
 
 class SyncQueueRouter(object):
@@ -346,9 +484,8 @@ class SyncQueueRouter(object):
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         """Ensure that the SyncQueue models get created on the right database."""
-        if (
-            app_label == SyncQueue._meta.app_label
-            and model_name == SyncQueue._meta.model_name
+        if app_label == SyncQueue._meta.app_label and (
+            model_name == SyncQueue._meta.model_name or hints.get("is_syncqueue")
         ):
             # The SyncQueue model should be migrated only on the SYNC_QUEUE database.
             return db == SYNC_QUEUE
@@ -361,11 +498,19 @@ class SyncQueueRouter(object):
 
 
 class UserSyncStatus(models.Model):
-    user = models.ForeignKey(FacilityUser, on_delete=models.CASCADE, null=False)
+    user = models.OneToOneField(FacilityUser, on_delete=models.CASCADE, null=False)
+    # the last sync session
     sync_session = models.ForeignKey(
         SyncSession, on_delete=models.SET_NULL, null=True, blank=True
     )
-    queued = models.BooleanField(default=False)
+    status = models.CharField(
+        blank=False,
+        null=False,
+        max_length=20,
+        choices=SyncQueueStatus.choices(),
+        default=SyncQueueStatus.Pending,
+    )
+    updated = models.DateTimeField(auto_now=True)
 
     # users can read their own SyncStatus
     own = IsOwn(read_only=True)
@@ -380,6 +525,54 @@ class UserSyncStatus(models.Model):
         is_syncable=False,
     )
     permissions = own | role
+
+    @classmethod
+    def update_status(cls, user_id):
+        """
+        Updates the status of the user's sync status.
+        """
+        sync_queue_statuses = {
+            sq["status"]: sq["sync_session_id"]
+            for sq in SyncQueue.objects.filter(user_id=user_id)
+            .values("status", "sync_session_id")
+            .order_by("updated")
+        }
+
+        # order of priority for reporting statuses
+        priority_order = [
+            SyncQueueStatus.Syncing,
+            SyncQueueStatus.Ready,
+            SyncQueueStatus.Queued,
+            SyncQueueStatus.Pending,
+        ]
+        try:
+            new_status = next(
+                status for status in priority_order if status in sync_queue_statuses
+            )
+        except StopIteration:
+            # if none match, either all are ineligible or simply there are none
+            new_status = SyncQueueStatus.Unavailable
+
+        sync_session_id = sync_queue_statuses.get(new_status)
+
+        defaults = {"status": new_status}
+
+        if sync_session_id is not None:
+            # Only update the sync_session_id if it is not None, as otherwise we will be clearing
+            # historical data that is used by the sync status API
+            defaults["sync_session_id"] = sync_session_id
+        try:
+            cls.objects.update_or_create(user_id=user_id, defaults=defaults)
+        except IntegrityError:
+            # If we get an IntegrityError, it probably means that the user does not exist locally yet.
+            # This can happen if the user was created on the server and has not been synced down yet.
+            # In this case, we will just ignore the error as the sync status
+            # will be updated when the sync finalizes.
+            pass
+
+    @property
+    def queued(self):
+        return self.status == SyncQueueStatus.Queued
 
 
 class OSUser(models.Model):
@@ -421,7 +614,7 @@ class LearnerDeviceStatus(AbstractFacilityDataModel):
     morango_model_name = "learnerdevicestatus"
 
     instance_id = UUIDField(max_length=32, editable=False, null=False)
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         FacilityUser,
         on_delete=models.CASCADE,
         related_name="learner_device_status",
@@ -464,9 +657,7 @@ class LearnerDeviceStatus(AbstractFacilityDataModel):
         :param status: A status tuple of which to save, see `DeviceStatus`
         :type status: tuple(string, int)
         """
-        if get_device_setting(
-            "subset_of_users_device", default=not device_provisioned()
-        ):
+        if not device_provisioned() or get_device_setting("subset_of_users_device"):
             for user_id in FacilityUser.objects.all().values_list("id", flat=True):
                 cls.save_learner_status(user_id, status)
 
@@ -487,7 +678,7 @@ class LearnerDeviceStatus(AbstractFacilityDataModel):
         instance_model = InstanceIDModel.get_or_create_current_instance()[0]
 
         # in order to save a status, it must be defined
-        if not any(status == choice for _, choice in DeviceStatus.choices()):
+        if not any(status == choice for choice, _ in DeviceStatus.choices()):
             raise ValueError("Value '{}' is not a valid status".format(status[0]))
 
         cls.objects.update_or_create(
@@ -503,9 +694,7 @@ class LearnerDeviceStatus(AbstractFacilityDataModel):
         provisioned as a `subset_of_users_device`
         :return:
         """
-        if get_device_setting(
-            "subset_of_users_device", default=not device_provisioned()
-        ):
+        if not device_provisioned() or get_device_setting("subset_of_users_device"):
             for user_id in FacilityUser.objects.all().values_list("id", flat=True):
                 cls.clear_learner_status(user_id)
 

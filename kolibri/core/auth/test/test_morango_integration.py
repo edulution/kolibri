@@ -8,6 +8,7 @@ import uuid
 
 import requests
 from django.core.management import call_command
+from django.db import connections
 from django.test import TestCase
 from django.test import TransactionTestCase
 from django.utils import timezone
@@ -78,11 +79,28 @@ class DateTimeTZFieldTestCase(TransactionTestCase):
             self.fail(e.message)
 
 
+class MultipleServerTestCase(TestCase):
+    """
+    A test case to do special teardown handling to prevent errors from our additional databases.
+    """
+
+    @classmethod
+    def _remove_databases_failures(cls):
+        for alias in connections:
+            if alias in cls.databases:
+                continue
+            connection = connections[alias]
+            for name, _ in cls._disallowed_connection_methods:
+                method = getattr(connection, name)
+                if hasattr(method, "wrapped"):
+                    setattr(connection, name, method.wrapped)
+
+
 @unittest.skipIf(
     not os.environ.get("INTEGRATION_TEST"),
     "This test will only be run during integration testing.",
 )
-class CertificateAuthenticationTestCase(TestCase):
+class CertificateAuthenticationTestCase(MultipleServerTestCase):
     @multiple_kolibri_servers(1)
     def test_multi_facility_authentication(self, servers):
         """
@@ -218,7 +236,7 @@ class CertificateAuthenticationTestCase(TestCase):
     not os.environ.get("INTEGRATION_TEST"),
     "This test will only be run during integration testing.",
 )
-class EcosystemTestCase(TestCase):
+class EcosystemTestCase(MultipleServerTestCase):
     """
     Where possible this test case uses the using kwarg with the db alias in order
     to save models to the write DB. Unfortunately, because of an internal issue with
@@ -383,6 +401,7 @@ class EcosystemTestCase(TestCase):
         s1.create_model(Role, collection_id=fac.id, user_id=alk_user.id, kind="admin")
         s0.create_model(Role, collection_id=fac.id, user_id=alk_user.id, kind="admin")
         s1.sync(s0, facility)
+        s2.sync(s0, facility)
         role = Role.objects.using(s1.db_alias).get(user=alk_user)
         admin_role = Store.objects.using(s1.db_alias).get(id=role.id)
         self.assertTrue(admin_role.conflicting_serialized_data)
@@ -396,6 +415,41 @@ class EcosystemTestCase(TestCase):
             .exists()
         )
         self.assertTrue(Store.objects.using(s1.db_alias).get(id=alk_user.id).deleted)
+
+        # assert deleted object is transitively propagated
+        s2.sync(s1, facility)
+        self.assertFalse(
+            FacilityUser.objects.using(s2.db_alias)
+            .filter(username="Antemblowind")
+            .exists()
+        )
+        self.assertTrue(Store.objects.using(s2.db_alias).get(id=alk_user.id).deleted)
+
+        # assert deletion takes priority over update
+        alk_user = FacilityUser.objects.using(s0.db_alias).create(
+            username="Antemblowind", facility=facility
+        )
+        # Sync to both devices
+        s1.sync(s0, facility)
+        s2.sync(s0, facility)
+
+        # delete on s0
+        s0.delete_model(FacilityUser, id=alk_user.id)
+        # update on s1
+        s1.update_model(FacilityUser, alk_user.id, username="Antemblowind2")
+        # Sync deletion to s2
+        s2.sync(s0, facility)
+        self.assertFalse(
+            FacilityUser.objects.using(s2.db_alias).filter(id=alk_user.id).exists()
+        )
+        # Sync update to s2
+        s2.sync(s1, facility)
+        self.assertFalse(
+            FacilityUser.objects.using(s2.db_alias).filter(id=alk_user.id).exists()
+        )
+        self.assertFalse(
+            FacilityUser.objects.using(s1.db_alias).filter(id=alk_user.id).exists()
+        )
 
         # # role deletion and re-creation
         # Change roles for users
@@ -464,7 +518,13 @@ class EcosystemTestCase(TestCase):
             Exam,
             title=exam_title,
             question_count=1,
-            question_sources=["a"],
+            question_sources=[
+                {
+                    "exercise_id": uuid.uuid4().hex,
+                    "question_id": uuid.uuid4().hex,
+                    "title": "a",
+                }
+            ],
             collection_id=classroom_id,
             creator_id=alto_user.id,
             active=True,
@@ -547,7 +607,7 @@ class EcosystemTestCase(TestCase):
     not os.environ.get("INTEGRATION_TEST"),
     "This test will only be run during integration testing.",
 )
-class EcosystemSingleUserTestCase(TestCase):
+class EcosystemSingleUserTestCase(MultipleServerTestCase):
     @multiple_kolibri_servers(3)
     def test_single_user_sync(self, servers):
 
@@ -740,7 +800,7 @@ class EcosystemSingleUserTestCase(TestCase):
     not os.environ.get("INTEGRATION_TEST"),
     "This test will only be run during integration testing.",
 )
-class EcosystemSingleUserAssignmentTestCase(TestCase):
+class EcosystemSingleUserAssignmentTestCase(MultipleServerTestCase):
     @multiple_kolibri_servers(3)
     def test_single_user_assignment_sync(self, servers):
         """
@@ -841,6 +901,22 @@ class EcosystemSingleUserAssignmentTestCase(TestCase):
                 self.assert_existence(
                     self.tablet, kind, assignment_id, should_exist=False
                 )
+                if disable_assignment == self.deactivate:
+                    # If we're deactivating the assignment, try reactivating it to check that we
+                    # can make it active again
+                    self.set_active_state(self.laptop_a, kind, assignment_id, True)
+                    self.sync_full_facility_servers()
+                    self.assert_existence(
+                        self.tablet, kind, assignment_id, should_exist=False
+                    )
+                    self.assert_existence(
+                        self.laptop_b, kind, assignment_id, should_exist=True
+                    )
+                    self.sync_single_user(self.laptop_a)
+                    # import IPython; IPython.embed()
+                    self.assert_existence(
+                        self.tablet, kind, assignment_id, should_exist=True
+                    )
 
         # Create exam on Laptop A, single-user sync to tablet, then modify exam on Laptop A and
         # single-user sync again to check that "updating" works
@@ -951,6 +1027,69 @@ class EcosystemSingleUserAssignmentTestCase(TestCase):
         )
         assert assignment_t.lesson.title == "Bee Boo"
 
+        # START BUG 11845
+        # https://github.com/learningequality/kolibri/pull/11845
+        # Create a lesson and exam that is assigned to the classroom and also to the user
+        # through another assignment, such as ad hoc or learner group
+        self.laptop_a.create_model(
+            LearnerGroup,
+            parent_id=self.classroom.id,
+        )
+        learner_group_11845 = LearnerGroup.objects.using(self.laptop_a.db_alias).get(
+            parent_id=self.classroom.id
+        )
+        self.laptop_a.create_model(
+            Membership, user_id=self.learner.id, collection_id=learner_group_11845.id
+        )
+        classroom_lesson_11845 = LessonAssignment.objects.using(
+            self.laptop_a.db_alias
+        ).get(id=self.create_assignment("lesson"))
+        self.laptop_a.create_model(
+            LessonAssignment,
+            lesson_id=classroom_lesson_11845.lesson_id,
+            collection_id=learner_group_11845.id,
+            assigned_by_id=self.teacher.id,
+        )
+        group_lesson_11845 = LessonAssignment.objects.using(self.laptop_a.db_alias).get(
+            lesson_id=classroom_lesson_11845.lesson_id,
+            collection_id=learner_group_11845.id,
+        )
+        # not failing during sync is part proof enough that the bug is fixed
+        self.sync_single_user(self.laptop_a)
+        # Check that the lesson is assigned to the classroom and the learner group
+        self.assert_existence(
+            self.tablet, "lesson", classroom_lesson_11845.id, should_exist=True
+        )
+        self.assert_existence(
+            self.tablet, "lesson", group_lesson_11845.id, should_exist=False
+        )
+
+        # == NOW EXAMS ==
+
+        classroom_exam_11845 = ExamAssignment.objects.using(self.laptop_a.db_alias).get(
+            id=self.create_assignment("exam")
+        )
+        self.laptop_a.create_model(
+            ExamAssignment,
+            exam_id=classroom_exam_11845.exam_id,
+            collection_id=learner_group_11845.id,
+            assigned_by_id=self.teacher.id,
+        )
+        group_exam_11845 = ExamAssignment.objects.using(self.laptop_a.db_alias).get(
+            exam_id=classroom_exam_11845.exam_id,
+            collection_id=learner_group_11845.id,
+        )
+        # not failing during sync is part proof enough that the bug is fixed
+        self.sync_single_user(self.laptop_a)
+        # Check that the exam is assigned to the classroom and the learner group
+        self.assert_existence(
+            self.tablet, "exam", classroom_exam_11845.id, should_exist=True
+        )
+        self.assert_existence(
+            self.tablet, "exam", group_exam_11845.id, should_exist=False
+        )
+        # END BUG 11845
+
         # The morango dirty bits should not be set on exams, lessons, and assignments on the tablet,
         # since we never want these "ghost" copies to sync back out to anywhere else
         assert (
@@ -1018,7 +1157,13 @@ class EcosystemSingleUserAssignmentTestCase(TestCase):
                 Exam,
                 title=title,
                 question_count=1,
-                question_sources=["a"],
+                question_sources=[
+                    {
+                        "exercise_id": uuid.uuid4().hex,
+                        "question_id": uuid.uuid4().hex,
+                        "title": "a",
+                    }
+                ],
                 collection_id=self.classroom.id,
                 creator_id=self.teacher.id,
                 active=True,
@@ -1034,7 +1179,13 @@ class EcosystemSingleUserAssignmentTestCase(TestCase):
             self.laptop_a.create_model(
                 Lesson,
                 title=title,
-                resources=["a"],
+                resources=[
+                    {
+                        "contentnode_id": uuid.uuid4().hex,
+                        "content_id": uuid.uuid4().hex,
+                        "channel_id": uuid.uuid4().hex,
+                    }
+                ],
                 collection_id=self.classroom.id,
                 created_by_id=self.teacher.id,
                 is_active=True,
@@ -1109,7 +1260,7 @@ class EcosystemSingleUserAssignmentTestCase(TestCase):
     not os.environ.get("INTEGRATION_TEST"),
     "This test will only be run during integration testing.",
 )
-class SingleUserSyncRegressionsTestCase(TestCase):
+class SingleUserSyncRegressionsTestCase(MultipleServerTestCase):
     @multiple_kolibri_servers(2)
     def test_facility_user_conflict_syncing_from_tablet(self, servers):
         self._test_facility_user_conflict(servers, True)

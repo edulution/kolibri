@@ -42,7 +42,7 @@
       :allowDownloads="allowDownloads"
       data-test="search-results-card-grid"
       :currentCardViewStyle="currentCardViewStyle"
-      :gridType="1"
+      :gridType="gridType"
       @openCopiesModal="copies => displayedCopies = copies"
       @toggleInfoPanel="$emit('setSidePanelMetadataContent', $event)"
     />
@@ -60,7 +60,7 @@
     <CopiesModal
       v-if="displayedCopies.length"
       :copies="displayedCopies"
-      @submit="displayedCopies = []"
+      @closeModal="displayedCopies = []"
     />
   </div>
 
@@ -70,7 +70,7 @@
 <script>
 
   import { ref } from 'kolibri.lib.vueCompositionApi';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import CopiesModal from './CopiesModal';
   import SearchChips from './SearchChips';
@@ -83,14 +83,15 @@
       LibraryAndChannelBrowserMainContent,
       SearchChips,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
     setup() {
       const sidePanelContent = ref(null);
       const toggleInfoPanel = content => (sidePanelContent.value = content);
-
+      const { windowIsSmall } = useKResponsiveWindow();
       return {
         sidePanelContent,
         toggleInfoPanel,
+        windowIsSmall,
       };
     },
     props: {
@@ -143,6 +144,11 @@
       return {
         displayedCopies: [],
       };
+    },
+    computed: {
+      gridType() {
+        return this.windowBreakpoint > 6 ? 2 : 1;
+      },
     },
     methods: {
       toggleCardView(value) {

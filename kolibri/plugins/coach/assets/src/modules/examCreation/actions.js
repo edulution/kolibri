@@ -3,7 +3,6 @@ import uniq from 'lodash/uniq';
 import unionBy from 'lodash/unionBy';
 import union from 'lodash/union';
 import shuffled from 'kolibri.utils.shuffled';
-import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
 import { ContentNodeResource, ContentNodeSearchResource } from 'kolibri.resources';
 import { getContentNodeThumbnail } from 'kolibri.utils.contentNode';
 import router from 'kolibri.coreVue.router';
@@ -11,7 +10,6 @@ import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
 import { PageNames } from '../../constants';
 import { MAX_QUESTIONS } from '../../constants/examConstants';
 import { createExam } from '../examShared/exams';
-import selectQuestions from './selectQuestions';
 
 export function resetExamCreationState(store) {
   store.commit('RESET_STATE');
@@ -216,14 +214,17 @@ export function updateSelectedQuestions(store) {
       contentNodes.forEach(exercise => {
         exercises[exercise.id] = exercise;
       });
+      // TODO This file needs to be cleaned up when updates to quiz management are complete -- this
+      // will be removed altogether so just no-op for now is ok
+      const doNothing = () => null;
       const availableExercises = exerciseIds.filter(id => exercises[id]);
       const exerciseTitles = availableExercises.map(id => exercises[id].title);
-      const questionIdArrays = availableExercises.map(
-        id => assessmentMetaDataState(exercises[id]).assessmentIds
+      const questionIdArrays = availableExercises.map(id =>
+        exercises[id].assessmentmetadata ? exercises[id].assessmentmetadata.assessment_item_ids : []
       );
       store.commit(
         'SET_SELECTED_QUESTIONS',
-        selectQuestions(
+        doNothing(
           store.state.numberOfQuestions,
           availableExercises,
           exerciseTitles,

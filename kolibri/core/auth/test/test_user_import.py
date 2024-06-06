@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import csv
 import os
 import tempfile
@@ -152,6 +148,8 @@ class UserImportCommandTestCase(TestCase):
     """
     Tests for 'kolibri manage importusers' command.
     """
+
+    databases = "__all__"
 
     @classmethod
     def setUpClass(self):

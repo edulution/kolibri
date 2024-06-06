@@ -9,16 +9,16 @@ import logging
 import os
 import sys
 from functools import update_wrapper
+from urllib.parse import urlparse
+from urllib.parse import urlunparse
 
 from configobj import ConfigObj
 from configobj import flatten_errors
 from configobj import get_extra_values
 from django.utils.functional import SimpleLazyObject
 from django.utils.module_loading import import_string
-from django.utils.six import string_types
-from six.moves.urllib.parse import urlparse
-from six.moves.urllib.parse import urlunparse
 from validate import is_boolean
+from validate import is_option
 from validate import Validator
 from validate import VdtTypeError
 from validate import VdtValueError
@@ -132,7 +132,7 @@ def _process_list(value, separator=","):
     if not isinstance(value, list):
         if not value:
             value = []
-        elif isinstance(value, string_types):
+        elif isinstance(value, str):
             value = value.split(separator)
         else:
             value = [value]
@@ -176,7 +176,7 @@ def language_list(value):
 def path(value):
     from kolibri.utils.conf import KOLIBRI_HOME
 
-    if not isinstance(value, string_types):
+    if not isinstance(value, str):
         raise VdtValueError(repr(value))
     # Allow for blank paths
     if value:
@@ -190,7 +190,7 @@ def path_list(value):
     Check that the supplied value is a semicolon-delimited list of paths.
     Note: we do not guarantee that these paths all currently exist.
     """
-    if isinstance(value, string_types):
+    if isinstance(value, str):
         value = value.split(";")
 
     out = []
@@ -248,7 +248,7 @@ def validate_bytes(value):
 
 
 def url_prefix(value):
-    if not isinstance(value, string_types):
+    if not isinstance(value, str):
         raise VdtValueError(value)
     return value.lstrip("/").rstrip("/") + "/"
 
@@ -269,6 +269,28 @@ def multiprocess_bool(value):
         return True
     except ImportError:
         return False
+
+
+def cache_option(value):
+    """
+    Validate the cache options.
+    Do this by checking it's an allowed option, and also that redis cache
+    can be imported properly on this platform.
+    """
+    value = is_option(value, "memory", "redis")
+    try:
+        if value == "redis":
+            # Check that we can properly import our RedisCache
+            # implementation, to ensure that we can use it.
+            # Also ensure that the redis package is installed.
+            from kolibri.core.utils.cache import RedisCache  # noqa
+            import redis  # noqa
+        return value
+    except ImportError:
+        logger.error(
+            "Redis cache backend is not available, are Redis packages installed?"
+        )
+        raise VdtValueError(value)
 
 
 class LazyImportFunction(object):
@@ -301,7 +323,7 @@ def lazy_import_callback(value):
     is internal to Kolibri, and also because the module may not be available
     in some contexts.
     """
-    if not isinstance(value, string_types):
+    if not isinstance(value, str):
         raise VdtValueError(value)
     try:
         # Check that the string is at least parseable as a module name
@@ -339,8 +361,7 @@ def lazy_import_callback_list(value):
 base_option_spec = {
     "Cache": {
         "CACHE_BACKEND": {
-            "type": "option",
-            "options": ("memory", "redis"),
+            "type": "cache_option",
             "default": "memory",
             "description": """
                 Which backend to use for the main cache - if 'memory' is selected, then for most cache operations,
@@ -403,6 +424,16 @@ base_option_spec = {
             ),
             "default": "",
             "description": "Eviction policy to use when using Redis for caching, Redis only.",
+        },
+        "STREAMED_FILE_CACHE_SIZE": {
+            "type": "bytes",
+            "default": "500MB",
+            "description": """
+                Disk space to be used for caching streamed files. This is used for caching files that are
+                being streamed from remote libraries, if these files are later imported, these should be cleaned up,
+                and will no longer count to this cache size.
+                Value can either be a number suffixed with a unit (e.g. MB, GB, TB) or an integer number of bytes.
+            """,
         },
     },
     "Database": {
@@ -706,6 +737,7 @@ def _get_validator():
             "url_prefix": url_prefix,
             "bytes": validate_bytes,
             "multiprocess_bool": multiprocess_bool,
+            "cache_option": cache_option,
             "lazy_import_callback_list": lazy_import_callback_list,
         }
     )
@@ -981,6 +1013,12 @@ def generate_empty_options_file(ini_filename="options.ini"):
     # Generate an options.ini file inside the KOLIBRI_HOME as default placeholder config
 
     conf = read_options_file(ini_filename=ini_filename)
+
+    for section, opts in option_spec.items():
+        for optname, attrs in opts.items():
+            for envvar in attrs.get("envvars", []):
+                if envvar in os.environ:
+                    conf[section].pop(optname, None)
 
     comments = None
 

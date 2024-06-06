@@ -4,10 +4,6 @@
     :authorized="userIsAuthorized"
     authorizedRole="registeredUser"
   >
-    <template #sub-nav>
-      <DeviceTopNav />
-    </template>
-
     <transition name="delay-entry">
       <PinAuthenticationModal
         v-if="showModal && authenticateWithPin"
@@ -16,12 +12,7 @@
       />
     </transition>
 
-    <transition name="delay-entry">
-      <PostSetupModalGroup
-        v-if="welcomeModalVisible"
-        @cancel="hideWelcomeModal"
-      />
-    </transition>
+
 
     <router-view />
   </NotificationsRoot>
@@ -40,17 +31,14 @@
   import redirectBrowser from 'kolibri.utils.redirectBrowser';
   import urls from 'kolibri.urls';
   import { PageNames } from '../constants';
-  import PostSetupModalGroup from './PostSetupModalGroup';
+
   import PinAuthenticationModal from './PinAuthenticationModal';
   import plugin_data from 'plugin_data';
-
-  const welcomeDismissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
 
   export default {
     name: 'DeviceIndex',
     components: {
       NotificationsRoot,
-      PostSetupModalGroup,
       PinAuthenticationModal,
     },
     mixins: [commonCoreStrings],
@@ -63,9 +51,6 @@
     computed: {
       ...mapGetters(['isUserLoggedIn', 'userFacilityId']),
       ...mapState(['authenticateWithPin', 'grantPluginAccess']),
-      ...mapState({
-        welcomeModalVisibleState: 'welcomeModalVisible',
-      }),
       facilities() {
         return this.$store.state.core.facilities;
       },
@@ -80,12 +65,6 @@
         }
         return (
           (plugin_data.allowGuestAccess && this.$store.getters.allowAccess) || this.isUserLoggedIn
-        );
-      },
-      welcomeModalVisible() {
-        return (
-          this.welcomeModalVisibleState &&
-          window.sessionStorage.getItem(welcomeDismissalKey) !== 'true'
         );
       },
       pageName() {
@@ -111,10 +90,6 @@
       },
     },
     methods: {
-      hideWelcomeModal() {
-        window.sessionStorage.setItem(welcomeDismissalKey, true);
-        this.$store.commit('SET_WELCOME_MODAL_VISIBLE', false);
-      },
       closePinModal() {
         redirectBrowser(urls['kolibri:kolibri.plugins.learn:learn']());
         return (this.showModal = false);

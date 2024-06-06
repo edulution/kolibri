@@ -17,11 +17,13 @@
       />
     </template>
 
-    <template
-      v-if="!deviceId"
-      #subNav
-    >
-      <LearnTopNav ref="topNav" />
+    <template #storageNotif>
+      <div
+        v-if="page === 'AppBarPage'"
+        aria-live="polite"
+      >
+        <StorageNotification :showBanner="showStorageNotification" />
+      </div>
     </template>
 
     <slot></slot>
@@ -36,16 +38,17 @@
   import AppBarPage from 'kolibri.coreVue.components.AppBarPage';
   import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import LearnTopNav from './LearnTopNav';
+  import { LearnerDeviceStatus } from 'kolibri.coreVue.vuex.constants';
   import DeviceConnectionStatus from './DeviceConnectionStatus.vue';
+  import StorageNotification from './StorageNotification';
 
   export default {
     name: 'LearnAppBarPage',
     components: {
       AppBarPage,
       ImmersivePage,
-      LearnTopNav,
       DeviceConnectionStatus,
+      StorageNotification,
     },
     mixins: [commonCoreStrings],
 
@@ -77,6 +80,9 @@
     computed: {
       page() {
         return this.deviceId ? 'ImmersivePage' : 'AppBarPage';
+      },
+      showStorageNotification() {
+        return this.userDeviceStatus === LearnerDeviceStatus.INSUFFICIENT_STORAGE;
       },
     },
   };

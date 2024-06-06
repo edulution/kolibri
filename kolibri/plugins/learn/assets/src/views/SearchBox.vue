@@ -9,7 +9,7 @@
       class="search-box-row"
       :style="{
         backgroundColor: $themeTokens.surface,
-        borderColor: $themePalette.grey.v_300,
+        borderColor: $themePalette.grey.v_400,
         fontSize: '16px',
       }"
     >
@@ -59,7 +59,7 @@
 <script>
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
+  import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
 
   export default {
     name: 'SearchBox',
@@ -188,6 +188,11 @@
     // removes the IE clear button
     &::-ms-clear {
       display: none;
+    }
+
+    // removes the Chrome clear button
+    &::-webkit-search-cancel-button {
+      appearance: none;
     }
   }
 

@@ -9,6 +9,7 @@ import sys
 from datetime import datetime
 
 import django
+import sphinx_rtd_theme
 from django.utils.encoding import force_text
 from django.utils.html import strip_tags
 
@@ -79,7 +80,7 @@ def process_docstring(app, what, name, obj, options, lines):
 
             # Add the field's type to the docstring
             if isinstance(field, models.ForeignKey):
-                to = field.rel.to
+                to = field.remote_field.model
                 lines.append(
                     u":type %s: %s to :class:`~%s`"
                     % (field.attname, type(field).__name__, to)
@@ -135,15 +136,9 @@ pygments_style = "sphinx"
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "default"
-on_rtd = os.environ.get("READTHEDOCS", None) == "True"
 
-
-if not on_rtd:  # only import and set the theme if we're building docs locally
-    import sphinx_rtd_theme
-
-    html_theme = "sphinx_rtd_theme"
-    html_theme_path = [".", sphinx_rtd_theme.get_html_theme_path()]
+html_theme = "sphinx_rtd_theme"
+html_theme_path = [".", sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -167,7 +162,7 @@ html_logo = "logo.png"
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = None
+html_favicon = "logo.ico"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -194,7 +189,7 @@ def setup(app):
     # Register the docstring processor with sphinx
     app.connect("autodoc-process-docstring", process_docstring)
     # Add our custom CSS overrides
-    app.add_stylesheet("theme_overrides.css")
+    app.add_css_file("theme_overrides.css")
 
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,

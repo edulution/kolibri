@@ -365,10 +365,9 @@ const coachStrings = createTranslator('CommonCoachStrings', {
     message: 'There was a problem saving this lesson',
     context: 'Error message.',
   },
-  duplicateLessonTitleError: {
-    message: 'A lesson with that name already exists',
-    context:
-      "Appears if the coach creates a lesson that has the same name as one that's already created.",
+  saveQuizError: {
+    message: 'There was a problem saving this quiz',
+    context: 'Error message.',
   },
 
   // empty states
@@ -602,6 +601,10 @@ const coachStrings = createTranslator('CommonCoachStrings', {
       'Learner improved at {value, number, integer} {value, plural, one {question} other {questions}}',
     context:
       'Indicates to the coach how many questions the learner answered correctly compared to the previous attempt',
+  },
+  coachReportsLesson: {
+    message: 'Report lesson',
+    context: 'Labels the Reports > Lesson tab for screen reader users',
   },
 });
 

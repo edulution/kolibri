@@ -1,8 +1,10 @@
 import uuid
 
+from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from morango.models import UUIDField
 
 from kolibri.core.auth.models import FacilityUser
 from kolibri.core.auth.permissions.general import IsOwn
@@ -100,6 +102,18 @@ class NetworkLocation(models.Model):
     # Determines whether device is local or on the internet
     is_local = models.BooleanField(default=False)
 
+    def __init__(self, *args, **kwargs):
+        super(NetworkLocation, self).__init__(*args, **kwargs)
+        self._set_fields_for_type()
+
+    def save(self, *args, **kwargs):
+        self._set_fields_for_type()
+        return super(NetworkLocation, self).save(*args, **kwargs)
+
+    def _set_fields_for_type(self):
+        """Abstract method to set fields for type"""
+        pass
+
     @property
     def since_last_accessed(self):
         """
@@ -132,12 +146,16 @@ class NetworkLocation(models.Model):
     def reserved(self):
         return self.location_type == LocationTypes.Reserved
 
+    @property
+    def is_kolibri(self):
+        return self.application == "kolibri"
+
     @classmethod
     def has_field(cls, field):
         try:
             cls._meta.get_field(field)
             return True
-        except models.FieldDoesNotExist:
+        except FieldDoesNotExist:
             return False
 
     def matches_version(self, version):
@@ -160,12 +178,11 @@ class StaticNetworkLocationManager(models.Manager):
 class StaticNetworkLocation(NetworkLocation):
     objects = StaticNetworkLocationManager()
 
+    def _set_fields_for_type(self):
+        self.location_type = LocationTypes.Static
+
     class Meta:
         proxy = True
-
-    def save(self, *args, **kwargs):
-        self.location_type = LocationTypes.Static
-        return super(StaticNetworkLocation, self).save(*args, **kwargs)
 
 
 class DynamicNetworkLocationManager(models.Manager):
@@ -188,13 +205,14 @@ class DynamicNetworkLocationManager(models.Manager):
 class DynamicNetworkLocation(NetworkLocation):
     objects = DynamicNetworkLocationManager()
 
+    def _set_fields_for_type(self):
+        self.location_type = LocationTypes.Dynamic
+        self.is_local = True  # all dynamic locations are local
+
     class Meta:
         proxy = True
 
     def save(self, *args, **kwargs):
-        self.location_type = LocationTypes.Dynamic
-        self.is_local = True
-
         if self.id and self.instance_id and self.id != self.instance_id:
             raise ValidationError(
                 {"instance_id": "`instance_id` and `id` must be the same"}
@@ -259,9 +277,8 @@ class NetworkLocationRouter(object):
 
 class PinnedDevice(models.Model):
 
-    id = models.UUIDField(primary_key=True, max_length=36, default=_uuid_string)
-    instance_id = models.UUIDField(blank=False)
-    user = models.ForeignKey(FacilityUser, blank=False)
+    instance_id = UUIDField(blank=False)
+    user = models.ForeignKey(FacilityUser, blank=False, on_delete=models.CASCADE)
     created = models.DateTimeField(default=timezone.now, db_index=True)
 
     permissions = IsOwn()

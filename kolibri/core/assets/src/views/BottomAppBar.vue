@@ -15,11 +15,16 @@
 
 <script>
 
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
 
   export default {
     name: 'BottomAppBar',
-    mixins: [responsiveWindowMixin],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsSmall,
+      };
+    },
   };
 
 </script>
@@ -47,7 +52,6 @@
   }
 
   .bottom-sm {
-    height: auto;
     min-height: 72px;
   }
 

@@ -28,17 +28,30 @@
         {{ $tr('recent') }}
       </h2>
       <LibraryAndChannelBrowserMainContent
-        :contents="resumableContentNodes"
+        :contents="contentCardsToDisplay"
         data-test="resumable-content-card-grid"
+        class="resumable-content-card-grid"
         :currentCardViewStyle="currentCardViewStyle"
-        :gridType="1"
+        :gridType="gridType"
         @openCopiesModal="copies => displayedCopies = copies"
         @toggleInfoPanel="$emit('setSidePanelMetadataContent', $event)"
       />
     </div>
+
+    <!-- if all items in initial backend response are not already being shown -->
     <KButton
-      v-if="(moreResumableContentNodes || []).length"
-      data-test="more-resumable-nodes-button"
+      v-if="moreContentCards && !showMoreContentCards"
+      data-test="show-more-resumable-nodes-button"
+      appearance="basic-link"
+      @click="handleShowMoreContentCards"
+    >
+      {{ coreString('showMoreAction') }}
+    </KButton>
+
+    <!-- if there are 13+ recent items & the first 12 are currently visible -->
+    <KButton
+      v-if="moreResumableContentNodes && showMoreContentCards"
+      data-test="view-more-resumable-nodes-button"
       appearance="basic-link"
       @click="fetchMoreResumableContentNodes"
     >
@@ -48,7 +61,7 @@
     <CopiesModal
       v-if="displayedCopies.length"
       :copies="displayedCopies"
-      @submit="displayedCopies = []"
+      @closeModal="displayedCopies = []"
     />
   </div>
 
@@ -59,7 +72,7 @@
 
   import { ref } from 'kolibri.lib.vueCompositionApi';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useLearnerResources from '../../composables/useLearnerResources';
   import CopiesModal from '../CopiesModal';
   import LibraryAndChannelBrowserMainContent from '../LibraryAndChannelBrowserMainContent';
@@ -70,7 +83,7 @@
       CopiesModal,
       LibraryAndChannelBrowserMainContent,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
     setup() {
       const {
         resumableContentNodes,
@@ -90,7 +103,7 @@
           activityKeys[firstActivity].value.focusFirstEl();
         }
       };
-
+      const { windowIsSmall } = useKResponsiveWindow();
       return {
         activityRefs,
         findFirstEl,
@@ -99,6 +112,7 @@
         resumableContentNodes,
         moreResumableContentNodes,
         fetchMoreResumableContentNodes,
+        windowIsSmall,
       };
     },
     props: {
@@ -109,12 +123,34 @@
     },
     data() {
       return {
+        showMoreContentCards: false,
         displayedCopies: [],
       };
+    },
+    computed: {
+      numContentCardsToDisplay() {
+        return this.windowBreakpoint === 2 || this.windowBreakpoint > 6 ? 4 : 3;
+      },
+      contentCardsToDisplay() {
+        if (this.showMoreContentCards) {
+          return this.resumableContentNodes;
+        } else {
+          return this.resumableContentNodes.slice(0, this.numContentCardsToDisplay);
+        }
+      },
+      moreContentCards() {
+        return this.resumableContentNodes.length > this.numContentCardsToDisplay;
+      },
+      gridType() {
+        return this.windowBreakpoint > 6 ? 2 : 1;
+      },
     },
     methods: {
       toggleCardView(value) {
         this.$emit('setCardStyle', value);
+      },
+      handleShowMoreContentCards() {
+        this.showMoreContentCards = true;
       },
     },
     $trs: {
@@ -141,6 +177,11 @@
 
   .toggle-view-buttons {
     float: right;
+  }
+
+  .resumable-content-card-grid {
+    margin-right: -8px;
+    margin-left: -8px;
   }
 
 </style>

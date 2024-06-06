@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import Vuex from 'vuex';
-import useKResponsiveWindow from 'kolibri-design-system/lib/useKResponsiveWindow';
+import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
 import FacilityAppBarPage from '../../src/views/FacilityAppBarPage';
 
 function makeWrapper({ propsData = {}, getters = {} }) {
@@ -12,11 +12,10 @@ function makeWrapper({ propsData = {}, getters = {} }) {
   return mount(FacilityAppBarPage, {
     propsData,
     store,
-    stubs: ['FacilityTopNav'],
   });
 }
 jest.mock('kolibri.urls');
-jest.mock('kolibri-design-system/lib/useKResponsiveWindow');
+jest.mock('kolibri-design-system/lib/composables/useKResponsiveWindow');
 
 describe('FacilityAppBarPage', function() {
   beforeAll(() => {
@@ -24,9 +23,9 @@ describe('FacilityAppBarPage', function() {
       windowIsSmall: false,
     }));
   });
-  it('renders the FacilityTopNav component', () => {
+  it('renders the AppBar component', () => {
     const wrapper = makeWrapper({});
-    expect(wrapper.findComponent({ name: 'FacilityTopNav' }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: 'AppBar' }).exists()).toBe(true);
   });
   describe('the title computed property', () => {
     it('should return the value of appBarTitle prop when provided', () => {

@@ -6,11 +6,11 @@ import os
 from django.apps import AppConfig
 from django.conf import settings
 from django.db.backends.signals import connection_created
-from django.db.models.query import F
 from django.db.utils import DatabaseError
 from django_filters.filters import UUIDFilter
 from django_filters.rest_framework.filterset import FilterSet
 
+from kolibri.core.errors import RedisConnectionError
 from kolibri.core.sqlite.pragmas import CONNECTION_PRAGMAS
 from kolibri.core.sqlite.pragmas import START_PRAGMAS
 from kolibri.core.sqlite.utils import repair_sqlite_db
@@ -50,10 +50,6 @@ class KolibriCoreConfig(AppConfig):
         # Register any django apps that may have kolibri plugin
         # modules inside them
         registered_plugins.register_non_plugins(settings.INSTALLED_APPS)
-        # Fixes issue using OuterRef within Cast() that is patched in later Django version
-        # Patch from https://github.com/django/django/commit/c412926a2e359afb40738d8177c9f3bef80ee04e
-        # https://code.djangoproject.com/ticket/29142
-        F.relabeled_clone = lambda self, relabels: self
 
     @staticmethod
     def activate_pragmas_per_connection(sender, connection, **kwargs):
@@ -108,14 +104,22 @@ class KolibriCoreConfig(AppConfig):
             cursor.execute(START_PRAGMAS)
             connection.close()
 
-    @staticmethod
-    def check_redis_settings():
+    @staticmethod  # noqa C901
+    def check_redis_settings():  # noqa C901
         """
         Check that Redis settings are sensible, and use the lower level Redis client to make updates
         if we are configured to do so, and if we should, otherwise make some logging noise.
         """
+
         if OPTIONS["Cache"]["CACHE_BACKEND"] != "redis":
             return
+
+        # Don't import until we've confirmed we're using Redis
+        # to avoid a hard dependency on Redis
+        # the options config has already been validated at this point
+        # so we know that redis is available.
+        from redis.exceptions import ConnectionError
+
         config_maxmemory = OPTIONS["Cache"]["CACHE_REDIS_MAXMEMORY"]
         config_maxmemory_policy = OPTIONS["Cache"]["CACHE_REDIS_MAXMEMORY_POLICY"]
 
@@ -161,6 +165,14 @@ class KolibriCoreConfig(AppConfig):
                     "Problematic Redis settings detected, please see Redis configuration "
                     "documentation for details: https://redis.io/topics/config"
                 )
+
+        except ConnectionError as e:
+            logger.warning("Unable to connect to Redis: {}".format(str(e)))
+
+            raise RedisConnectionError(
+                "Unable to connect to Redis: {}".format(str(e))
+            ) from e
+
         except Exception as e:
             logger.warning("Unable to check Redis settings")
             logger.warning(e)

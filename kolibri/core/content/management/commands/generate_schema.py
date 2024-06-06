@@ -2,7 +2,6 @@ import io
 import json
 import os
 import shutil
-import sys
 from collections import defaultdict
 from collections import OrderedDict
 
@@ -19,7 +18,7 @@ from sqlalchemy.orm import sessionmaker
 from kolibri.core.content.apps import KolibriContentConfig
 from kolibri.core.content.constants.schema_versions import CONTENT_SCHEMA_VERSION
 from kolibri.core.content.constants.schema_versions import CURRENT_SCHEMA_VERSION
-from kolibri.core.content.utils.channel_import import models_to_exclude
+from kolibri.core.content.utils.channel_import import no_schema_models
 from kolibri.core.content.utils.sqlalchemybridge import __SQLALCHEMY_CLASSES_MODULE_NAME
 from kolibri.core.content.utils.sqlalchemybridge import __SQLALCHEMY_CLASSES_PATH
 from kolibri.core.content.utils.sqlalchemybridge import (
@@ -100,7 +99,7 @@ class Command(BaseCommand):
         table_names = [
             model._meta.db_table
             for name, model in app_config.models.items()
-            if name != "channelmetadatacache" and model not in models_to_exclude
+            if name != "channelmetadatacache" and model not in no_schema_models
         ]
         metadata.reflect(bind=engine, only=table_names)
         Base = prepare_base(metadata, name=version)
@@ -133,14 +132,8 @@ class Command(BaseCommand):
                 data[table_name] = [get_dict(r) for r in session.query(record).all()]
 
             data_path = DATA_PATH_TEMPLATE.format(name=version)
-            # Handle Python 2 unicode issue by opening the file in binary mode
-            # with no encoding as the data has already been encoded
-            if sys.version[0] == "2":
-                with io.open(data_path, mode="wb") as f:
-                    json.dump(data, f)
-            else:
-                with io.open(data_path, mode="w", encoding="utf-8") as f:
-                    json.dump(data, f)
+            with io.open(data_path, mode="w", encoding="utf-8") as f:
+                json.dump(data, f)
 
             shutil.rmtree(
                 os.path.join(

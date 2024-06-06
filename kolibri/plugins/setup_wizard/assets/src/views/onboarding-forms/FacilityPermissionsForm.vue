@@ -11,7 +11,7 @@
       ref="first-button"
       v-model="selected"
       class="permission-preset-radio-button"
-      :value="Presets.NONFORMAL"
+      :buttonValue="Presets.NONFORMAL"
       :label="$tr('nonFormalLabel')"
       :description="$tr('nonFormalDescription')"
     />
@@ -24,7 +24,7 @@
     <KRadioButton
       v-model="selected"
       class="permission-preset-radio-button"
-      :value="Presets.FORMAL"
+      :buttonValue="Presets.FORMAL"
       :label="$tr('formalLabel')"
       :description="$tr('formalDescription')"
     />
@@ -42,7 +42,8 @@
 
 <script>
 
-  import { Presets, FooterMessageTypes } from '../../constants';
+  import { Presets } from 'kolibri.coreVue.vuex.constants';
+  import { FooterMessageTypes } from '../../constants';
   import OnboardingStepBase from '../OnboardingStepBase';
   import FacilityNameTextbox from './FacilityNameTextbox';
 
@@ -66,16 +67,25 @@
         Presets,
       };
     },
+    computed: {
+      facilityNameInvalid() {
+        return !this.facilityName || this.facilityName.trim() === '';
+      },
+    },
     mounted() {
       this.focusOnTextbox();
     },
     inject: ['wizardService'],
     methods: {
       handleContinue() {
-        this.wizardService.send({
-          type: 'CONTINUE',
-          value: { selected: this.selected, facilityName: this.facilityName },
-        });
+        if (this.facilityNameInvalid) {
+          return this.focusOnTextbox();
+        } else {
+          this.wizardService.send({
+            type: 'CONTINUE',
+            value: { selected: this.selected, facilityName: this.facilityName },
+          });
+        }
       },
       focusOnTextbox() {
         if (this.$refs && this.$refs['facility-name']) {

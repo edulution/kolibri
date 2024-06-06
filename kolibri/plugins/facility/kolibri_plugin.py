@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from kolibri.core.auth.constants.user_kinds import ADMIN
 from kolibri.core.hooks import NavigationHook
 from kolibri.core.hooks import RoleBasedRedirectHook
@@ -9,7 +5,7 @@ from kolibri.core.webpack.hooks import WebpackBundleHook
 from kolibri.plugins import KolibriPluginBase
 from kolibri.plugins.hooks import register_hook
 from kolibri.utils import translation
-from kolibri.utils.translation import ugettext as _
+from kolibri.utils.translation import gettext as _
 
 
 class FacilityManagementPlugin(KolibriPluginBase):

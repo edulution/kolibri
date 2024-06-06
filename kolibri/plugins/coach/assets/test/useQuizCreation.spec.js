@@ -1,8 +1,9 @@
+import Vue from 'vue';
 import { get } from '@vueuse/core';
 import { ChannelResource, ExamResource } from 'kolibri.resources';
 import { objectWithDefaults } from 'kolibri.utils.objectSpecs';
-import { ExerciseResource, QuizQuestion } from '../src/composables/quizCreationSpecs.js';
-import { useQuizCreation } from '../src/composables/useQuizCreation.js';
+import { QuizExercise, QuizQuestion } from '../src/composables/quizCreationSpecs.js';
+import useQuizCreation from '../src/composables/useQuizCreation.js';
 
 const {
   // Methods
@@ -22,7 +23,6 @@ const {
   quiz,
   allSections,
   activeSection,
-  // activeExercisePool,
   activeQuestions,
   selectedActiveQuestions,
   // replacementQuestionPool,
@@ -50,8 +50,17 @@ function generateQuestions(num = 0) {
  *  A helper function to mock an exercise with a given number of questions (for `resource_pool`)
  */
 function generateExercise(numQuestions) {
-  const exercise = objectWithDefaults({ resource_id: 'exercise_1' }, ExerciseResource);
-  exercise.questions = generateQuestions(numQuestions);
+  const assessments = generateQuestions(numQuestions);
+  const assessmentmetadata = { assessment_item_ids: assessments.map(q => q.question_id) };
+  const exercise = objectWithDefaults(
+    {
+      id: 'exercise_1',
+      content_id: 'exercise_1',
+      assessmentmetadata,
+      unique_question_ids: assessments.map(q => `exercise_1:${q.question_id}`),
+    },
+    QuizExercise
+  );
   return exercise;
 }
 
@@ -122,8 +131,9 @@ describe('useQuizCreation', () => {
 
       it('Can change the activeSection', () => {
         const addedSection = addSection();
+        addSection(); // This automatically sets the added section as active, but we won't use it
         expect(get(activeSection).section_id).not.toEqual(addedSection.section_id);
-        setActiveSection(addedSection.section_id);
+        setActiveSection(addedSection.section_id); // Now we set the first added section as active
         expect(get(activeSection).section_id).toEqual(addedSection.section_id);
       });
 
@@ -136,16 +146,15 @@ describe('useQuizCreation', () => {
         ).toEqual(newTitle);
       });
 
-      it('Will update `questions` to match `question_count` property when it is changed', () => {
+      it('Will update `questions` to match `question_count` property when it is changed', async () => {
         // Setup a mock exercise w/ some questions; update the activeSection with their values
-        const exercise = generateExercise(10);
-        const questions = exercise.questions;
+        const exercise = generateExercise(20);
         updateSection({
           section_id: get(activeSection).section_id,
-          questions,
           resource_pool: [exercise],
         });
-        expect(get(activeQuestions)).toHaveLength(questions.length);
+        await Vue.nextTick();
+        expect(get(activeQuestions)).toHaveLength(get(activeSection).question_count);
         expect(get(activeQuestions).length).not.toEqual(0);
         expect(get(activeSection).resource_pool).toHaveLength(1);
 
@@ -155,18 +164,16 @@ describe('useQuizCreation', () => {
           section_id: get(activeSection).section_id,
           question_count: newQuestionCount,
         });
+        await Vue.nextTick();
         // Now questions should only be as long as newQuestionCount
         expect(get(activeQuestions)).toHaveLength(newQuestionCount);
-        // And it should have split it into head & tail and kept the head so indexes 0 and 4 ought
-        // to be the same as the first and last questions in the updated questions array
-        expect(get(activeQuestions)[0].question_id).toEqual(questions[0].question_id);
-        expect(get(activeQuestions)[4].question_id).toEqual(questions[4].question_id);
 
         const newQuestionCount2 = 10;
         updateSection({
           section_id: get(activeSection).section_id,
           question_count: newQuestionCount2,
         });
+        await Vue.nextTick();
         expect(get(activeQuestions)).toHaveLength(newQuestionCount2);
       });
 

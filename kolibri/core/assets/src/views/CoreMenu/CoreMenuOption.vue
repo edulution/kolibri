@@ -13,9 +13,9 @@
         @keydown.enter="visibleSubMenu = !visibleSubMenu"
       >
         <slot>
-          <KLabeledIcon :iconAfter="iconAfter">
+          <KLabeledIcon :iconAfter="iconAfter" :data-testid="`icon-${iconAfter}`">
             <template v-if="icon" #icon>
-              <KIcon :icon="icon" :color="optionIconColor" />
+              <KIcon :icon="icon" :color="optionIconColor" :data-testid="`icon-${icon}`" />
             </template>
             <div v-if="label">{{ label }}</div>
           </KLabeledIcon>
@@ -37,7 +37,7 @@
         <slot>
           <KLabeledIcon>
             <template v-if="icon" #icon>
-              <KIcon :icon="icon" :color="optionIconColor" />
+              <KIcon :icon="icon" :color="optionIconColor" :data-testid="`icon-${icon}`" />
             </template>
             <div v-if="label">{{ label }}</div>
           </KLabeledIcon>
@@ -52,13 +52,13 @@
           <router-link
             v-if="linkActive"
             v-slot="{ href, navigate, isActive }"
-            :to="{ name: subRoute.name, params: $route.params, query: $router.query }"
+            :to="{ name: subRoute.name, params: $route.params, query: $route.query }"
           >
             <a
               class="link"
               :href="href"
               :class="isActive ? subRouteActiveClass : subRouteInactiveClass"
-              @click="e => isActive ? toggleAndroidMenu() : navigate(e)"
+              @click="e => isActive ? toggleMenu() : toggleMenu() && navigate(e)"
             >
               {{ subRoute.label }}
             </a>
@@ -107,10 +107,17 @@
         required: false,
         default: '',
       },
+      linkActive: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
       subRoutes: {
         type: Array,
         required: false,
-        default: null,
+        default: () => [],
+        // subRoutes should be an array of objects with the name, label, and route properties
+        validate: subRoutes => subRoutes.every(route => route.name && route.label && route.route),
       },
       disabled: {
         type: Boolean,
@@ -124,9 +131,6 @@
       };
     },
     computed: {
-      linkActive() {
-        return window.location.pathname == this.link;
-      },
       optionStyle() {
         if (this.disabled) {
           return {
@@ -139,9 +143,9 @@
             color: this.$themeTokens.primaryDark,
             fontWeight: 'bold',
             margin: '8px',
-            backgroundColor: this.$themeBrand.primary.v_50,
+            backgroundColor: this.$themePalette.grey.v_100,
             ':hover': {
-              backgroundColor: this.$themeBrand.primary.v_100,
+              backgroundColor: this.$themePalette.grey.v_200,
             },
             ':focus': this.$coreOutline,
           };
@@ -149,7 +153,7 @@
         return {
           color: this.$themeTokens.text,
           ':hover': {
-            backgroundColor: this.$themeBrand.primary.v_50,
+            backgroundColor: this.$themePalette.grey.v_100,
           },
           ':focus': this.$coreOutline,
         };
@@ -185,7 +189,7 @@
         });
       },
     },
-    mounted() {
+    created() {
       this.submenuShouldBeOpen();
     },
     methods: {
@@ -197,11 +201,11 @@
         }
         return false;
       },
-      toggleAndroidMenu() {
-        if (this.disabled) {
-          return;
+      toggleMenu() {
+        if (!this.disabled) {
+          this.$emit('toggleMenu');
         }
-        this.$emit('toggleAndroidMenu');
+        return true;
       },
       generateNavRoute(route) {
         const params = this.$route.params;

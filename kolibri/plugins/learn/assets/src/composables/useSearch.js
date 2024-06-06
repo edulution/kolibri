@@ -20,10 +20,9 @@ import {
   NoCategories,
   ResourcesNeededTypes,
 } from 'kolibri.coreVue.vuex.constants';
-import plugin_data from 'plugin_data';
 import { deduplicateResources } from '../utils/contentNode';
+import { currentDeviceData } from './useDevices';
 import useContentNodeProgress from './useContentNodeProgress';
-import useDevices from './useDevices';
 import { setLanguages } from './useLanguages';
 
 export const logging = logger.getLogger(__filename);
@@ -61,17 +60,36 @@ function _generateResourcesNeeded(learnerNeeds) {
   return resourcesNeeded;
 }
 
+const gradeLevelsShown = [
+  'BASIC_SKILLS',
+  'PRESCHOOL',
+  'LOWER_PRIMARY',
+  'UPPER_PRIMARY',
+  'LOWER_SECONDARY',
+  'UPPER_SECONDARY',
+  'TERTIARY',
+  'PROFESSIONAL',
+  'WORK_SKILLS',
+];
+
 function _generateGradeLevelsList(gradeLevels) {
-  return Object.keys(ContentLevels).filter(key => {
-    const value = ContentLevels[key];
-    return gradeLevels && gradeLevels.includes(value);
+  return gradeLevelsShown.filter(key => {
+    return gradeLevels && gradeLevels.includes(ContentLevels[key]);
   });
 }
 
+const accessibilityLabelsShown = [
+  'SIGN_LANGUAGE',
+  'AUDIO_DESCRIPTION',
+  'TAGGED_PDF',
+  'ALT_TEXT',
+  'HIGH_CONTRAST',
+  'CAPTIONS_SUBTITLES',
+];
+
 function _generateAccessibilityOptionsList(accessibilityLabels) {
-  return Object.keys(AccessibilityCategories).filter(key => {
-    const value = AccessibilityCategories[key];
-    return accessibilityLabels && accessibilityLabels.includes(value);
+  return accessibilityLabelsShown.filter(key => {
+    return accessibilityLabels && accessibilityLabels.includes(AccessibilityCategories[key]);
   });
 }
 
@@ -133,16 +151,6 @@ function _generateLibraryCategoriesLookup(categories) {
   return libraryCategories;
 }
 
-const localDeviceGlobalLabels = {
-  learningActivitiesShown: _generateLearningActivitiesShown(plugin_data.learningActivities),
-  libraryCategories: _generateLibraryCategoriesLookup(plugin_data.categories),
-  resourcesNeeded: _generateResourcesNeeded(plugin_data.learnerNeeds),
-  gradeLevelsList: _generateGradeLevelsList(plugin_data.gradeLevels || []),
-  accessibilityOptionsList: _generateAccessibilityOptionsList(plugin_data.accessibilityLabels),
-  languagesList: plugin_data.languages || [],
-  channelsList: plugin_data.channels || [],
-};
-
 export const searchKeys = [
   'learning_activities',
   'categories',
@@ -169,7 +177,7 @@ export default function useSearch(descendant, store, router) {
   const more = ref(null);
   const labels = ref(null);
 
-  const { baseurl } = useDevices(store);
+  const { baseurl } = currentDeviceData(store);
 
   const searchTerms = computed({
     get() {
@@ -350,7 +358,7 @@ export default function useSearch(descendant, store, router) {
   // component to setup the available labels for child components
   // to consume them.
 
-  const otherDeviceGlobalLabels = ref(null);
+  const globalLabels = ref(null);
 
   const globalLabelsLoading = ref(false);
 
@@ -359,17 +367,12 @@ export default function useSearch(descendant, store, router) {
   function ensureGlobalLabels() {
     set(globalLabelsLoading, true);
     const currentBaseUrl = get(baseurl);
-    // If no baseurl, we're browsing the local device, so the global labels are already set.
-    if (!currentBaseUrl) {
-      set(globalLabelsLoading, false);
-      return;
-    }
     ContentNodeResource.fetchCollection({
       getParams: { max_results: 1, baseurl: currentBaseUrl },
     })
       .then(data => {
         const labels = data.labels;
-        set(otherDeviceGlobalLabels, {
+        set(globalLabels, {
           learningActivitiesShown: _generateLearningActivitiesShown(labels.learning_activities),
           libraryCategories: _generateLibraryCategoriesLookup(labels.categories),
           resourcesNeeded: _generateResourcesNeeded(labels.learner_needs),
@@ -390,7 +393,7 @@ export default function useSearch(descendant, store, router) {
   watch(baseurl, ensureGlobalLabels);
 
   function _getGlobalLabels(name, defaultValue) {
-    const lookup = get(baseurl) ? get(otherDeviceGlobalLabels) : localDeviceGlobalLabels;
+    const lookup = get(globalLabels);
     if (lookup) {
       return lookup[name];
     }

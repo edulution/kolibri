@@ -1,10 +1,6 @@
 <template>
 
-  <CoachAppBarPage
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="true"
-  >
+  <CoachAppBarPage>
 
     <KPageContainer :class="{ 'print': $isPrint }">
       <ReportsHeader
@@ -89,7 +85,7 @@
                     :text="coachString('openQuizLabel')"
                     appearance="flat-button"
                     class="table-left-aligned-button"
-                    @click="showOpenConfirmationModal = true; modalQuizId = tableRow.id"
+                    @click="showOpenConfirmationModal = true; modalQuiz = tableRow"
                   />
                   <!-- Close quiz button -->
                   <KButton
@@ -97,7 +93,7 @@
                     :text="coachString('closeQuizLabel')"
                     appearance="flat-button"
                     class="table-left-aligned-button"
-                    @click="showCloseConfirmationModal = true; modalQuizId = tableRow.id;"
+                    @click="showCloseConfirmationModal = true; modalQuiz = tableRow;"
                   />
                   <div
                     v-if="tableRow.archive"
@@ -117,11 +113,11 @@
           :submitText="coreString('continueAction')"
           :cancelText="coreString('cancelAction')"
           @cancel="showOpenConfirmationModal = false"
-          @submit="handleOpenQuiz(modalQuizId)"
+          @submit="handleOpenQuiz(modalQuiz.id)"
         >
           <p>{{ coachString('openQuizModalDetail') }}</p>
           <p>{{ coachString('lodQuizDetail') }}</p>
-          <p>{{ coachString('fileSizeToDownload', { size: modalQuizId.size_string }) }}</p>
+          <p>{{ coachString('fileSizeToDownload', { size: modalQuiz.size_string }) }}</p>
         </KModal>
         <KModal
           v-if="showCloseConfirmationModal"
@@ -129,7 +125,7 @@
           :submitText="coreString('continueAction')"
           :cancelText="coreString('cancelAction')"
           @cancel="showCloseConfirmationModal = false"
-          @submit="handleCloseQuiz(modalQuizId)"
+          @submit="handleCloseQuiz(modalQuiz.id)"
         >
           <div>{{ coachString('closeQuizModalDetail') }}</div>
         </KModal>
@@ -168,7 +164,7 @@
         filter: 'allQuizzes',
         showOpenConfirmationModal: false,
         showCloseConfirmationModal: false,
-        modalQuizId: null,
+        modalQuiz: null,
       };
     },
     computed: {
@@ -260,7 +256,7 @@
           id: quizId,
           data: {
             active: true,
-            date_activated: new Date(),
+            draft: false,
           },
           exists: true,
         });
@@ -280,7 +276,6 @@
           id: quizId,
           data: {
             archive: true,
-            date_archived: new Date(),
           },
           exists: true,
         });

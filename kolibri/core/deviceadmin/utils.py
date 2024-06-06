@@ -2,7 +2,6 @@ import io
 import logging
 import os
 import re
-import sys
 from datetime import datetime
 
 from django import db
@@ -19,14 +18,9 @@ from kolibri.utils.conf import KOLIBRI_HOME
 logger = logging.getLogger(__name__)
 
 
-# Use encoded text for Python 3 (doesn't work in Python 2!)
+# Use encoded text
 KWARGS_IO_READ = {"mode": "r", "encoding": "utf-8"}
 KWARGS_IO_WRITE = {"mode": "w", "encoding": "utf-8"}
-
-# Use binary file mode for Python 2 (doesn't work in Python 3!)
-if sys.version_info < (3,):
-    KWARGS_IO_READ = {"mode": "rb"}
-    KWARGS_IO_WRITE = {"mode": "wb"}
 
 
 def default_backup_folder():
@@ -148,7 +142,9 @@ def dbrestore(from_file):
     # See: https://github.com/learningequality/kolibri/issues/2875
     with open(from_file, **KWARGS_IO_READ) as f:
         db.connections["default"].connect()
+        db.connections["default"].connection.execute("PRAGMA foreign_keys=OFF")
         db.connections["default"].connection.executescript(f.read())
+        db.connections["default"].connection.execute("PRAGMA foreign_keys=ON")
 
     # Finally, it's okay to import models and open database connections.
     # We need this to avoid generating records with identical 'Instance ID'

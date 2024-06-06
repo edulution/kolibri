@@ -10,21 +10,21 @@
 
       <UiToolbar
         :title="title"
-        :removeNavIcon="isAppContext && !windowIsLarge"
+        :removeNavIcon="showAppNavView"
         type="clear"
-        textColor="white"
+        textColor="black"
         class="app-bar"
         :style="{ height: topBarHeight + 'px' }"
         :raised="false"
         :removeBrandDivider="true"
       >
         <template
-          v-if="windowIsLarge || !isAppContext"
+          v-if="!showAppNavView"
           #icon
         >
           <KIconButton
             icon="menu"
-            :color="$themeTokens.textInverted"
+            :color="$themeTokens.text"
             :ariaLabel="$tr('openNav')"
             @click="$emit('toggleSideNav')"
           />
@@ -36,15 +36,20 @@
             :src="themeConfig.appBar.topLogo.src"
             :alt="themeConfig.appBar.topLogo.alt"
             :style="themeConfig.appBar.topLogo.style"
-            :class="isAppContext ? 'brand-logo-left' : 'brand-logo'"
+            :class="showAppNavView ? 'brand-logo-left' : 'brand-logo'"
           >
         </template>
 
         <template
-          v-if="windowIsLarge"
+          v-if="showNavigation && windowIsLarge"
           #navigation
         >
-          <slot name="sub-nav"></slot>
+          <slot name="sub-nav">
+            <Navbar
+              v-if="links.length > 0"
+              :navigationLinks="links"
+            />
+          </slot>
         </template>
 
         <template #actions>
@@ -56,10 +61,11 @@
           >
             <slot name="app-bar-actions"></slot>
             <span v-if="isLearner">
-              <KIconButton
+              <KIcon
                 ref="pointsButton"
                 icon="pointsActive"
                 :ariaLabel="$tr('pointsAriaLabel')"
+                :color="$themeTokens.primary"
               />
               <div v-if="!windowIsSmall" class="points-description">
                 {{ $formatNumber(totalPoints) }}
@@ -83,7 +89,7 @@
               <KIcon
                 icon="person"
                 :style="{
-                  fill: $themeTokens.textInverted,
+                  fill: $themeTokens.text,
                   height: '24px',
                   width: '24px',
                   margin: '4px',
@@ -99,15 +105,16 @@
         </template>
       </UiToolbar>
     </header>
-    <!-- IF making changes to the sub nav, make sure to make -->
-    <!-- corresponding changes in SideNav.vue in regards to  -->
-    <!-- Window size and app context. Changes may need to be made -->
-    <!-- in parallel in both files for non-breaking updates -->
     <div
-      v-if="!windowIsLarge && !isAppContext"
+      v-if="showNavigation && !windowIsLarge && !showAppNavView"
       class="subpage-nav"
     >
-      <slot name="sub-nav"></slot>
+      <slot name="sub-nav">
+        <Navbar
+          v-if="links.length > 0"
+          :navigationLinks="links"
+        />
+      </slot>
     </div>
   </div>
 
@@ -116,14 +123,18 @@
 
 <script>
 
-  import { mapActions, mapGetters, mapState } from 'vuex';
+  import { mapActions, mapGetters } from 'vuex';
+  import { get } from '@vueuse/core';
+  import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import UiToolbar from 'kolibri.coreVue.components.UiToolbar';
   import KIconButton from 'kolibri-design-system/lib/buttons-and-links/KIconButton';
   import themeConfig from 'kolibri.themeConfig';
-  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
-  import navComponentsMixin from '../mixins/nav-components';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
+  import useNav from '../composables/useNav';
+  import useUser from '../composables/useUser';
   import SkipNavigationLink from './SkipNavigationLink';
+  import Navbar from './Navbar';
 
   const hashedValuePattern = /^[a-f0-9]{30}$/;
 
@@ -133,16 +144,51 @@
       UiToolbar,
       KIconButton,
       SkipNavigationLink,
+      Navbar,
     },
-    mixins: [commonCoreStrings, navComponentsMixin],
+    mixins: [commonCoreStrings],
     setup() {
+      const store = getCurrentInstance().proxy.$store;
+      const $route = computed(() => store.state.route);
       const { windowIsLarge, windowIsSmall } = useKResponsiveWindow();
-      return { themeConfig, windowIsLarge, windowIsSmall };
+      const { topBarHeight, navItems } = useNav();
+      const { isLearner, isUserLoggedIn, username, full_name } = useUser();
+      const links = computed(() => {
+        const currentItem = navItems.find(nc => nc.url === window.location.pathname);
+        if (!currentItem || !currentItem.routes) {
+          return [];
+        }
+        return currentItem.routes.map(route => ({
+          title: route.label,
+          link: { name: route.name, params: get($route).params, query: get($route).query },
+          icon: route.icon,
+          condition: route.condition,
+        }));
+      });
+      return {
+        themeConfig,
+        windowIsLarge,
+        windowIsSmall,
+        topBarHeight,
+        links,
+        isUserLoggedIn,
+        isLearner,
+        username,
+        fullName: full_name,
+      };
     },
     props: {
       title: {
         type: String,
         required: true,
+      },
+      showNavigation: {
+        type: Boolean,
+        default: true,
+      },
+      showAppNavView: {
+        type: Boolean,
+        default: false,
       },
     },
     data() {
@@ -151,11 +197,7 @@
       };
     },
     computed: {
-      ...mapGetters(['isUserLoggedIn', 'totalPoints', 'isLearner', 'isAppContext']),
-      ...mapState({
-        username: state => state.core.session.username,
-        fullName: state => state.core.session.full_name,
-      }),
+      ...mapGetters(['totalPoints']),
       // temp hack for the VF plugin
       usernameForDisplay() {
         return !hashedValuePattern.test(this.username) ? this.username : this.fullName;

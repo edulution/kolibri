@@ -68,7 +68,7 @@
 
 
               <!-- display sync status, when relevant -->
-              <div v-if="isLearnerOnlyImport" data-test="syncStatusInDropdown">
+              <div v-if="isLearnerOnlyImport">
                 <div class="sync-status">
                   {{ $tr('deviceStatus') }}
                 </div>
@@ -88,31 +88,41 @@
             >
               <template #options>
                 <CoreMenuOption
-                  v-for="component in topComponents"
-                  :key="component.name"
-                  :label="component.label"
-                  :subRoutes="component.routes"
-                  :link="component.url"
-                  :icon="component.icon"
-                  data-test="side-nav-component"
+                  v-for="item in topItems"
+                  :key="item.name"
+                  :label="item.label"
+                  :subRoutes="item.routes"
+                  :link="item.url"
+                  :icon="item.icon"
+                  :linkActive="item.active"
+                  data-test="side-nav-item"
+                  @toggleMenu="toggleNav"
                 />
                 <SideNavDivider />
                 <CoreMenuOption
-                  v-for="component in accountComponents"
-                  :key="component.name"
-                  :label="component.label"
-                  :subRoutes="component.routes"
-                  :link="component.url"
-                  :icon="component.icon"
+                  v-for="item in accountItems"
+                  :key="item.name"
+                  :label="item.label"
+                  :subRoutes="item.routes"
+                  :link="item.url"
+                  :icon="item.icon"
+                  :linkActive="item.active"
                   style="cursor: pointer;"
-                  data-test="side-nav-component"
+                  data-test="side-nav-item"
+                  @toggleMenu="toggleNav"
                 />
-                <LogoutSideNavEntry v-if="isUserLoggedIn" />
+                <CoreMenuOption
+                  v-if="logoutUrl && isUserLoggedIn"
+                  :label="$tr('signOut')"
+                  :link="logoutUrl"
+                  icon="logout"
+                />
                 <CoreMenuOption
                   :label="coreString('changeLanguageOption')"
                   icon="language"
                   class="pointer"
-                  @select="handleShowLanguageModal()"
+                  @select="handleShowLanguageModal"
+                  @toggleMenu="toggleNav"
                 />
                 <SideNavDivider />
               </template>
@@ -170,7 +180,7 @@
             </div>
           </div>
           <div
-            v-if="!isAppContext || windowIsLarge"
+            v-if="!showAppNavView || windowIsLarge"
             class="side-nav-header"
             :style="{
               height: topBarHeight + 'px',
@@ -182,7 +192,7 @@
               ref="closeButton"
               tabindex="0"
               icon="close"
-              :color="$themeTokens.textInverted"
+              :color="$themeTokens.text"
               class="side-nav-header-icon"
               :ariaLabel="$tr('closeNav')"
               size="large"
@@ -190,7 +200,7 @@
             />
             <span
               class="side-nav-header-name"
-              :style="{ color: $themeTokens.textInverted }"
+              :style="{ color: $themeTokens.text }"
             >{{ sideNavTitleText }}</span>
           </div>
         </FocusTrap>
@@ -199,15 +209,15 @@
 
     <BottomNavigationBar
       v-if="showAppNavView"
-      :bottomMenuOptions="bottomMenuOptions"
+      :bottomMenuItem="bottomMenuItem"
       :navShown="navShown"
-      @toggleNav="toggleNav()"
+      @toggleNav="toggleNav"
     />
 
 
 
     <Backdrop
-      v-show="navShown && !isAppContext"
+      v-show="navShown && !showAppNavView"
       :transitions="true"
       class="side-nav-backdrop"
       @click="toggleNav"
@@ -233,32 +243,30 @@
 
 <script>
 
-  import { mapGetters, mapState } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { UserKinds, NavComponentSections } from 'kolibri.coreVue.vuex.constants';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
-  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
+  import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
   import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
   import CoreMenuOption from 'kolibri.coreVue.components.CoreMenuOption';
   import CoreLogo from 'kolibri.coreVue.components.CoreLogo';
   import LearnOnlyDeviceNotice from 'kolibri.coreVue.components.LearnOnlyDeviceNotice';
-  import navComponents from 'kolibri.utils.navComponents';
   import PrivacyInfoModal from 'kolibri.coreVue.components.PrivacyInfoModal';
   import themeConfig from 'kolibri.themeConfig';
   import Backdrop from 'kolibri.coreVue.components.Backdrop';
   import LanguageSwitcherModal from 'kolibri.coreVue.components.LanguageSwitcherModal';
   import TotalPoints from 'kolibri.coreVue.components.TotalPoints';
-  import navComponentsMixin from '../mixins/nav-components';
+  import urls from 'kolibri.urls';
+  import useNav from '../composables/useNav';
   import useUser from '../composables/useUser';
   import useUserSyncStatus from '../composables/useUserSyncStatus';
   import SyncStatusDisplay from './SyncStatusDisplay';
   import SideNavDivider from './SideNavDivider';
   import FocusTrap from './FocusTrap.vue';
   import BottomNavigationBar from './BottomNavigationBar';
-  import LogoutSideNavEntry from './LogoutSideNavEntry';
 
   // Explicit ordered list of roles for nav item sorting
-  const navComponentRoleOrder = [
+  const navItemRoleOrder = [
     UserKinds.ANONYMOUS,
     UserKinds.LEARNER,
     UserKinds.COACH,
@@ -281,24 +289,51 @@
       FocusTrap,
       TotalPoints,
       LanguageSwitcherModal,
-      LogoutSideNavEntry,
       BottomNavigationBar,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin, responsiveElementMixin, navComponentsMixin],
+    mixins: [commonCoreStrings, responsiveElementMixin],
     setup() {
-      const { isLearnerOnlyImport } = useUser();
+      const { windowIsSmall, windowIsLarge } = useKResponsiveWindow();
+      const {
+        canManageContent,
+        isLearner,
+        isSuperuser,
+        isAdmin,
+        isCoach,
+        isUserLoggedIn,
+        isLearnerOnlyImport,
+        username,
+        full_name,
+      } = useUser();
       const { status, lastSynced } = useUserSyncStatus();
+      const { topBarHeight, navItems } = useNav();
       return {
+        fullName: full_name,
+        username,
+        topBarHeight,
+        windowIsLarge,
+        windowIsSmall,
+        canManageContent,
+        isLearner,
+        isSuperuser,
+        isAdmin,
+        isCoach,
+        isUserLoggedIn,
         isLearnerOnlyImport,
         themeConfig,
         userSyncStatus: status,
         userLastSynced: lastSynced,
+        navItems,
       };
     },
     props: {
       navShown: {
         type: Boolean,
         required: true,
+      },
+      showAppNavView: {
+        type: Boolean,
+        default: false,
       },
     },
     data() {
@@ -310,57 +345,36 @@
       };
     },
     computed: {
-      ...mapGetters([
-        'isSuperuser',
-        'isAdmin',
-        'isCoach',
-        'getUserKind',
-        'isAppContext',
-        'isUserLoggedIn',
-      ]),
-      ...mapState({
-        username: state => state.core.session.username,
-        fullName: state => state.core.session.full_name,
-      }),
       width() {
         return this.showAppNavView ? '100vw' : `${this.topBarHeight * 4.5}px`;
       },
       showSoudNotice() {
         return this.isLearnerOnlyImport && (this.isSuperuser || this.isAdmin || this.isCoach);
       },
-      showAppNavView() {
-        // IF making changes to the sub nav, make sure to make
-        // corresponding changes in SideNav.vue in regards to
-        //  Window size and app context. Changes may need to be made
-        // in parallel in both files for non-breaking updates
-        // The expected behavior is:
-        // In an app context, on small and medium screens,
-        // show the app Nav
-        // In browser based contexts, and large screen app view
-        // use the "non-app" upper navigation bar
-        return this.isAppContext && !this.windowIsLarge;
-      },
       footerMsg() {
         return this.$tr('poweredBy', { version: __version });
       },
-      topComponents() {
-        return navComponents
-          .filter(component => component.section !== NavComponentSections.ACCOUNT)
-          .sort(this.compareMenuComponents)
+      topItems() {
+        return this.navItems
+          .filter(item => item.section !== NavComponentSections.ACCOUNT)
+          .sort(this.compareMenuItems)
           .filter(this.filterByRole)
           .filter(this.filterByFullFacilityOnly);
       },
-      accountComponents() {
-        const accountComponents = navComponents
-          .filter(component => component.section === NavComponentSections.ACCOUNT)
-          .sort(this.compareMenuComponents);
+      accountItems() {
+        const accountItems = this.navItems
+          .filter(item => item.section === NavComponentSections.ACCOUNT)
+          .sort(this.compareMenuItems);
 
-        return [...accountComponents]
-          .filter(this.filterByRole)
-          .filter(this.filterByFullFacilityOnly);
+        return [...accountItems].filter(this.filterByRole).filter(this.filterByFullFacilityOnly);
       },
-      bottomMenuOptions() {
-        return navComponents.filter(component => component.bottomBar == true);
+      bottomMenuItem() {
+        const allNavItems = this.topItems.concat(this.accountItems);
+        const bottombarItems = allNavItems.filter(item => item.bottomBar == true);
+        if (bottombarItems.length > 0) {
+          return bottombarItems[0];
+        }
+        return allNavItems.find(item => item.active);
       },
       sideNavTitleText() {
         if (this.themeConfig.sideNav.title) {
@@ -369,19 +383,23 @@
         return this.coreString('kolibriLabel');
       },
       userIsLearner() {
-        return this.getUserKind == UserKinds.LEARNER;
+        // learners and SOUD learners should display
+        return this.isLearner || (this.isUserLoggedIn && this.isLearnerOnlyImport);
       },
       loggedInUserKind() {
-        if (this.getUserKind === UserKinds.LEARNER) {
+        if (this.userIsLearner) {
           return this.coreString('learnerLabel');
         }
-        if (this.getUserKind === UserKinds.ADMIN) {
+        if (this.isAdmin) {
           return this.coreString('adminLabel');
         }
-        if (this.getUserKind === UserKinds.COACH) {
+        if (this.isCoach) {
           return this.coreString('coachLabel');
         }
         return this.coreString('superAdminLabel');
+      },
+      logoutUrl() {
+        return urls['kolibri:core:logout'] && urls['kolibri:core:logout']();
       },
     },
     watch: {
@@ -406,6 +424,30 @@
     },
 
     methods: {
+      filterByRole(navItem) {
+        if (!navItem.role) {
+          // No role defined, so always show
+          return true;
+        }
+        if (navItem.role === UserKinds.COACH) {
+          return this.isCoach || this.isAdmin || this.isSuperuser;
+        }
+        if (navItem.role === UserKinds.ADMIN) {
+          return this.isAdmin || this.isSuperuser;
+        }
+        if (navItem.role === UserKinds.CAN_MANAGE_CONTENT) {
+          return this.canManageContent || this.isSuperuser;
+        }
+        if (navItem.role === UserKinds.SUPERUSER) {
+          return this.isSuperuser;
+        }
+        if (navItem.role === UserKinds.ANONYMOUS) {
+          return !this.isUserLoggedIn;
+        }
+        if (navItem.role === UserKinds.LEARNER) {
+          return this.isLearner || this.isCoach || this.isAdmin || this.isSuperuser;
+        }
+      },
       toggleNav() {
         this.$emit('toggleSideNav');
       },
@@ -414,28 +456,22 @@
       },
       handleClickPrivacyLink() {
         this.privacyModalVisible = true;
+        this.toggleNav();
       },
-      compareMenuComponents(navComponentA, navComponentB) {
+      compareMenuItems(navItemA, navItemB) {
         // Compare menu items to allow sorting by the following priority:
         // Sort by role
         // Nav items with no roles will be placed first
         // as index will be -1
-        if (navComponentA.role !== navComponentB.role) {
-          return (
-            navComponentRoleOrder.indexOf(navComponentA.role) -
-            navComponentRoleOrder.indexOf(navComponentB.role)
-          );
-        }
-        // Next sort by priority
-        if (navComponentA.priority !== navComponentB.priority) {
-          return navComponentA.priority - navComponentB.priority;
+        if (navItemA.role !== navItemB.role) {
+          return navItemRoleOrder.indexOf(navItemA.role) - navItemRoleOrder.indexOf(navItemB.role);
         }
         // Still no difference?
-        // There is no difference!
-        return 0;
+        // Sort by the URL to ensure consistent ordering
+        return navItemA.url.localeCompare(navItemB.url);
       },
-      filterByFullFacilityOnly(component) {
-        return !this.isLearnerOnlyImport || !component.fullFacilityOnly;
+      filterByFullFacilityOnly(item) {
+        return !this.isLearnerOnlyImport || !item.fullFacilityOnly;
       },
 
       /**
@@ -471,6 +507,11 @@
         message: 'Device status',
         context:
           "Label in the side navigation menu. Indicates the status of an individual learner's device.",
+      },
+      signOut: {
+        message: 'Sign out',
+        context:
+          "Users can exit Kolibri by selecting 'Sign out' from the user menu in the upper right corner.",
       },
     },
   };
@@ -553,6 +594,7 @@
     padding-top: 4px;
     overflow: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain;
   }
 
   .bottom-nav-scrollable-area {

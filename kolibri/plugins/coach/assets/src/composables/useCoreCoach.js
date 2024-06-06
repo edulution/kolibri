@@ -1,14 +1,20 @@
 import find from 'lodash/find';
+import logger from 'kolibri.lib.logging';
 import { get } from '@vueuse/core';
 import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
 import { currentLanguage, isRtl } from 'kolibri.utils.i18n';
 import { coachStrings } from '../views/common/commonCoachStrings';
+
+const logging = logger.getLogger(__filename);
 
 export default function useCoreCoach(store) {
   store = store || getCurrentInstance().proxy.$store;
   const route = computed(() => store.state.route);
   const pageTitle = computed(() => formatPageTitle());
   const appBarTitle = computed(() => getAppBarTitle());
+  const authorized = computed(() => store.getters.userIsAuthorizedForCoach);
+  const classId = computed(() => get(route).params.classId);
+  const groups = computed(() => store.getters['classSummary/groups']);
 
   function getAppBarTitle() {
     let facilityName;
@@ -60,7 +66,7 @@ export default function useCoreCoach(store) {
             return coachStrings.$tr(part);
         }
       } catch (err) {
-        console.error(
+        logging.error(
           "Failed to obtain page title. Ensure that this route's meta.titleParts are corrrectly configured."
         );
         return '';
@@ -73,7 +79,20 @@ export default function useCoreCoach(store) {
     return strings.join(' - ');
   }
 
+  function initClassInfo() {
+    return store.dispatch('initClassInfo', get(classId));
+  }
+
+  function refreshClassSummary() {
+    return store.dispatch('classSummary/refreshClassSummary', null, { root: true });
+  }
+
   return {
+    initClassInfo,
+    refreshClassSummary,
+    classId,
+    groups,
+    authorized,
     pageTitle,
     appBarTitle,
   };

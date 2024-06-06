@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from django.urls import reverse
 
 from kolibri.core.auth.constants.user_kinds import ANONYMOUS
@@ -11,15 +7,17 @@ from kolibri.core.device.utils import allow_learner_unassigned_resource_access
 from kolibri.core.device.utils import get_device_setting
 from kolibri.core.device.utils import is_landing_page
 from kolibri.core.device.utils import LANDING_PAGE_LEARN
+from kolibri.core.discovery.hooks import NetworkLocationBroadcastHook
 from kolibri.core.discovery.hooks import NetworkLocationDiscoveryHook
 from kolibri.core.hooks import NavigationHook
 from kolibri.core.hooks import RoleBasedRedirectHook
+from kolibri.core.utils.lock import retry_on_db_lock
 from kolibri.core.webpack import hooks as webpack_hooks
 from kolibri.plugins import KolibriPluginBase
 from kolibri.plugins.hooks import register_hook
 from kolibri.utils import conf
 from kolibri.utils import translation
-from kolibri.utils.translation import ugettext as _
+from kolibri.utils.translation import gettext as _
 
 
 class Learn(KolibriPluginBase):
@@ -58,18 +56,13 @@ class LearnAsset(webpack_hooks.WebpackBundleHook):
 
     @property
     def plugin_data(self):
-        from kolibri.core.content.utils.search import get_all_contentnode_label_metadata
-        from kolibri.core.content.api import ChannelMetadataViewSet
         from kolibri.core.discovery.well_known import CENTRAL_CONTENT_BASE_URL
         from kolibri.core.discovery.well_known import CENTRAL_CONTENT_BASE_INSTANCE_ID
 
-        channel_viewset = ChannelMetadataViewSet()
-
-        channels = channel_viewset.serialize(
-            channel_viewset.get_queryset().filter(root__available=True)
-        )
-        label_metadata = get_all_contentnode_label_metadata()
         return {
+            "allowDownloadOnMeteredConnection": get_device_setting(
+                "allow_download_on_metered_connection"
+            ),
             "allowGuestAccess": get_device_setting("allow_guest_access"),
             "allowLearnerDownloads": get_device_setting(
                 "allow_learner_download_resources"
@@ -78,13 +71,6 @@ class LearnAsset(webpack_hooks.WebpackBundleHook):
             "enableCustomChannelNav": conf.OPTIONS["Learn"][
                 "ENABLE_CUSTOM_CHANNEL_NAV"
             ],
-            "categories": label_metadata["categories"],
-            "learningActivities": label_metadata["learning_activities"],
-            "languages": label_metadata["languages"],
-            "channels": channels,
-            "gradeLevels": label_metadata["grade_levels"],
-            "accessibilityLabels": label_metadata["accessibility_labels"],
-            "learnerNeeds": label_metadata["learner_needs"],
             "studioDevice": {
                 "base_url": CENTRAL_CONTENT_BASE_URL,
                 "instance_id": CENTRAL_CONTENT_BASE_INSTANCE_ID,
@@ -95,6 +81,13 @@ class LearnAsset(webpack_hooks.WebpackBundleHook):
 @register_hook
 class MyDownloadsAsset(webpack_hooks.WebpackBundleHook):
     bundle_id = "my_downloads_app"
+
+    @property
+    def plugin_data(self):
+        return {
+            "setLimitForAutodownload": get_device_setting("set_limit_for_autodownload"),
+            "limitForAutodownload": get_device_setting("limit_for_autodownload"),
+        }
 
 
 @register_hook
@@ -116,10 +109,17 @@ class LearnContentNodeHook(ContentNodeDisplayHook):
             )
 
 
-def _learner_ids():
-    from kolibri.core.auth.models import FacilityUser
+@retry_on_db_lock
+def request_soud_sync(network_location):
+    """
+    :type network_location: kolibri.core.discovery.models.NetworkLocation
+    """
+    from kolibri.core.auth.tasks import enqueue_soud_sync_processing
+    from kolibri.core.device.soud import request_sync_hook
 
-    return FacilityUser.objects.all().values_list("id", flat=True)
+    if not network_location.subset_of_users_device and network_location.is_kolibri:
+        request_sync_hook(network_location)
+        enqueue_soud_sync_processing()
 
 
 @register_hook
@@ -128,29 +128,38 @@ class NetworkDiscoveryForSoUDHook(NetworkLocationDiscoveryHook):
         """
         :type network_location: kolibri.core.discovery.models.NetworkLocation
         """
-        from kolibri.core.auth.tasks import begin_request_soud_sync
+        if get_device_setting("subset_of_users_device"):
+            request_soud_sync(network_location)
 
-        if (
-            get_device_setting("subset_of_users_device", default=False)
-            and not network_location.subset_of_users_device
-        ):
-            for user_id in _learner_ids():
-                begin_request_soud_sync(network_location.base_url, user_id)
 
-    def on_disconnect(self, network_location):
+@register_hook
+class NetworkBroadcastForSoUDHook(NetworkLocationBroadcastHook):
+    """
+    This hook is used to hook into the broadcast of the SoUD status of this device to other
+    devices on the network. So when this device is updated, possibly to SoUD, it will
+    enqueue SoUD syncs to all other non-SoUD devices on the network.
+    """
+
+    def on_renew(self, instance, network_locations):
         """
-        :type network_location: kolibri.core.discovery.models.NetworkLocation
+        :type instance: kolibri.core.discovery.utils.network.broadcast.KolibriInstance
+        :type network_locations: kolibri.core.discovery.models.NetworkLocation[]
         """
-        from kolibri.core.auth.tasks import stop_request_soud_sync
+        if not get_device_setting("subset_of_users_device"):
+            return
 
-        if (
-            get_device_setting("subset_of_users_device", default=False)
-            and not network_location.subset_of_users_device
-        ):
-            for user_id in _learner_ids():
-                stop_request_soud_sync(network_location.base_url, user_id)
+        for network_location in network_locations:
+            request_soud_sync(network_location)
 
 
 @register_hook
 class MyDownloadsNavAction(NavigationHook):
     bundle_id = "my_downloads_side_nav"
+
+    @property
+    def plugin_data(self):
+        return {
+            "allowLearnerDownloads": get_device_setting(
+                "allow_learner_download_resources"
+            ),
+        }

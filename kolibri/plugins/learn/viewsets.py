@@ -16,6 +16,7 @@ from kolibri.core.content.api import ContentNodeViewset
 from kolibri.core.content.api import UserContentNodeViewset
 from kolibri.core.content.models import ContentNode
 from kolibri.core.exams.models import Exam
+from kolibri.core.exams.models import exam_assignment_lookup
 from kolibri.core.lessons.models import Lesson
 from kolibri.core.logger.models import AttemptLog
 from kolibri.core.logger.models import MasteryLog
@@ -54,6 +55,16 @@ class LearnStateView(APIView):
         )
 
 
+def _map_contentnodes(request, content_ids):
+    contentnodes = (
+        contentnode_viewset.serialize_list(request, {"ids": content_ids})
+        if content_ids
+        else []
+    )
+    contentnode_map = {c["id"]: c for c in contentnodes}
+    return contentnode_map
+
+
 def _consolidate_lessons_data(request, lessons):
     lesson_contentnode_ids = set()
     for lesson in lessons:
@@ -69,15 +80,9 @@ def _consolidate_lessons_data(request, lessons):
         else []
     )
 
-    contentnodes = (
-        contentnode_viewset.serialize_list(request, {"ids": lesson_contentnode_ids})
-        if lesson_contentnode_ids
-        else []
-    )
+    contentnode_map = _map_contentnodes(request, lesson_contentnode_ids)
 
     progress_map = {l["content_id"]: l["progress"] for l in contentnode_progress}
-
-    contentnode_map = {c["id"]: c for c in contentnodes}
 
     for lesson in lessons:
         lesson["progress"] = {
@@ -98,6 +103,7 @@ def _consolidate_lessons_data(request, lessons):
             )
             missing_resource = missing_resource or not resource["contentnode"]
         lesson["missing_resource"] = missing_resource
+        lesson["active"] = lesson.pop("is_active")
 
 
 class LearnerClassroomViewset(ReadOnlyValuesViewset):
@@ -182,14 +188,19 @@ class LearnerClassroomViewset(ReadOnlyValuesViewset):
                 "title",
                 "closed",
                 "answer_count",
+                "data_model_version",
                 "score",
                 "question_sources",
             )
         )
         exam_node_ids = set()
+
         for exam in exams:
             exam_node_ids |= {
-                question["exercise_id"] for question in exam.get("question_sources")
+                exercise_id
+                for exercise_id, _ in exam_assignment_lookup(
+                    exam.get("question_sources", [])
+                )
             }
 
         available_exam_ids = set(
@@ -197,6 +208,8 @@ class LearnerClassroomViewset(ReadOnlyValuesViewset):
                 "id", flat=True
             )
         )
+
+        contentnode_map = _map_contentnodes(self.request, available_exam_ids)
 
         for exam in exams:
             closed = exam.pop("closed")
@@ -216,10 +229,14 @@ class LearnerClassroomViewset(ReadOnlyValuesViewset):
                     "closed": None,
                     "started": False,
                 }
-            exam["missing_resource"] = any(
-                question["exercise_id"] not in available_exam_ids
-                for question in exam.get("question_sources")
-            )
+            missing_resource = False
+            for exercise_id, _ in exam_assignment_lookup(
+                exam.get("question_sources", [])
+            ):
+                if exercise_id not in contentnode_map:
+                    missing_resource = True
+                    break
+            exam["missing_resource"] = missing_resource
         out_items = []
         for item in items:
             item["assignments"] = {

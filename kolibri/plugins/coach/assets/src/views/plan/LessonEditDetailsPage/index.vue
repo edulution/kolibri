@@ -14,20 +14,17 @@
         :disabled="disabled"
         @cancel="goBackToSummaryPage"
         @submit="handleSaveChanges"
-      >
+      />
 
-        <template #resourceTable>
-          <section v-if="showResourcesTable">
-            <h2 class="resource-header">
-              {{ coreString('resourcesLabel') }}
-            </h2>
-            <ResourceListTable
-              v-show="!disabled"
-              :resources.sync="updatedResources"
-            />
-          </section>
-        </template>
-      </AssignmentDetailsForm>
+      <section v-if="showResourcesTable">
+        <h2 class="resource-header">
+          {{ coreString('resourcesLabel') }}
+        </h2>
+        <ResourceListTable
+          v-show="!disabled"
+          :resources.sync="updatedResources"
+        />
+      </section>
 
     </KPageContainer>
   </CoachImmersivePage>
@@ -64,9 +61,9 @@
         lesson: {
           title: '',
           description: '',
-          lesson_assignments: [],
+          assignments: [],
           resources: [],
-          is_active: false,
+          active: false,
         },
         // A copy of lesson.resources
         updatedResources: [],
@@ -78,14 +75,9 @@
       formProps() {
         return {
           assignmentType: 'lesson',
+          assignment: this.lesson,
           classId: this.$route.params.classId,
           groups: this.$store.getters['classSummary/groups'],
-          initialActive: this.lesson.is_active,
-          initialAdHocLearners: this.lesson.learner_ids,
-          initialSelectedCollectionIds: this.lesson.lesson_assignments,
-          initialTitle: this.lesson.title,
-          initialDescription: this.lesson.description,
-          submitErrorMessage: this.$tr('submitErrorMessage'),
         };
       },
       previousPageRoute() {
@@ -99,18 +91,25 @@
         return this.$router.getRoute(route);
       },
     },
-    beforeRouteEnter(to, from, next) {
-      return LessonResource.fetchModel({
-        id: to.params.lessonId,
-      })
-        .then(lesson => {
-          next(vm => {
-            vm.setData(lesson);
-          });
-        })
-        .catch(error => {
-          next(vm => vm.setError(error));
-        });
+    created() {
+      const initClassInfoPromise = this.$store.dispatch(
+        'initClassInfo',
+        this.$route.params.classId
+      );
+      const getFacilitiesPromise =
+        this.$store.getters.isSuperuser && this.$store.state.core.facilities.length === 0
+          ? this.$store.dispatch('getFacilities').catch(() => {})
+          : Promise.resolve();
+
+      Promise.all([initClassInfoPromise, getFacilitiesPromise])
+        .then(() =>
+          LessonResource.fetchModel({
+            id: this.$route.params.lessonId,
+          })
+        )
+        .then(lesson => this.setData(lesson))
+        .catch(error => this.setError(error))
+        .then(() => this.$store.dispatch('notLoading'));
     },
     methods: {
       // @public
@@ -122,7 +121,7 @@
       },
       // @public
       setError(error) {
-        this.$store.dispatch('handleApiError', error);
+        this.$store.dispatch('handleApiError', { error });
         this.loading = false;
         this.$store.dispatch('notLoading');
       },
@@ -133,7 +132,7 @@
         this.disabled = true;
         const data = {
           description: newDetails.description,
-          lesson_assignments: newDetails.assignments,
+          assignments: newDetails.assignments,
           title: newDetails.title,
           learner_ids: newDetails.learner_ids,
         };

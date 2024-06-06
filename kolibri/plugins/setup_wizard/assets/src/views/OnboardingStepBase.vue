@@ -144,7 +144,7 @@
   import LanguageSwitcherModal from 'kolibri.coreVue.components.LanguageSwitcherModal';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import AppError from 'kolibri-common/components/AppError';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import { availableLanguages, currentLanguage } from 'kolibri.utils.i18n';
   import { FooterMessageTypes } from '../constants';
 
@@ -152,7 +152,11 @@
     name: 'OnboardingStepBase',
     components: { AppError, CoreLogo, LanguageSwitcherModal },
     inject: ['wizardService'],
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return { windowIsSmall };
+    },
     props: {
       /**
        * The event sent to the state machine when the user clicks GO BACK.
@@ -319,7 +323,7 @@
     .logo-text {
       position: absolute;
       // Aligns text vertically with logo
-      bottom: 3px;
+      bottom: 5px;
       // Spaces the text from the logo
       left: 48px;
       font-size: 18px;

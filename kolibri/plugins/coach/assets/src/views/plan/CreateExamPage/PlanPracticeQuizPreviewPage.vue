@@ -2,8 +2,6 @@
 
   <CoachImmersivePage
     :appBarTitle="appBarTitle"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
     icon="back"
     :route="returnBackRoute"
     :primary="false"
@@ -80,7 +78,7 @@
               this.showError = true;
               this.showTitleError = true;
             } else {
-              this.$store.dispatch('handleApiError', error);
+              this.$store.dispatch('handleApiError', { error });
             }
           });
       },

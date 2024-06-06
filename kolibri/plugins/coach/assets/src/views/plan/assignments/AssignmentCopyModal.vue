@@ -14,7 +14,7 @@
         :key="classroom.id"
         v-model="selectedClassroomId"
         :label="classroomLabel(classroom)"
-        :value="classroom.id"
+        :buttonValue="classroom.id"
         data-test="radio-button"
       />
     </div>
@@ -144,7 +144,7 @@
             this.blockControls = false;
           })
           .catch(error => {
-            this.$store.dispatch('handleApiError', error);
+            this.$store.dispatch('handleApiError', { error });
             logError(error);
             this.blockControls = false;
           });

@@ -121,7 +121,7 @@
     SyncFacilityModalGroup,
   } from 'kolibri.coreVue.componentSets.sync';
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import { TaskResource, FacilityResource } from 'kolibri.resources';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
@@ -232,8 +232,8 @@
         TaskResource.get(this.syncTaskId).then(task => {
           if (task.clearable) {
             this.isSyncing = false;
-            this.syncTaskId = '';
             TaskResource.clear(this.syncTaskId);
+            this.syncTaskId = '';
             if (task.status === TaskStatuses.FAILED) {
               this.syncHasFailed = true;
             } else if (task.status === TaskStatuses.COMPLETED) {

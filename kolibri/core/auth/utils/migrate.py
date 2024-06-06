@@ -1,7 +1,7 @@
 import logging
 
+from django.core.exceptions import FieldDoesNotExist
 from django.db import connections
-from django.db.models import FieldDoesNotExist
 from morango.registry import syncable_models
 from morango.sync.backends.utils import calculate_max_sqlite_variables
 
@@ -101,7 +101,7 @@ def merge_users(source_user, target_user):  # noqa C901
                 try:
                     field_obj = LogModel._meta.get_field(field)
                     if hasattr(field_obj, "from_db_value"):
-                        value = field_obj.from_db_value(value, None, None, None)
+                        value = field_obj.from_db_value(value, None, None)
                 except FieldDoesNotExist:
                     pass
                 setattr(new_log, field, value)
@@ -162,7 +162,7 @@ def _copy_data(Model, id_map, source_data):
             try:
                 field_obj = Model._meta.get_field(field)
                 if hasattr(field_obj, "from_db_value"):
-                    value = field_obj.from_db_value(value, None, None, None)
+                    value = field_obj.from_db_value(value, None, None)
             except FieldDoesNotExist:
                 pass
             setattr(new_obj, field, value)
@@ -221,7 +221,7 @@ def migrate_facility(facility):
     a new facility, and then deletes the old facility, including from the morango store.
     """
     new_dataset = fork_facility(facility)
-    default_facility = get_device_setting("default_facility", None)
+    default_facility = get_device_setting("default_facility")
     if default_facility and default_facility.id == facility.id:
         new_facility = Facility.objects.get(dataset_id=new_dataset.id)
         set_device_settings(default_facility=new_facility)

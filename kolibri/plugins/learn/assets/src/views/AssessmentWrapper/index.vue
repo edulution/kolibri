@@ -51,8 +51,8 @@ oriented data synchronization.
           @click="nextQuestion"
         />
       </UiAlert>
-      <div class="content-wrapper" :style="{ backgroundColor: this.$themePalette.grey.v_100 }">
-        <KContentRenderer
+      <div class="content-wrapper" :style="{ backgroundColor: this.$themePalette.grey.v_50 }">
+        <ContentRenderer
           ref="contentRenderer"
           :kind="kind"
           :lang="lang"
@@ -144,7 +144,7 @@ oriented data synchronization.
   import { MasteryModelGenerators } from 'kolibri.coreVue.vuex.constants';
   import shuffled from 'kolibri.utils.shuffled';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
   import CoreInfoIcon from 'kolibri.coreVue.components.CoreInfoIcon';
   import { createTranslator, defaultLanguage } from 'kolibri.utils.i18n';
@@ -176,7 +176,13 @@ oriented data synchronization.
       LessonMasteryBar,
       CoreInfoIcon,
     },
-    mixins: [commonCoreStrings, responsiveWindowMixin],
+    mixins: [commonCoreStrings],
+    setup() {
+      const { windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsSmall,
+      };
+    },
     props: {
       lang: {
         type: Object,

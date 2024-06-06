@@ -62,15 +62,17 @@
           </div>
         </div>
       </transition>
-      <KGrid gutter="0">
+      <KGrid class="full-height-container" gutter="0">
         <KGridItem
           v-if="showSideBar"
+          class="full-height-container"
           :layout8="{ span: 2 }"
           :layout12="{ span: 3 }"
-          class="sidebar-container"
-          :class="{ 'mt-40': showControls }"
         >
           <SideBar
+            id="sidebar-container"
+            class="scroller-height"
+            :style="{ position: 'sticky', top: 0 }"
             :outline="outline || []"
             :goToDestination="goToDestination"
             :focusDestPage="focusDestPage"
@@ -78,16 +80,17 @@
         </KGridItem>
         <KGridItem
           ref="pdfContainer"
+          class="full-height-container"
           :layout8="{ span: showSideBar ? 6 : 8 }"
           :layout12="{ span: showSideBar ? 9 : 12 }"
         >
-          <RecycleList
+          <RecyclableScroller
+            id="pdf-container"
             ref="recycleList"
             :items="pdfPages"
-            :itemHeight="itemHeight"
+            :buffer="itemHeight * 2"
             :emitUpdate="true"
-            :style="{ height: `${elementHeight - 40}px` }"
-            class="pdf-container"
+            class="pdf-container scroller-height"
             keyField="index"
             @update="handleUpdate"
           >
@@ -104,7 +107,7 @@
                 :eventBus="eventBus"
               />
             </template>
-          </RecycleList>
+          </RecyclableScroller>
         </KGridItem>
       </KGrid>
     </template>
@@ -119,18 +122,19 @@
   import Hammer from 'hammerjs';
   import throttle from 'lodash/throttle';
   import debounce from 'lodash/debounce';
-  import { RecycleList } from 'vue-virtual-scroller';
-  import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
+  import logger from 'kolibri.lib.logging';
   // polyfill necessary for recycle list
   import 'intersection-observer';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import responsiveElementMixin from 'kolibri.coreVue.mixins.responsiveElementMixin';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import CoreFullscreen from 'kolibri.coreVue.components.CoreFullscreen';
   import '../utils/domPolyfills';
   import { EventBus } from '../utils/event_utils';
+  import RecyclableScroller from './RecyclableScroller';
   import PdfPage from './PdfPage';
   import SideBar from './SideBar';
+
+  const logging = logger.getLogger(__filename);
 
   // How often should we respond to changes in scrolling to render new pages?
   const renderDebounceTime = 300;
@@ -141,10 +145,17 @@
     components: {
       SideBar,
       PdfPage,
-      RecycleList,
       CoreFullscreen,
+      RecyclableScroller,
     },
-    mixins: [responsiveWindowMixin, responsiveElementMixin, commonCoreStrings],
+    mixins: [commonCoreStrings],
+    setup() {
+      const { windowIsLarge, windowIsSmall } = useKResponsiveWindow();
+      return {
+        windowIsLarge,
+        windowIsSmall,
+      };
+    },
     data: () => ({
       progress: null,
       scale: null,
@@ -252,11 +263,6 @@
           });
         }
       },
-      elementHeight() {
-        if (this.recycleListIsMounted) {
-          this.debounceForceUpdateRecycleList();
-        }
-      },
       showSideBar() {
         this.$nextTick(() => {
           if (!this.$refs.pdfContainer || !this.$refs.pdfContainer.$el) {
@@ -271,15 +277,7 @@
       PDFJSLib.GlobalWorkerOptions.workerSrc =
         __webpack_public_path__ + `pdfJSWorker-${__version}.js`;
     },
-    destroyed() {
-      // Reset the overflow on the HTML tag that we set to hidden in created()
-      window.document.getElementsByTagName('html')[0].style.overflow = 'auto';
-    },
     created() {
-      // Override, only on this component, the overflow style of the HTML tag
-      // so that PDFRenderer can scroll itself.
-      window.document.getElementsByTagName('html')[0].style.overflow = 'hidden';
-
       this.worker = new PDFJSLib.PDFWorker();
 
       this.worker.promise.catch(error => {
@@ -297,39 +295,38 @@
       };
       this.eventBus = new EventBus();
       this.prepComponentData = loadingPdf.promise
-        .then(pdfDocument => {
+        .then(async pdfDocument => {
           // Get initial info from the loaded pdf document
           this.pdfDocument = pdfDocument;
           this.totalPages = this.pdfDocument.numPages;
+          // Is either the first page or the saved last page visited
+          const firstPageToRender = parseInt(this.getSavedPosition() * this.totalPages);
+
+          const firstPage = await this.getPage(firstPageToRender + 1);
+          const viewPort = firstPage.getViewport({ scale: 1 });
+          this.firstPageHeight = viewPort.height;
+          this.firstPageWidth = viewPort.width;
+          this.scale = this.$el.clientWidth / (this.firstPageWidth * this.screenSizeMultiplier);
+
           // init pdfPages array
+          // ensuring that firstPageToRender is resolved so that we do not refetch the page
           for (let i = 0; i < this.totalPages; i++) {
             this.pdfPages.push({
-              page: null,
-              resolved: false,
+              page: i == firstPageToRender ? firstPage : null,
+              resolved: i == firstPageToRender,
+              size: () => {
+                return this.firstPageHeight * this.scale + MARGIN;
+              },
               index: i,
             });
           }
-          // Is either the first page or the saved last page visited
-          const firstPageToRender = parseInt(this.getSavedPosition() * this.totalPages);
-          return this.getPage(firstPageToRender + 1).then(firstPage => {
-            const viewPort = firstPage.getViewport({ scale: 1 });
-            this.firstPageHeight = viewPort.height;
-            this.firstPageWidth = viewPort.width;
-            this.scale = this.elementWidth / (this.firstPageWidth * this.screenSizeMultiplier);
 
-            // Set the firstPageToRender into the pdfPages object so that we do not refetch the page
-            // from PDFJS when we do our initial render
-            // splice so changes are detected
-            this.pdfPages.splice(firstPageToRender, 1, {
-              ...this.pdfPages[firstPageToRender],
-              page: firstPage,
-              resolved: true,
-            });
-            pdfDocument.getOutline().then(outline => {
-              this.outline = outline;
-              this.showSideBar = outline && outline.length > 0 && this.windowIsLarge; // Remove if other tabs are already implemented
-            });
-          });
+          const outline = await pdfDocument.getOutline();
+          this.outline = outline;
+          this.showSideBar = outline && outline.length > 0 && this.windowIsLarge; // Remove if other tabs are already implemented
+          // Reduce the scale slightly if we are showing the sidebar
+          // at first load.
+          this.scale = this.showSideBar ? 0.75 * this.scale : this.scale;
         })
         .catch(error => {
           this.reportLoadingError(error);
@@ -377,11 +374,16 @@
         if (pageNum > 0 && pageNum <= this.totalPages && !this.pdfPages[pageNum - 1].resolved) {
           const pageIndex = pageNum - 1;
           this.getPage(pageNum).then(pdfPage => {
+            const { height } = pdfPage.getViewport({ scale: 1 });
+
             // splice so changes are detected
             this.pdfPages.splice(pageIndex, 1, {
               ...this.pdfPages[pageIndex],
               page: pdfPage,
               resolved: true,
+              size: () => {
+                return height * this.scale + MARGIN;
+              },
             });
           });
         }
@@ -478,11 +480,10 @@
       calculateRecycleListHeight() {
         return this.$refs.recycleList.$el.scrollHeight;
       },
-      debounceForceUpdateRecycleList: debounce(function() {
-        this.forceUpdateRecycleList();
-      }, renderDebounceTime),
       forceUpdateRecycleList() {
-        this.$refs.recycleList.updateVisibleItems(false);
+        if (this.$refs.recycleList) {
+          this.$refs.recycleList.updateVisibleItems(false);
+        }
       },
       updateProgress() {
         if (this.forceDurationBasedProgress) {
@@ -526,13 +527,13 @@
         Promise.resolve(dest === 'string' ? this.pdfDocument.getDestination(dest) : dest).then(
           explicitDest => {
             if (!Array.isArray(explicitDest)) {
-              console.error('Error getting destination');
+              logging.error('Error getting destination');
               return;
             }
 
             this.getDestinationPageNumber(explicitDest).then(pageNumber => {
               if (!pageNumber || pageNumber < 1 || pageNumber > this.pagesCount) {
-                console.error('Invalid destination page');
+                logging.error('Invalid destination page');
                 return;
               }
 
@@ -563,13 +564,13 @@
         Promise.resolve(dest === 'string' ? this.pdfDocument.getDestination(dest) : dest).then(
           explicitDest => {
             if (!Array.isArray(explicitDest)) {
-              console.error('Error getting destination');
+              logging.error('Error getting destination');
               return;
             }
 
             this.getDestinationPageNumber(explicitDest).then(pageNumber => {
               if (!pageNumber || pageNumber < 1 || pageNumber > this.pagesCount) {
-                console.error('Invalid destination page');
+                logging.error('Invalid destination page');
                 return;
               }
 
@@ -632,14 +633,14 @@
                 resolve(pageIndex + 1);
               })
               .catch(e => {
-                console.error('Error getting destination page number', e);
+                logging.error('Error getting destination page number', e);
                 resolve();
               });
           }
           if (Number.isInteger(destRef)) {
             return resolve(destRef + 1);
           }
-          console.error('Invalid destination reference');
+          logging.error('Invalid destination reference');
           resolve();
         });
       },
@@ -665,21 +666,22 @@
 
   @import '~kolibri-design-system/lib/styles/definitions';
   $controls-height: 40px;
-  $top-bar-height: 32px;
-  $tool-bar-height: 56px;
 
   .pdf-renderer {
     @extend %momentum-scroll;
     @extend %dropshadow-2dp;
 
     position: relative;
-    height: calc(100vh - #{$top-bar-height} - #{$controls-height} + 16px);
     overflow-y: hidden;
   }
 
   .pdf-container {
     position: relative;
-    top: $controls-height;
+    overflow-y: auto;
+  }
+
+  .scroller-height {
+    height: calc(100% - #{$controls-height});
   }
 
   .controls {
@@ -701,8 +703,8 @@
     margin: 0 auto;
   }
   // enable horizontal scrolling
-  /deep/ .recycle-list {
-    .item-wrapper {
+  /deep/ .vue-recycle-scroller {
+    .vue-recycle-scroller-item-wrapper {
       overflow-x: auto;
     }
   }
@@ -717,11 +719,6 @@
   }
 
   .fullscreen-header {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
-    z-index: 7;
     display: flex;
     height: $controls-height;
   }
@@ -743,28 +740,27 @@
     transform: translateY(-40px);
   }
 
-  .mt-40 {
-    margin-top: 40px;
-  }
-
-  .sidebar-container {
-    height: calc(100vh - #{$tool-bar-height});
-  }
-
-  .pdf-renderer.pdf-controls-open .sidebar-container {
-    height: calc(100vh - #{$tool-bar-height} - #{$controls-height});
-  }
-
-  .pdf-renderer.pdf-full-screen .sidebar-container {
-    height: 100vh;
-  }
-
-  .pdf-renderer.pdf-full-screen.pdf-controls-open .sidebar-container {
-    height: calc(100vh - #{$controls-height});
-  }
-
-  /deep/ .sidebar-container > div {
+  .full-height-container {
     height: 100%;
+  }
+
+  /deep/ .full-height-container > div {
+    height: 100%;
+  }
+
+  /deep/ .resize-observer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    background-color: transparent;
+    border: 0;
+    opacity: 0;
   }
 
 </style>

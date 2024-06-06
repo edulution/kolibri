@@ -1,6 +1,5 @@
 import os
 import platform
-import sys
 import uuid
 from collections import namedtuple
 from datetime import timedelta
@@ -17,6 +16,7 @@ from morango.models import InstanceIDModel
 from morango.models import SyncSession
 from morango.models import TransferSession
 from rest_framework import status
+from rest_framework.test import APIClient
 from rest_framework.test import APITestCase
 
 import kolibri
@@ -32,11 +32,14 @@ from kolibri.core.auth.test.test_api import ClassroomFactory
 from kolibri.core.auth.test.test_api import FacilityFactory
 from kolibri.core.auth.test.test_api import FacilityUserFactory
 from kolibri.core.content.models import ContentDownloadRequest
+from kolibri.core.content.models import ContentRemovalRequest
+from kolibri.core.content.models import ContentRequestReason
 from kolibri.core.device.models import DevicePermissions
 from kolibri.core.device.models import DeviceSettings
 from kolibri.core.device.models import DeviceStatus
 from kolibri.core.device.models import LearnerDeviceStatus
 from kolibri.core.device.models import StatusSentiment
+from kolibri.core.device.models import SyncQueueStatus
 from kolibri.core.device.models import UserSyncStatus
 from kolibri.core.public.constants import user_sync_statuses
 from kolibri.core.public.constants.user_sync_options import DELAYED_SYNC
@@ -275,6 +278,7 @@ class DeviceSettingsTestCase(APITestCase):
 
     def setUp(self):
         super(DeviceSettingsTestCase, self).setUp()
+        clear_process_cache()
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
@@ -321,6 +325,7 @@ class DeviceSettingsTestCase(APITestCase):
 class DevicePermissionsTestCase(APITestCase):
     @classmethod
     def setUpTestData(cls):
+        clear_process_cache()
         provision_device()
         cls.facility = FacilityFactory.create()
         cls.superuser = create_superuser(cls.facility)
@@ -358,6 +363,7 @@ class DevicePermissionsTestCase(APITestCase):
 @override_option("Deployment", "MINIMUM_DISK_SPACE", 0)
 class FreeSpaceTestCase(APITestCase):
     def setUp(self):
+        clear_process_cache()
         provision_device()
         self.facility = FacilityFactory.create()
         self.superuser = create_superuser(self.facility)
@@ -368,30 +374,17 @@ class FreeSpaceTestCase(APITestCase):
             facility=self.facility,
         )
 
-    def test_posix_freespace(self):
-        if not sys.platform.startswith("win"):
-            with mock.patch("kolibri.utils.system.os.statvfs") as os_statvfs_mock:
-                statvfs_result = namedtuple("statvfs_result", ["f_frsize", "f_bavail"])
-                os_statvfs_mock.return_value = statvfs_result(f_frsize=1, f_bavail=2)
+    def test_freespace(self):
+        with mock.patch("kolibri.utils.system.shutil.disk_usage") as diskusage_mock:
+            diskusage_result = namedtuple("diskusage_result", ["free"])
+            diskusage_mock.return_value = diskusage_result(free=2)
 
-                response = self.client.get(
-                    reverse("kolibri:core:freespace"), {"path": "test"}
-                )
+            response = self.client.get(
+                reverse("kolibri:core:freespace"), {"path": "test"}
+            )
 
-                os_statvfs_mock.assert_called_with(os.path.realpath("test"))
-                self.assertEqual(response.data, {"freespace": 2})
-
-    def test_win_freespace_fail(self):
-        if sys.platform.startswith("win"):
-            ctypes_mock = mock.MagicMock()
-            with mock.patch.dict("sys.modules", ctypes=ctypes_mock):
-                ctypes_mock.windll.kernel32.GetDiskFreeSpaceExW.return_value = 0
-                ctypes_mock.winError.side_effect = OSError
-                try:
-                    self.client.get(reverse("kolibri:core:freespace"), {"path": "test"})
-                except OSError:
-                    # check if ctypes.winError() has been called
-                    ctypes_mock.winError.assert_called_with()
+            diskusage_mock.assert_called_with(os.path.realpath("test"))
+            self.assertEqual(response.data, {"freespace": 2})
 
 
 class DeviceInfoTestCase(APITestCase):
@@ -403,6 +396,7 @@ class DeviceInfoTestCase(APITestCase):
         cls.superuser = create_superuser(cls.facility)
 
     def setUp(self):
+        clear_process_cache()
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
@@ -501,6 +495,7 @@ class DeviceNameTestCase(APITestCase):
         cls.user = FacilityUserFactory.create(facility=cls.facility)
 
     def setUp(self):
+        clear_process_cache()
         super(DeviceNameTestCase, self).setUp()
         self.client.login(
             username=self.superuser.username,
@@ -576,7 +571,7 @@ class UserSyncStatusTestCase(APITestCase):
         data1 = {
             "user_id": cls.user1.id,
             "sync_session": cls.syncsession1,
-            "queued": True,
+            "status": SyncQueueStatus.Queued,
         }
         cls.syncstatus1 = UserSyncStatus.objects.create(**data1)
 
@@ -594,7 +589,7 @@ class UserSyncStatusTestCase(APITestCase):
         data2 = {
             "user_id": cls.user2.id,
             "sync_session": cls.syncsession2,
-            "queued": False,
+            "status": SyncQueueStatus.Pending,
         }
         cls.syncstatus2 = UserSyncStatus.objects.create(**data2)
 
@@ -620,6 +615,7 @@ class UserSyncStatusTestCase(APITestCase):
         )
 
     def setUp(self):
+        clear_process_cache()
         self.client.login(
             username=self.superuser.username,
             password=DUMMY_PASSWORD,
@@ -747,7 +743,7 @@ class UserSyncStatusTestCase(APITestCase):
             password=DUMMY_PASSWORD,
             facility=self.facility,
         )
-        self.syncstatus1.queued = False
+        self.syncstatus1.status = SyncQueueStatus.Pending
         self.syncstatus1.save()
         self._create_transfer_session(
             active=False,
@@ -813,7 +809,7 @@ class UserSyncStatusTestCase(APITestCase):
             password=DUMMY_PASSWORD,
             facility=self.facility,
         )
-        self.syncstatus1.queued = False
+        self.syncstatus1.status = SyncQueueStatus.Pending
         self.syncstatus1.save()
         last_sync = timezone.now() - timedelta(seconds=DELAYED_SYNC * 2)
         self.syncsession1.last_activity_timestamp = last_sync
@@ -829,6 +825,29 @@ class UserSyncStatusTestCase(APITestCase):
         self.assertEqual(
             response.data[0]["status"], user_sync_statuses.NOT_RECENTLY_SYNCED
         )
+
+    def test_usersyncstatus_list_learner_no_sync_session(self):
+        self.client.login(
+            username=self.user1.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        self.syncstatus1.status = SyncQueueStatus.Pending
+        previous_sync_session = self.syncstatus1.sync_session
+        self.syncstatus1.sync_session = None
+        self.syncstatus1.save()
+
+        try:
+            response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
+            self.assertEqual(len(response.data), 1)
+            self.assertEqual(response.data[0]["user"], self.user1.id)
+            self.assertEqual(
+                response.data[0]["status"], user_sync_statuses.NOT_RECENTLY_SYNCED
+            )
+        finally:
+            # Not doing this leads to weird unexpected test contagion.
+            self.syncstatus1.sync_session = previous_sync_session
+            self.syncstatus1.save()
 
     def test_usersyncstatus_list__insufficient_storage(self):
         self.client.login(
@@ -900,10 +919,92 @@ class UserSyncStatusTestCase(APITestCase):
         device_status = self._create_device_status("oopsie", StatusSentiment.Neutral)
         self.syncsession1.client_instance_id = device_status.instance_id
         self.syncsession1.save()
-        response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
         content_request.save()
+        response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["user"], self.user1.id)
         self.assertEqual(response.data[0]["status"], user_sync_statuses.RECENTLY_SYNCED)
-        self.assertFalse(response.data[0]["has_downloads"])
+        self.assertTrue(response.data[0]["has_downloads"])
         self.assertIsNone(response.data[0]["last_download_removed"])
+
+    def test_downloads_queryset__content_request_removed(self):
+        self.client.login(
+            username=self.user1.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        self._create_transfer_session(
+            active=False,
+        )
+        content_request = ContentDownloadRequest.build_for_user(self.user1)
+        content_request.contentnode_id = uuid.uuid4().hex
+        content_request.save()
+        content_removal_request = ContentRemovalRequest.build_for_user(self.user1)
+        content_removal_request.contentnode_id = content_request.contentnode_id
+        content_removal_request.save()
+        response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
+        self.assertFalse(response.data[0]["has_downloads"])
+
+    def test_downloads_queryset__sync_downloads_in_progress(self):
+        self.client.login(
+            username=self.user1.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        self._create_transfer_session(
+            active=False,
+        )
+        content_request = ContentDownloadRequest.build_for_user(self.user1)
+        content_request.contentnode_id = uuid.uuid4().hex
+        content_request.reason = ContentRequestReason.SyncInitiated
+        content_request.save()
+        response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
+        self.assertTrue(response.data[0]["sync_downloads_in_progress"])
+
+    def test_downloads_queryset__sync_downloads_in_progress_removed(self):
+        self.client.login(
+            username=self.user1.username,
+            password=DUMMY_PASSWORD,
+            facility=self.facility,
+        )
+        self._create_transfer_session(
+            active=False,
+        )
+        content_request = ContentDownloadRequest.build_for_user(self.user1)
+        content_request.contentnode_id = uuid.uuid4().hex
+        content_request.reason = ContentRequestReason.SyncInitiated
+        content_request.save()
+        content_removal_request = ContentRemovalRequest.build_for_user(self.user1)
+        content_removal_request.contentnode_id = content_request.contentnode_id
+        content_removal_request.reason = ContentRequestReason.SyncInitiated
+        content_removal_request.save()
+        response = self.client.get(reverse("kolibri:core:usersyncstatus-list"))
+        self.assertFalse(response.data[0]["sync_downloads_in_progress"])
+
+
+class CSRFProtectedDeviceTestCase(APITestCase):
+    def setUp(self):
+        clear_process_cache()
+        self.client_csrf = APIClient(enforce_csrf_checks=True)
+        self.superuser_data = {"username": "superuser", "password": "password"}
+        self.facility_data = {"name": "Wilson Elementary"}
+        self.preset_data = "nonformal"
+        self.settings = {}
+        self.allow_guest_access = True
+        self.language_id = "en"
+
+    def test_csrf_protected_deviceprovision(self):
+        response = self.client_csrf.post(
+            reverse("kolibri:core:deviceprovision"),
+            {
+                "device_name": None,
+                "superuser": self.superuser_data,
+                "facility": self.facility_data,
+                "preset": self.preset_data,
+                "settings": self.settings,
+                "language_id": self.language_id,
+                "allow_guest_access": self.allow_guest_access,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -11,12 +11,8 @@ instead, at a different URL (e.g. with version number v2 instead of v1), leaving
 endpoint in place and maintained to the best extent possible so older clients can still use it.
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
-from django.conf.urls import include
-from django.conf.urls import url
+from django.urls import include
+from django.urls import re_path
 from rest_framework import routers
 
 from ..auth.api import PublicFacilityUserViewSet
@@ -30,7 +26,7 @@ from .api import InfoViewSet
 from .api import PublicChannelMetadataViewSet
 from .api import PublicContentNodeTreeViewSet
 from .api import PublicContentNodeViewSet
-from .api import SyncQueueViewSet
+from .api import SyncQueueAPIView
 from kolibri.core.content.public_api import ImportMetadataViewset
 
 
@@ -43,7 +39,6 @@ router.register(
 )
 router.register(r"signup", PublicSignUpViewSet, basename="publicsignup")
 router.register(r"info", InfoViewSet, basename="info")
-router.register(r"syncqueue", SyncQueueViewSet, basename="syncqueue")
 
 public_content_v2_router = routers.SimpleRouter()
 public_content_v2_router.register(
@@ -63,21 +58,26 @@ public_content_v2_router.register(
 
 # Add public api endpoints
 urlpatterns = [
-    url(r"^", include(router.urls)),
-    url(r"v2/", include(public_content_v2_router.urls)),
-    url(
-        r"(?P<version>[^/]+)/channels/lookup/(?P<identifier>[^/]+)",
+    re_path(r"^", include(router.urls)),
+    re_path(r"v2/", include(public_content_v2_router.urls)),
+    re_path(
+        r"(?P<version>[^/]+)/channels/lookup/(?P<identifier>[^/]+)$",
         get_public_channel_lookup,
         name="get_public_channel_lookup",
     ),
-    url(
+    re_path(
         r"(?P<version>[^/]+)/channels",
         get_public_channel_list,
         name="get_public_channel_list",
     ),
-    url(
+    re_path(
         r"(?P<version>[^/]+)/file_checksums/",
         get_public_file_checksums,
         name="get_public_file_checksums",
+    ),
+    re_path(
+        r"syncqueue/",
+        SyncQueueAPIView.as_view(),
+        name="syncqueue",
     ),
 ]

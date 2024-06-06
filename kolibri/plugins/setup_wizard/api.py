@@ -1,6 +1,9 @@
 import requests
 from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
 from rest_framework import decorators
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError
@@ -8,6 +11,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from kolibri.core.auth.backends import FACILITY_CREDENTIAL_KEY
 from kolibri.core.auth.constants import user_kinds
 from kolibri.core.auth.models import Facility
 from kolibri.core.auth.models import FacilityUser
@@ -27,12 +31,10 @@ class HasPermissionDuringLODSetup(BasePermission):
     def has_permission(self, request, view):
         from kolibri.core.device.utils import get_device_setting
 
-        subset_of_users_device = get_device_setting(
-            "subset_of_users_device", default=False
-        )
-        return subset_of_users_device
+        return get_device_setting("subset_of_users_device")
 
 
+@method_decorator(csrf_protect, name="dispatch")
 class SetupWizardResource(ViewSet):
     """
     Generic endpoints for use during various setup wizard onboarding flows
@@ -45,6 +47,7 @@ class SetupWizardResource(ViewSet):
         facility_id = request.data.get("facility_id", None)
         username = request.data.get("username", None)
         password = request.data.get("password", None)
+        full_name = request.data.get("full_name", "")
         baseurl = request.data.get("baseurl", None)
 
         api_url = reverse("kolibri:core:publicsignup-list")
@@ -52,15 +55,19 @@ class SetupWizardResource(ViewSet):
         url = "{}{}".format(baseurl, api_url)
 
         payload = {
-            "facility_id": facility_id,
+            # N.B. facility is keyed by facility not facility_id on the signup
+            # viewset serializer.
+            FACILITY_CREDENTIAL_KEY: facility_id,
             "username": username,
             "password": password,
+            "full_name": full_name,
         }
 
         r = requests.post(url, data=payload)
         return Response({"status": r.status_code, "data": r.content})
 
 
+@method_decorator(csrf_protect, name="dispatch")
 class FacilityImportViewSet(ViewSet):
     """
     A group of endpoints that are used by the SetupWizard to import a facility
@@ -155,7 +162,12 @@ class FacilityImportViewSet(ViewSet):
         baseurl = request.data.get("baseurl")
         password = request.data.get("password")
         username = request.data.get("username")
-        facility_info = get_remote_users_info(baseurl, facility_id, username, password)
+        try:
+            facility_info = get_remote_users_info(
+                baseurl, facility_id, username, password
+            )
+        except AuthenticationFailed:
+            raise PermissionDenied()
         user_info = facility_info["user"]
         roles = user_info["roles"]
         admin_roles = (user_kinds.ADMIN, user_kinds.SUPERUSER)

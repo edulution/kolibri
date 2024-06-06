@@ -11,13 +11,8 @@
     <KPageContainer>
       <AssignmentDetailsModal
         ref="detailsModal"
-        assignmentType="new_lesson"
-        :modalTitleErrorMessage="coachString('duplicateLessonTitleError')"
-        :submitErrorMessage="coachString('saveLessonError')"
-        :initialDescription="''"
-        :initialTitle="''"
-        :initialSelectedCollectionIds="[classId]"
-        :initialAdHocLearners="[]"
+        assignmentType="lesson"
+        :assignment="{ assignments: [classId] }"
         :classId="classId"
         :groups="groups"
         :disabled="false"
@@ -50,6 +45,15 @@
       classId() {
         return this.$route.params.classId;
       },
+    },
+    created() {
+      const initClassInfoPromise = this.$store.dispatch('initClassInfo', this.classId);
+      const getFacilitiesPromise =
+        this.$store.getters.isSuperuser && this.$store.state.core.facilities.length === 0
+          ? this.$store.dispatch('getFacilities').catch(() => {})
+          : Promise.resolve();
+
+      Promise.all([initClassInfoPromise, getFacilitiesPromise]);
     },
     mounted() {
       this.$store.commit('CORE_SET_PAGE_LOADING', false);

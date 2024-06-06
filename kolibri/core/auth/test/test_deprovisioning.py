@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import uuid
 
 from django.core.management import call_command
@@ -33,6 +29,7 @@ class DeprovisionCommandTestCase(TestCase):
     Tests for the deprovision command.
     """
 
+    databases = "__all__"
     fixtures = ["content_test.json"]
 
     def setUp(self):

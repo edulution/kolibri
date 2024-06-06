@@ -8,11 +8,10 @@
     <!-- by replacing it with an empty object -->
     <ImmersivePage
       v-else
-      :loading="loading"
       :route="back"
       :appBarTitle="barTitle"
       :appearanceOverrides="{}"
-      :primary="!allowDownloads"
+      :primary="false"
       class="page"
     >
       <template #actions>
@@ -23,7 +22,7 @@
         />
       </template>
 
-      <KCircularLoader v-if="loading" />
+      <KCircularLoader v-if="loading" class="page-loader" />
 
       <div v-else>
         <!-- Header with thumbail and tagline -->
@@ -39,10 +38,10 @@
         >
           <template #sticky-sidebar>
             <ToggleHeaderTabs
-              v-if="!!windowIsLarge"
+              v-if="!!windowIsLarge && topic"
               :topic="topic"
               :topics="topics"
-              :style="tabPosition"
+              :width="sidePanelWidth"
             />
             <SearchFiltersPanel
               v-if="!!windowIsLarge && searchActive"
@@ -58,7 +57,7 @@
               ref="sidePanel"
               class="side-panel"
               :topics="topics"
-              :topicMore="topicMore"
+              :topicMore="Boolean(topicMore)"
               :topicsLoading="topicMoreLoading"
               :width="`${sidePanelWidth}px`"
               :style="sidePanelStyleOverrides"
@@ -111,6 +110,7 @@
                   :key="t.id"
                   :topic="t"
                   :subTopicLoading="t.id === subTopicLoading"
+                  :gridType="gridType"
                   :allowDownloads="allowDownloads"
                   @showMore="handleShowMore"
                   @loadMoreInSubtopic="handleLoadMoreInSubtopic"
@@ -125,7 +125,7 @@
                 :allowDownloads="allowDownloads"
                 data-test="search-results"
                 :contents="resourcesDisplayed"
-                :numCols="numCols"
+                :gridType="gridType"
                 currentCardViewStyle="card"
                 @toggleInfoPanel="toggleInfoPanel"
               />
@@ -188,7 +188,7 @@
             ref="embeddedPanel"
             class="full-screen-side-panel"
             :topics="topics"
-            :topicMore="topicMore"
+            :topicMore="Boolean(topicMore)"
             :topicsLoading="topicMoreLoading"
             :style="sidePanelStyleOverrides"
             @loadMoreTopics="handleLoadMoreInTopic"
@@ -242,22 +242,30 @@
 
 <script>
 
-  import { mapActions, mapState } from 'vuex';
+  import { get, set } from '@vueuse/core';
   import isEqual from 'lodash/isEqual';
-  import set from 'lodash/set';
+  import lodashSet from 'lodash/set';
+  import lodashGet from 'lodash/get';
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
-  import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import { getCurrentInstance, ref, watch } from 'kolibri.lib.vueCompositionApi';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
+  import useUser from 'kolibri.coreVue.composables.useUser';
   import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import { throttle } from 'frame-throttle';
   import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
+  import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
+  import { ContentNodeResource } from 'kolibri.resources';
   import plugin_data from 'plugin_data';
   import SidePanelModal from '../SidePanelModal';
   import { PageNames } from '../../constants';
+  import useChannels from '../../composables/useChannels';
   import useSearch from '../../composables/useSearch';
   import useContentLink from '../../composables/useContentLink';
+  import useContentNodeProgress from '../../composables/useContentNodeProgress';
   import useCoreLearn from '../../composables/useCoreLearn';
+  import { setCurrentDevice, StudioNotAllowedError } from '../../composables/useDevices';
+  import useDownloadRequests from '../../composables/useDownloadRequests';
   import LibraryAndChannelBrowserMainContent from '../LibraryAndChannelBrowserMainContent';
   import SearchFiltersPanel from '../SearchFiltersPanel';
   import BrowseResourceMetadata from '../BrowseResourceMetadata';
@@ -271,6 +279,33 @@
   import TopicSubsection from './TopicSubsection';
   import TopicsPanelModal from './TopicsPanelModal';
   import commonLearnStrings from './../commonLearnStrings';
+
+  function _handleRootTopic(topic, currentChannel) {
+    const isRoot = !topic.parent;
+    if (isRoot) {
+      topic.description = currentChannel.description;
+      topic.tagline = currentChannel.tagline;
+      topic.thumbnail = currentChannel.thumbnail;
+    }
+    return isRoot;
+  }
+
+  function _getChildren(id, topic, skip) {
+    let children = topic.children.results || [];
+    let skipped = false;
+    // If there is only one child, and that child is a topic, then display that instead
+    while (skip && children.length === 1 && !children[0].is_leaf) {
+      topic = children[0];
+      children = topic.children.results || [];
+      skipped = true;
+      id = topic.id;
+    }
+    return {
+      children,
+      skipped,
+      id,
+    };
+  }
 
   export default {
     name: 'TopicsPage',
@@ -305,11 +340,13 @@
       ImmersivePage,
       DeviceConnectionStatus,
     },
-    mixins: [responsiveWindowMixin, commonCoreStrings, commonLearnStrings],
-    setup() {
+    mixins: [commonCoreStrings, commonLearnStrings],
+    setup(props) {
       const { canAddDownloads, canDownloadExternally } = useCoreLearn();
-      const store = getCurrentInstance().proxy.$store;
-      const topic = computed(() => store.state.topicsTree && store.state.topicsTree.topic);
+      const currentInstance = getCurrentInstance().proxy;
+      const store = currentInstance.$store;
+      const router = currentInstance.$router;
+      const topic = ref(null);
       const {
         searchTerms,
         displayingSearchResults,
@@ -321,9 +358,167 @@
         searchMore,
         removeFilterTag,
         clearSearch,
+        currentRoute,
       } = useSearch(topic);
       const { back, genContentLinkKeepCurrentBackLink } = useContentLink();
+      const { windowBreakpoint, windowIsLarge, windowIsSmall } = useKResponsiveWindow();
+      const { channelsMap, fetchChannels } = useChannels();
+      const { fetchContentNodeProgress, fetchContentNodeTreeProgress } = useContentNodeProgress();
+      const { isUserLoggedIn, isCoach, isAdmin, isSuperuser } = useUser();
+      const { fetchUserDownloadRequests } = useDownloadRequests(store);
+
+      const isRoot = ref(false);
+      const channel = ref(null);
+      const contents = ref([]);
+      const loading = ref(true);
+      const sidePanelIsOpen = ref(false);
+
+      const _getAllDescendantChildren = topic => {
+        const contentnode_id__in = [];
+        const children = topic.children ? topic.children.results : [];
+        for (const child of children) {
+          if (child.kind === ContentNodeKinds.TOPIC) {
+            contentnode_id__in.push(..._getAllDescendantChildren(child));
+          } else {
+            contentnode_id__in.push(child.id);
+          }
+        }
+        return contentnode_id__in;
+      };
+
+      const fetchRemoteBrowsingContentNodeUserData = topic => {
+        if (get(isUserLoggedIn) && props.deviceId) {
+          const contentnode_id__in = _getAllDescendantChildren(topic);
+          if (contentnode_id__in.length) {
+            if (get(canAddDownloads)) {
+              fetchUserDownloadRequests({ contentnode_id__in });
+            }
+            fetchContentNodeProgress({ ids: contentnode_id__in });
+          }
+        }
+      };
+
+      function _handleTopicRedirect(route, children, id, skipped) {
+        if (children.every(c => c.is_leaf) && route.name !== PageNames.TOPICS_TOPIC_SEARCH) {
+          // if all children are leaf nodes (i.e. they have no children themselves)
+          // then redirect to search results
+          if (children.every(c => c.title == '')) {
+            router.replace({
+              name: PageNames.TOPICS_TOPIC_SEARCH,
+              params: { ...route.params, id },
+              query: route.query,
+            });
+          } else {
+            sidePanelIsOpen.value = false;
+          }
+        } else if (skipped) {
+          // If we have skipped down the topic tree, replace to the new top level topic
+          router.replace({ name: route.name, params: { ...route.params, id }, query: route.query });
+          return true;
+        } else {
+          sidePanelIsOpen.value = false;
+        }
+      }
+
+      function _loadTopicsTopic({ baseurl, shouldResolve } = {}) {
+        let id = props.id;
+        const route = currentRoute();
+        const skip = route.query && route.query.skip === 'true';
+        const params = {
+          include_coach_content: get(isAdmin) || get(isCoach) || get(isSuperuser),
+          baseurl,
+        };
+        if (get(isUserLoggedIn) && !baseurl) {
+          fetchContentNodeTreeProgress({ id, params });
+        }
+        return Promise.all([
+          ContentNodeResource.fetchTree({
+            id,
+            params,
+          }),
+          fetchChannels({ baseurl }),
+        ]).then(([fetchedTopic]) => {
+          if (shouldResolve()) {
+            const currentChannel = channelsMap[fetchedTopic.channel_id];
+            if (!currentChannel) {
+              router.replace({ name: PageNames.CONTENT_UNAVAILABLE });
+              return;
+            }
+
+            const rootTopic = _handleRootTopic(fetchedTopic, currentChannel);
+
+            const childrenResults = _getChildren(id, fetchedTopic, skip);
+
+            const { children, skipped } = childrenResults;
+
+            id = childrenResults.id;
+
+            const redirectedToNewTopic = _handleTopicRedirect(route, children, id, skipped);
+
+            if (redirectedToNewTopic) {
+              // If we have encountered the skip logic, we need to reload the topic
+              // with the new id, which will be triggered by our watch statement below
+              // so we can just return here
+              return;
+            }
+
+            fetchRemoteBrowsingContentNodeUserData(fetchedTopic);
+
+            set(isRoot, rootTopic);
+
+            set(contents, children);
+
+            set(topic, fetchedTopic);
+
+            set(channel, currentChannel);
+
+            set(loading, false);
+
+            store.dispatch('notLoading');
+            store.commit('CORE_SET_ERROR', null);
+          }
+        });
+      }
+
+      function showTopicsTopic() {
+        return store.dispatch('loading').then(() => {
+          const route = currentRoute();
+          store.commit('SET_PAGE_NAME', route.name);
+          set(loading, true);
+          set(topic, null);
+          set(channel, null);
+          set(contents, []);
+          set(isRoot, false);
+          const shouldResolve = samePageCheckGenerator(store);
+          let promise;
+          if (props.deviceId) {
+            promise = setCurrentDevice(props.deviceId).then(device => {
+              const baseurl = device.base_url;
+              return _loadTopicsTopic({ baseurl, shouldResolve });
+            });
+          } else {
+            promise = _loadTopicsTopic({ shouldResolve });
+          }
+          return promise.catch(error => {
+            if (shouldResolve()) {
+              if (
+                error === StudioNotAllowedError ||
+                (error.response && error.response.status === 410)
+              ) {
+                router.replace({ name: PageNames.LIBRARY });
+                return;
+              }
+              store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+            }
+          });
+        });
+      }
+
+      watch([() => props.id, () => props.deviceId], showTopicsTopic);
+      showTopicsTopic();
+
       return {
+        fetchRemoteBrowsingContentNodeUserData,
         canAddDownloads,
         canDownloadExternally,
         searchTerms,
@@ -338,14 +533,31 @@
         clearSearch,
         back,
         genContentLinkKeepCurrentBackLink,
+        windowBreakpoint,
+        windowIsLarge,
+        windowIsSmall,
+        isRoot,
+        channel,
+        topic,
+        contents,
+        isUserLoggedIn,
+        fetchContentNodeTreeProgress,
+        loading,
+        sidePanelIsOpen,
       };
     },
     props: {
-      loading: {
-        type: Boolean,
+      deviceId: {
+        type: String,
         default: null,
       },
-      deviceId: {
+      // Our linting doesn't detect usage in the setup function yet.
+      // eslint-disable-next-line kolibri/vue-no-unused-properties
+      id: {
+        type: String,
+        required: true,
+      },
+      subtopic: {
         type: String,
         default: null,
       },
@@ -353,9 +565,7 @@
     data: function() {
       return {
         sidePanelStyleOverrides: {},
-        tabPosition: {},
         showMoreResources: false,
-        sidePanelIsOpen: false,
         metadataSidePanelContent: null,
         expandedTopics: {},
         subTopicLoading: null,
@@ -364,17 +574,13 @@
       };
     },
     computed: {
-      ...mapState('topicsTree', ['channel', 'contents', 'isRoot', 'topic']),
       allowDownloads() {
-        return this.canAddDownloads && Boolean(this.deviceId);
+        return this.isUserLoggedIn && this.canAddDownloads && Boolean(this.deviceId);
       },
       barTitle() {
         return this.deviceId
           ? this.learnString('exploreLibraries')
           : (this.topic && this.topic.title) || '';
-      },
-      childrenToDisplay() {
-        return Math.max(this.numCols, 3);
       },
       breadcrumbs() {
         if (!this.topic || !this.topic.ancestors) {
@@ -386,7 +592,7 @@
             // To allow navigating to a specific topic under the breadcrumb
             // without following the normal skip logic, add a special query
             // parameter to signal that we do not want to skip.
-            set(link, ['query', 'skip'], 'false');
+            lodashSet(link, ['query', 'skip'], 'false');
             return {
               // Use the channel name just in case the root node does not have a title.
               text: index === 0 ? this.channelTitle : title,
@@ -400,10 +606,16 @@
         return this.$route.name === PageNames.TOPICS_TOPIC_SEARCH;
       },
       channelTitle() {
-        return this.channel.name;
+        return this.channel ? this.channel.name : '';
       },
       resources() {
         return this.contents.filter(content => content.kind !== ContentNodeKinds.TOPIC);
+      },
+      childrenToDisplay() {
+        return this.windowBreakpoint === 2 || this.windowBreakpoint > 4 ? 4 : 3;
+      },
+      gridType() {
+        return this.windowBreakpoint > 4 ? 2 : 1;
       },
       resourcesDisplayed() {
         // if no folders are shown at this level, show more resources to fill the space
@@ -455,6 +667,7 @@
             // showMore is whether we should show more inline
             const showMore =
               !this.subTopicId &&
+              this.topics.length != 1 &&
               topicChildren.length > this.childrenToDisplay &&
               !this.expandedTopics[t.id];
 
@@ -484,13 +697,13 @@
           });
       },
       subTopicId() {
-        return this.$route.params.subtopic;
+        return this.subtopic;
       },
       currentChannelIsCustom() {
         if (
           plugin_data.enableCustomChannelNav &&
           this.topic &&
-          this.topic.options.modality === 'CUSTOM_NAVIGATION'
+          lodashGet(this.topic, ['options', 'modality']) === 'CUSTOM_NAVIGATION'
         ) {
           return true;
         }
@@ -499,7 +712,7 @@
       sidePanelWidth() {
         if (!this.windowIsLarge) {
           return 0;
-        } else if (this.windowBreakpoint < 4) {
+        } else if (this.windowBreakpoint < 5) {
           return 234;
         } else {
           return 346;
@@ -508,16 +721,16 @@
       gridStyle() {
         let style = {};
         /*
-          Fixes jumping scrollbar when reaching the bottom of the page
-          for certain page heights and when side bar is present.
-          The issue is caused by the document scroll height being changed
-          by the sidebar's switching position from absolute to fixed in
-          the sticky calculation, resulting in an endless cycle
-          of the calculation being called and the sidepanel alternating between
-          fixed and absolute position over and over. Setting min height prevents
-          this by making sure that the document scroll height won't change
-          on the sidebar positioning updates.
-        */
+            Fixes jumping scrollbar when reaching the bottom of the page
+            for certain page heights and when side bar is present.
+            The issue is caused by the document scroll height being changed
+            by the sidebar's switching position from absolute to fixed in
+            the sticky calculation, resulting in an endless cycle
+            of the calculation being called and the sidepanel alternating between
+            fixed and absolute position over and over. Setting min height prevents
+            this by making sure that the document scroll height won't change
+            on the sidebar positioning updates.
+          */
         if (this.windowIsLarge) {
           style = {
             minHeight: '900px',
@@ -531,15 +744,6 @@
           style.marginLeft = `${this.sidePanelWidth + 24}px`;
         }
         return style;
-      },
-      numCols() {
-        if (this.windowBreakpoint > 1 && this.windowBreakpoint < 2) {
-          return 2;
-        } else if (this.windowBreakpoint >= 2 && this.windowBreakpoint <= 4) {
-          return 3;
-        } else if (this.windowBreakpoint > 4) {
-          return 4;
-        } else return null;
       },
       throttledStickyCalculation() {
         return throttle(this.stickyCalculation);
@@ -612,7 +816,6 @@
       }
     },
     methods: {
-      ...mapActions('topicsTree', ['loadMoreContents', 'loadMoreTopics']),
       throttledHandleScroll() {
         this.throttledStickyCalculation();
       },
@@ -659,11 +862,59 @@
           [topicId]: true,
         };
       },
+      loadMoreContents(parentId) {
+        const parentIndex = this.contents.findIndex(p => p.id === parentId);
+        const parent = parentIndex > -1 ? this.contents[parentIndex] : null;
+        const more = parent && parent.children && parent.children.more;
+        if (more) {
+          if (this.isUserLoggedIn && !this.deviceId) {
+            this.fetchContentNodeTreeProgress(more);
+          }
+          return ContentNodeResource.fetchTree(more)
+            .then(data => {
+              const child = this.contents[parentIndex];
+              child.children.results = child.children.results.concat(data.children.results);
+              child.children.more = data.children.more;
+              this.contents = [
+                ...this.contents.slice(0, parentIndex),
+                child,
+                ...this.contents.slice(parentIndex + 1),
+              ];
+              this.fetchRemoteBrowsingContentNodeUserData(data);
+            })
+            .catch(err => {
+              this.$store.dispatch('handleApiError', { error: err });
+            });
+        }
+      },
       handleLoadMoreInSubtopic(topicId) {
         this.subTopicLoading = topicId;
         this.loadMoreContents(topicId).then(() => {
           this.subTopicLoading = null;
         });
+      },
+      loadMoreTopics() {
+        const more = this.topic.children.more;
+        if (more) {
+          if (this.isUserLoggedIn && !this.deviceId) {
+            this.fetchContentNodeTreeProgress(more);
+          }
+          return ContentNodeResource.fetchTree(more)
+            .then(data => {
+              this.contents = this.contents.concat(data.children.results);
+              this.topic = {
+                ...this.topic,
+                children: {
+                  results: [...this.topic.children.results, ...data.children.results],
+                  more: data.children.more,
+                },
+              };
+              this.fetchRemoteBrowsingContentNodeUserData(data);
+            })
+            .catch(err => {
+              this.$store.dispatch('handleApiError', { error: err });
+            });
+        }
       },
       handleLoadMoreInTopic() {
         this.topicMoreLoading = true;
@@ -761,6 +1012,7 @@
 
   .end-button-block {
     width: 100%;
+    padding-bottom: 16px;
     margin-top: 16px;
     text-align: center;
   }
@@ -776,6 +1028,11 @@
   .chip {
     margin-bottom: 8px;
     margin-left: 8px;
+  }
+
+  .page-loader {
+    top: $toolbar-height;
+    padding-top: 16px;
   }
 
 </style>

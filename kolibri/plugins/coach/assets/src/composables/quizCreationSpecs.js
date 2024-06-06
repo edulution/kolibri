@@ -7,17 +7,21 @@
  */
 
 /**
- * @typedef   {Object}  QuizResource    An object referencing an exercise or topic to be used
+ * @typedef   {Object}  QuizExercise    An object referencing an exercise or topic to be used
  *                                      within the `QuizSeciton.resource_pool` property.
+ * @property  {string}  id              Unique ID for this exercise (aka, `exercise_id` elsewhere)
  * @property  {string}  title           The resource title
  * @property  {string}  ancestor_id     The ID of the parent contentnode
  * @property  {string}  content_id      The ID for the piece of content
- * @property  {string}  id              Unique ID for this exercise
  * @property  {bool}    is_leaf         Whether or not this is a leaf node (i.e. an exercise)
  * @property  {string}  kind            Exercise or Topic in our case - see: `ContentNodeKinds`
  */
 
-export const QuizResource = {
+export const QuizExercise = {
+  id: {
+    type: String,
+    default: '',
+  },
   title: {
     type: String,
     default: '',
@@ -30,10 +34,6 @@ export const QuizResource = {
     type: String,
     default: '',
   },
-  id: {
-    type: String,
-    default: '',
-  },
   is_leaf: {
     type: Boolean,
     default: false,
@@ -42,22 +42,9 @@ export const QuizResource = {
     type: String,
     default: '',
   },
-};
-
-/**
- * @typedef   {Object}  ExerciseResource        A particular exercise that can be selected within a
- *                                              quiz. An ExerciseResource here is a QuizResource
- *                                              with assessment metadata attached.
- * @extends   {QuizResource}
- * @property  {Array}   assessment_ids  A list of assessment item IDs that are associated with
- *                                      this exercise
- * @property  {string}  contentnode     The contentnode ID for the Assessment
- */
-export const ExerciseResource = {
-  ...QuizResource,
-  assessment_ids: {
-    type: Array,
-    default: () => [],
+  assessmentmetadata: {
+    type: Object,
+    default: () => ({ assessment_item_ids: [] }),
   },
   contentnode: {
     type: String,
@@ -67,7 +54,9 @@ export const ExerciseResource = {
 
 /**
  * @typedef  {Object} QuizQuestion         A particular question in a Quiz - aka an assessment item
- *                                         from an ExerciseResource.
+ *                                         from an QuizExercise.
+ * @property {string} id                   A  ** unique **  identifier for this question that is
+ *                                          a combination of <exercise_id>:<question_id>
  * @property {string} exercise_id          The ID of the resource from which the question originates
  * @property {string} question_id          A *unique* identifier of this particular question within
  *                                         the quiz -- same as the `assessment_item_id`
@@ -92,10 +81,6 @@ export const QuizQuestion = {
     type: 'number',
     default: 0,
   },
-  missing_resource: {
-    type: Boolean,
-    default: false,
-  },
 };
 
 /**
@@ -110,7 +95,9 @@ export const QuizQuestion = {
  * @property {boolean}            learners_see_fixed_order   A bool flag indicating whether this
  *                                                           section is shown in the same order, or
  *                                                           randomized, to the learners
- * @property {ExerciseResource[]} resource_pool              An array of contentnode ids indicat
+ * @property {QuizExercise[]}     resource_pool              An array of QuizExercise objects from
+ *                                                           which the questions in this section_id
+ *                                                           will be drawn
  */
 export const QuizSection = {
   section_id: {
@@ -141,7 +128,7 @@ export const QuizSection = {
   resource_pool: {
     type: Array,
     default: () => [],
-    spec: ExerciseResource,
+    spec: QuizExercise,
   },
 };
 
@@ -157,6 +144,30 @@ function getRandomInt() {
  */
 export const Quiz = {
   title: {
+    type: String,
+    default: '',
+  },
+  assignments: {
+    type: Array,
+    default: () => [],
+  },
+  draft: {
+    type: Boolean,
+    default: true,
+  },
+  active: {
+    type: Boolean,
+    default: false,
+  },
+  archive: {
+    type: Boolean,
+    default: false,
+  },
+  learner_ids: {
+    type: Array,
+    default: () => [],
+  },
+  collection: {
     type: String,
     default: '',
   },

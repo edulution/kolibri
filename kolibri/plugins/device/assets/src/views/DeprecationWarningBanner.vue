@@ -1,31 +1,25 @@
 <template>
 
   <div
-    v-show="showBanner"
+    v-show="userDevicesUsingIE11"
     class="alert"
-    :style="{ backgroundColor: $themePalette.yellow.v_100 }"
+    :style="{ backgroundColor: $themePalette.yellow.v_200 }"
   >
     <div style="display:flex">
       <div>
         <KIcon
           icon="warning"
           class="icon"
-          :color="$themePalette.amber.v_a400"
+          :color="$themePalette.yellow.v_1100"
         />
       </div>
 
       <div class="error-message">
-        <p v-if="py27Deprecated">
-          {{ coreString('pythonSupportWillBeDropped') }}
-        </p>
-        <p v-if="currentUserOnIE11">
-          {{ coreString('currentDeviceUsingIE11') }}
-        </p>
-        <p v-if="userDevicesUsingIE11">
+        <p>
           {{ coreString('userDevicesUsingIE11') }}
         </p>
-        <p v-if="currentUserOnIE11 || userDevicesUsingIE11">
-          {{ coreString('browserSupportWillBeDroppedIE11') }}
+        <p>
+          {{ coreString('browserSupportDroppedIE11') }}
         </p>
       </div>
     </div>
@@ -37,24 +31,14 @@
 <script>
 
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { browser } from 'kolibri.utils.browserInfo';
   import plugin_data from 'plugin_data';
 
   export default {
     name: 'DeprecationWarningBanner',
     mixins: [commonCoreStrings],
     computed: {
-      showBanner() {
-        return this.currentUserOnIE11 || this.userDevicesUsingIE11 || this.py27Deprecated;
-      },
       userDevicesUsingIE11() {
         return plugin_data.deprecationWarnings.ie11;
-      },
-      py27Deprecated() {
-        return plugin_data.deprecationWarnings.py27;
-      },
-      currentUserOnIE11() {
-        return browser.name === 'IE';
       },
     },
   };

@@ -4,25 +4,27 @@
     here or in router, but somewhere -->
   <div class="main">
     <ScrollingHeader :scrollPosition="0">
-      <AppBar
-        ref="appBar"
-        class="app-bar"
-        :title="title"
-        @toggleSideNav="navShown = !navShown"
-        @showLanguageModal="languageModalShown = true"
-      >
-        <template #sub-nav>
-          <slot name="subNav"></slot>
-        </template>
-      </AppBar>
+      <transition mode="out-in">
+        <AppBar
+          v-if="showAppBarsOnScroll"
+          ref="appBar"
+          class="app-bar"
+          :title="title"
+          :showNavigation="showNavigation"
+          :showAppNavView="isAppContextAndTouchDevice"
+          @toggleSideNav="navShown = !navShown"
+        >
+          <template #sub-nav>
+            <slot name="subNav"></slot>
+          </template>
+        </AppBar>
+      </transition>
       <KLinearLoader
         v-if="isLoading"
         type="indeterminate"
         :delay="false"
       />
-      <div aria-live="polite">
-        <StorageNotification :showBanner="showStorageNotification" />
-      </div>
+      <slot name="storageNotif"></slot>
     </ScrollingHeader>
 
     <div
@@ -32,20 +34,16 @@
       <slot></slot>
     </div>
 
-    <SideNav
-      ref="sideNav"
-      :navShown="navShown"
-      @toggleSideNav="navShown = !navShown"
-      @shouldFocusFirstEl="findFirstEl()"
-    />
-    <LanguageSwitcherModal
-      v-if="languageModalShown"
-      ref="languageSwitcherModal"
-      :style="{ color: $themeTokens.text }"
-      @cancel="languageModalShown = false"
-    />
-
-    <MeteredConnectionNotificationModal />
+    <transition mode="out-in">
+      <SideNav
+        v-if="showAppBarsOnScroll"
+        ref="sideNav"
+        :navShown="navShown"
+        :showAppNavView="isAppContextAndTouchDevice"
+        @toggleSideNav="navShown = !navShown"
+        @shouldFocusFirstEl="findFirstEl()"
+      />
+    </transition>
 
   </div>
 
@@ -55,26 +53,21 @@
 <script>
 
   import { mapGetters } from 'vuex';
-  import LanguageSwitcherModal from 'kolibri.coreVue.components.LanguageSwitcherModal';
-  import ScrollingHeader from 'kolibri.coreVue.components.ScrollingHeader';
-  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
-  import SideNav from 'kolibri.coreVue.components.SideNav';
-  import { LearnerDeviceStatus } from 'kolibri.coreVue.vuex.constants';
+  import { throttle } from 'frame-throttle';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import MeteredConnectionNotificationModal from 'kolibri-common/components/MeteredConnectionNotificationModal';
+  import { isTouchDevice } from 'kolibri.utils.browserInfo';
+  import useUserSyncStatus from 'kolibri.coreVue.composables.useUserSyncStatus';
   import AppBar from '../AppBar';
-  import StorageNotification from '../StorageNotification';
-  import useUserSyncStatus from '../../composables/useUserSyncStatus';
+  import SideNav from '../SideNav';
+  import ScrollingHeader from '../ScrollingHeader';
 
   export default {
     name: 'AppBarPage',
     components: {
       AppBar,
-      MeteredConnectionNotificationModal,
-      LanguageSwitcherModal,
       ScrollingHeader,
       SideNav,
-      StorageNotification,
     },
     mixins: [commonCoreStrings],
     setup() {
@@ -89,7 +82,11 @@
     props: {
       title: {
         type: String,
-        default: null,
+        default: '',
+      },
+      showNavigation: {
+        type: Boolean,
+        default: true,
       },
       appearanceOverrides: {
         type: Object,
@@ -106,12 +103,17 @@
     data() {
       return {
         appBarHeight: 0,
-        languageModalShown: false,
         navShown: false,
+        lastScrollTop: 0,
+        hideAppBars: true,
+        throttledHandleScroll: null,
       };
     },
     computed: {
       ...mapGetters(['isAppContext', 'isPageLoading']),
+      isAppContextAndTouchDevice() {
+        return this.isAppContext && isTouchDevice;
+      },
       isLoading() {
         return this.isPageLoading || this.loading;
       },
@@ -122,7 +124,7 @@
               width: '100%',
               maxWidth: '1064px',
               margin: 'auto',
-              backgroundColor: this.$themePalette.grey.v_100,
+              backgroundColor: this.$themePalette.grey.v_50,
               paddingLeft: this.paddingLeftRight,
               paddingRight: this.paddingLeftRight,
               paddingTop: this.appBarHeight + this.paddingTop + 'px',
@@ -136,8 +138,12 @@
       paddingLeftRight() {
         return this.isAppContext || this.windowIsSmall ? '8px' : '32px';
       },
-      showStorageNotification() {
-        return this.userDeviceStatus === LearnerDeviceStatus.INSUFFICIENT_STORAGE;
+      showAppBarsOnScroll() {
+        let show = true;
+        if (this.isAppContextAndTouchDevice) {
+          show = this.hideAppBars;
+        }
+        return show;
       },
     },
     watch: {
@@ -150,12 +156,39 @@
       this.$nextTick(() => {
         this.appBarHeight = this.$refs.appBar.$el.scrollHeight || 0;
       });
+      this.addScrollListener();
+    },
+    beforeUnmount() {
+      this.removeScrollListener();
     },
     methods: {
+      addScrollListener() {
+        if (this.isAppContextAndTouchDevice) {
+          this.throttledHandleScroll = throttle(this.handleScroll);
+          window.addEventListener('scroll', this.throttledHandleScroll);
+        }
+      },
       findFirstEl() {
         this.$nextTick(() => {
           this.$refs.sideNav.focusFirstEl();
         });
+      },
+      handleScroll() {
+        const scrollTop = window.scrollY;
+        //Is user scrolling up?
+        if (scrollTop > this.lastScrollTop) {
+          this.hideAppBars = false;
+        } else {
+          this.hideAppBars = true;
+        }
+        this.lastScrollTop = scrollTop;
+      },
+      removeScrollListener() {
+        if (this.isAppContextAndTouchDevice) {
+          window.removeEventListener('scroll', this.throttledHandleScroll);
+          this.throttledHandleScroll.cancel();
+          this.throttledHandleScroll = null;
+        }
       },
     },
   };

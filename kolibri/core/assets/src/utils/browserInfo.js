@@ -64,26 +64,20 @@ export const os = {
   patch: osVersion[2],
 };
 
-/**
- * Detection of whether an Android device is using WebView based on
- * https://developer.chrome.com/multidevice/user-agent#webview_user_agent
- * First checks for 'wv' (Lolipop+), then for 'Version/x.x'
- */
-const isAndroid = os.name === 'Android';
-export const isAndroidWebView =
-  isAndroid &&
-  (browser.name === 'Chrome Webview' ||
-    (browser.name === 'Chrome' && /Version\/\d+\.\d+/.test(userAgent)));
+// Check for presence of the touch event in DOM or multi-touch capabilities
+export const isTouchDevice =
+  'ontouchstart' in window ||
+  window.navigator?.maxTouchPoints > 0 ||
+  window.navigator?.msMaxTouchPoints > 0;
 
-/**
- * Embedded WebViews on Mac have no app identifier, while all the major browsers do, so check
- * for browser app strings and mark as embedded if none are found.
- */
-const isMac = os.name === 'Mac OS';
-export const isMacWebView =
-  isMac && !(/Safari/.test(userAgent) || /Chrome/.test(userAgent) || /Firefox/.test(userAgent));
+function handlePointerDown(event) {
+  if (event.pointerType === 'mouse') {
+    localStorage.setItem('mouseUsed', 'true');
+    isMouseUsed = true;
+    window.removeEventListener('pointerdown', handlePointerDown);
+  }
+}
 
-/**
- * All web views
- */
-export const isEmbeddedWebView = isAndroidWebView || isMacWebView;
+window.addEventListener('pointerdown', handlePointerDown);
+
+export let isMouseUsed = localStorage.getItem('mouseUsed') === 'true';

@@ -1,35 +1,29 @@
 diskcache==4.1.0
-django-js-asset<2
-django-filter==1.1.0 # pyup: <2.0.0
-django-js-reverse==0.9.1
-djangorestframework==3.9.1
-django==1.11.29  # pyup: >=1.11,<2
-six==1.14.0
+django-filter==21.1
+django-js-reverse==0.10.2
+djangorestframework==3.14.0
+django==3.2.25
 colorlog==3.2.0 # pyup: <4.0.0
 configobj==5.0.6
-django-mptt==0.9.1
+django-mptt==0.14.0
 requests==2.27.1
 cheroot==8.6.0
 magicbus==4.1.2
-futures==3.1.1  # Temporarily pinning this until we can do a Python 2/3 compatible solution of newer versions # pyup: <=3.1.1
-more-itertools==5.0.0  # Last Python 2.7 friendly release # pyup: <6.0
-le-utils==0.2.1
-jsonfield==2.0.2
-requests-toolbelt==0.9.1
-morango==0.6.16
+le-utils==0.2.2
+jsonfield==3.1.0
+morango==0.8.0
 tzlocal==2.1
 pytz==2022.1
 python-dateutil==2.8.2
 sqlalchemy==1.4.49
 semver==2.8.1
-django-redis-cache==2.0.0
+django-redis-cache==3.0.1
 redis==3.2.1
-html5lib==1.0.1
+html5lib==1.1
 zeroconf-py2compat==0.19.17
-ifcfg==0.21
 Click==7.0
 whitenoise==4.1.4
-idna==2.8
+idna==3.7
 ifaddr==0.1.7  # Pin as version 0.2.0 only supports Python 3.7 and above
 importlib-metadata==2.1.1
 importlib_resources==3.3.1

@@ -1,7 +1,3 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import uuid
 
 from django.urls import reverse
@@ -20,6 +16,8 @@ DUMMY_PASSWORD = "password"
 
 
 class ClassSummaryTestCase(EvaluationMixin, APITestCase):
+
+    databases = "__all__"
 
     fixtures = ["content_test.json"]
     the_channel_id = "6199dde695db4ee4ab392222d5af1e5c"
@@ -207,6 +205,8 @@ class ClassSummaryTestCase(EvaluationMixin, APITestCase):
 
 
 class ClassSummaryDiffTestCase(EvaluationMixin, APITestCase):
+    databases = "__all__"
+
     def test_practice_quiz_summary(self):
         provision_device()
         classroom = Classroom.objects.create(name="classrom", parent=self.facility)

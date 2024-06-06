@@ -13,14 +13,16 @@
       v-model="setting"
       class="radio-button"
       :label="$tr('yesOptionLabel')"
-      :value="true"
+      :buttonValue="true"
+      :autofocus="setting"
     />
     <KRadioButton
       ref="noRadio"
       v-model="setting"
       class="radio-button"
       :label="$tr('noOptionLabel')"
-      :value="false"
+      :buttonValue="false"
+      :autofocus="!setting"
     />
     <p class="description">
       {{ getCommonSyncString('changeLater') }}
@@ -34,7 +36,8 @@
 <script>
 
   import commonSyncElements from 'kolibri.coreVue.mixins.commonSyncElements';
-  import { Presets, FooterMessageTypes } from '../../constants';
+  import { Presets } from 'kolibri.coreVue.vuex.constants';
+  import { FooterMessageTypes } from '../../constants';
   import OnboardingStepBase from '../OnboardingStepBase';
 
   export default {

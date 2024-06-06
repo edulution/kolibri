@@ -312,8 +312,13 @@
       cancelStyleOverrides() {
         return {
           color: this.$themeTokens.textInverted,
-          'background-color': this.$themePalette.red.v_700,
-          ':hover': { 'background-color': this.$themePalette.red.v_900 },
+          'background-color': this.$themePalette.red.v_1100,
+          // We need to use a darker color for hover than
+          // palette.red.v_1100 but at the same time,
+          // palette.red.v_1100 is the darkest available red
+          // in the palette. Using this hardcoded color was
+          // agreed with designers.
+          ':hover': { 'background-color': '#A81700' },
         };
       },
       examDateArchived() {
@@ -347,16 +352,26 @@
           id: this.$route.params.quizId,
           data: {
             active: true,
-            date_activated: new Date(),
+            draft: false,
           },
           exists: true,
         });
 
         return promise
-          .then(() => {
-            this.$store.dispatch('classSummary/refreshClassSummary');
+          .then(data => {
             this.showConfirmationModal = false;
             this.$store.dispatch('createSnackbar', this.coachString('quizOpenedMessage'));
+            if (data.id !== this.$route.params.quizId) {
+              this.$router.replace({
+                name: this.$route.name,
+                params: {
+                  ...this.$route.params,
+                  quizId: data.id,
+                },
+              });
+            } else {
+              this.$store.dispatch('classSummary/refreshClassSummary');
+            }
           })
           .catch(() => {
             this.$store.dispatch('createSnackbar', this.coachString('quizFailedToOpenMessage'));
@@ -367,7 +382,6 @@
           id: this.$route.params.quizId,
           data: {
             archive: true,
-            date_archived: new Date(),
           },
           exists: true,
         });

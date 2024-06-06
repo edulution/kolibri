@@ -4,7 +4,7 @@ from concurrent.futures import CancelledError
 from django.db import connection as django_connection
 
 from kolibri.core.tasks.compat import PoolExecutor
-from kolibri.core.tasks.job import Priority
+from kolibri.core.tasks.constants import Priority
 from kolibri.core.tasks.storage import Storage
 from kolibri.core.tasks.utils import db_connection
 from kolibri.core.tasks.utils import InfiniteLoopThread
@@ -12,7 +12,9 @@ from kolibri.core.tasks.utils import InfiniteLoopThread
 logger = logging.getLogger(__name__)
 
 
-def execute_job(job_id):
+def execute_job(
+    job_id, worker_host=None, worker_process=None, worker_thread=None, worker_extra=None
+):
     """
     Call the function stored in the job.func.
     :return: None
@@ -24,7 +26,7 @@ def execute_job(job_id):
 
     job = storage.get_job(job_id)
 
-    storage.mark_job_as_running(job_id)
+    job.update_worker_info(worker_host, worker_process, worker_thread, worker_extra)
 
     job.execute()
 
@@ -32,6 +34,23 @@ def execute_job(job_id):
 
     # Close any django connections opened here
     django_connection.close()
+
+
+def execute_job_with_python_worker(job_id):
+    """
+    Call execute_job but additionally with the current host, process and thread information taken
+    directly from python internals.
+    """
+    import os
+    import socket
+    import threading
+
+    execute_job(
+        job_id,
+        worker_host=socket.gethostname(),
+        worker_process=str(os.getpid()),
+        worker_thread=str(threading.get_ident()),
+    )
 
 
 class Worker(object):
@@ -82,17 +101,19 @@ class Worker(object):
         return pool
 
     def handle_finished_future(self, future):
-        # get back the job assigned to the future
-        job = self.job_future_mapping[future]
-
-        # Clean up tracking of this job and its future
-        del self.job_future_mapping[future]
-        del self.future_job_mapping[job.job_id]
-
         try:
-            future.result()
-        except CancelledError:
-            self.storage.mark_job_as_canceled(job.job_id)
+            # get back the job assigned to the future
+            job = self.job_future_mapping[future]
+            # Clean up tracking of this job and its future
+            del self.job_future_mapping[future]
+            del self.future_job_mapping[job.job_id]
+
+            try:
+                future.result()
+            except CancelledError:
+                self.storage.mark_job_as_canceled(job.job_id)
+        except KeyError:
+            pass
 
     def shutdown(self, wait=True):
         logger.info("Asking job schedulers to shut down.")
@@ -168,9 +189,15 @@ class Worker(object):
         :return future:
         """
         future = self.workers.submit(
-            execute_job,
+            execute_job_with_python_worker,
             job_id=job.job_id,
         )
+
+        # Check if the job ID already exists in the future_job_mapping dictionary
+        if job.job_id in self.future_job_mapping:
+            logger.warn(
+                "Job id {} is already in future_job_mapping.".format(job.job_id)
+            )
 
         # assign the futures to a dict, mapping them to a job
         self.job_future_mapping[future] = job

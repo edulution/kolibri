@@ -1,4 +1,6 @@
 import copy
+import json
+import logging
 import random
 import tempfile
 import uuid
@@ -28,6 +30,8 @@ from kolibri.core.content.utils.sqlalchemybridge import load_metadata
 from kolibri.core.content.utils.upgrade import count_removed_resources
 from kolibri.core.content.utils.upgrade import get_automatically_updated_resources
 from kolibri.core.content.utils.upgrade import get_new_resources_available_for_import
+
+logger = logging.getLogger(__name__)
 
 
 def to_dict(instance):
@@ -103,7 +107,7 @@ class ChannelBuilder(object):
             for key in self.tree_keys:
                 setattr(self, key, data[key])
         except KeyError:
-            print(
+            logger.error(
                 "No tree cache found for {} levels and {} children per level".format(
                     self.levels, self.num_children
                 )
@@ -311,9 +315,14 @@ class ChannelBuilder(object):
 
     @property
     def data(self):
+        contentnode_list = []
+        for node in self.nodes.values():
+            node["ancestors"] = json.dumps(node["ancestors"])
+            contentnode_list.append(node)
+
         return {
             "content_channel": [self.channel],
-            "content_contentnode": list(self.nodes.values()),
+            "content_contentnode": contentnode_list,
             "content_file": list(self.files.values()),
             "content_localfile": list(self.localfiles.values()),
         }

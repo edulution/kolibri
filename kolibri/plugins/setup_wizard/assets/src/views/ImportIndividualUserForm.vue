@@ -32,7 +32,9 @@
         :disabled="formSubmitted"
         :label="coreString('usernameLabel')"
         :autofocus="$attrs.autofocus"
-        @blur="blurred = true"
+        :invalid="Boolean(invalidText)"
+        :invalidText="invalidText"
+        @blur="shouldValidate = true"
       />
       <PasswordTextbox
         v-if="!facility.learner_can_login_with_no_password"
@@ -79,7 +81,9 @@
           v-model.trim="adminUsername"
           :label="coreString('usernameLabel')"
           :autofocus="$attrs.autofocus"
-          @blur="blurred = true"
+          :invalid="Boolean(invalidText)"
+          :invalidText="invalidText"
+          @blur="shouldValidate = true"
         />
         <PasswordTextbox
           ref="adminPasswordTextbox"
@@ -135,6 +139,7 @@
         facilities: [],
         selectedFacilityId: 'selectedFacilityId',
         formSubmitted: false,
+        shouldValidate: false,
       };
     },
     inject: ['wizardService'],
@@ -191,6 +196,18 @@
       adminModalMessage() {
         return this.$tr('enterAdminCredentials', { facility: this.facility.name });
       },
+      invalidText() {
+        if (!this.shouldValidate) {
+          return '';
+        }
+        if (
+          !this.useAdmin & (this.username.trim() === '') ||
+          this.useAdmin & (this.adminUsername === null || this.adminUsername.trim() === '')
+        ) {
+          return this.coreString('requiredFieldError');
+        }
+        return '';
+      },
     },
     beforeMount() {
       this.fetchNetworkLocation(this.deviceId).then(() => {
@@ -225,12 +242,23 @@
         this.useAdmin = false;
       },
       openAdminCredentialsForm() {
+        // clean error from non-admin form:
+        this.shouldValidate = false;
+        this.error = false;
+
         this.useAdmin = true;
         this.$nextTick(function() {
           this.$refs.adminUsernameTextbox.focus();
         });
       },
       handleSubmit() {
+        if (this.wizardService.state.context.importedUsers.length === 0) {
+          this.shouldValidate = true;
+          if (this.invalidText) {
+            this.$refs.usernameTextbox.focus();
+            return;
+          }
+        }
         this.formSubmitted = true;
         const task_name = 'kolibri.core.auth.tasks.peeruserimport';
         const password = this.password === '' ? DemographicConstants.NOT_SPECIFIED : this.password;
@@ -268,7 +296,7 @@
             if (!this.wizardService.state.context.firstImportedLodUser) {
               this.wizardService.send({
                 type: 'SET_FIRST_LOD',
-                value: { username: this.username, password },
+                value: { username: task.extra_metadata.username, password },
               });
             }
 
@@ -284,6 +312,7 @@
               ERROR_CONSTANTS.MISSING_PASSWORD,
               ERROR_CONSTANTS.PASSWORD_NOT_SPECIFIED,
               ERROR_CONSTANTS.AUTHENTICATION_FAILED,
+              ERROR_CONSTANTS.INVALID_USERNAME,
             ]);
 
             const errorData = error.response.data;
@@ -313,6 +342,11 @@
         this.handleSubmit();
       },
       moveAdmin() {
+        this.shouldValidate = true;
+        if (this.invalidText) {
+          this.$refs.adminUsernameTextbox.focus();
+          return;
+        }
         const params = {
           baseurl: this.device.baseurl,
           username: this.adminUsername,
@@ -336,10 +370,13 @@
               ERROR_CONSTANTS.INVALID_CREDENTIALS,
               ERROR_CONSTANTS.AUTHENTICATION_FAILED,
               ERROR_CONSTANTS.PERMISSION_DENIED,
+              ERROR_CONSTANTS.MISSING_PASSWORD,
+              ERROR_CONSTANTS.PASSWORD_NOT_SPECIFIED,
+              ERROR_CONSTANTS.INVALID_USERNAME,
             ]);
             if (errorsCaught) {
               this.error = true;
-            } else this.$store.dispatch('handleApiError', error);
+            } else this.$store.dispatch('handleApiError', { error });
           });
       },
     },

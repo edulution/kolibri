@@ -14,7 +14,7 @@
         </template>
       </ImmersiveToolbar>
       <KLinearLoader
-        v-if="loading"
+        v-if="isLoading"
         type="indeterminate"
         :delay="false"
       />
@@ -29,8 +29,9 @@
 
 <script>
 
-  import ScrollingHeader from 'kolibri.coreVue.components.ScrollingHeader';
+  import { mapGetters } from 'vuex';
   import ImmersiveToolbar from '../ImmersiveToolbar';
+  import ScrollingHeader from '../ScrollingHeader';
 
   export default {
     name: 'ImmersivePage',
@@ -69,13 +70,17 @@
       };
     },
     computed: {
+      ...mapGetters(['isPageLoading']),
+      isLoading() {
+        return this.isPageLoading || this.loading;
+      },
       wrapperStyles() {
         return this.appearanceOverrides
           ? this.appearanceOverrides
           : {
               width: '100%',
               display: 'inline-block',
-              backgroundColor: this.$themePalette.grey.v_100,
+              backgroundColor: this.$themePalette.grey.v_50,
               paddingLeft: '32px',
               paddingRight: '32px',
               paddingBottom: '72px',

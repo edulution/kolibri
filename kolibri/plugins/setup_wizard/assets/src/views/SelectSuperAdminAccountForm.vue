@@ -147,22 +147,22 @@
             this.loading = false;
           })
           .catch(error => {
-            this.$store.dispatch('handleApiError', error);
+            this.$store.dispatch('handleApiError', { error });
           });
       },
       resetFormAndRefocus() {
         this.shouldValidate = false;
-        if (this.$refs.password) {
+        if (this.$refs.passwordTextbox) {
           // If password was set to the facility.password in handler
           if (this.selected.label !== this.facility.username) {
-            this.$refs.password.resetAndFocus();
+            this.$refs.passwordTextbox.resetAndFocus();
           }
         }
       },
       handleClickNextImportedUser() {
         this.error = false;
-        if (!this.passwordValid) {
-          this.$refs.password.focus();
+        if (!this.passwordValid && 'passwordTextbox' in this.$refs) {
+          this.$refs.passwordTextbox.focus();
           return;
         }
         return FacilityImportResource.grantsuperuserpermissions({

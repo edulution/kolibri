@@ -1,7 +1,4 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
+import logging
 import time
 from datetime import datetime
 from datetime import timedelta
@@ -16,6 +13,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ValidationError
 from django.db.models import Func
 from django.db.models import OuterRef
 from django.db.models import Q
@@ -28,6 +26,7 @@ from django.http import HttpResponseBadRequest
 from django.utils.decorators import method_decorator
 from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django_filters.rest_framework import CharFilter
 from django_filters.rest_framework import ChoiceFilter
@@ -42,6 +41,7 @@ from morango.models import TransferSession
 from rest_framework import decorators
 from rest_framework import filters
 from rest_framework import permissions
+from rest_framework import serializers
 from rest_framework import status
 from rest_framework import views
 from rest_framework import viewsets
@@ -60,6 +60,7 @@ from .models import LearnerGroup
 from .models import Membership
 from .models import Role
 from .serializers import ClassroomSerializer
+from .serializers import CreateFacilitySerializer
 from .serializers import ExtraFieldsSerializer
 from .serializers import FacilityDatasetSerializer
 from .serializers import FacilitySerializer
@@ -74,16 +75,23 @@ from kolibri.core.api import ValuesViewset
 from kolibri.core.auth.constants.demographics import NOT_SPECIFIED
 from kolibri.core.auth.permissions.general import _user_is_admin_for_own_facility
 from kolibri.core.auth.permissions.general import DenyAll
+from kolibri.core.device.permissions import IsSuperuser
 from kolibri.core.device.utils import allow_guest_access
 from kolibri.core.device.utils import allow_other_browsers_to_connect
+from kolibri.core.device.utils import APP_AUTH_TOKEN_COOKIE_NAME
+from kolibri.core.device.utils import is_full_facility_import
 from kolibri.core.device.utils import valid_app_key_on_request
 from kolibri.core.logger.models import UserSessionLog
 from kolibri.core.mixins import BulkCreateMixin
 from kolibri.core.mixins import BulkDeleteMixin
 from kolibri.core.query import annotate_array_aggregate
 from kolibri.core.query import SQCount
+from kolibri.core.serializers import HexOnlyUUIDField
 from kolibri.core.utils.pagination import ValuesViewsetPageNumberPagination
 from kolibri.plugins.app.utils import interface
+
+
+logger = logging.getLogger(__name__)
 
 
 class OptionalPageNumberPagination(ValuesViewsetPageNumberPagination):
@@ -174,13 +182,17 @@ class FacilityDatasetFilter(FilterSet):
         fields = ["facility_id"]
 
 
+def _is_full_facility_import(dataset):
+    return is_full_facility_import(dataset["id"])
+
+
 class FacilityDatasetViewSet(ValuesViewset):
     permission_classes = (KolibriAuthPermissions,)
     filter_backends = (
         KolibriAuthPermissionsFilter,
         DjangoFilterBackend,
     )
-    filter_class = FacilityDatasetFilter
+    filterset_class = FacilityDatasetFilter
     serializer_class = FacilityDatasetSerializer
 
     values = (
@@ -199,7 +211,10 @@ class FacilityDatasetViewSet(ValuesViewset):
         "preset",
     )
 
-    field_map = {"allow_guest_access": lambda x: allow_guest_access()}
+    field_map = {
+        "allow_guest_access": lambda x: allow_guest_access(),
+        "is_full_facility_import": _is_full_facility_import,
+    }
 
     def get_queryset(self):
         return FacilityDataset.objects.filter(
@@ -338,6 +353,8 @@ class PublicFacilityUserViewSet(ReadOnlyValuesViewset):
     }
 
     def get_queryset(self):
+        if self.request.user.is_anonymous:
+            return FacilityUser.objects.none()
         facility_id = self.request.query_params.get(
             "facility_id", self.request.user.facility_id
         )
@@ -380,9 +397,9 @@ class FacilityUserViewSet(ValuesViewset):
     )
     order_by_field = "username"
 
-    queryset = FacilityUser.objects.all()
+    queryset = FacilityUser.objects.all().order_by(order_by_field)
     serializer_class = FacilityUserSerializer
-    filter_class = FacilityUserFilter
+    filterset_class = FacilityUserFilter
     search_fields = ("username", "full_name")
 
     values = (
@@ -397,6 +414,7 @@ class FacilityUserViewSet(ValuesViewset):
         "id_number",
         "gender",
         "birth_year",
+        "extra_demographics",
     )
 
     field_map = {
@@ -430,11 +448,17 @@ class FacilityUserViewSet(ValuesViewset):
             update_session_auth_hash(self.request, instance)
 
 
+class SanitizeInputsSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    facility = HexOnlyUUIDField()
+
+
 class UsernameAvailableView(views.APIView):
     def post(self, request):
-        username = request.data.get("username")
-        facility_id = request.data.get("facility")
-
+        serializer = SanitizeInputsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data["username"]
+        facility_id = serializer.validated_data["facility"]
         if not username or not facility_id:
             return Response(
                 "Must specify username, and facility",
@@ -502,7 +526,7 @@ class MembershipViewSet(BulkDeleteMixin, BulkCreateMixin, viewsets.ModelViewSet)
     filter_backends = (KolibriAuthPermissionsFilter, DjangoFilterBackend)
     queryset = Membership.objects.all()
     serializer_class = MembershipSerializer
-    filter_class = MembershipFilter
+    filterset_class = MembershipFilter
     filter_fields = ["user", "collection", "user_ids"]
 
 
@@ -522,7 +546,7 @@ class RoleViewSet(BulkDeleteMixin, BulkCreateMixin, viewsets.ModelViewSet):
     filter_backends = (KolibriAuthPermissionsFilter, DjangoFilterBackend)
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    filter_class = RoleFilter
+    filterset_class = RoleFilter
     filter_fields = ["user", "collection", "kind", "user_ids"]
 
 
@@ -621,6 +645,13 @@ class FacilityViewSet(ValuesViewset):
             )
         )
 
+    @decorators.action(methods=["post"], detail=False, permission_classes=[IsSuperuser])
+    def create_facility(self, request):
+        serializer = CreateFacilitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response()
+
 
 class PublicFacilityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Facility.objects.all()
@@ -666,7 +697,7 @@ class ClassroomViewSet(ValuesViewset):
     filter_backends = (KolibriAuthPermissionsFilter, DjangoFilterBackend)
     queryset = Classroom.objects.all()
     serializer_class = ClassroomSerializer
-    filter_class = ClassroomFilter
+    filterset_class = ClassroomFilter
 
     values = (
         "id",
@@ -748,12 +779,17 @@ class LearnerGroupViewSet(ValuesViewset):
         return annotate_array_aggregate(queryset, user_ids="membership__user__id")
 
 
+@method_decorator(csrf_protect, name="dispatch")
 class SignUpViewSet(viewsets.GenericViewSet, CreateModelMixin):
 
     serializer_class = FacilityUserSerializer
 
     def check_can_signup(self, serializer):
-        if not serializer.validated_data["facility"].dataset.learner_can_sign_up:
+        facility = serializer.validated_data["facility"]
+        if (
+            not facility.dataset.learner_can_sign_up
+            or not facility.dataset.full_facility_import
+        ):
             raise PermissionDenied("Cannot sign up to this facility")
 
     def perform_create(self, serializer):
@@ -827,7 +863,7 @@ class SetNonSpecifiedPasswordView(views.APIView):
         except (ValueError, ObjectDoesNotExist):
             raise Http404(error_message)
 
-        if user.password != NOT_SPECIFIED:
+        if user.password != NOT_SPECIFIED or hasattr(user, "os_user"):
             raise Http404(error_message)
 
         user.set_password(password)
@@ -836,8 +872,18 @@ class SetNonSpecifiedPasswordView(views.APIView):
         return Response()
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
+@method_decorator([ensure_csrf_cookie, csrf_protect], name="dispatch")
 class SessionViewSet(viewsets.ViewSet):
+    def _check_os_user(self, request, username):
+        auth_token = request.COOKIES.get(APP_AUTH_TOKEN_COOKIE_NAME)
+        if auth_token:
+            try:
+                user = FacilityUser.objects.get_or_create_os_user(auth_token)
+                if user is not None and user.username == username:
+                    return user
+            except ValidationError as e:
+                logger.error(e)
+
     def create(self, request):
         username = request.data.get("username", "")
         password = request.data.get("password", "")
@@ -854,7 +900,23 @@ class SessionViewSet(viewsets.ViewSet):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        # Find the FacilityUser we're looking for use later on
+        user = None
+        if interface.enabled and valid_app_key_on_request(request):
+            # If we are in app context, then try to get the automatically created OS User
+            # if it matches the username, without needing a password.
+            user = self._check_os_user(request, username)
+        if user is None:
+            # Otherwise attempt full authentication
+            user = authenticate(
+                username=username, password=password, facility=facility_id
+            )
+        if user is not None and user.is_active:
+            # Correct password, and the user is marked "active"
+            login(request, user)
+            # Success!
+            return self.get_session_response(request)
+        # Otherwise, try to give a helpful error message
+        # Find the FacilityUser we're looking for
         try:
             unauthenticated_user = FacilityUser.objects.get(
                 username__iexact=username, facility=facility_id
@@ -872,17 +934,19 @@ class SessionViewSet(viewsets.ViewSet):
                 ],
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        user = authenticate(username=username, password=password, facility=facility_id)
-        if user is not None and user.is_active:
-            # Correct password, and the user is marked "active"
-            login(request, user)
-            # Success!
-            return self.get_session_response(request)
-        if unauthenticated_user.password == NOT_SPECIFIED:
+        except FacilityUser.MultipleObjectsReturned:
+            # Handle case of multiple matching usernames
+            unauthenticated_user = FacilityUser.objects.filter(
+                username__exact=username, facility=facility_id
+            ).first()
+        if unauthenticated_user.password == NOT_SPECIFIED and not hasattr(
+            unauthenticated_user, "os_user"
+        ):
             # Here - we have a Learner whose password is "NOT_SPECIFIED" because they were created
             # while the "Require learners to log in with password" setting was disabled - but now
             # it is enabled again.
+            # Alternatively, they may have been created as an OSUser for automatic login with an
+            # authentication token. If this is the case, then we do not allow for the password to be set.
             return Response(
                 [
                     {

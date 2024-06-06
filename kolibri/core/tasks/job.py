@@ -5,14 +5,20 @@ import traceback
 import uuid
 from collections import namedtuple
 
-from six import string_types
-
+from kolibri.core.tasks.constants import (  # noqa F401 - imported for backwards compatibility
+    Priority,
+)
+from kolibri.core.tasks.exceptions import JobNotRunning
 from kolibri.core.tasks.exceptions import UserCancelledError
 from kolibri.core.tasks.utils import callable_to_import_path
 from kolibri.core.tasks.utils import current_state_tracker
 from kolibri.core.tasks.utils import import_path_to_callable
+from kolibri.core.tasks.validation import validate_interval
+from kolibri.core.tasks.validation import validate_priority
+from kolibri.core.tasks.validation import validate_repeat
+from kolibri.core.tasks.validation import validate_timedelay
 from kolibri.utils import translation
-from kolibri.utils.translation import ugettext as _
+from kolibri.utils.translation import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -71,26 +77,6 @@ class State(object):
     }
 
 
-class Priority(object):
-    """
-    This class defines the priority levels and their corresponding integer values.
-
-    REGULAR priority is for tasks that can wait for some time before it actually
-    starts executing. Tasks that are tracked on task manager should use this priority.
-
-    HIGH priority is for tasks that want execution as soon as possible. Tasks that
-    might affect user experience (e.g. on screen loading animation) like importing
-    channel metadata.
-    """
-
-    LOW = 15
-    REGULAR = 10
-    HIGH = 5
-
-    # A set of all valid priorities
-    Priorities = {HIGH, REGULAR, LOW}
-
-
 JobStatus = namedtuple("Status", ("title", "text"))
 
 
@@ -111,6 +97,9 @@ def default_status_text(job):
         )
     # Translators: Message shown to indicate that while a background process has started, no progress can be reported yet.
     return _("Waiting")
+
+
+ALLOWED_RETRY_IN_KWARGS = {"priority", "repeat", "interval", "retry_interval"}
 
 
 class Job(object):
@@ -159,9 +148,7 @@ class Job(object):
         except TypeError as e:
             # A Job's arguments, results, or metadata are prime suspects for
             # what might cause this error.
-            raise TypeError(
-                "Job objects need to be JSON-serializable: {}".format(str(e))
-            )
+            raise TypeError("Job objects need to be JSON-serializable") from e
         return string_result
 
     @classmethod
@@ -212,7 +199,7 @@ class Job(object):
         :param func: func can be a callable object, in which case it is turned into an importable string,
         or it can be an importable string already.
         """
-        if not callable(func) and not isinstance(func, string_types):
+        if not callable(func) and not isinstance(func, str):
             raise TypeError(
                 "Cannot create Job for object of type {}".format(type(func))
             )
@@ -272,6 +259,15 @@ class Job(object):
             self.extra_metadata[key] = value
         self.save_meta()
 
+    def update_worker_info(self, host=None, process=None, thread=None, extra=None):
+        self.storage.save_worker_info(
+            self.job_id,
+            host=host,
+            process=process,
+            thread=thread,
+            extra=extra,
+        )
+
     def check_for_cancel(self):
         if self.cancellable:
             if self.storage.check_job_canceled(self.job_id):
@@ -285,12 +281,40 @@ class Job(object):
         self.storage.save_job_as_cancellable(self.job_id, cancellable=cancellable)
 
     def retry_in(self, dt, **kwargs):
-        self.storage.retry_job_in(self.job_id, dt, **kwargs)
+        if getattr(current_state_tracker, "job", None) is not self:
+            raise JobNotRunning(
+                "retry_in can only be called from within a running job about the currently running job"
+            )
+        validate_timedelay(dt)
+        self._retry_in_delay = dt
+        for key in kwargs:
+            if key not in ALLOWED_RETRY_IN_KWARGS:
+                raise ValueError(
+                    "retry_in got an unexpected keyword argument '{}'".format(key)
+                )
+        if "priority" in kwargs:
+            validate_priority(kwargs["priority"])
+
+        if "repeat" in kwargs:
+            validate_repeat(kwargs["repeat"])
+
+        if "interval" in kwargs:
+            validate_interval(kwargs["interval"])
+
+        if "retry_interval" in kwargs:
+            validate_interval(kwargs["retry_interval"])
+
+        self._retry_in_kwargs = kwargs
 
     def execute(self):
         self._check_storage_attached()
 
+        self.storage.mark_job_as_running(self.job_id)
+
         setattr(current_state_tracker, "job", self)
+
+        self._retry_in_delay = None
+        self._retry_in_kwargs = {}
 
         func = self.task
 
@@ -312,6 +336,9 @@ class Job(object):
             )
             self.storage.mark_job_as_failed(self.job_id, e, traceback_str)
 
+        self.storage.reschedule_finished_job_if_needed(
+            self.job_id, delay=self._retry_in_delay, **self._retry_in_kwargs
+        )
         setattr(current_state_tracker, "job", None)
 
     @property

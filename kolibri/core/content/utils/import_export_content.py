@@ -105,6 +105,7 @@ def get_import_export_data(
     renderable_only=True,
     topic_thumbnails=True,
     all_thumbnails=False,
+    check_file_availability=True,
 ):
     """
     Helper function that calls get_import_export_nodes followed by
@@ -119,6 +120,7 @@ def get_import_export_data(
         drive_id=drive_id,
         peer_id=peer_id,
         renderable_only=renderable_only,
+        check_file_availability=check_file_availability,
     )
     return get_content_nodes_data(
         channel_id,
@@ -137,6 +139,7 @@ def get_import_export_nodes(  # noqa: C901
     drive_id=None,
     peer_id=None,
     renderable_only=True,
+    check_file_availability=True,
 ):
     """
     Returns a list of queries for ContentNode objects matching the given
@@ -159,12 +162,18 @@ def get_import_export_nodes(  # noqa: C901
         kind=content_kinds.TOPIC
     )
 
-    if available is not None:
-        nodes_to_include = nodes_to_include.filter(available=available)
+    # When exporting, only include available nodes. When importing, include any
+    # nodes that are missing files in case they have missing supplementary
+    # files and would be considered available.
+    if available is True:
+        nodes_to_include = nodes_to_include.filter(available=True)
+    elif available is False:
+        nodes_to_include = nodes_to_include.filter(files__local_file__available=False)
 
-    nodes_to_include = filter_by_file_availability(
-        nodes_to_include, channel_id, drive_id, peer_id
-    )
+    if check_file_availability:
+        nodes_to_include = filter_by_file_availability(
+            nodes_to_include, channel_id, drive_id, peer_id
+        )
 
     while min_boundary < max_rght:
         max_boundary = min_boundary + dynamic_chunksize
@@ -246,26 +255,33 @@ def get_content_nodes_data(  # noqa: C901
             segment_boundaries = nodes_query.aggregate(
                 min_boundary=Min("lft"), max_boundary=Max("rght")
             )
-            segment_topics = ContentNode.objects.filter(
-                channel_id=channel_id, kind=content_kinds.TOPIC
-            ).filter(
-                Q(
-                    lft__lte=segment_boundaries["min_boundary"],
-                    rght__gte=segment_boundaries["max_boundary"],
+            # If the nodes_query queryset was empty, these aggregated values will be None
+            # and Django does not let us do lte and gte queries against None,
+            # plus even trying is a waste of our time, because the query should return nothing.
+            if (
+                segment_boundaries["min_boundary"] is not None
+                and segment_boundaries["max_boundary"] is not None
+            ):
+                segment_topics = ContentNode.objects.filter(
+                    channel_id=channel_id, kind=content_kinds.TOPIC
+                ).filter(
+                    Q(
+                        lft__lte=segment_boundaries["min_boundary"],
+                        rght__gte=segment_boundaries["max_boundary"],
+                    )
+                    | Q(
+                        lft__lte=segment_boundaries["max_boundary"],
+                        rght__gte=segment_boundaries["min_boundary"],
+                    )
                 )
-                | Q(
-                    lft__lte=segment_boundaries["max_boundary"],
-                    rght__gte=segment_boundaries["min_boundary"],
-                )
-            )
 
-            file_objects = LocalFile.objects.filter(
-                files__contentnode__in=segment_topics,
-            ).values("id", "file_size", "extension")
-            if available is not None:
-                file_objects = file_objects.filter(available=available)
-            for f in file_objects:
-                queried_file_objects[f["id"]] = f
+                file_objects = LocalFile.objects.filter(
+                    files__contentnode__in=segment_topics,
+                ).values("id", "file_size", "extension")
+                if available is not None:
+                    file_objects = file_objects.filter(available=available)
+                for f in file_objects:
+                    queried_file_objects[f["id"]] = f
 
     files_to_download = list(queried_file_objects.values())
 

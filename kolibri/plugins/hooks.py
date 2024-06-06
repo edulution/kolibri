@@ -153,16 +153,10 @@ objects are each instances of the hook classes that were registered.
 
 
 """
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 from abc import abstractproperty
 from functools import partial
 from inspect import isabstract
-
-import six
 
 from kolibri.plugins import SingletonMeta
 
@@ -188,6 +182,24 @@ def _make_singleton(subclass):
     subclass.__new__ = new
 
 
+def _add_kolibri_hook_meta(subclass):
+    """
+    Vendored from six add_metaclass.
+    """
+    orig_vars = subclass.__dict__.copy()
+    slots = orig_vars.get("__slots__")
+    if slots is not None:
+        if isinstance(slots, str):
+            slots = [slots]
+        for slots_var in slots:
+            orig_vars.pop(slots_var)
+    orig_vars.pop("__dict__", None)
+    orig_vars.pop("__weakref__", None)
+    if hasattr(subclass, "__qualname__"):
+        orig_vars["__qualname__"] = subclass.__qualname__
+    return KolibriHookMeta(subclass.__name__, subclass.__bases__, orig_vars)
+
+
 def define_hook(subclass=None, only_one_registered=False):
     """
     This method must be used as a decorator to define a new hook inheriting from
@@ -200,7 +212,7 @@ def define_hook(subclass=None, only_one_registered=False):
     if subclass is None:
         return partial(define_hook, only_one_registered=only_one_registered)
 
-    subclass = six.add_metaclass(KolibriHookMeta)(subclass)
+    subclass = _add_kolibri_hook_meta(subclass)
 
     subclass._setup_base_class(only_one_registered=only_one_registered)
 
@@ -232,6 +244,28 @@ def register_hook(subclass):
     subclass._registered = True
 
     return subclass
+
+
+def unregister_hook(subclass):
+    """
+    This method must be used as a decorator to unregister a hook and prevent it from being
+    registered against the abstract hook classes it inherits from.
+    """
+    if not any(
+        hasattr(base, "_registered_hooks")
+        and base.abstract
+        and issubclass(base, KolibriHook)
+        for base in subclass.__bases__
+    ):
+        raise TypeError(
+            "unregister_hook decorator used on a class that does not inherit from any abstract KolibriHook subclasses"
+        )
+    if not subclass.__module__.endswith("kolibri_plugin"):
+        raise RuntimeError(
+            "unregister_hook decorator invoked outside of a kolibri_plugin.py module - this hook will not be initialized"
+        )
+    subclass.remove_hook_from_registries()
+    subclass._registered = False
 
 
 class KolibriHookMeta(SingletonMeta):
@@ -315,6 +349,37 @@ class KolibriHookMeta(SingletonMeta):
             "{} added to registry for defined hook: {}".format(hook.unique_id, cls)
         )
 
+    def remove_hook_from_registries(cls):
+        """
+        Remove a concrete hook class from all relevant abstract hook registries.
+        """
+        if not cls.abstract and cls._registered:
+            hook = cls()
+            for parent in cls.__mro__:
+                if (
+                    isabstract(parent)
+                    and issubclass(parent, KolibriHook)
+                    and parent is not KolibriHook
+                    and hasattr(parent, "_registered_hooks")
+                ):
+                    parent.remove_hook_from_class_registry(hook)
+
+    def remove_hook_from_class_registry(cls, hook):
+        """
+        Remove a concrete hook instance from the hook registry on this abstract hook
+        """
+        if not cls.abstract:
+            raise TypeError(
+                "remove_hook_from_registry method used on a non-abstract hook"
+            )
+        if hook.unique_id in cls._registered_hooks:
+            del cls._registered_hooks[hook.unique_id]
+            logger.debug(
+                "{} removed from registry for defined hook: {}".format(
+                    hook.unique_id, cls
+                )
+            )
+
     def get_hook(cls, unique_id):
         """
         Fetch a registered hook instance by its unique_id
@@ -324,7 +389,7 @@ class KolibriHookMeta(SingletonMeta):
         return cls._registered_hooks.get(unique_id, None)
 
 
-class KolibriHook(six.with_metaclass(KolibriHookMeta)):
+class KolibriHook(metaclass=KolibriHookMeta):
     @abstractproperty
     def _not_abstract(self):
         """

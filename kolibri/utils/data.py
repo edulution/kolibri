@@ -1,6 +1,5 @@
 import re
 
-from six import string_types
 
 BYTES_PREFIXES = ("", "K", "M", "G", "T", "P")
 PREFIX_FACTOR_BYTES = 1000.0
@@ -36,7 +35,7 @@ def bytes_from_humans(size, suffix="B"):
     if isinstance(size, int):
         # If it is already an integer, return early.
         return size
-    if not isinstance(size, string_types):
+    if not isinstance(size, str):
         raise ValueError("size must be an integer or string")
     # Be lenient by making all input uppercase to maximize chance of a match.
     size = size.upper()
@@ -52,10 +51,10 @@ class ChoicesEnum(object):
     @classmethod
     def choices(cls):
         choices_list = [
-            ("{}".format(m), getattr(cls, m)) for m in cls.__dict__ if m[0] != "_"
+            (getattr(cls, m), "{}".format(m)) for m in cls.__dict__ if m[0] != "_"
         ]
         return tuple(sorted(choices_list))
 
     @classmethod
     def max_length(cls):
-        return max(len(getattr(cls, m)) for m in cls.__dict__ if m[0] != "_")
+        return max(len(str(getattr(cls, m))) for m in cls.__dict__ if m[0] != "_")

@@ -1,20 +1,19 @@
 <template>
 
-  <CoachAppBarPage
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
-    :showSubNav="true"
-  >
+  <CoachAppBarPage>
 
     <KPageContainer>
 
-      <ReportsLearnerHeader :enablePrint="true" />
-
-      <ActivityList
-        embeddedPageName="ReportsLearnerActivityPage"
-        :noActivityString="coachString('activityListEmptyState')"
-      />
-
+      <ReportsLearnerHeader :enablePrint="true" :activeTabId="ReportsLearnersTabs.ACTIVITY" />
+      <KTabsPanel
+        :tabsId="REPORTS_LEARNERS_TABS_ID"
+        :activeTabId="ReportsLearnersTabs.ACTIVITY"
+      >
+        <ActivityList
+          embeddedPageName="ReportsLearnerActivityPage"
+          :noActivityString="coachString('activityListEmptyState')"
+        />
+      </KTabsPanel>
     </KPageContainer>
   </CoachAppBarPage>
 
@@ -26,6 +25,7 @@
   import commonCoach from '../common';
   import CoachAppBarPage from '../CoachAppBarPage';
   import ActivityList from '../common/notifications/ActivityList';
+  import { REPORTS_LEARNERS_TABS_ID, ReportsLearnersTabs } from '../../constants/tabsConstants';
   import ReportsLearnerHeader from './ReportsLearnerHeader';
 
   export default {
@@ -36,6 +36,12 @@
       ReportsLearnerHeader,
     },
     mixins: [commonCoach],
+    data() {
+      return {
+        REPORTS_LEARNERS_TABS_ID,
+        ReportsLearnersTabs,
+      };
+    },
   };
 
 </script>

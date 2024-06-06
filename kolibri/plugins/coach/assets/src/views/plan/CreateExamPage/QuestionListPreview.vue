@@ -70,7 +70,7 @@
       <h3 v-if="content && content.available" class="question-title">
         {{ currentQuestion.title }}
       </h3>
-      <KContentRenderer
+      <ContentRenderer
         v-if="content && content.available && questionId"
         ref="contentRenderer"
         :kind="content.kind"
@@ -84,7 +84,7 @@
         :interactive="false"
       />
       <p v-else>
-        <KIcon icon="warning" :style=" { fill: $themePalette.orange.v_400 }" />
+        <KIcon icon="warning" :style=" { fill: $themePalette.yellow.v_1100 }" />
         {{ resourceMissingText }}
       </p>
     </KGridItem>

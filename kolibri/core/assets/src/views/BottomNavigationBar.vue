@@ -1,22 +1,22 @@
 <template>
 
   <div class="bottom-bar" :style="{ backgroundColor: $themeTokens.textInverted }">
-    <span v-for="(routeDefinition, key) in bottomMenuOptions[0].routes" :key="key">
+    <span v-for="(routeDefinition, key) in routes" :key="key">
       <a
-        :href="generateNavRoute(routeDefinition.route, bottomMenuOptions[0].url)"
+        :href="generateNavRoute(routeDefinition.route)"
         tabindex="-1"
         class="nav-menu-item"
         :style="{ textDecoration: 'none' }"
-        @click="handleNav(routeDefinition.route, bottomMenuOptions[0].url)"
+        @click="handleNav(routeDefinition.route)"
       >
         <div
-          :style="isActiveLink(routeDefinition.route, bottomMenuOptions[0].url) ?
+          :style="isActiveLink(routeDefinition.route) ?
             bottomMenuActiveStyles :
             bottomMenuInactiveStyles"
         >
           <KIconButton
             :icon="routeDefinition.icon"
-            :color="isActiveLink(routeDefinition.route, bottomMenuOptions[0].url)
+            :color="isActiveLink(routeDefinition.route)
               ? $themeTokens.primary
               : $themeTokens.annotation"
             :ariaLabel="routeDefinition.label"
@@ -24,7 +24,7 @@
           />
         </div>
         <p
-          v-if="isActiveLink(routeDefinition.route, bottomMenuOptions[0].url)"
+          v-if="isActiveLink(routeDefinition.route)"
           class="nav-menu-label"
           :style="{ color: $themeTokens.primary }"
         >
@@ -36,10 +36,17 @@
       <KIconButton
         icon="menu"
         :ariaLabel="coreString('menuLabel')"
+        size="small"
         :color="navShown ? $themeTokens.primary : $themeTokens.annotation"
         @click="$emit('toggleNav')"
       />
-      <p :style="{ color: $themeTokens.primary }">{{ coreString('menuLabel') }}</p>
+      <p
+        v-if="navShown"
+        class="nav-menu-label"
+        :style="{ color: $themeTokens.primary }"
+      >
+        {{ coreString('menuLabel') }}
+      </p>
     </span>
   </div>
 
@@ -55,8 +62,8 @@
     name: 'BottomNavigationBar',
     mixins: [commonCoreStrings],
     props: {
-      bottomMenuOptions: {
-        type: Array,
+      bottomMenuItem: {
+        type: Object,
         required: true,
       },
       navShown: {
@@ -76,17 +83,23 @@
           borderTop: `4px solid ${this.$themeTokens.textInverted}`,
         };
       },
+      routes() {
+        return this.bottomMenuItem.routes || [];
+      },
+      url() {
+        return this.bottomMenuItem.url || '';
+      },
     },
     methods: {
-      generateNavRoute(route, url) {
+      generateNavRoute(route) {
         const params = this.$route.params;
-        return generateNavRoute(url, route, params);
+        return generateNavRoute(this.url, route, params);
       },
-      isActiveLink(route, url) {
-        return window.location.pathname === url && route == this.$router.currentRoute.path;
+      isActiveLink(route) {
+        return this.bottomMenuItem.active && route == this.$router.currentRoute.path;
       },
-      handleNav(route, url) {
-        if (this.isActiveLink(route, url) && this.navShown) {
+      handleNav(route) {
+        if (this.isActiveLink(route) && this.navShown) {
           this.$emit('toggleNav');
         }
       },

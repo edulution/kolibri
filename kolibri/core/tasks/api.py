@@ -1,7 +1,9 @@
 import logging
 
 from django.http.response import Http404
+from django.utils.decorators import method_decorator
 from django.utils.timezone import make_aware
+from django.views.decorators.csrf import csrf_protect
 from pytz import utc
 from rest_framework import decorators
 from rest_framework import serializers
@@ -9,7 +11,6 @@ from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from six import string_types
 
 from kolibri.core.tasks.exceptions import JobNotFound
 from kolibri.core.tasks.exceptions import JobNotRestartable
@@ -41,8 +42,15 @@ class TasksSerializer(serializers.Serializer):
         return fields
 
 
+@method_decorator(csrf_protect, name="dispatch")
 class TasksViewSet(viewsets.GenericViewSet):
     serializer_class = TasksSerializer
+
+    def get_queryset(self):
+        """
+        Add this purely to avoid warnings from DRF YASG schema generation.
+        """
+        return None
 
     def validate_create_req_data(self, request):
         """
@@ -150,7 +158,7 @@ class TasksViewSet(viewsets.GenericViewSet):
                 enqueue_args["enqueue_at"],
                 job,
                 queue=registered_task.queue,
-                priority=registered_task.priority,
+                priority=enqueue_args.get("priority", registered_task.priority),
                 interval=enqueue_args.get("repeat_interval", 0),
                 repeat=enqueue_args.get("repeat", 0),
                 retry_interval=enqueue_args.get("retry_interval", None),
@@ -160,7 +168,7 @@ class TasksViewSet(viewsets.GenericViewSet):
                 enqueue_args["enqueue_in"],
                 job,
                 queue=registered_task.queue,
-                priority=registered_task.priority,
+                priority=enqueue_args.get("priority", registered_task.priority),
                 interval=enqueue_args.get("repeat_interval", 0),
                 repeat=enqueue_args.get("repeat", 0),
                 retry_interval=enqueue_args.get("retry_interval", None),
@@ -168,7 +176,7 @@ class TasksViewSet(viewsets.GenericViewSet):
         return job_storage.enqueue_job(
             job,
             queue=registered_task.queue,
-            priority=registered_task.priority,
+            priority=enqueue_args.get("priority", registered_task.priority),
             retry_interval=enqueue_args.get("retry_interval", None),
         )
 
@@ -196,7 +204,6 @@ class TasksViewSet(viewsets.GenericViewSet):
             object, including args, kwargs, and extra_metadata.
         """
         validated_data = self.validate_create_req_data(request)
-
         enqueued_jobs_response = []
 
         # Once we have validated all the tasks, we are good to go!
@@ -216,7 +223,7 @@ class TasksViewSet(viewsets.GenericViewSet):
 
     def _get_job_for_pk(self, request, pk):
         try:
-            if not isinstance(pk, string_types):
+            if not isinstance(pk, str):
                 raise JobNotFound
             job = job_storage.get_job(job_id=pk)
             registered_task = TaskRegistry[job.func]

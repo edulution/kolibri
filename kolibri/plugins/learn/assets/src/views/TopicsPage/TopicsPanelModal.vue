@@ -25,7 +25,7 @@
           :text="t.title"
           class="side-panel-folder-link"
           :appearanceOverrides="{ color: $themeTokens.text }"
-          :to="genContentLinkBackLinkCurrentPage(t.id, false)"
+          :to="genContentLinkKeepCurrentBackLink(t.id, false)"
         />
       </div>
       <KButton
@@ -44,7 +44,7 @@
 
 <script>
 
-  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import commonLearnStrings from '../commonLearnStrings';
   import SidePanelModal from '../SidePanelModal';
@@ -56,16 +56,16 @@
     mixins: [commonLearnStrings, commonCoreStrings],
     setup() {
       const { windowIsLarge } = useKResponsiveWindow();
-      const { genContentLinkBackLinkCurrentPage } = useContentLink();
+      const { genContentLinkKeepCurrentBackLink } = useContentLink();
       return {
-        genContentLinkBackLinkCurrentPage,
+        genContentLinkKeepCurrentBackLink,
         windowIsLarge,
       };
     },
     props: {
       topicMore: {
-        type: Function,
-        default: () => null,
+        type: Boolean,
+        default: false,
       },
       topics: {
         type: Array,

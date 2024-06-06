@@ -1,20 +1,13 @@
-import datetime
-import hashlib
 import logging
 import ntpath
 import os
-import random
 import shutil
 
-import requests
 from django.conf import settings
 from django.core.management import call_command
 from django.utils import timezone
-from morango.errors import MorangoResumeSyncError
-from morango.models import InstanceIDModel
-from requests.exceptions import ConnectionError
 from rest_framework import serializers
-from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import ValidationError
 
 from kolibri.core.auth.constants.demographics import NOT_SPECIFIED
@@ -24,27 +17,23 @@ from kolibri.core.auth.constants.user_kinds import ASSIGNABLE_COACH
 from kolibri.core.auth.constants.user_kinds import COACH
 from kolibri.core.auth.constants.user_kinds import SUPERUSER
 from kolibri.core.auth.models import Facility
-from kolibri.core.auth.models import FacilityUser
-from kolibri.core.auth.utils.sync import find_soud_sync_session_for_resume
 from kolibri.core.auth.utils.sync import find_soud_sync_sessions
 from kolibri.core.auth.utils.sync import validate_and_create_sync_credentials
 from kolibri.core.auth.utils.users import get_remote_users_info
-from kolibri.core.device.models import UserSyncStatus
+from kolibri.core.device import soud
 from kolibri.core.device.translation import get_device_language
 from kolibri.core.device.translation import get_settings_language
-from kolibri.core.device.utils import get_device_info
 from kolibri.core.discovery.models import NetworkLocation
 from kolibri.core.discovery.utils.network.client import NetworkClient
 from kolibri.core.discovery.utils.network.errors import NetworkLocationNotFound
 from kolibri.core.discovery.utils.network.errors import ResourceGoneError
 from kolibri.core.error_constants import DEVICE_LIMITATIONS
-from kolibri.core.public.constants.user_sync_statuses import QUEUED
-from kolibri.core.public.constants.user_sync_statuses import SYNC
 from kolibri.core.serializers import HexOnlyUUIDField
 from kolibri.core.tasks.decorators import register_task
 from kolibri.core.tasks.exceptions import JobNotFound
-from kolibri.core.tasks.exceptions import UserCancelledError
+from kolibri.core.tasks.exceptions import JobRunning
 from kolibri.core.tasks.job import JobStatus
+from kolibri.core.tasks.job import Priority
 from kolibri.core.tasks.job import State
 from kolibri.core.tasks.main import job_storage
 from kolibri.core.tasks.permissions import IsAdminForJob
@@ -52,14 +41,14 @@ from kolibri.core.tasks.permissions import IsSuperAdmin
 from kolibri.core.tasks.permissions import NotProvisioned
 from kolibri.core.tasks.utils import get_current_job
 from kolibri.core.tasks.validation import JobValidator
-from kolibri.core.utils.urls import reverse_remote
 from kolibri.utils.conf import KOLIBRI_HOME
-from kolibri.utils.conf import OPTIONS
 from kolibri.utils.filesystem import mkdirp
-from kolibri.utils.translation import ugettext as _
+from kolibri.utils.time_utils import naive_utc_datetime
+from kolibri.utils.translation import gettext as _
 
 
 logger = logging.getLogger(__name__)
+SOUD_SYNC_PROCESSING_JOB_ID = "50"
 
 
 def status_fn(job):
@@ -259,6 +248,16 @@ class SyncJobValidator(JobValidator):
         else:
             facility_id = facility
             facility_name = data["facility_name"]
+        kwargs = dict(
+            chunk_size=200,
+            noninteractive=True,
+        )
+        if data["command"] == "resumesync":
+            # Selectively add in the sync_session_id if resuming
+            # as the sync command will reject the id parameter.
+            kwargs["id"] = data["sync_session_id"]
+        else:
+            kwargs["facility"] = facility_id
         return {
             "extra_metadata": dict(
                 facility_id=facility_id,
@@ -268,12 +267,7 @@ class SyncJobValidator(JobValidator):
                 bytes_received=0,
             ),
             "facility_id": facility_id,
-            "kwargs": dict(
-                chunk_size=200,
-                noninteractive=True,
-                facility=facility_id,
-                sync_session_id=data.get("sync_session_id"),
-            ),
+            "kwargs": kwargs,
             "args": [data["command"]],
         }
 
@@ -429,331 +423,57 @@ class DeleteFacilityValidator(JobValidator):
         }
 
 
-class PeerRepeatingSingleSyncJobValidator(PeerSyncJobValidator):
-    resync_interval = serializers.IntegerField(default=None, allow_null=True)
-    user_id = HexOnlyUUIDField()
-
-    def validate(self, data):
-        job_data = super(PeerRepeatingSingleSyncJobValidator, self).validate(data)
-        job_data["job_id"] = hashlib.md5(
-            "{}::{}".format(job_data["kwargs"]["baseurl"], data["user_id"]).encode()
-        ).hexdigest()
-        job_data["kwargs"]["resync_interval"] = (
-            data["resync_interval"] or OPTIONS["Deployment"]["SYNC_INTERVAL"]
-        )
-        job_data["kwargs"]["user"] = data["user_id"]
-        return job_data
-
-
 soud_sync_queue = "soud_sync"
 
 
 @register_task(
-    validator=PeerRepeatingSingleSyncJobValidator,
+    job_id=SOUD_SYNC_PROCESSING_JOB_ID,
     queue=soud_sync_queue,
+    priority=Priority.HIGH,
     status_fn=status_fn,
+    long_running=True,
 )
-def peerusersync(command, **kwargs):
-    cleanup = False
-    resync_interval = kwargs["resync_interval"]
-    kwargs["keep_alive"] = True
-    try:
-        call_command(command, **kwargs)
-    except Exception as e:
-        cleanup = True
-        if isinstance(e, MorangoResumeSyncError):
-            # override to reschedule a sync sooner in this case
-            resync_interval = 5
-            logger.warning(
-                "Failed to resume sync session for user {} to server {}; queuing its cleanup".format(
-                    kwargs["user"], kwargs["baseurl"]
-                )
-            )
-        elif isinstance(e, UserCancelledError):
-            # In this instance we are cancelling the task, and we should not reschedule
-            resync_interval = None
-        else:
-            logger.error(
-                "Error syncing user {} to server {}".format(
-                    kwargs["user"], kwargs["baseurl"]
-                )
-            )
-            raise
-    finally:
-        # cleanup session on error if we tried to resume it
-        if cleanup and command == "resumesync":
-            # for resume we should have sync_session_id kwarg
-            queue_soud_sync_cleanup(kwargs["sync_session_id"])
+def soud_sync_processing():
+    # run processing
+    soud.execute_syncs()
+    # schedule next run
+    next_run = soud.get_time_to_next_attempt()
+    if next_run is not None:
         job = get_current_job()
-        if job and job.storage.check_job_canceled(job.job_id):
-            # If the job is canceled, then do not attempt to resync
-            resync_interval = None
-        if resync_interval:
-            # schedule a new sync
-            schedule_new_sync(
-                kwargs["baseurl"], kwargs["user"], interval=resync_interval
-            )
+        job.retry_in(next_run)
+    else:
+        logger.info("Skipping enqueue of SoUD sync processing: no attempts remaining")
 
 
-def startpeerusersync(
-    server, user_id, resync_interval=OPTIONS["Deployment"]["SYNC_INTERVAL"]
-):
+def enqueue_soud_sync_processing():
     """
-    Initiate a SYNC (PULL + PUSH) of a specific user from another device.
+    Enqueue a task to process SoUD syncs, if necessary
     """
+    next_run = soud.get_time_to_next_attempt()
+    if next_run is None:
+        # No need to enqueue, as there is no next run
+        logger.info("Skipping enqueue of SoUD sync processing: no eligible syncs")
+        return
 
-    user = FacilityUser.objects.get(pk=user_id)
-    facility_id = user.facility.id
-
-    # attempt to resume an existing session
-    sync_session = find_soud_sync_session_for_resume(user, server)
-
-    job, enqueue_args = peerusersync.validate_job_data(
-        user,
-        {
-            "baseurl": server,
-            "user_id": user_id,
-            "resync_interval": resync_interval,
-            "facility": facility_id,
-            "sync_session_id": sync_session.id if sync_session else None,
-            "command": "resumesync" if sync_session else "sync",
-        },
-    )
-
-    job_id = peerusersync.enqueue(job=job)
-    return job_id
-
-
-def stoppeerusersync(server, user_id):
-    """
-    Close the sync session with a server
-    """
-    logger.debug(
-        "Stopping SoUD syncs for user {} against server {}".format(user_id, server)
-    )
-
-    user = FacilityUser.objects.get(pk=user_id)
-    sync_session = find_soud_sync_session_for_resume(user, server)
-
-    # clear jobs with matching ID
-    job_id = hashlib.md5("{}::{}".format(server, user_id).encode()).hexdigest()
+    # Check if there is already an enqueued job
     try:
-        job_storage.cancel(job_id)
-        job_storage.clear(job_id=job_id)
+        converted_next_run = naive_utc_datetime(timezone.now() + next_run)
+        orm_job = job_storage.get_orm_job(SOUD_SYNC_PROCESSING_JOB_ID)
+        if (
+            orm_job.state not in (State.COMPLETED, State.FAILED, State.CANCELED)
+            and orm_job.scheduled_time <= converted_next_run
+        ):
+            # Already queued sooner or at the same time as the next run
+            logger.info("Skipping enqueue of SoUD sync processing: scheduled sooner")
+            return
     except JobNotFound:
-        # No job to clean up, we're done!
         pass
 
-    # skip if we couldn't find one for resume
-    if sync_session is None:
-        return
-
-    logger.debug("Enqueuing cleanup of SoUD sync session {}".format(sync_session.id))
-    return queue_soud_sync_cleanup(sync_session.id)
-
-
-def begin_request_soud_sync(server, user):
-    """
-    Enqueue a task to request this SoUD to be
-    synced with a server
-    """
-    info = get_device_info()
-    if not info["subset_of_users_device"]:
-        # this does not make sense unless this is a SoUD
-        logger.warning("Only Subsets of Users Devices can do automated SoUD syncing.")
-        return
-    users = UserSyncStatus.objects.filter(user_id=user).values(
-        "queued", "sync_session__last_activity_timestamp"
-    )
-    if users:
-        SYNC_INTERVAL = OPTIONS["Deployment"]["SYNC_INTERVAL"]
-        dt = datetime.timedelta(seconds=SYNC_INTERVAL)
-        if timezone.now() - users[0]["sync_session__last_activity_timestamp"] < dt:
-            schedule_new_sync(server, user)
-            return
-
-        if users[0]["queued"]:
-            all_jobs = job_storage.get_all_jobs()
-            failed_jobs = [
-                j
-                for j in all_jobs
-                if j.state == State.FAILED
-                and j.extra_metadata.get("started_by", None) == user
-                and j.extra_metadata.get("type", None) == "SYNCPEER/SINGLE"
-            ]
-            queued_jobs = [
-                j
-                for j in all_jobs
-                if j.state == State.QUEUED
-                and j.extra_metadata.get("started_by", None) == user
-                and j.extra_metadata.get("type", None) == "SYNCPEER/SINGLE"
-            ]
-            if failed_jobs:
-                for j in failed_jobs:
-                    job_storage.clear(job_id=j.job_id)
-                # if previous sync jobs have failed, unblock UserSyncStatus to try again:
-                UserSyncStatus.objects.update_or_create(
-                    user_id=user, defaults={"queued": False}
-                )
-            elif queued_jobs:
-                return  # If there are pending and not failed jobs, don't enqueue a new one
-
-    logger.info(
-        "Queuing SoUD syncing request against server {} for user {}".format(
-            server, user
-        )
-    )
-    request_soud_sync.enqueue(args=(server, user))
-
-
-def stop_request_soud_sync(server, user):
-    """
-    Cleanup steps to stop SoUD syncing
-    """
-    info = get_device_info()
-    if not info["subset_of_users_device"]:
-        # this does not make sense unless this is a SoUD
-        logger.warning("Only Subsets of Users Devices can do this")
-        return
-
-    # close active sync session
-    stoppeerusersync(server, user)
-
-
-@register_task(
-    queue=soud_sync_queue,
-)
-def request_soud_sync(server, user, queue_id=None, ttl=4):
-    """
-    Make a request to the serverurl endpoint to sync this SoUD (Subset of Users Device)
-        - If the server says "sync now" immediately queue a sync task for the server
-        - If the server responds with an identifier and interval, schedule itself to run
-        again in the future with that identifier as an argument, at the interval specified
-    """
-
-    if queue_id is None:
-        server_url = reverse_remote(server, "kolibri:core:syncqueue-list")
-    else:
-        server_url = reverse_remote(
-            server, "kolibri:core:syncqueue-detail", kwargs={"pk": queue_id}
-        )
-
-    instance_model = InstanceIDModel.get_or_create_current_instance()[0]
-
-    logger.debug("Requesting SoUD sync for user {} and server {}".format(user, server))
+    logger.info("Enqueuing SoUD sync processing in {}".format(next_run))
     try:
-        data = {"user": user, "instance": instance_model.id}
-        if queue_id is None:
-            # Set connection timeout to slightly larger than a multiple of 3, as per:
-            # https://docs.python-requests.org/en/master/user/advanced/#timeouts
-            # Use a relatively short connection timeout so that we don't block
-            # waiting for servers that have dropped off the network.
-            response = requests.post(server_url, json=data, timeout=(6.05, 30))
-        else:
-            # Use a blanket 30 second timeout for PUT requests, as we have already
-            # got a place in the queue to sync with this server, so we can be
-            # more sure that the server is actually available.
-            response = requests.put(server_url, json=data, timeout=30)
-        if response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
-            raise ConnectionError()
-    except ConnectionError:
-        # Algorithm to try several times if the server is not responding
-        # Randomly it can be trying it up to 1560 seconds (26 minutes)
-        # before desisting
-        ttl -= 1
-        if ttl == 0:
-            logger.error(
-                "Give up trying to connect to the server {} for user {}".format(
-                    server, user
-                )
-            )
-            return
-        interval = random.randint(1, 30 * (10 - ttl))
-        dt = datetime.timedelta(seconds=interval)
-        request_soud_sync.enqueue_in(dt, args=(server, user, queue_id, ttl))
-        if queue_id:
-            logger.warning(
-                "Connection error connecting to server {} for user {}, for queue id {}. Trying to connect in {} seconds".format(
-                    server, user, queue_id, interval
-                )
-            )
-        else:
-            logger.warning(
-                "Connection error connecting to server {} for user {}. Trying to connect in {} seconds".format(
-                    server, user, interval
-                )
-            )
-        return
-
-    if response.status_code == status.HTTP_404_NOT_FOUND:
-        logger.debug(
-            "User {} was not found requesting SoUD sync from server {}".format(
-                user, server
-            )
-        )
-        return  # Request done to a server not owning this user's data
-
-    if response.status_code == status.HTTP_200_OK:
-        handle_server_sync_response(response, server, user)
-    else:
-        logger.warning(
-            "{} response for user {} SoUD sync request to server {} | {}".format(
-                response.status_code, user, server, response.content
-            )
-        )
-
-
-def handle_server_sync_response(response, server, user):
-    # In either case, we set the sync status for this user as queued
-    # Once the sync starts, then this should get cleared and the SyncSession
-    # set on the status, so that more info can be garnered.
-    server_response = response.json()
-
-    UserSyncStatus.objects.update_or_create(user_id=user, defaults={"queued": True})
-
-    if server_response["action"] == SYNC:
-        server_sync_interval = server_response.get(
-            "sync_interval", str(OPTIONS["Deployment"]["SYNC_INTERVAL"])
-        )
-        job_id = startpeerusersync(server, user, server_sync_interval)
-        logger.info(
-            "Enqueuing a sync task for user {} with server {} in job {}".format(
-                user, server, job_id
-            )
-        )
-
-    elif server_response["action"] == QUEUED:
-        pk = server_response["id"]
-        time_alive = server_response["keep_alive"]
-        dt = datetime.timedelta(seconds=int(time_alive))
-        current_job = get_current_job()
-        if current_job:
-            current_job.retry_in(dt, args=(server, user, pk, time_alive))
-            logger.info(
-                "Server {} busy for user {}, will try again in {} seconds with pk={}".format(
-                    server, user, time_alive, pk
-                )
-            )
-        else:
-            logger.warning(
-                "Tried to retry current job but not running in a task context"
-            )
-
-
-def schedule_new_sync(server, user, interval=OPTIONS["Deployment"]["SYNC_INTERVAL"]):
-    # reschedule the process for a new sync
-    logging.info(
-        "Requeueing to sync with server {} for user {} in {} seconds".format(
-            server, user, interval
-        )
-    )
-    dt = datetime.timedelta(seconds=interval)
-    current_job = get_current_job()
-    if current_job:
-        current_job.retry_in(dt)
-    else:
-        JOB_ID = hashlib.md5("{}:{}".format(server, user).encode()).hexdigest()
-        request_soud_sync.enqueue_in(dt, args=(server, user), job_id=JOB_ID)
+        soud_sync_processing.enqueue_in(next_run)
+    except JobRunning:
+        logger.info("Skipping enqueue of SoUD sync processing: already running")
 
 
 @register_task(
@@ -779,6 +499,9 @@ def queue_soud_sync_cleanup(*sync_session_ids):
 
     :param sync_session_ids: ID's of sync sessions we should cleanup
     """
+    logger.info(
+        "Enqueueing cleanup of sync sessions: {}".format(", ".join(sync_session_ids))
+    )
     return soud_sync_cleanup.enqueue(kwargs=dict(pk__in=sync_session_ids))
 
 
@@ -815,7 +538,12 @@ class PeerImportSingleSyncJobValidator(PeerSyncJobValidator):
         facility_id = data["facility"]
         username = data["username"]
         password = data["password"]
-        facility_info = get_remote_users_info(baseurl, facility_id, username, password)
+        try:
+            facility_info = get_remote_users_info(
+                baseurl, facility_id, username, password
+            )
+        except AuthenticationFailed as e:
+            raise ValidationError(detail=str(e.detail), code=e.detail.code)
         user_info = facility_info["user"]
 
         # syncing using an admin account (username & password belong to the admin):
@@ -865,6 +593,7 @@ class PeerImportSingleSyncJobValidator(PeerSyncJobValidator):
     queue=soud_sync_queue,
     permission_classes=[IsSuperAdmin() | NotProvisioned()],
     status_fn=status_fn,
+    long_running=True,
 )
 def peeruserimport(command, **kwargs):
     call_command(command, **kwargs)
@@ -886,3 +615,54 @@ def deletefacility(facility):
         facility=facility,
         noninteractive=True,
     )
+
+
+class CleanUpSyncsValidator(JobValidator):
+    pull = serializers.BooleanField(required=False)
+    push = serializers.BooleanField(required=False)
+    sync_filter = serializers.CharField(required=True)
+    client_instance_id = HexOnlyUUIDField(required=False)
+    server_instance_id = HexOnlyUUIDField(required=False)
+
+    def validate(self, data):
+        if data.get("pull") is None and data.get("push") is None:
+            raise serializers.ValidationError("Either pull or push must be specified")
+        elif data.get("pull") is data.get("push"):
+            raise serializers.ValidationError(
+                "Only one of pull or push needs to be specified"
+            )
+
+        if (
+            data.get("client_instance_id") is None
+            and data.get("server_instance_id") is None
+        ):
+            raise serializers.ValidationError(
+                "Either client_instance_id or server_instance_id must be specified"
+            )
+        elif (
+            data.get("client_instance_id") is not None
+            and data.get("server_instance_id") is not None
+        ):
+            raise serializers.ValidationError(
+                "Only one of client_instance_id or server_instance_id can be specified"
+            )
+
+        return {
+            "kwargs": data,
+        }
+
+
+@register_task(
+    validator=CleanUpSyncsValidator,
+    track_progress=False,
+    cancellable=False,
+    long_running=True,
+    status_fn=status_fn,
+)
+def cleanupsync(**kwargs):
+    # ensure arguments are valid, even outside of task API
+    validator = CleanUpSyncsValidator(data=dict(type=cleanupsync.__name__, **kwargs))
+    validator.is_valid(raise_exception=True)
+
+    sync_filter = kwargs.pop("sync_filter")
+    call_command("cleanupsyncs", sync_filter=str(sync_filter), expiration=1, **kwargs)

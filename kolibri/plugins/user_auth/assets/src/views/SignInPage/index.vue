@@ -163,7 +163,6 @@
   import { validateUsername } from 'kolibri.utils.validators';
   import UiAutocompleteSuggestion from 'kolibri-design-system/lib/keen/UiAutocompleteSuggestion';
   import UiAlert from 'kolibri-design-system/lib/keen/UiAlert';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import { ComponentMap } from '../../constants';
   import getUrlParameter from '../getUrlParameter';
   import AuthBase from '../AuthBase';
@@ -187,7 +186,7 @@
       UiAlert,
       UsersList,
     },
-    mixins: [responsiveWindowMixin, commonCoreStrings, commonUserStrings],
+    mixins: [commonCoreStrings, commonUserStrings],
     data() {
       return {
         username: '',
@@ -340,6 +339,7 @@
         // and forth
         this.usernameBlurred = false;
         this.passwordBlurred = false;
+        this.usernameSubmittedWithoutPassword = false;
         this.loginError = null;
       },
       // Sets the selected list user and/or logs them in

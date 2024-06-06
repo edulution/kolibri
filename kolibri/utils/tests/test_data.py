@@ -1,11 +1,8 @@
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from django.test import TestCase
 
 from kolibri.utils.data import bytes_for_humans
 from kolibri.utils.data import bytes_from_humans
+from kolibri.utils.data import ChoicesEnum
 
 
 class BytesForHumans(TestCase):
@@ -81,3 +78,14 @@ class BytesFromHumans(TestCase):
             bytes_from_humans("611.77PB".lower()),
             611.77 * 1000 * 1000 * 1000 * 1000 * 1000,
         )
+
+
+class IntegerChoices(ChoicesEnum):
+    ONE = 1
+    TWO = 2
+    THREE = 3
+
+
+def test_choices_enum():
+    assert IntegerChoices.choices() == ((1, "ONE"), (2, "TWO"), (3, "THREE"))
+    assert IntegerChoices.max_length() == 1

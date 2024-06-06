@@ -1,5 +1,6 @@
 import uniq from 'lodash/uniq';
 import { checkCapability } from 'kolibri.utils.appCapabilities';
+import { Presets } from 'kolibri.coreVue.vuex.constants';
 import { DeviceTypePresets, FacilityTypePresets, LodTypePresets, UsePresets } from '../constants';
 
 /**
@@ -68,6 +69,7 @@ const initialContext = {
   importedUsers: [],
   firstImportedLodUser: null,
   facilitiesOnDeviceCount: null,
+  isImportedFacility: false,
 };
 
 export const wizardMachine = createMachine(
@@ -239,23 +241,10 @@ export const wizardMachine = createMachine(
           BACK: 'requirePassword',
         },
       },
-      // A passthrough step depending on the value of context.canGetOsUser - the finalizeSetup state
-      // will provision the device with the OS user and create the default facility
-      createSuperuserAndFacility: {
-        on: { BACK: 'personalDataConsent' },
-        always: [
-          {
-            cond: 'canGetOsUser',
-            target: 'finalizeSetup',
-          },
-          {
-            target: 'createSuperuserAndFacilityForm',
-          },
-        ],
-      },
 
-      // If we're not able to get an OS user, the user creates their account
-      createSuperuserAndFacilityForm: {
+      // In the group learning flow we always create the account on the device
+      // and the backend associates it with the created superuser.
+      createSuperuserAndFacility: {
         meta: { route: { name: 'CREATE_SUPERUSER_AND_FACILITY', path: 'create-account' } },
         on: {
           CONTINUE: { target: 'finalizeSetup', actions: 'setSuperuser' },
@@ -314,6 +303,7 @@ export const wizardMachine = createMachine(
             on: {
               BACK: 'selectSuperAdminAccountForm',
             },
+            exit: 'setImportedFacility',
           },
         },
         // Listener on the importFacility state; typically this would be above `states` but
@@ -544,12 +534,17 @@ export const wizardMachine = createMachine(
        * This effectively resets the machine's state
        */
       resetContext: assign(initialContext),
+      setImportedFacility: assign({
+        isImportedFacility: () => {
+          return true;
+        },
+      }),
     },
     guards: {
       // Functions used to return a true/false value. When the functions are called, they are passed
       // the current value of the machine's context as the only parameter
       isOnMyOwnOrGroup: context => {
-        return context.onMyOwnOrGroup === UsePresets.ON_MY_OWN;
+        return context.onMyOwnOrGroup === Presets.PERSONAL;
       },
       isGroupSetup: context => {
         return context.onMyOwnOrGroup === UsePresets.GROUP;

@@ -4,6 +4,8 @@
     <component
       :is="!windowIsSmall && currentCardViewStyle === 'list' ? 'div' : 'CardGrid'"
       :data-test="`${windowIsSmall ? '' : 'non-'}mobile-card-grid`"
+      :style="{ maxWidth: '1700px' }"
+      :gridType="gridType"
     >
       <component
         :is="componentType"
@@ -30,7 +32,7 @@
 
 <script>
 
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import useContentLink from '../composables/useContentLink';
   import CardGrid from './cards/CardGrid';
   import ResourceCard from './cards/ResourceCard';
@@ -50,14 +52,17 @@
       ResourceCard,
     },
 
-    mixins: [responsiveWindowMixin],
-
     setup() {
       const {
         genContentLinkBackLinkCurrentPage,
         genContentLinkKeepCurrentBackLink,
       } = useContentLink();
-      return { genContentLinkBackLinkCurrentPage, genContentLinkKeepCurrentBackLink };
+      const { windowIsSmall } = useKResponsiveWindow();
+      return {
+        genContentLinkBackLinkCurrentPage,
+        genContentLinkKeepCurrentBackLink,
+        windowIsSmall,
+      };
     },
 
     props: {
@@ -81,6 +86,10 @@
       allowDownloads: {
         type: Boolean,
         default: false,
+      },
+      gridType: {
+        type: Number,
+        default: 1,
       },
     },
     computed: {

@@ -1,6 +1,12 @@
 <template>
 
   <DeviceAppBarPage :title="pageTitle">
+    <transition name="delay<-entry">
+      <PostSetupModalGroup
+        v-if="!channelListLoading && welcomeModalVisible"
+        @cancel="hideWelcomeModal"
+      />
+    </transition>
 
     <KPageContainer class="device-container">
 
@@ -94,10 +100,13 @@
   import { PageNames } from '../../constants';
   import HeaderWithOptions from '../HeaderWithOptions';
   import { deviceString } from '../commonDeviceStrings';
+  import PostSetupModalGroup from '../PostSetupModalGroup';
   import SelectTransferSourceModal from './SelectTransferSourceModal';
   import ChannelPanel from './ChannelPanel/WithSizeAndOptions';
   import DeleteChannelModal from './DeleteChannelModal';
   import TasksBar from './TasksBar';
+
+  const welcomeDismissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
 
   export default {
     name: 'ManageContentPage',
@@ -109,6 +118,7 @@
     components: {
       DeviceAppBarPage,
       ChannelPanel,
+      PostSetupModalGroup,
       DeleteChannelModal,
       HeaderWithOptions,
       SelectTransferSourceModal,
@@ -130,8 +140,12 @@
         'channelIsBeingDeleted',
         'managedTasks',
       ]),
+      ...mapGetters(['isLearnerOnlyImport']),
       ...mapState('manageContent/wizard', ['pageName']),
       ...mapState('manageContent', ['channelListLoading']),
+      ...mapState({
+        welcomeModalVisibleState: 'welcomeModalVisible',
+      }),
       pageTitle() {
         return deviceString('deviceManagementTitle');
       },
@@ -166,6 +180,13 @@
           },
         ];
       },
+      welcomeModalVisible() {
+        return (
+          this.welcomeModalVisibleState &&
+          window.localStorage.getItem(welcomeDismissalKey) !== 'true' &&
+          (!this.installedChannelsWithResources.length > 0) & !this.isLearnerOnlyImport
+        );
+      },
     },
     watch: {
       installedChannelsWithResources: {
@@ -195,6 +216,10 @@
     },
     methods: {
       ...mapActions('manageContent', ['refreshChannelList', 'startImportWorkflow']),
+      hideWelcomeModal() {
+        window.localStorage.setItem(welcomeDismissalKey, true);
+        this.$store.commit('SET_WELCOME_MODAL_VISIBLE', false);
+      },
       handleSelect({ value }) {
         const nextRoute = {
           DELETE: PageNames.DELETE_CHANNELS,

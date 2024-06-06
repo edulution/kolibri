@@ -21,11 +21,10 @@ class AppPlugin(SimplePlugin):
         self.port = port
 
     def RUN(self):
-        start_url = (
-            "http://127.0.0.1:{port}".format(port=self.port)
-            + interface.get_initialize_url()
-        )
-        print("Kolibri running at: {start_url}".format(start_url=start_url))
+        start_url = "http://127.0.0.1:{port}".format(
+            port=self.port
+        ) + interface.get_initialize_url(auth_token="1234")
+        logging.info("Kolibri running at: {start_url}".format(start_url=start_url))
 
 
 logging.info("Initializing Kolibri and running any upgrade routines")

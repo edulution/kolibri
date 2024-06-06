@@ -26,8 +26,12 @@
               :text="deviceName"
               :maxLines="2"
               class="name"
+              :style="{ color: $themePalette.black }"
             />
-            <p class="channels">
+            <p
+              class="channels"
+              :style="{ color: channelColor }"
+            >
               {{ $tr('channels', { count: channelCount }) }}
             </p>
           </div>
@@ -51,7 +55,7 @@
 <script>
 
   import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
-  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
+  import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
 
   export default {
@@ -70,6 +74,10 @@
       device: {
         type: Object,
         required: true,
+      },
+      channelCount: {
+        type: Number,
+        default: 0,
       },
       routeTo: {
         type: Object,
@@ -90,9 +98,6 @@
           textAlign: 'center',
         };
       },
-      channelCount() {
-        return this.device['total_count'] || 0;
-      },
       deviceName() {
         return this.device.nickname || this.device.device_name;
       },
@@ -104,6 +109,9 @@
         } else {
           return 'laptop';
         }
+      },
+      channelColor() {
+        return this.$themePalette.grey.v_600;
       },
     },
     $trs: {
@@ -171,7 +179,6 @@
     font-size: 19px;
     font-weight: 700;
     line-height: 140%;
-    color: black;
   }
 
   .channels {
@@ -179,7 +186,6 @@
     margin: 5px 0 0;
     font-size: 17px;
     font-weight: 500;
-    color: #616161;
   }
 
   .view-all {

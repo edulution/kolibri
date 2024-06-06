@@ -33,7 +33,6 @@ from django.db.models import F
 from django.db.models import Min
 from django.db.models import OuterRef
 from django.db.models import QuerySet
-from django.utils.encoding import python_2_unicode_compatible
 from le_utils.constants import content_kinds
 from le_utils.constants import format_presets
 from morango.models.fields import UUIDField
@@ -58,7 +57,6 @@ from kolibri.utils.time_utils import local_now
 PRESET_LOOKUP = dict(format_presets.choices)
 
 
-@python_2_unicode_compatible
 class ContentTag(base_models.ContentTag):
     def __str__(self):
         return self.tag_name
@@ -185,7 +183,6 @@ class ContentNodeManager(
         return stack
 
 
-@python_2_unicode_compatible
 class ContentNode(base_models.ContentNode):
     """
     The primary object type in a content database. Defines the properties that are shared
@@ -215,9 +212,9 @@ class ContentNode(base_models.ContentNode):
     # whether a device super admin, or via initial configuration.
     # These nodes will not be subject to automatic garbage collection
     # to manage space.
-    # Set as a NullBooleanField to limit migration time in creating the new column,
+    # Set as a nullable BooleanField to limit migration time in creating the new column,
     # needs a subsequent Kolibri upgrade step to backfill these values.
-    admin_imported = models.NullBooleanField()
+    admin_imported = models.BooleanField(null=True)
 
     objects = ContentNodeManager()
 
@@ -248,7 +245,6 @@ for field_name in bitmask_fieldnames:
     field.contribute_to_class(ContentNode, field_name)
 
 
-@python_2_unicode_compatible
 class Language(base_models.Language):
     def __str__(self):
         return self.lang_name or ""
@@ -316,7 +312,6 @@ class LocalFileQueryset(models.QuerySet, FilterByUUIDQuerysetMixin):
         )
 
 
-@python_2_unicode_compatible
 class LocalFile(base_models.LocalFile):
     """
     The bottom layer of the contentDB schema, defines the local state of files on the device storage.
@@ -375,7 +370,6 @@ class ChannelMetadataQueryset(QuerySet, FilterByUUIDQuerysetMixin):
 BATCH_SIZE = 1000
 
 
-@python_2_unicode_compatible
 class ChannelMetadata(base_models.ChannelMetadata):
     """
     Holds metadata about all existing content databases that exist locally.
@@ -388,10 +382,10 @@ class ChannelMetadata(base_models.ChannelMetadata):
         "Language", related_name="channels", verbose_name="languages", blank=True
     )
     order = models.PositiveIntegerField(default=0, null=True, blank=True)
-    public = models.NullBooleanField()
+    public = models.BooleanField(null=True)
     # Has only a subset of this channel's metadata been imported?
     # Use a null boolean field to avoid issues during metadata import
-    partial = models.NullBooleanField(default=False)
+    partial = models.BooleanField(null=True, default=False)
 
     objects = ChannelMetadataQueryset.as_manager()
 
@@ -446,6 +440,20 @@ def _hex_uuid_str():
     return str(uuid.uuid4().hex)
 
 
+class ContentRequestManager(models.Manager):
+    request_type = None
+
+    def get_queryset(self):
+        """
+        Automatically filters on the request type for use with proxy models
+        :rtype: django.db.models.QuerySet
+        """
+        queryset = super(ContentRequestManager, self).get_queryset()
+        if self.request_type is not None:
+            queryset = queryset.filter(type=self.request_type)
+        return queryset
+
+
 class ContentRequest(models.Model):
     """
     Model representing requests for specific content, either through user interaction or as a
@@ -454,7 +462,9 @@ class ContentRequest(models.Model):
     """
 
     id = UUIDField(primary_key=True, default=_hex_uuid_str)
-    facility = models.ForeignKey(Facility, related_name="content_requests")
+    facility = models.ForeignKey(
+        Facility, related_name="content_requests", on_delete=models.CASCADE
+    )
 
     # the source model's `morango_model_name` that initiated the request:
     # - for user-initiated requests it should be `facilityuser`
@@ -474,6 +484,8 @@ class ContentRequest(models.Model):
 
     contentnode_id = UUIDField()
     metadata = JSONField(null=True)
+
+    objects = ContentRequestManager()
 
     class Meta:
         unique_together = ("type", "source_model", "source_id", "contentnode_id")
@@ -515,18 +527,6 @@ class ContentRequest(models.Model):
     @property
     def total_progress(self):
         return self.metadata.get("total_progress", 0) if self.metadata else 0
-
-
-class ContentRequestManager(models.Manager):
-    request_type = None
-
-    def get_queryset(self):
-        """
-        Automatically filters on the request type for use with proxy models
-        :rtype: django.db.models.QuerySet
-        """
-        queryset = super(ContentRequestManager, self).get_queryset()
-        return queryset.filter(type=self.request_type)
 
 
 class ContentDownloadRequestManager(ContentRequestManager):

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
-const program = require('commander');
+const fs = require('node:fs');
+const path = require('node:path');
+const { Command } = require('commander');
 const checkVersion = require('check-node-version');
 const ini = require('ini');
+const toml = require('toml');
 const get = require('lodash/get');
 const version = require('../package.json');
 const logger = require('./logging');
@@ -12,7 +13,12 @@ const readWebpackJson = require('./read_webpack_json');
 
 const cliLogging = logger.getLogger('Kolibri CLI');
 
+const program = new Command();
+
 function list(val) {
+  // Handle the differences between the TOML and cfg parsers: TOML returns an array already,
+  // but cfg needs some post-processing
+  if (Array.isArray(val)) return val;
   return val.split(',');
 }
 
@@ -23,13 +29,26 @@ function filePath(val) {
 }
 
 let configFile;
+let configSectionPath;
+let config;
 try {
-  configFile = fs.readFileSync(path.join(process.cwd(), './setup.cfg'), 'utf-8');
+  configFile = fs.readFileSync(path.join(process.cwd(), './pyproject.toml'), 'utf-8');
+  // The group `[tool.kolibri.i18n]` in TOML is turned into nested objects by
+  // the parser, so needs nested lookups to get its keys; hence a path.
+  configSectionPath = ['tool', 'kolibri', 'i18n'];
+  config = toml.parse(configFile);
 } catch (e) {
-  // do nothing
+  try {
+    // try the old-style setup.cfg
+    configFile = fs.readFileSync(path.join(process.cwd(), './setup.cfg'), 'utf-8');
+    configSectionPath = ['kolibri:i18n'];
+    config = ini.parse(configFile);
+  } catch (e) {
+    // do nothing, use a default empty config
+    configSectionPath = ['null'];
+    config = ini.parse('');
+  }
 }
-
-const config = ini.parse(configFile || '');
 
 program.version(version).description('Tools for Kolibri frontend plugins');
 
@@ -64,6 +83,8 @@ function runWebpackBuild(mode, bundleData, devServer, options, cb = null) {
     cache: options.cache,
     transpile: options.transpile,
     devServer,
+    requireKdsPath: options.requireKdsPath,
+    kdsPath: options.kdsPath,
   };
 
   const webpackConfig = require('./webpack.config.plugin');
@@ -184,7 +205,7 @@ program
   .arguments('<mode>', 'Mode to run in, options are: d/dev/development, p/prod/production, c/clean')
   .option('-f , --file <file>', 'Set custom file which lists plugins that should be built')
   .option(
-    '-p, --plugins <plugins...>',
+    '--plugins <plugins...>',
     'An explicit comma separated list of plugins that should be built',
     list,
     []
@@ -197,7 +218,7 @@ program
   )
   .option('--parallel <parallel>', 'Run multiple bundles in parallel', Number, 0)
   .option('-h, --hot', 'Use hot module reloading in the webpack devserver', false)
-  .option('-p, --port <port>', 'Set a port number to start devserver on', Number, 3000)
+  .option('--port <port>', 'Set a port number to start devserver on', Number, 3000)
   .option('--host <host>', 'Set a host to serve devserver', String, '0.0.0.0')
   .option('--json', 'Output webpack stats in JSON format - only works in prod mode', false)
   .option('--cache', 'Use cache in webpack', false)
@@ -208,7 +229,22 @@ program
     list,
     []
   )
+  .option(
+    '--require-kds-path',
+    'Flag to check if yarn command is run using devserver-with-kds',
+    false
+  )
+  .option('--kds-path <kdsPath>', 'Full path to local kds directory', String, '')
+  .option('--write-to-disk', 'Write files to disk instead of using webpack devserver', false)
   .action(function(mode, options) {
+    if (options.requireKdsPath) {
+      if (!options.kdsPath) {
+        cliLogging.error(
+          'The --require-kds-path flag was specified, but no --kds-path value was provided. Please include the path to the local KDS directory.'
+        );
+        process.exit(1);
+      }
+    }
     if (typeof mode !== 'string') {
       cliLogging.error('Build mode must be specified');
       process.exit(1);
@@ -251,6 +287,10 @@ program
     }
     if (options.watchonly.length) {
       const unwatchedBundles = [];
+      // Watch core for changes if KDS option is provided; all KDS components are linked to core.
+      if (options.requireKdsPath && !options.watchonly.includes('core')) {
+        options.watchonly.push('core');
+      }
       const findModuleName = bundleDatum => {
         return !options.watchonly.some(m => bundleDatum.module_path.includes(m));
       };
@@ -285,7 +325,14 @@ program
         });
       }
     }
-    runWebpackBuild(mode, bundleData, mode === modes.DEV, options);
+
+    if (options.writeToDisk && mode === modes.DEV) {
+      cliLogging.warn(
+        'Enabling write-to-disk mode may fill up your developer machine with lots of different built files if frequent changes are made.'
+      );
+    }
+
+    runWebpackBuild(mode, bundleData, !options.writeToDisk && mode === modes.DEV, options);
   });
 
 const ignoreDefaults = ['**/node_modules/**', '**/static/**'];
@@ -307,7 +354,7 @@ program
   .option('-p, --pattern <string>', 'Lint only files that match this comma separated pattern', null)
   .action(function(args, options) {
     const files = [];
-    if (!(args instanceof program.Command)) {
+    if (!(args instanceof Command)) {
       files.push(...args);
     } else {
       options = args;
@@ -323,7 +370,7 @@ program
       const Minimatch = require('minimatch').Minimatch;
       patternCheck = new Minimatch(options.pattern, {});
     }
-    const glob = require('glob');
+    const glob = require('./glob');
     const { logging, lint, noChange } = require('./lint');
     const chokidar = require('chokidar');
     const watchMode = options.monitor;
@@ -414,7 +461,7 @@ program
     if (!files.length) {
       program.command('compress').help();
     } else {
-      const glob = require('glob');
+      const glob = require('./glob');
       const compressFile = require('./compress');
       Promise.all(
         files.map(file => {
@@ -425,10 +472,14 @@ program
     }
   });
 
-const localeDataFolderDefault = filePath(get(config, ['kolibri:i18n', 'locale_data_folder']));
-const globalWebpackConfigDefault = filePath(get(config, ['kolibri:i18n', 'webpack_config']));
-const langInfoConfigDefault = filePath(get(config, ['kolibri:i18n', 'lang_info']));
-const langIgnoreDefaults = list(get(config, ['kolibri:i18n', 'ignore'], ''));
+const localeDataFolderDefault = filePath(
+  get(config, configSectionPath.concat(['locale_data_folder']))
+);
+const globalWebpackConfigDefault = filePath(
+  get(config, configSectionPath.concat(['webpack_config']))
+);
+const langInfoConfigDefault = filePath(get(config, configSectionPath.concat(['lang_info'])));
+const langIgnoreDefaults = list(get(config, configSectionPath.concat(['ignore']), ''));
 
 // Path to the kolibri locale language_info file, which we use if we are running
 // from inside the Kolibri repository.
@@ -493,7 +544,7 @@ function _generatePathInfo({
       })
     );
   }
-  if (namespace && searchPath) {
+  if (namespace.length && namespace.length == searchPath.length) {
     let aliases;
     if (webpackConfig) {
       const webpack = require('webpack');
@@ -508,19 +559,25 @@ function _generatePathInfo({
       }
       aliases = buildConfig.resolve.alias;
     }
-    pathInfoArray.push({
-      moduleFilePath: searchPath,
-      namespace: namespace,
-      name: namespace,
-      aliases,
-    });
+    for (let i = 0; i < namespace.length; i++) {
+      pathInfoArray.push({
+        moduleFilePath: searchPath[i],
+        namespace: namespace[i],
+        name: namespace[i],
+        aliases,
+      });
+    }
   }
   if (pathInfoArray.length) {
     return pathInfoArray;
   }
   cliLogging.error('This command requires one or more of the following combinations of arguments:');
   cliLogging.error('1) The --pluginFile, --plugins, or --pluginPath argument.');
-  cliLogging.error('2) The --searchPath argument along with the --namespace argument.');
+  cliLogging.error('2) One or more pairs of the --searchPath and --namespace arguments.');
+}
+
+function _collect(value, previous) {
+  return previous.concat([value]);
 }
 
 function _addPathOptions(cmd) {
@@ -544,7 +601,12 @@ function _addPathOptions(cmd) {
       list,
       langIgnoreDefaults.length ? langIgnoreDefaults : ignoreDefaults
     )
-    .option('-n , --namespace <namespace>', 'Set namespace for string extraction')
+    .option(
+      '-n , --namespace <namespace>',
+      'Set namespace for string extraction; this may be specified multiple times, but there must be an equal number of --searchPath arguments',
+      _collect,
+      []
+    )
     .option(
       '--localeDataFolder <localeDataFolder>',
       'Set path to write locale files to',
@@ -553,7 +615,9 @@ function _addPathOptions(cmd) {
     )
     .option(
       '--searchPath <searchPath>',
-      'Set path to search for files containing strings to be extracted'
+      'Set path to search for files containing strings to be extracted; this may be specified multiple times, but there must be an equal number of --namespace arguments',
+      _collect,
+      []
     )
     .option(
       '--webpackConfig <webpackConfig>',

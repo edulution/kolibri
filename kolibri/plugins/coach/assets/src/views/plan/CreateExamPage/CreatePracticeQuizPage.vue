@@ -2,8 +2,6 @@
 
   <CoachImmersivePage
     :appBarTitle="$tr('createNewExamLabel')"
-    :authorized="userIsAuthorized"
-    authorizedRole="adminOrCoach"
     icon="close"
     :pageTitle="$tr('selectPracticeQuizLabel')"
     :route="toolbarRoute"
@@ -41,10 +39,9 @@
 
   import { mapState } from 'vuex';
   import { ContentNodeKinds } from 'kolibri.coreVue.vuex.constants';
-  import responsiveWindowMixin from 'kolibri.coreVue.mixins.responsiveWindowMixin';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import ResourceSelectionBreadcrumbs from '../../plan/LessonResourceSelectionPage/SearchTools/ResourceSelectionBreadcrumbs';
-  import { PageNames } from '../../../constants';
+  import { PageNames, ViewMoreButtonStates } from '../../../constants/index';
   import ContentCardList from '../../plan/LessonResourceSelectionPage/ContentCardList';
   import commonCoach from '../../common';
   import CoachImmersivePage from '../../CoachImmersivePage';
@@ -56,10 +53,10 @@
       ContentCardList,
       ResourceSelectionBreadcrumbs,
     },
-    mixins: [commonCoreStrings, commonCoach, responsiveWindowMixin],
+    mixins: [commonCoreStrings, commonCoach],
     data() {
       return {
-        viewMoreButtonState: 'no_more_results',
+        viewMoreButtonState: ViewMoreButtonStates.NO_MORE,
         contentHasCheckbox: () => false,
         contentIsSelected: () => '',
       };
