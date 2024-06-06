@@ -36,7 +36,6 @@
                 :group="group"
                 @rename="openRenameGroupModal"
                 @delete="openDeleteGroupModal"
-                @subscribe="openSubscribeGroupModal"
               />
             </tbody>
           </template>
@@ -65,24 +64,6 @@
           @cancel="closeModal"
         />
       </KTabsPanel>
-
-      <KModal
-        v-if="subscriptionModalOpen"
-        :title="coreString('channelSubscriptionModalTitle') + subscriptionModalData.groupName"
-        :cancelText="coreString('closeAction')"
-        :submitText="coreString('saveAction')"
-        @cancel="onSubscriptionModalCancel"
-        @submit="onSubscriptionModalSubmit"
-      >
-        <KCheckbox
-          v-for="(channel, index) in channels"
-          :key="index"
-          :label="channel.title"
-          :checked="selectedChannelsIds.includes(channel.id)"
-          @change="$event => onChannelChange(channel.id)"
-        />
-        <p>{{ $tr('channelSubscriptionNote') }}</p>
-      </KModal>
     </KPageContainer>
   </CoachAppBarPage>
 
@@ -136,13 +117,6 @@
         groupsAreLoading,
       };
     },
-    data() {
-      return {
-        subscriptionModalOpen: false,
-        subscriptionModalData: {},
-        selectedChannelsIds: [],
-      }
-    },
     computed: {
       ...mapState('groups', ['groupModalShown', 'groups']),
       showCreateGroupModal() {
@@ -157,13 +131,9 @@
       sortedGroups() {
         return orderBy(this.groups, [group => group.name.toUpperCase()], ['asc']);
       },
-      channels() {
-        return this.$store.state.core.channels.list;
-      },
     },
     methods: {
       ...mapActions('groups', ['displayModal']),
-      ...mapActions('subscriptions', ['saveGroupSubscription']),
       closeModal() {
         this.displayModal(false);
       },
@@ -186,37 +156,6 @@
         this.showSnackbarNotification('groupDeleted');
         this.displayModal(false);
       },
-      openSubscribeGroupModal(groupName, groupId, subscriptions) {
-        this.subscriptionModalOpen = true;
-        this.subscriptionModalData = { groupName, groupId };
-        this.selectedChannelsIds = subscriptions.length ? JSON.parse(subscriptions) : subscriptions;
-      },
-      onSubscriptionModalCancel() {
-        this.subscriptionModalOpen = false;
-        this.subscriptionModalData = {};
-        this.selectedChannelsIds = [];
-      },
-      onSubscriptionModalSubmit() {
-        this.saveGroupSubscription({
-            id: this.subscriptionModalData.groupId,
-            choices: JSON.stringify(this.selectedChannelsIds),
-        });
-
-        this.$router.go(this.$router.currentRoute)
-        
-        this.subscriptionModalOpen = false;
-        this.subscriptionModalData = {};
-        this.selectedChannelsIds = [];
-      },
-      onChannelChange(channelId) {
-        let selectedChannelsIds = [...this.selectedChannelsIds];
-        if (selectedChannelsIds.includes(channelId)) {
-          selectedChannelsIds = selectedChannelsIds.filter(d => d !== channelId)
-        } else {
-          selectedChannelsIds.push(channelId)
-        }
-        this.selectedChannelsIds = selectedChannelsIds
-      }
     },
     $trs: {
       newGroupAction: {
@@ -227,10 +166,6 @@
       noGroups: {
         message: 'You do not have any groups',
         context: 'Message displayed when there are no groups within a class.',
-      },
-      channelSubscriptionNote: {
-        message: 'Chosen channels will be available in the class',
-        context: 'This message displays as helper note inside channel subscription modal',
       },
     },
   };

@@ -3,43 +3,50 @@
   <LearnAppBarPage :appBarTitle="learnString('learnLabel')">
     <div v-if="!loading" id="main" role="main">
       <MissingResourceAlert v-if="missingResources" />
-      <YourClasses
-        v-if="displayClasses"
-        class="section"
-        :classes="classes"
-        data-test="classes"
-        short
+      <YourClasses 
+        v-if="displayClasses" 
+        class="section" 
+        :classes="classes" 
+        data-test="classes" 
+        short 
       />
-      <ContinueLearning
+      <ContinueLearning 
         v-if="continueLearning"
         class="section"
-        :fromClasses="continueLearningFromClasses"
-        :data-test="continueLearningFromClasses ?
-          'continueLearningFromClasses' :
-          'continueLearningOnYourOwn'"
+        :fromClasses="continueLearningFromClasses" 
+        :data-test="continueLearningFromClasses ? 'continueLearningFromClasses' 
+          : 'continueLearningOnYourOwn'" 
       />
-      <AssignedLessonsCards
-        v-if="hasActiveClassesLessons"
-        class="section"
+      <AssignedLessonsCards 
+        v-if="hasActiveClassesLessons" 
+        class="section" 
         :lessons="activeClassesLessons"
-        displayClassName
-        recent
-        data-test="recentLessons"
+        displayClassName 
+        recent 
+        data-test="recentLessons" 
       />
-      <AssignedQuizzesCards
-        v-if="hasActiveClassesQuizzes"
-        class="section"
+      <AssignedQuizzesCards 
+        v-if="hasActiveClassesQuizzes" 
+        class="section" 
         :quizzes="activeClassesQuizzes"
-        displayClassName
-        recent
-        data-test="recentQuizzes"
+        displayClassName 
+        recent 
+        data-test="recentQuizzes" 
       />
-      <ExploreChannels
-        v-if="displayExploreChannels"
-        :channels="filteredChannels"
+      <AssessmentCards 
+        v-if="assessments.length" 
         class="section"
-        data-test="exploreChannels"
-        :short="isShort"
+        :assessments="assessments"
+        displayClassName
+        recent 
+        data-test="recentQuizzes" 
+      />
+      <ExploreChannels 
+        v-if="displayExploreChannels" 
+        :channels="filteredChannels" 
+        class="section"
+        data-test="exploreChannels" 
+        :short="isShort" 
       />
 
     </div>
@@ -49,204 +56,225 @@
 
 
 <script>
+import { mapGetters } from 'vuex';
+import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
+import { get } from '@vueuse/core';
+import client from 'kolibri.client';
+import urls from 'kolibri.urls';
+import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
+import useUser from 'kolibri.coreVue.composables.useUser';
+import { UserKinds } from 'kolibri.coreVue.vuex.constants';
+import useChannels from '../../composables/useChannels';
+import useDeviceSettings from '../../composables/useDeviceSettings';
+import useLearnerResources, {
+  setClasses,
+  setResumableContentNodes,
+  getLearnerAssessments,
+} from '../../composables/useLearnerResources';
+import { setContentNodeProgress } from '../../composables/useContentNodeProgress';
+import { PageNames } from '../../constants';
+import AssignedLessonsCards from '../classes/AssignedLessonsCards';
+import AssignedQuizzesCards from '../classes/AssignedQuizzesCards';
+import YourClasses from '../YourClasses';
+import LearnAppBarPage from '../LearnAppBarPage';
+import AssessmentCards from '../classes/AssessmentCards';
+import commonLearnStrings from './../commonLearnStrings';
+import ContinueLearning from './ContinueLearning';
+import ExploreChannels from './ExploreChannels';
 
-  import { mapGetters } from 'vuex';
-  import { computed, getCurrentInstance } from 'kolibri.lib.vueCompositionApi';
-  import { get } from '@vueuse/core';
-  import client from 'kolibri.client';
-  import urls from 'kolibri.urls';
-  import MissingResourceAlert from 'kolibri-common/components/MissingResourceAlert';
-  import useUser from 'kolibri.coreVue.composables.useUser';
-  import { UserKinds } from 'kolibri.coreVue.vuex.constants';
-  import useChannels from '../../composables/useChannels';
-  import useDeviceSettings from '../../composables/useDeviceSettings';
-  import useLearnerResources, {
-    setClasses,
-    setResumableContentNodes,
-  } from '../../composables/useLearnerResources';
-  import { setContentNodeProgress } from '../../composables/useContentNodeProgress';
-  import { PageNames } from '../../constants';
-  import AssignedLessonsCards from '../classes/AssignedLessonsCards';
-  import AssignedQuizzesCards from '../classes/AssignedQuizzesCards';
-  import YourClasses from '../YourClasses';
-  import LearnAppBarPage from '../LearnAppBarPage';
-  import commonLearnStrings from './../commonLearnStrings';
-  import ContinueLearning from './ContinueLearning';
-  import ExploreChannels from './ExploreChannels';
+/**
+ * Home page contains useful suggestions for a learner, e.g. their
+ * resources and quizzes in progress, classes, resources to explore, etc.
+ * What sections are displayed depends on whether a learner
+ * is signed in and also if they're a member of classes.
+ */
+export default {
+  name: 'HomePage',
+  components: {
+    AssignedLessonsCards,
+    AssignedQuizzesCards,
+    YourClasses,
+    ContinueLearning,
+    ExploreChannels,
+    LearnAppBarPage,
+    MissingResourceAlert,
+    AssessmentCards,
+  },
+  mixins: [commonLearnStrings],
+  setup() {
+    const currentInstance = getCurrentInstance().proxy;
+    const store = currentInstance.$store;
+    const router = currentInstance.$router;
 
-  /**
-   * Home page contains useful suggestions for a learner, e.g. their
-   * resources and quizzes in progress, classes, resources to explore, etc.
-   * What sections are displayed depends on whether a learner
-   * is signed in and also if they're a member of classes.
-   */
-  export default {
-    name: 'HomePage',
-    components: {
-      AssignedLessonsCards,
-      AssignedQuizzesCards,
-      YourClasses,
-      ContinueLearning,
-      ExploreChannels,
-      LearnAppBarPage,
-      MissingResourceAlert,
-    },
-    mixins: [commonLearnStrings],
-    data() {
-      return {
-        filteredChannels: [],
-      }
-    },
-    setup() {
-      const currentInstance = getCurrentInstance().proxy;
-      const store = currentInstance.$store;
-      const router = currentInstance.$router;
+    const { isUserLoggedIn } = useUser();
+    const { canAccessUnassignedContent } = useDeviceSettings();
+    const { localChannelsCache, fetchChannels, fetchLearnerChannels } = useChannels();
+    const {
+      classes,
+      activeClassesLessons,
+      activeClassesQuizzes,
+      activeClassesAssessments,
+      resumableClassesQuizzes,
+      resumableClassesResources,
+      resumableContentNodes,
+      learnerFinishedAllClasses,
+    } = useLearnerResources();
 
-      const { isUserLoggedIn } = useUser();
-      const { canAccessUnassignedContent } = useDeviceSettings();
-      const { localChannelsCache, fetchChannels, fetchLearnerChannels } = useChannels();
-      const {
-        classes,
-        activeClassesLessons,
-        activeClassesQuizzes,
-        resumableClassesQuizzes,
-        resumableClassesResources,
-        resumableContentNodes,
-        learnerFinishedAllClasses,
-      } = useLearnerResources();
+    const continueLearningFromClasses = computed(
+      () =>
+        (get(isUserLoggedIn) && get(resumableClassesQuizzes).length > 0) ||
+        get(resumableClassesResources).length > 0
+    );
+    const continueLearningOnYourOwn = computed(
+      () =>
+        get(isUserLoggedIn) &&
+        get(learnerFinishedAllClasses) &&
+        get(canAccessUnassignedContent) &&
+        get(resumableContentNodes).length > 0
+    );
 
-      const continueLearningFromClasses = computed(
-        () =>
-          (get(isUserLoggedIn) && get(resumableClassesQuizzes).length > 0) ||
-          get(resumableClassesResources).length > 0
+    const continueLearning = computed(
+      () => get(continueLearningFromClasses) || get(continueLearningOnYourOwn)
+    );
+
+    const hasActiveClassesLessons = computed(
+      () =>
+        get(isUserLoggedIn) && get(activeClassesLessons) && get(activeClassesLessons).length > 0
+    );
+    const hasActiveClassesQuizzes = computed(
+      () =>
+        get(isUserLoggedIn) && get(activeClassesQuizzes) && get(activeClassesQuizzes).length > 0
+    );
+    const hasActiveClassesAssessments = computed(
+      () =>
+        get(isUserLoggedIn) && get(activeClassesAssessments) && 
+        get(activeClassesAssessments).length > 0
+    );
+    
+
+    const displayClasses = computed(() => {
+      return get(isUserLoggedIn) && (get(classes).length || !get(canAccessUnassignedContent));
+    });
+
+    const missingResources = computed(() => {
+      return (
+        get(activeClassesLessons).some(l => l.missing_resource) ||
+        get(activeClassesQuizzes).some(q => q.missing_resource) ||
+        get(activeClassesAssessments).some(q => q.missing_resource)
       );
-      const continueLearningOnYourOwn = computed(
-        () =>
-          get(isUserLoggedIn) &&
-          get(learnerFinishedAllClasses) &&
-          get(canAccessUnassignedContent) &&
-          get(resumableContentNodes).length > 0
-      );
+    });
 
-      const continueLearning = computed(
-        () => get(continueLearningFromClasses) || get(continueLearningOnYourOwn)
-      );
-
-      const hasActiveClassesLessons = computed(
-        () =>
-          get(isUserLoggedIn) && get(activeClassesLessons) && get(activeClassesLessons).length > 0
-      );
-      const hasActiveClassesQuizzes = computed(
-        () =>
-          get(isUserLoggedIn) && get(activeClassesQuizzes) && get(activeClassesQuizzes).length > 0
-      );
-
-      const displayClasses = computed(() => {
-        return get(isUserLoggedIn) && (get(classes).length || !get(canAccessUnassignedContent));
-      });
-
-      const missingResources = computed(() => {
-        return (
-          get(activeClassesLessons).some(l => l.missing_resource) ||
-          get(activeClassesQuizzes).some(q => q.missing_resource)
-        );
-      });
-
-      function hydrateHomePage() {
-        return client({ url: urls['kolibri:kolibri.plugins.edulution:homehydrate']() }).then(
-          response => {
-            setClasses(response.data.classrooms);
-            setResumableContentNodes(
-              response.data.resumable_resources.results || [],
-              response.data.resumable_resources.more || null
-            );
-            for (const progress of response.data.resumable_resources_progress) {
-              setContentNodeProgress(progress);
-            }
+    function hydrateHomePage() {
+      return client({ url: urls['kolibri:kolibri.plugins.edulution:homehydrate']() }).then(
+        response => {
+          setClasses(response.data.classrooms);
+          setResumableContentNodes(
+            response.data.resumable_resources.results || [],
+            response.data.resumable_resources.more || null
+          );
+          for (const progress of response.data.resumable_resources_progress) {
+            setContentNodeProgress(progress);
           }
-        );
-      }
-
-      fetchChannels().then(channels => {
-        if (!channels.length) {
-          router.replace({ name: PageNames.LIBRARY });
-          return;
         }
-
-        // force fetch classes and resumable content nodes to make sure that the home
-        // page is up-to-date when navigating to other 'Learn' pages and then back
-        // to the home page
-        return hydrateHomePage()
-          .then(() => {
-            store.commit('SET_PAGE_NAME', PageNames.HOME);
-            store.dispatch('notLoading');
-          })
-          .catch(error => {
-            return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
-          });
-      });
-
-      return {
-        isUserLoggedIn,
-        channels: localChannelsCache,
-        classes,
-        activeClassesLessons,
-        activeClassesQuizzes,
-        hasActiveClassesLessons,
-        hasActiveClassesQuizzes,
-        continueLearningFromClasses,
-        continueLearning,
-        displayClasses,
-        missingResources,
-        fetchLearnerChannels,
-        learnerFinishedAllClasses,
-        canAccessUnassignedContent,
-      };
-    },
-    props: {
-      loading: {
-        type: Boolean,
-        default: null,
-      },
-    },
-    created() {
-      this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, userId: this.currentUserId }).then(res => {
-        console.log({ res });
-        this.filteredChannels = res;
-      });
-    },
-    computed: {
-      ...mapGetters(['getUserKind', 'currentUserId']),
-      isShort() {
-        if (this.getUserKind === UserKinds.LEARNER) {
-          return false;
-        }
-        return this.displayClasses || this.continueLearning || this.hasActiveClassesLessons || this.hasActiveClassesQuizzes
-      },
-      hasChannels() {
-        return this.filteredChannels && this.filteredChannels.length > 0;
-      },
-      displayExploreChannels() {
-        return (
-          this.hasChannels &&
-          (!this.isUserLoggedIn ||
-            (this.learnerFinishedAllClasses && this.canAccessUnassignedContent))
-        );
-      }
+      );
     }
-  };
+
+    fetchChannels().then(channels => {
+      if (!channels.length) {
+        router.replace({ name: PageNames.LIBRARY });
+        return;
+      }
+
+      // force fetch classes and resumable content nodes to make sure that the home
+      // page is up-to-date when navigating to other 'Learn' pages and then back
+      // to the home page
+      return hydrateHomePage()
+        .then(() => {
+          store.commit('SET_PAGE_NAME', PageNames.HOME);
+          store.dispatch('notLoading');
+        })
+        .catch(error => {
+          return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        });
+    });
+
+    return{ 
+      isUserLoggedIn,
+      channels: localChannelsCache,
+      classes,
+      activeClassesLessons,
+      activeClassesQuizzes,
+      activeClassesAssessments,
+      hasActiveClassesLessons,
+      hasActiveClassesQuizzes,
+      hasActiveClassesAssessments,
+      continueLearningFromClasses,
+      continueLearning,
+      displayClasses,
+      missingResources,
+      fetchLearnerChannels,
+      learnerFinishedAllClasses,
+      canAccessUnassignedContent,
+    };
+  },
+
+  props: {
+    loading: {
+      type: Boolean,
+      default: null,
+    },
+  },
+
+
+  data() {
+    return {
+      filteredChannels: [],
+      assessments: [],
+    }
+  },
+  computed: {
+    ...mapGetters(['getUserKind', 'currentUserId']),
+    isShort() {
+      if (this.getUserKind === UserKinds.LEARNER) {
+        return false;
+      }
+      return this.displayClasses || this.continueLearning || 
+        this.hasActiveClassesLessons || this.hasActiveClassesQuizzes || 
+        this.hasActiveClassesAssessments 
+    },
+    hasChannels() {
+      return this.filteredChannels && this.filteredChannels.length > 0;
+    },
+    displayExploreChannels() {
+      return (
+        this.hasChannels &&
+        (!this.isUserLoggedIn ||
+          (this.learnerFinishedAllClasses && this.canAccessUnassignedContent))
+      );
+    }
+  },
+  created() {
+    this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, 
+      userId: this.currentUserId }).then(res => {
+      this.filteredChannels = res;
+    });
+
+    getLearnerAssessments(this.currentUserId, null).then(res => {
+      this.assessments = res;
+    });
+  },
+
+};
 
 </script>
 
 
 <style lang="scss" scoped>
+.section:not(:first-child) {
+  margin-top: 32px;
+}
 
-  .section:not(:first-child) {
-    margin-top: 32px;
-  }
-
-  .section:first-child {
-    margin-top: 16px;
-  }
-
+.section:first-child {
+  margin-top: 16px;
+}
 </style>

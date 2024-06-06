@@ -1,4 +1,4 @@
-import { ContentNodeResource, ExamResource, KnowledgemapResource } from 'kolibri.resources';
+import { ContentNodeResource, ExamResource, AssessmentDetailsResource, KnowledgemapResource } from 'kolibri.resources';
 import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
 import { convertExamQuestionSources } from 'kolibri.utils.exams';
 import shuffled from 'kolibri.utils.shuffled';
@@ -122,4 +122,100 @@ export function showKnowledgemap(store, { contentId }) {
             return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
         });
   })
+}
+
+export function showAssessment(store, params, alreadyOnQuiz) {
+  const questionNumber = Number(params.questionNumber);
+  const { classId, examId } = params;
+  if (!alreadyOnQuiz) {
+    store.commit('CORE_SET_PAGE_LOADING', true);
+  }
+  store.commit('SET_PAGE_NAME', ClassesPageNames.ASSESSMENT_VIEWER);
+
+  const userId = store.getters.currentUserId;
+
+  if (!userId) {
+    store.commit('CORE_SET_ERROR', 'You must be logged in as a learner to view this page');
+    store.commit('CORE_SET_PAGE_LOADING', false);
+  } else {
+    const promises = [
+      LearnerClassroomResource.fetchModel({ id: classId }),
+      AssessmentDetailsResource.fetchModel({ id: examId }),
+    ];
+    const shouldResolve = samePageCheckGenerator(store);
+    Promise.all(promises).then(
+      ([classroom, assessmentData]) => {
+        const exam = assessmentData;
+        if (shouldResolve()) {
+          store.commit('classAssignments/SET_CURRENT_CLASSROOM', classroom);
+
+          let contentPromise;
+          if (exam.question_sources.length) {
+            contentPromise = ContentNodeResource.fetchCollection({
+              getParams: {
+                ids: exam.question_sources.map(item => item.exercise_id),
+              },
+            });
+          } else {
+            contentPromise = Promise.resolve([]);
+          }
+          contentPromise.then(
+            contentNodes => {
+              if (shouldResolve()) {
+                const questions = convertExamQuestionSources(exam, { contentNodes });
+
+                // Exam is drawing solely on malformed exercise data, best to quit now
+                if (questions.some(question => !question.question_id)) {
+                  store.dispatch(
+                    'handleError',
+                    `This assessment cannot be displayed:\nQuestion sources: ${JSON.stringify(
+                      questions
+                    )}\nExam: ${JSON.stringify(exam)}`
+                  );
+                  return;
+                }
+                // Illegal question number!
+                else if (questionNumber >= questions.length) {
+                  store.dispatch(
+                    'handleError',
+                    `Question number ${questionNumber} is not valid for this assessment`
+                  );
+                  return;
+                }
+
+                const contentNodeMap = {};
+
+                for (const node of contentNodes) {
+                  contentNodeMap[node.id] = node;
+                }
+
+                for (const question of questions) {
+                  question.missing = !contentNodeMap[question.exercise_id];
+                }
+
+                store.commit('examViewer/SET_STATE', {
+                  contentNodeMap,
+                  exam,
+                  questionNumber,
+                  questions,
+                });
+                store.commit('CORE_SET_PAGE_LOADING', false);
+                store.commit('CORE_SET_ERROR', null);
+              }
+            },
+            error => {
+              shouldResolve()
+                ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
+                : null;
+            }
+          );
+        }
+      },
+      error => {
+        shouldResolve()
+          ? store.dispatch('handleApiError', { error, reloadOnReconnect: true })
+          : null;
+      }
+    );
+  }
 }

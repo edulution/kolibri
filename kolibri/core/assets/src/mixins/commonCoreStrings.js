@@ -411,6 +411,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context:
       'Generally the OPTIONS dropdown menu displays beside a user in a list of users.\n\nIf you select OPTIONS it will display a list of options of actions that you can do with that user. For example, edit their details, reset their password or delete them. ',
   },
+  userNamesList: {
+    message: 'User Names',
+    context:
+      'Generally the OPTIONS dropdown menu displays beside a user in a list of users.\n\nIf you select OPTIONS it will display a list of options of actions that you can do with that user. For example, edit their details, reset their password or delete them. ',
+  },
   passwordLabel: {
     message: 'Password',
     context: "'Password' is a required field when you create an account as a user on Kolibri.",
@@ -440,6 +445,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   },
   quizzesLabel: {
     message: 'Quizzes',
+    context:
+      'A quiz is a summative assessment made up of questions taken from exercises. Quizzes are created by coaches and then assigned to learners in a class.\n\nWe intentionally renamed "exam" to "quiz" in order to encourage use as an informal diagnostic tool for teachers.',
+  },
+  assessmentLabel: {
+    message: 'Assessments',
     context:
       'A quiz is a summative assessment made up of questions taken from exercises. Quizzes are created by coaches and then assigned to learners in a class.\n\nWe intentionally renamed "exam" to "quiz" in order to encourage use as an informal diagnostic tool for teachers.',
   },

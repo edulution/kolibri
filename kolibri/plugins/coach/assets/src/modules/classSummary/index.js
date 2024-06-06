@@ -90,12 +90,6 @@ function defaultState() {
      * }
      */
     lessonMap: {},
-    /*
-     * activeLearnersMap := [
-     *   learner_id, ...
-     * ]
-     */
-    activeLearnersMap: [],
   };
 }
 
@@ -354,17 +348,6 @@ export default {
         contentNodes: state.contentNodeMap,
       };
     },
-    /*
-     * activeLearners := [
-     *   learner_id ...
-     * ]
-     */
-    activeLearners(state) {
-      return state.activeLearnersMap;
-    },
-    learnersInfo(state) {
-      return state.learnersInfo;
-    }
   },
   mutations: {
     SET_STATE(state, summary) {
@@ -397,8 +380,6 @@ export default {
         contentNodeMap: _itemMap(patchedSummaryContent, 'node_id'),
         contentLearnerStatusMap: _statusMap(summary.content_learner_status, 'content_id'),
         lessonMap: _mapLessons(summary.lessons),
-        activeLearnersMap: summary.active_learners,
-        learnersInfo: summary.learners_info,
       });
     },
     CREATE_ITEM(state, { map, id, object }) {

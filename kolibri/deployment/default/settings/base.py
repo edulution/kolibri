@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     "django_js_reverse",
     "jsonfield",
     "morango",
+    "kolibri.core.assessment",
 ]
 
 MIDDLEWARE = [

@@ -210,7 +210,7 @@ export function showExamCreationPreviewPage(store, params, fromRoute, query = {}
       })
       .catch(error => {
         store.dispatch('notLoading');
-        return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        return store.dispatch('handleApiError', error);
       });
   });
 }
@@ -229,7 +229,7 @@ export function showPracticeQuizCreationPreviewPage(store, params) {
       })
       .catch(error => {
         store.dispatch('notLoading');
-        return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        return store.dispatch('handleApiError', error);
       });
   });
 }
@@ -248,7 +248,7 @@ function _prepPracticeQuizContentPreview(store, classId, contentId) {
       return contentNode;
     },
     error => {
-      return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+      return store.dispatch('handleApiError', error);
     }
   );
 }
@@ -266,7 +266,7 @@ function _prepExamContentPreview(store, classId, contentId) {
       return contentNode;
     },
     error => {
-      return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+      return store.dispatch('handleApiError', error);
     }
   );
 }

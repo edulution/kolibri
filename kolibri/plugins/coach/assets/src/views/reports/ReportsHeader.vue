@@ -4,7 +4,7 @@
     <p>
       <BackLink
         v-if="classListPageEnabled || userIsMultiFacilityAdmin"
-        :to="$router.getRoute('HomePage', { classId: this.$route.params.classId })"
+        :to="$router.getRoute('HomePage')"
         :text="coreString('classHome')"
       />
     </p>
@@ -87,11 +87,6 @@
             id: ReportsTabs.LEARNERS,
             label: this.coreString('learnersLabel'),
             to: this.classRoute('ReportsLearnerListPage'),
-          },
-          {
-            id: ReportsTabs.ATTENDANCE,
-            label: this.coreString('attendanceLabel'),
-            to: this.classRoute('ReportsAttendanceListPage'),
           },
         ];
       },

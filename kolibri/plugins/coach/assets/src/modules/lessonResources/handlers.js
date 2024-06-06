@@ -234,7 +234,7 @@ export function showLessonSelectionContentPreview(store, params, query = {}) {
       })
       .catch(error => {
         store.dispatch('notLoading');
-        return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+        return store.dispatch('handleApiError', error);
       });
   });
 }
@@ -262,7 +262,7 @@ function _prepLessonContentPreview(store, classId, lessonId, contentId) {
       return contentNode;
     },
     error => {
-      return store.dispatch('handleApiError', { error, reloadOnReconnect: true });
+      return store.dispatch('handleApiError', error);
     }
   );
 }
