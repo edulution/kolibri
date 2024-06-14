@@ -77,7 +77,7 @@
               @keydown="handleUsernameKeydown"
             />
           </transition>
-          <transition name="list">
+          <!-- <transition name="list">
             <div class="suggestions-wrapper">
               <ul
                 v-if="simpleSignIn && suggestions.length"
@@ -94,7 +94,7 @@
                 />
               </ul>
             </div>
-          </transition>
+          </transition> -->
           <div>
             <KButton
               class="login-btn"
