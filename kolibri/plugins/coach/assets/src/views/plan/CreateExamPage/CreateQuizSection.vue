@@ -170,11 +170,7 @@
           </KGridItem>
         </KGrid>
 
-        <AccordionContainer
-          :items="activeQuestions.map(i => ({
-            id: i.id,
-          }))"
-        >
+        <AccordionContainer :items="activeQuestions">
           <template #left-actions>
             <KCheckbox
               ref="selectAllCheckbox"
@@ -186,6 +182,18 @@
             />
           </template>
           <template #right-actions>
+            <KIconButton
+              icon="expandAll"
+              :tooltip="expandAll$()"
+              :disabled="!canExpandAll"
+              @click="expandAll"
+            />
+            <KIconButton
+              icon="collapseAll"
+              :tooltip="collapseAll$()"
+              :disabled="!canCollapseAll"
+              @click="collapseAll"
+            />
             <KIconButton
               icon="refresh"
               :tooltip="replaceAction$()"
@@ -200,108 +208,114 @@
               @click="() => deleteQuestions()"
             />
           </template>
-          <template #default="{ toggleItemState, isItemExpanded }">
-            <DragContainer
-              key="drag-container"
-              :items="activeQuestions"
-              @sort="handleQuestionOrderChange"
-              @dragStart="handleDragStart"
+
+          <DragContainer
+            key="drag-container"
+            :items="activeQuestions"
+            @sort="handleQuestionOrderChange"
+            @dragStart="handleDragStart"
+          >
+            <transition-group
+              tag="div"
+              name="list"
+              class="wrapper"
             >
-              <transition-group
-                tag="div"
-                name="list"
-                class="wrapper"
+              <Draggable
+                v-for="(question, index) in activeQuestions"
+                :key="`drag-${question.item}`"
+                tabindex="-1"
+                style="background: white"
               >
-                <Draggable
-                  v-for="(question, index) in activeQuestions"
-                  :key="`drag-${question.id}`"
-                  tabindex="-1"
-                  style="background: white"
+                <AccordionItem
+                  :id="question.item"
+                  :title="question.title"
+                  :aria-selected="selectedActiveQuestions.includes(
+                    question.item
+                  )"
                 >
-                  <AccordionItem
-                    :id="question.id"
-                    :title="question.title"
-                    :aria-selected="selectedActiveQuestions.includes(
-                      question.id
-                    )"
-                  >
-                    <template #heading="{ title }">
-                      <h3
-                        class="accordion-header"
-                      >
-                        <DragHandle>
-                          <div>
-                            <DragSortWidget
-                              class="sort-widget"
-                              moveUpText="up"
-                              moveDownText="down"
-                              :noDrag="true"
-                              :isFirst="index === 0"
-                              :isLast="index === activeQuestions.length - 1"
-                              @moveUp="shiftOne(index, -1)"
-                              @moveDown="shiftOne(index, +1)"
-                            />
-                          </div>
-                        </DragHandle>
-                        <KCheckbox
-                          style="padding-left: 0.5em"
-                          :checked="selectedActiveQuestions.includes(
-                            question.id
-                          )"
-                          @change="() => toggleQuestionInSelection(question.id)"
-                        />
-                        <KButton
-                          tabindex="0"
-                          appearance="basic-link"
-                          :style="accordionStyleOverrides"
-                          class="accordion-header-label"
-                          :aria-expanded="isItemExpanded(question.id)"
-                          :aria-controls="`question-panel-${question.id}`"
-                          @click="toggleItemState(question.id)"
-                        >
-                          <span>{{ title + " " + question.counter_in_exercise }}</span>
-                          <KIcon
-                            style="position: absolute; right:0; top: 0.92em"
-                            :icon="isItemExpanded(question.id) ?
-                              'chevronUp' : 'chevronRight'"
+                  <template #heading="{ title }">
+                    <h3
+                      class="accordion-header"
+                    >
+                      <DragHandle>
+                        <div>
+                          <DragSortWidget
+                            class="sort-widget"
+                            moveUpText="up"
+                            moveDownText="down"
+                            :noDrag="true"
+                            :isFirst="index === 0"
+                            :isLast="index === activeQuestions.length - 1"
+                            @moveUp="shiftOne(index, -1)"
+                            @moveDown="shiftOne(index, +1)"
                           />
-                        </KButton>
-                      </h3>
-                    </template>
-                    <template #content>
-                      <div
-                        v-if="isItemExpanded(question.id)"
-                        :id="`question-panel-${question.id}`"
-                        :ref="`question-panel-${question.id}`"
-                        :style="{ userSelect: dragActive ? 'none!important' : 'text' }"
+                        </div>
+                      </DragHandle>
+                      <KCheckbox
+                        style="padding-left: 0.5em"
+                        :checked="selectedActiveQuestions.includes(
+                          question.item
+                        )"
+                        @change="() => toggleQuestionInSelection(question.item)"
+                      />
+                      <KButton
+                        tabindex="0"
+                        appearance="basic-link"
+                        :style="accordionStyleOverrides"
+                        class="accordion-header-label"
+                        :aria-expanded="isExpanded(index)"
+                        :aria-controls="`question-panel-${question.item}`"
+                        @click="toggle(index)"
                       >
-                        <ContentRenderer
-                          :ref="`contentRenderer-${question.id}`"
-                          :kind="activeResourceMap[question.exercise_id].kind"
-                          :lang="activeResourceMap[question.exercise_id].lang"
-                          :files="activeResourceMap[question.exercise_id].files"
-                          :available="activeResourceMap[question.exercise_id].available"
-                          :itemId="question.question_id"
-                          :assessment="true"
-                          :allowHints="false"
-                          :interactive="false"
-                          @interaction="() => null"
-                          @updateProgress="() => null"
-                          @updateContentState="() => null"
-                          @error="err => $emit('error', err)"
+                        <span>{{ title + " " + question.counter_in_exercise }}</span>
+                        <KIcon
+                          style="position: absolute; right:0; top: 0.92em"
+                          :icon="isExpanded(index) ?
+                            'chevronUp' : 'chevronRight'"
                         />
-                      </div>
-                    </template>
-                  </AccordionItem>
-                </Draggable>
-              </transition-group>
-            </DragContainer>
-          </template>
+                      </KButton>
+                    </h3>
+                  </template>
+                  <template #content>
+                    <div
+                      v-if="isExpanded(index)"
+                      :id="`question-panel-${question.id}`"
+                      :ref="`question-panel-${question.id}`"
+                      :style="{ userSelect: dragActive ? 'none!important' : 'text' }"
+                    >
+                      <ContentRenderer
+                        :ref="`contentRenderer-${question.id}`"
+                        :kind="activeResourceMap[question.exercise_id].kind"
+                        :lang="activeResourceMap[question.exercise_id].lang"
+                        :files="activeResourceMap[question.exercise_id].files"
+                        :available="activeResourceMap[question.exercise_id].available"
+                        :itemId="question.question_id"
+                        :assessment="true"
+                        :allowHints="false"
+                        :interactive="false"
+                        @interaction="() => null"
+                        @updateProgress="() => null"
+                        @updateContentState="() => null"
+                        @error="err => $emit('error', err)"
+                      />
+                    </div>
+                  </template>
+                </AccordionItem>
+              </Draggable>
+            </transition-group>
+          </DragContainer>
         </AccordionContainer>
       </div>
 
     </KTabsPanel>
 
+    <NotEnoughResourcesModal
+      v-if="showNotEnoughResourcesModal"
+      :selectedQuestions="selectedActiveQuestions"
+      :availableResources="replacementQuestionPool"
+      @close="showNotEnoughResourcesModal = false"
+      @addResources="redirectToSelectResources"
+    />
     <KModal
       v-if="showDeleteConfirmation"
       :title="deleteSectionLabel$()"
@@ -310,6 +324,8 @@
       @cancel="handleShowConfirmation"
       @submit="handleConfirmDelete"
     >
+      <!-- TODO Use `displaySectionTitle` here once #12274 is merged as that PR
+        changes how we handle section indexing, which is needed for displaySectionTitle -->
       {{ deleteConfirmation$({ section_title: activeSection.section_title }) }}
     </KModal>
 
@@ -324,17 +340,22 @@
   import { ref } from 'kolibri.lib.vueCompositionApi';
   import logging from 'kolibri.lib.logging';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import { enhancedQuizManagementStrings } from 'kolibri-common/strings/enhancedQuizManagementStrings';
+  import {
+    displaySectionTitle,
+    enhancedQuizManagementStrings,
+  } from 'kolibri-common/strings/enhancedQuizManagementStrings';
   import DragContainer from 'kolibri.coreVue.components.DragContainer';
   import DragHandle from 'kolibri.coreVue.components.DragHandle';
   import DragSortWidget from 'kolibri.coreVue.components.DragSortWidget';
   import Draggable from 'kolibri.coreVue.components.Draggable';
+  import AccordionItem from 'kolibri-common/components/AccordionItem';
+  import AccordionContainer from 'kolibri-common/components/AccordionContainer';
+  import useAccordion from 'kolibri-common/components/useAccordion';
   import { injectQuizCreation } from '../../../composables/useQuizCreation';
   import commonCoach from '../../common';
   import { PageNames } from '../../../constants';
   import TabsWithOverflow from './TabsWithOverflow';
-  import AccordionContainer from './AccordionContainer';
-  import AccordionItem from './AccordionItem';
+  import NotEnoughResourcesModal from './NotEnoughResourcesModal';
 
   const logger = logging.getLogger(__filename);
 
@@ -348,6 +369,7 @@
       DragSortWidget,
       DragHandle,
       TabsWithOverflow,
+      NotEnoughResourcesModal,
     },
     mixins: [commonCoreStrings, commonCoach],
     setup() {
@@ -369,6 +391,9 @@
         updateResources$,
         changesSavedSuccessfully$,
         questionsDeletedNotification$,
+        expandAll$,
+        collapseAll$,
+        questionDeletionConfirmation$,
       } = enhancedQuizManagementStrings;
 
       const {
@@ -382,8 +407,7 @@
         setActiveSection,
         updateQuiz,
         selectAllQuestions,
-        displaySectionTitle,
-
+        replacementQuestionPool,
         // Computed
         toggleQuestionInSelection,
         allSections,
@@ -394,14 +418,36 @@
         selectedActiveQuestions,
       } = injectQuizCreation();
 
+      const {
+        collapse,
+        collapseAll,
+        expand,
+        expandAll,
+        isExpanded,
+        toggle,
+        canCollapseAll,
+        canExpandAll,
+      } = useAccordion(activeQuestions);
+
       // The number we use for the default section title
       const sectionCreationCount = ref(1);
       const dragActive = ref(false);
 
       return {
+        canCollapseAll,
+        canExpandAll,
+        collapse,
+        collapseAll,
+        expand,
+        expandAll,
+        isExpanded,
+        toggle,
+
         dragActive,
         sectionCreationCount,
         sectionLabel$,
+        expandAll$,
+        collapseAll$,
         selectAllLabel$,
         addQuizSections$,
         quizSectionsLabel$,
@@ -411,6 +457,7 @@
         addQuizSectionQuestionsInstructions$,
         editSectionLabel$,
         deleteSectionLabel$,
+        questionDeletionConfirmation$,
         replaceAction$,
         questionList$,
         sectionDeletedNotification$,
@@ -436,6 +483,7 @@
         activeSection,
         activeResourceMap,
         activeResourcePool,
+        replacementQuestionPool,
         activeQuestions,
         selectedActiveQuestions,
       };
@@ -443,6 +491,7 @@
     data() {
       return {
         showDeleteConfirmation: false,
+        showNotEnoughResourcesModal: false,
       };
     },
     computed: {
@@ -518,6 +567,8 @@
         this.$nextTick(() => {
           this.$store.dispatch(
             'createSnackbar',
+            // TODO Use `displaySectionTitle` here once #12274 is merged as that PR
+            // changes how we handle section indexing
             this.sectionDeletedNotification$({ section_title })
           );
           this.focusActiveSectionTab();
@@ -528,9 +579,13 @@
         this.showDeleteConfirmation = section_id;
       },
       handleReplaceSelection() {
-        const section_id = get(this.activeSection).section_id;
-        const route = this.$router.getRoute(PageNames.QUIZ_REPLACE_QUESTIONS, { section_id });
-        this.$router.push(route);
+        if (this.replacementQuestionPool.length < this.selectedActiveQuestions.length) {
+          this.showNotEnoughResourcesModal = true;
+        } else {
+          const section_id = get(this.activeSection).section_id;
+          const route = this.$router.getRoute(PageNames.QUIZ_REPLACE_QUESTIONS, { section_id });
+          this.$router.push(route);
+        }
       },
       handleActiveSectionAction(opt) {
         const section_id = this.activeSection.section_id;
@@ -614,6 +669,10 @@
             count,
           })
         );
+      },
+      redirectToSelectResources() {
+        this.showNotEnoughResourcesModal = false;
+        this.openSelectResources(this.activeSection.section_id);
       },
     },
   };

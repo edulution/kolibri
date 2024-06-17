@@ -19,12 +19,47 @@
     >
       <AssignmentDetailsModal
         v-if="quizInitialized"
+        ref="detailsModal"
         assignmentType="quiz"
         :assignment="quiz"
         :classId="classId"
         :groups="groups"
         @update="updateQuiz"
       />
+
+      <div v-if="quizInitialized">
+        <h5 class="section-order-header">
+          {{ sectionOrderLabel$() }}
+        </h5>
+        <KGrid>
+          <KGridItem
+            :layout12="{ span: 6 }"
+            :layout8="{ span: 4 }"
+            :layout4="{ span: 2 }"
+          >
+            <KRadioButton
+              :currentValue="quiz.learners_see_fixed_order"
+              :label="randomizedLabel$()"
+              :buttonValue="false"
+              :description="randomizedSectionOptionDescription$()"
+              @input="value => updateQuiz({ learners_see_fixed_order: value })"
+            />
+          </KGridItem>
+          <KGridItem
+            :layout12="{ span: 6 }"
+            :layout8="{ span: 4 }"
+            :layout4="{ span: 2 }"
+          >
+            <KRadioButton
+              :currentValue="quiz.learners_see_fixed_order"
+              :label="fixedLabel$()"
+              :buttonValue="true"
+              :description="fixedSectionOptionDescription$()"
+              @input="value => updateQuiz({ learners_see_fixed_order: value })"
+            />
+          </KGridItem>
+        </KGrid>
+      </div>
 
       <CreateQuizSection v-if="quizInitialized && quiz.draft" />
 
@@ -38,6 +73,11 @@
         <KButtonGroup>
           <KButton
             :text="coreString('saveAction')"
+            :disabled="allSectionsEmpty"
+            @click="() => saveQuizAndRedirect(false)"
+          />
+          <KButton
+            :text="saveAndClose$()"
             primary
             :disabled="allSectionsEmpty"
             @click="() => saveQuizAndRedirect()"
@@ -46,6 +86,19 @@
       </BottomAppBar>
 
     </KPageContainer>
+
+    <KModal
+      v-if="closeConfirmationToRoute"
+      :submitText="coreString('continueAction')"
+      :cancelText="coreString('cancelAction')"
+      :title="closeConfirmationTitle$()"
+      @cancel="closeConfirmationToRoute = null"
+      @submit="$router.push(closeConfirmationToRoute)"
+    >
+      {{ closeConfirmationMessage$() }}
+    </KModal>
+
+
 
     <router-view v-if="quizInitialized" />
 
@@ -57,6 +110,8 @@
 <script>
 
   import get from 'lodash/get';
+  import { ERROR_CONSTANTS } from 'kolibri.coreVue.vuex.constants';
+  import CatchErrors from 'kolibri.utils.CatchErrors';
   import { ref } from 'kolibri.lib.vueCompositionApi';
   import pickBy from 'lodash/pickBy';
   import BottomAppBar from 'kolibri.coreVue.components.BottomAppBar';
@@ -79,24 +134,52 @@
     },
     mixins: [commonCoreStrings],
     setup() {
+      const closeConfirmationToRoute = ref(null);
       const { classId, groups } = useCoreCoach();
-      const { quiz, updateQuiz, saveQuiz, initializeQuiz, allSectionsEmpty } = useQuizCreation();
+      const {
+        quizHasChanged,
+        quiz,
+        updateQuiz,
+        saveQuiz,
+        initializeQuiz,
+        allSectionsEmpty,
+      } = useQuizCreation();
       const showError = ref(false);
       const quizInitialized = ref(false);
 
-      const { allSectionsEmptyWarning$ } = enhancedQuizManagementStrings;
+      const {
+        saveAndClose$,
+        allSectionsEmptyWarning$,
+        closeConfirmationTitle$,
+        closeConfirmationMessage$,
+        sectionOrderLabel$,
+        randomizedLabel$,
+        fixedLabel$,
+        randomizedSectionOptionDescription$,
+        fixedSectionOptionDescription$,
+      } = enhancedQuizManagementStrings;
 
       return {
+        closeConfirmationTitle$,
+        closeConfirmationMessage$,
         classId,
         groups,
+        closeConfirmationToRoute,
         showError,
         quiz,
+        quizHasChanged,
         saveQuiz,
         updateQuiz,
         initializeQuiz,
         quizInitialized,
         allSectionsEmpty,
         allSectionsEmptyWarning$,
+        saveAndClose$,
+        sectionOrderLabel$,
+        randomizedLabel$,
+        fixedLabel$,
+        randomizedSectionOptionDescription$,
+        fixedSectionOptionDescription$,
       };
     },
     provide() {
@@ -140,15 +223,19 @@
       },
     },
     watch: {
-      $route: function() {
-        // FIXME Coach shouldn't be setting loading in a beforeEach here maybe?
-        this.$store.dispatch('notLoading');
-      },
       filters(newVal) {
         this.$router.push({
           query: { ...this.$route.query, ...pickBy(newVal) },
         });
       },
+    },
+    beforeRouteLeave(to, from, next) {
+      if (this.quizHasChanged && !this.closeConfirmationToRoute) {
+        this.closeConfirmationToRoute = to;
+        next(false);
+      } else {
+        next();
+      }
     },
     mounted() {
       this.$store.dispatch('notLoading');
@@ -158,13 +245,36 @@
       this.quizInitialized = true;
     },
     methods: {
-      saveQuizAndRedirect() {
-        this.saveQuiz().then(() => {
-          this.$router.replace({
-            name: PageNames.EXAMS,
-            classId: this.$route.params.classId,
+      saveQuizAndRedirect(close = true) {
+        this.saveQuiz()
+          .then(exam => {
+            if (close) {
+              this.$router.replace({
+                name: PageNames.EXAMS,
+                params: {
+                  classId: this.$route.params.classId,
+                },
+              });
+            } else {
+              if (String(this.$route.params.quizId) === String(exam.id)) {
+                return;
+              }
+              this.$router.replace({
+                name: PageNames.EXAM_CREATION_ROOT,
+                params: {
+                  classId: this.$route.params.classId,
+                  quizId: exam.id,
+                },
+              });
+            }
+          })
+          .catch(error => {
+            const errors = CatchErrors(error, [ERROR_CONSTANTS.UNIQUE, 'BLANK']);
+            this.$refs.detailsModal.handleSubmitFailure();
+            if (errors.length) {
+              this.$refs.detailsModal.handleSubmitTitleFailure();
+            }
           });
-        });
       },
     },
     $trs: {
@@ -182,6 +292,11 @@
 
   .message {
     margin-right: 8px;
+  }
+
+  .section-order-header {
+    margin-top: 0;
+    margin-bottom: 0.5em;
   }
 
 </style>

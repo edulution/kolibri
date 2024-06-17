@@ -36,8 +36,8 @@
               :autofocus="true"
               :invalid="titleIsInvalid"
               :invalidText="titleIsInvalidText"
+              :showInvalidText="titleIsInvalid"
               :disabled="disabled || formIsSubmitted"
-              @blur="titleIsVisited = true"
               @input="showTitleError = false"
               @keydown.enter="submitData"
             />
@@ -193,7 +193,6 @@
         selectedCollectionIds: this.assignment.assignments || [],
         activeIsSelected: this.assignment.active || false,
         adHocLearners: this.assignment.learner_ids || [],
-        titleIsVisited: false,
         formIsSubmitted: false,
         showServerError: false,
         showTitleError: false,
@@ -202,16 +201,18 @@
     computed: {
       titleIsInvalidText() {
         // submission is handled because "blur" event happens on submit
-        if (!this.disabled && !this.formIsSubmitted && this.titleIsVisited) {
-          if (this.title === '') {
+        if (!this.disabled && !this.formIsSubmitted) {
+          if (this.title === '' && this.showTitleError) {
             return this.coreString('requiredFieldError');
           }
           if (this.assignmentIsQuiz) {
             if (
-              this.$store.getters['classSummary/quizTitleUnavailable']({
-                title: this.title,
-                excludeId: this.$route.params.quizId,
-              }) ||
+              Boolean(
+                this.$store.getters['classSummary/quizTitleUnavailable']({
+                  title: this.title,
+                  excludeId: this.$route.params.quizId,
+                })
+              ) ||
               this.showTitleError
             ) {
               return this.quizDuplicateTitleError$();
@@ -301,7 +302,6 @@
           });
         } else {
           this.formIsSubmitted = false;
-          this.$refs.titleField.focus();
         }
       },
       /**
@@ -317,6 +317,9 @@
       handleSubmitTitleFailure() {
         this.formIsSubmitted = false;
         this.showTitleError = true;
+        this.$refs.titleField.focus();
+        // Scroll to the title field in case focus() didn't do that immediately
+        this.window.scrollTo({ top: 0, behavior: 'smooth' });
       },
     },
   };

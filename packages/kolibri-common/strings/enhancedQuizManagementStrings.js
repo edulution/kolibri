@@ -44,6 +44,10 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
   sectionTitle: {
     message: 'Section title',
   },
+  sectionTitleUniqueWarning: {
+    message: 'Section titles must be unique within the quiz',
+    context: 'Informs the user that they must use a unique title for each section',
+  },
   numberOfQuestionsLabel: {
     message: 'Number of questions',
   },
@@ -68,8 +72,8 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
   addQuestions: {
     message: 'Add questions',
   },
-  selectFoldersOrExercises: {
-    message: 'Select folders or exercises from these channels',
+  selectResourcesDescription: {
+    message: 'Select resources from these channels',
   },
   numberOfSelectedBookmarks: {
     message: '{ count, number } { count, plural, one { bookmark } other { bookmarks }}',
@@ -98,6 +102,9 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
   replaceAction: {
     message: 'Replace',
   },
+  replaceQuestionsHeading: {
+    message: 'The new questions you select will replace the current ones.',
+  },
   replaceQuestionsExplaination: {
     message: 'The new questions you selected will replace the current ones.',
   },
@@ -111,6 +118,10 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
     message:
       'Please choose a different resource or decrease the number of questions to be replaced.',
   },
+  sectionOrderLabel: {
+    message: 'Section order',
+    context: 'A label for the place where the section order option is shown.',
+  },
   questionOrder: {
     message: 'Question order',
   },
@@ -123,11 +134,17 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
   randomizedOptionDescription: {
     message: 'Each learner sees a different question order',
   },
+  randomizedSectionOptionDescription: {
+    message: 'Each learner sees a different section order',
+  },
   fixedLabel: {
     message: 'Fixed',
   },
   fixedOptionDescription: {
     message: 'Each learner sees the same question order',
+  },
+  fixedSectionOptionDescription: {
+    message: 'Each learner sees the same section order',
   },
   questionEditedSuccessfully: {
     message: 'Question edited successfully',
@@ -216,8 +233,7 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
     context: 'Message of modal when a user tries to replace questions but the pool is empty',
   },
   addMoreResourcesWithNonEmptyPool: {
-    message:
-      'Please add more resources to this section, or go back and only select up to { available, number } { available, plural, one { question } other { questions } } to be replaced.',
+    message: 'Please add more resources to this section, or go back and select fewer questions',
     context:
       'Message of modal when a user tries to replace more questions than are available in the pool',
   },
@@ -227,4 +243,26 @@ export const enhancedQuizManagementStrings = createTranslator('EnhancedQuizManag
   goBackAction: {
     message: 'Go back',
   },
+  questionsUnusedInSection: {
+    message: '{ count, number } { count, plural, one { question } other { questions }} unused',
+  },
+  questionsLabel: {
+    message: 'Questions',
+    context: 'Label for dropdown list of questions',
+  },
+  saveAndClose: {
+    message: 'Save and close',
+  },
+  questionDeletionConfirmation: {
+    message:
+      'Are you sure you want to remove { count, number } { count, plural, one { question } other { questions }} from this section?',
+  },
 });
+
+const { sectionLabel$ } = enhancedQuizManagementStrings;
+
+export function displaySectionTitle(section, index) {
+  return section.section_title === ''
+    ? sectionLabel$({ sectionNumber: index + 1 })
+    : section.section_title;
+}

@@ -140,6 +140,16 @@
           @submit="handleOpenQuiz(activeQuiz.id)"
         >
           <p>{{ openQuizModalDetail$() }}</p>
+          <p v-if="activeQuiz.draft">
+            {{ canNoLongerEditQuizNotice$() }}
+          </p>
+          <p
+            v-if="
+              activeQuiz.data_model_version === 3 &&
+                activeQuiz.question_sources.some(s => (!s.questions || s.questions.length === 0))"
+          >
+            {{ openQuizModalEmptySections$() }}
+          </p>
           <p>{{ lodQuizDetail$() }}</p>
           <p>{{ fileSizeToDownload$({ size: activeQuiz.size_string }) }}</p>
         </KModal>
@@ -222,6 +232,7 @@
         openQuizLabel$,
         closeQuizLabel$,
         openQuizModalDetail$,
+        openQuizModalEmptySections$,
         closeQuizModalDetail$,
         lodQuizDetail$,
         fileSizeToDownload$,
@@ -232,6 +243,7 @@
         newQuizAction$,
         filterQuizStatus$,
         quizClosedLabel$,
+        canNoLongerEditQuizNotice$,
       } = coachStrings;
 
       const statusSelected = ref({
@@ -260,12 +272,14 @@
         openQuizLabel$,
         closeQuizLabel$,
         openQuizModalDetail$,
+        openQuizModalEmptySections$,
         closeQuizModalDetail$,
         lodQuizDetail$,
         fileSizeToDownload$,
         titleLabel$,
         recipientsLabel$,
         sizeLabel$,
+        canNoLongerEditQuizNotice$,
         statusLabel$,
         newQuizAction$,
         filterQuizStatus$,

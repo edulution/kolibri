@@ -6,7 +6,7 @@
     </div>
     <div v-else>
       <h5 class="select-folder-style">
-        {{ selectFoldersOrExercises$() }}
+        {{ selectResourcesDescription$() }}
       </h5>
 
       <div v-if="!isTopicIdSet && bookmarks.length && !showBookmarks">
@@ -61,14 +61,18 @@
         :selectAllChecked="selectAllChecked"
         :selectAllIndeterminate="selectAllIndeterminate"
         :contentIsChecked="contentPresentInWorkingResourcePool"
-        :contentHasCheckbox="hasCheckbox"
+        :contentHasCheckbox="actuallyHasCheckbox"
         :contentCardMessage="selectionMetadata"
         :contentCardLink="contentLink"
         :loadingMoreState="loadingMore"
         @changeselectall="handleSelectAll"
         @change_content_card="toggleSelected"
         @moreresults="fetchMoreResources"
-      />
+      >
+        <template #notice="{ content }">
+          <span style="position: absolute; bottom: 1em;">{{ cardNoticeContent(content) }}</span>
+        </template>
+      </ContentCardList>
 
       <div class="bottom-navigation">
         <KGrid>
@@ -146,7 +150,12 @@
       // to be added to Quiz Section.
       const showBookmarks = computed(() => route.value.query.showBookmarks);
       const searchQuery = computed(() => route.value.query.search);
-      const { updateSection, activeResourcePool, selectAllQuestions } = injectQuizCreation();
+      const {
+        updateSection,
+        activeResourcePool,
+        selectAllQuestions,
+        allQuestionsInQuiz,
+      } = injectQuizCreation();
       const showCloseConfirmation = ref(false);
 
       const prevRoute = ref({ name: PageNames.EXAM_CREATION_ROOT });
@@ -155,7 +164,7 @@
         sectionSettings$,
         selectFromBookmarks$,
         numberOfSelectedBookmarks$,
-        selectFoldersOrExercises$,
+        selectResourcesDescription$,
         numberOfSelectedResources$,
         numberOfResourcesSelected$,
         changesSavedSuccessfully$,
@@ -163,6 +172,7 @@
         cannotSelectSomeTopicWarning$,
         closeConfirmationMessage$,
         closeConfirmationTitle$,
+        questionsUnusedInSection$,
       } = enhancedQuizManagementStrings;
 
       // TODO let's not use text for this
@@ -203,7 +213,7 @@
        */
       function selectableContentList() {
         return contentList.value.reduce((newList, content) => {
-          if (content.kind === ContentNodeKinds.TOPIC && hasCheckbox(content)) {
+          if (content.kind === ContentNodeKinds.TOPIC && actuallyHasCheckbox(content)) {
             newList = [...newList, ...content.children.results];
           } else {
             newList.push(content);
@@ -276,7 +286,7 @@
       });
 
       const showSelectAll = computed(() => {
-        return contentList.value.every(content => hasCheckbox(content));
+        return contentList.value.every(content => actuallyHasCheckbox(content));
       });
 
       function handleSelectAll(isChecked) {
@@ -336,6 +346,33 @@
       const bookmarks = ref([]);
       const searchResults = ref([]);
       const moreSearchResults = ref(null);
+
+      function unusedQuestionsCount(content) {
+        if (content.kind === ContentNodeKinds.EXERCISE) {
+          const questionItems = content.assessmentmetadata.assessment_item_ids.map(
+            aid => `${content.id}:${aid}`
+          );
+          const questionsItemsAlreadyUsed = allQuestionsInQuiz.value
+            .map(q => q.item)
+            .filter(i => questionItems.includes(i));
+          const questionItemsAvailable = questionItems.length - questionsItemsAlreadyUsed.length;
+          return questionItemsAvailable;
+        }
+        return -1;
+      }
+      /**
+       * Uses the imported `hasCheckbox` method in addition to some locally relevant conditions
+       * to identify if the content has a checkbox.
+       * For Exercises, we make sure there are questions available in the resource
+       * For Topics, we make sure that there are questions available in the children
+       * -- Note that for topics, hasCheckbox will only be true if all children are Exercises,
+       *    so we can call this recursively without worrying about it going too deep
+       */
+      function actuallyHasCheckbox(content) {
+        return content.kind === ContentNodeKinds.EXERCISE
+          ? hasCheckbox(content) && unusedQuestionsCount(content) > 0
+          : hasCheckbox(content) && content.children.results.some(actuallyHasCheckbox);
+      }
 
       // Load up the channels
 
@@ -451,6 +488,9 @@
       });
 
       return {
+        actuallyHasCheckbox,
+        unusedQuestionsCount,
+        allQuestionsInQuiz,
         selectAllChecked,
         selectAllIndeterminate,
         showSelectAll,
@@ -465,7 +505,6 @@
         contentList,
         resources,
         showCloseConfirmation,
-        hasCheckbox,
         loading,
         hasMore,
         loadingMore,
@@ -480,7 +519,8 @@
         sectionSettings$,
         selectFromBookmarks$,
         numberOfSelectedBookmarks$,
-        selectFoldersOrExercises$,
+        questionsUnusedInSection$,
+        selectResourcesDescription$,
         numberOfSelectedResources$,
         numberOfResourcesSelected$,
         windowIsSmall,
@@ -541,8 +581,17 @@
       }
     },
     methods: {
+      cardNoticeContent(content) {
+        if (content.kind === ContentNodeKinds.EXERCISE) {
+          return this.questionsUnusedInSection$({
+            count: this.unusedQuestionsCount(content),
+          });
+        } else {
+          return '';
+        }
+      },
       showTopicSizeWarningCard(content) {
-        return !this.hasCheckbox(content) && content.kind === ContentNodeKinds.TOPIC;
+        return !this.actuallyHasCheckbox(content) && content.kind === ContentNodeKinds.TOPIC;
       },
       showTopicSizeWarning() {
         return this.contentList.some(this.showTopicSizeWarningCard);
@@ -598,6 +647,7 @@
         });
         this.$store.dispatch('createSnackbar', this.changesSavedSuccessfully$());
       },
+      // The message put onto the content's card when listed
       selectionMetadata(content) {
         if (content.kind === ContentNodeKinds.TOPIC) {
           const total = content.num_exercises;
@@ -612,8 +662,9 @@
             count: numberOfresourcesSelected,
             total: total,
           });
+        } else {
+          // content is an exercise
         }
-        return '';
       },
       handleSearchTermChange(searchTerm) {
         const query = {
