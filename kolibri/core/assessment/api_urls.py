@@ -2,7 +2,7 @@ from django.conf.urls import include
 from django.conf.urls import url
 from rest_framework import routers
 
-from .api import AssessmentViewset, GroupAssessmentViewset, CreateAssessmentRecord, ExamAssessmentStartViewSet, ExamAssessmentStopViewSet, GetAssessmentViewSet
+from .api import AssessmentViewset, GroupAssessmentViewset, CreateAssessmentRecord, ExamAssessmentStartViewSet, ExamAssessmentStopViewSet, GetAssessmentViewSet, AssessmentChannelsViewSet
 from .api import GetLearnerAssessmentViewset, FetchAssessmentGroupData, MarkAssessmentViewset, AssessmentTestViewSet, AssessmentReportViewSet,AssessmentHistoryReportViewSet
 
 router = routers.SimpleRouter()
@@ -18,5 +18,6 @@ router.register(r"assessmenttest", AssessmentTestViewSet, basename="assessmentte
 router.register(r"assessmentpastreport", AssessmentReportViewSet, basename="assessmentpastreport")
 router.register(r"assessmenthistoryreport", AssessmentHistoryReportViewSet, basename="assessmenthistoryreport")
 router.register(r"getassessment", GetAssessmentViewSet, basename="getassessment")
+router.register(r"assessmentchannels", AssessmentChannelsViewSet, basename="assessmentchannels")
 
 urlpatterns = [url(r"^", include(router.urls))]

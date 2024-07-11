@@ -945,3 +945,19 @@ class GetAssessmentViewSet(ViewSet):
 
         except models.AssessmentHistory.DoesNotExist:
             return Response({"error": "Assessment History not found"}, status=status.HTTP_404_NOT_FOUND)
+class AssessmentChannelsViewSet(ViewSet):
+
+    def list(self, request):
+        try:
+            # Get all channel_id values from the AssessmentConfig table
+            channel_ids = models.AssessmentConfig.objects.values_list('channel_id', flat=True)
+            channel_ids_list = []
+
+            # Check if there are any channel_id values and convert them to a list
+            if channel_ids:
+                channel_ids_list = [str(channel_id).replace('-', '') for channel_id in channel_ids]
+
+            return Response(channel_ids_list, status=status.HTTP_200_OK)
+
+        except models.AssessmentConfig.DoesNotExist:
+            return Response({"error": "Assessment Channels not found"}, status=status.HTTP_404_NOT_FOUND)
