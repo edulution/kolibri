@@ -959,7 +959,7 @@ class AssessmentChannelsViewSet(ViewSet):
             
             final_response = {
                                 'result':   {
-                                                'channellist': channel_ids_list
+                                                'channel_list': channel_ids_list
                                             }
                             }
 
