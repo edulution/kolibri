@@ -956,8 +956,14 @@ class AssessmentChannelsViewSet(ViewSet):
             # Check if there are any channel_id values and convert them to a list
             if channel_ids:
                 channel_ids_list = [str(channel_id).replace('-', '') for channel_id in channel_ids]
+            
+            final_response = {
+                                'result':   {
+                                                'channellist': channel_ids_list
+                                            }
+                            }
 
-            return Response(channel_ids_list, status=status.HTTP_200_OK)
+            return Response(final_response, status=status.HTTP_200_OK)
 
         except models.AssessmentConfig.DoesNotExist:
             return Response({"error": "Assessment Channels not found"}, status=status.HTTP_404_NOT_FOUND)
