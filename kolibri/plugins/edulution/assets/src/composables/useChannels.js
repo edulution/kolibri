@@ -15,7 +15,7 @@ const localChannelsCache = ref([]);
 
 function fetchChannels(params) {
   params = pickBy(params || {});
-  return ChannelResource.list({ available: true, ...params }).then(channels => {
+  return ChannelResource.list({ available: true,has_exercise:true, ...params }).then(channels => {
     for (const channel of channels) {
       set(channelsMap, channel.id, channel);
     }
