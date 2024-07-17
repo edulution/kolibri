@@ -44,7 +44,7 @@
             color: this.$themeTokens.textInverted,
           },
           {
-            isHidden: !this.canAccessUnassignedContent || this.getUserKind === UserKinds.LEARNER,
+            isHidden: !this.canAccessUnassignedContent,
             title: this.coreString('libraryLabel'),
             link: this.$router.getRoute(PageNames.LIBRARY),
             icon: 'library',
