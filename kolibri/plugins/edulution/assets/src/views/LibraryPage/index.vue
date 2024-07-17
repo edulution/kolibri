@@ -53,6 +53,7 @@
           class="grid"
           :contents="rootNodes"
           :deviceId="deviceId"
+          :progress="progress"
         />
         <!-- ResumableContentGrid mostly handles whether it renders or not internally !-->
         <!-- but we conditionalize it based on whether we are on another device's library page !-->
@@ -259,6 +260,7 @@
   import SidePanelModal from '../SidePanelModal';
   import SearchFiltersPanel from '../SearchFiltersPanel';
   import { KolibriStudioId, PageNames } from '../../constants';
+  import useContentNodeProgress from '../../composables/useContentNodeProgress';
   import useCardViewStyle from '../../composables/useCardViewStyle';
   import useContentLink from '../../composables/useContentLink';
   import useCoreLearn from '../../composables/useCoreLearn';
@@ -624,6 +626,11 @@
         }
         document.documentElement.style.position = '';
       },
+    },
+    mounted(){
+      const {fetchContentNodeProgress} = useLearnerResources()
+        const params = { resume: true, max_results: 12, ordering: '-last_interacted' };
+        fetchContentNodeProgress(params)
     },
     created() {
       const welcomeDismissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';

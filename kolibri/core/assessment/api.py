@@ -958,7 +958,9 @@ class AssessmentChannelsViewSet(ViewSet):
                 channel_ids_list = [str(channel_id).replace('-', '') for channel_id in channel_ids]
             
             final_response =    {
-                                    'channel_list': channel_ids_list
+                                    "results":{
+                                        'channel_list': channel_ids_list
+                                    }
                                 }
 
             return Response(final_response, status=status.HTTP_200_OK)

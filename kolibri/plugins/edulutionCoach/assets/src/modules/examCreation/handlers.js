@@ -6,6 +6,7 @@ import {
   BookmarksResource,
   ContentNodeSearchResource,
   ChannelResource,
+  AssessmentChannelList
 } from 'kolibri.resources';
 import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
 import router from 'kolibri.coreVue.router';
@@ -28,27 +29,35 @@ function showExamCreationPage(store, params) {
 }
 
 export function showExamCreationRootPage(store, params) {
-  return store.dispatch('loading').then(() => {
-    return ChannelResource.fetchCollection({
-      getParams: { available: true, has_exercise: true },
-    }).then(channels => {
-      const channelContentList = channels.map(channel => ({
-        ...channel,
-        id: channel.root,
-        title: channel.name,
-        kind: ContentNodeKinds.CHANNEL,
-        is_leaf: false,
-      }));
-      store.commit('SET_TOOLBAR_ROUTE', {
-        name: PageNames.EXAMS,
-      });
-      return showExamCreationPage(store, {
-        classId: params.classId,
-        contentList: channelContentList,
-        pageName: PageNames.EXAM_CREATION_ROOT,
-      });
+    return store.dispatch('loading').then(() => {
+      return ChannelResource.fetchCollection({
+        getParams: { available: true, has_exercise: true },
+      }).then(channels => {
+        return AssessmentChannelList.fetchCollection().then(items=> {
+
+        const channelmap = channels.map(data => items.results[0].channel_list.includes(data.root))
+  
+        let channelContentList = channelmap.map(channel => ({
+          ...channel,
+          id: channel.root,
+          title: channel.name,
+          kind: ContentNodeKinds.CHANNEL,
+          is_leaf: false,
+        }));
+        store.commit('SET_TOOLBAR_ROUTE', {
+          name: PageNames.EXAMS,
+        });
+        if(channelmap.length !== 0){
+          channelContentList = []
+        }
+        return showExamCreationPage(store, {
+          classId: params.classId,
+          contentList: channelContentList,
+          pageName: PageNames.EXAM_CREATION_ROOT,
+        });
+      })
+    })
     });
-  });
 }
 export function showPracticeQuizCreationRootPage(store, params) {
   return fetchPracticeQuizzes().then(channels => {

@@ -9,8 +9,9 @@
         <ChannelThumbnailNew
           v-if="channel.thumbnail"
           :thumbnail="channel.thumbnail"
-          :progress="0"
+          :progress="progress"
           :fullwidth="fullwidth"
+          :channel="channel"        
         />
 
         <div class="text">
@@ -28,6 +29,7 @@
 import TextTruncatorCss from 'kolibri.coreVue.components.TextTruncatorCss';
 import ChannelThumbnailNew from '../ChannelThumbnailNew';
 import ToggleRouterLink from '../ToggleRouterLink';
+import useContentNodeProgress from '../../composables/useContentNodeProgress';
 
 export default {
   name: 'ChannelCard',
@@ -36,6 +38,10 @@ export default {
     TextTruncatorCss,
     ToggleRouterLink,
   },
+  setup() {
+      const { contentNodeProgressMap } = useContentNodeProgress();
+      return { contentNodeProgressMap };
+    },
   props: {
     channel: {
       type: Object,
@@ -60,7 +66,13 @@ export default {
       required: false,
       default: () => [],
     },
-  }
+  },
+  computed: {
+      progress() {
+        return this.contentNodeProgressMap[this.channel && this.channel.content_id] || 0;
+      },
+    },
+
 }
 </script>
 
