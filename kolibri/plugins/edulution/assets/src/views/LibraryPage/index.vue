@@ -51,7 +51,7 @@
           v-if="!isLocalLibraryEmpty"
           data-test="channel-cards"
           class="grid"
-          :contents="rootNodes"
+          :contents="filteredChannels"
           :deviceId="deviceId"
           :progress="progress"
         />
@@ -246,7 +246,7 @@
 
 
 <script>
-
+  import { mapGetters } from 'vuex';
   import { get, set } from '@vueuse/core';
   import cloneDeep from 'lodash/cloneDeep';
 
@@ -257,10 +257,10 @@
   import { currentLanguage } from 'kolibri.utils.i18n';
   import samePageCheckGenerator from 'kolibri.utils.samePageCheckGenerator';
   import { ContentNodeResource } from 'kolibri.resources';
+  import { UserKinds } from 'kolibri.coreVue.vuex.constants';
   import SidePanelModal from '../SidePanelModal';
   import SearchFiltersPanel from '../SearchFiltersPanel';
   import { KolibriStudioId, PageNames } from '../../constants';
-  import useContentNodeProgress from '../../composables/useContentNodeProgress';
   import useCardViewStyle from '../../composables/useCardViewStyle';
   import useContentLink from '../../composables/useContentLink';
   import useCoreLearn from '../../composables/useCoreLearn';
@@ -339,7 +339,7 @@
       const { currentCardViewStyle } = useCardViewStyle();
       const { back } = useContentLink();
       const { baseurl, deviceName, fetchDevices } = useDevices();
-      const { fetchChannels } = useChannels();
+      const { fetchChannels,fetchLearnerChannels } = useChannels();
       const { fetchPinsForUser } = usePinnedDevices();
 
       onMounted(() => {
@@ -481,6 +481,7 @@
         rootNodesLoading,
         rootNodes,
         isUserLoggedIn,
+        fetchLearnerChannels,
       };
     },
     props: {
@@ -497,9 +498,11 @@
         devices: [],
         searching: true,
         usersPins: [],
+        filteredChannels: [],
       };
     },
     computed: {
+      ...mapGetters(['getUserKind', 'currentUserId']),
       allowDownloads() {
         return this.canAddDownloads && Boolean(this.deviceId);
       },
@@ -642,6 +645,12 @@
       if (this.isUserLoggedIn) {
         this.refreshDevices();
       }
+
+      this.fetchLearnerChannels({ isLearner: this.getUserKind === UserKinds.LEARNER, 
+      userId: this.currentUserId }).then(res => {
+      this.filteredChannels = res;
+    });
+
     },
     methods: {
       addDevice(device, channels) {
