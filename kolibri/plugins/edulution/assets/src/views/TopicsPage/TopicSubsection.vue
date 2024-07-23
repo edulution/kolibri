@@ -24,6 +24,18 @@
           icon="chevronDown"
           :style="{ top: '4px' }"
         />
+        
+        <div class="progress-bar-wrapper" :style="{ backgroundColor: $themePalette.grey.v_300 }">
+          <div
+            class="progress-bar"
+            :style="{
+              width: percent + '%',
+              backgroundColor: $themePalette.orange.v_400
+            }"
+          >
+
+          </div>
+        </div>
       </div>
       
       <div class="topic-subsection-body">
@@ -105,7 +117,11 @@
     computed: {
       topicKnowledgemap() {
         return get(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic.id )?.children || [];
-      }
+      },
+      percent() {
+        const progress = get(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic.id )?.progress_fraction || 0
+        return Math.max(Math.min(progress * 100, 100), 0);
+      },
     },
     methods: {
       onExpansionClick() {
@@ -143,6 +159,7 @@
       border-radius: 8px 8px 0 0;
       padding: 16px;
       cursor: pointer;
+      position: relative;
       & h2 {
         margin: 0;
         color: white !important;
@@ -160,6 +177,20 @@
         border-radius: 50%;
         margin-right: 16px;
         object-fit: cover;
+      }
+
+      .progress-bar-wrapper {
+        position: absolute;
+        bottom: 0px;
+        left: 0;
+        width: 100%;
+        height: 5px;
+        opacity: 0.9;
+        background-color: rgb(224, 224, 224);
+      }
+
+      .progress-bar {
+        height: 100%;
       }
     }
 

@@ -2,6 +2,7 @@
 
   <ChannelCard
     :channel="contentNode"
+    :knowledgemap="knowledgemap"
     :to="to"
     variant="topic"
     :fullwidth="true"

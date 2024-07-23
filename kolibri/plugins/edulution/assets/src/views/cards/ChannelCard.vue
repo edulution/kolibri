@@ -47,6 +47,10 @@ export default {
       type: Object,
       required: true,
     },
+    knowledgemap: {
+      type: Object,
+      required: false,
+    },
     to: {
       type: Object,
       required: true,
@@ -69,6 +73,9 @@ export default {
   },
   computed: {
       progress() {
+        if (this.knowledgemap?.progress_fraction) {
+          return this.knowledgemap.progress_fraction || 0;
+        }
         return this.contentNodeProgressMap[this.channel && this.channel.content_id] || 0;
       },
     },
