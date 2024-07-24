@@ -4,7 +4,6 @@
     :route="homePageLink"
     :appBarTitle="exam.title || ''"
   >
-
     <KCircularLoader v-if="loading || !currentQuestion" />
 
     <div v-else>
@@ -17,43 +16,38 @@
           class="column-pane"
         >
           <div class="column-contents-wrapper">
-
-            <KPageContainer style="padding:0;">
+            <KPageContainer style="padding: 0">
               <AnswerHistory
                 :pastattempts="pastattempts"
                 :sections="sections"
+                :currentSectionIndex="currentSectionIndex"
                 :questionNumber="questionNumber"
-                :currentQuestion="currentQuestion"
                 :questionItem="attemptLogItemValue"
                 :wrapperComponentRefs="$refs"
-                :questionItemsList="questionItemsList"
                 @goToQuestion="goToQuestion"
               />
             </KPageContainer>
-
           </div>
         </KGridItem>
 
-        <KGridItem :layout12="{ span: 8 }" class="column-pane">
+        <KGridItem
+          :layout12="{ span: 8 }"
+          class="column-pane"
+        >
           <main :class="{ 'column-contents-wrapper': !windowIsSmall }">
-
-            <KPageContainer dir="auto" style="overflow-x: visible;">
+            <KPageContainer
+              dir="auto"
+              style="overflow-x: visible"
+            >
               <KGrid v-if="windowIsLarge">
-                <KGridItem
-                  :layout12="{ span: 8 }"
-                >
+                <KGridItem :layout12="{ span: 8 }">
                   <h2 class="section-title">
                     {{ displaySectionTitle(currentSection, currentSectionIndex) }}
                   </h2>
-                  <p> {{ currentSection.description }} </p>
+                  <p v-if="currentSection.description">{{ currentSection.description }}</p>
                 </KGridItem>
-                <KGridItem
-                  :layout12="{ span: 4 }"
-                >
-                  <div
-                    :style="
-                      { margin: '2em auto 0', textAlign: 'center', width: '100%' }"
-                  >
+                <KGridItem :layout12="{ span: 4 }">
+                  <div :style="{ margin: '2em auto 0', textAlign: 'center', width: '100%' }">
                     <div>{{ coreString('timeSpentLabel') }}:</div>
                     <TimeDuration
                       class="timer"
@@ -64,14 +58,34 @@
                   </div>
                 </KGridItem>
               </KGrid>
-              <div v-else style="overflow-x: visible">
-                <div v-if="(windowIsSmall || windowIsMedium)">
+              <div
+                v-else
+                style="overflow-x: visible"
+              >
+                <div v-if="windowIsSmall || windowIsMedium">
                   <KSelect
                     v-if="sectionSelectOptions.length > 1"
                     :value="currentSectionOption"
                     :options="sectionSelectOptions"
                     @select="handleSectionOptionChange"
-                  />
+                  >
+                    <template #display>
+                      <KIcon
+                        class="dot"
+                        :icon="sectionQuestionsIcon(currentSectionIndex)"
+                        :color="sectionQuestionsIconColor(currentSectionIndex)"
+                      />
+                      <span>{{ currentSectionOption.label }}</span>
+                    </template>
+                    <template #option="{ index, option }">
+                      <KIcon
+                        class="dot"
+                        :icon="sectionQuestionsIcon(index)"
+                        :color="sectionQuestionsIconColor(index)"
+                      />
+                      <span>{{ option.label }}</span>
+                    </template>
+                  </KSelect>
                   <h2
                     v-else-if="currentSectionOption.label"
                     class="section-select"
@@ -79,14 +93,11 @@
                     {{ currentSectionOption.label }}
                   </h2>
                 </div>
-                <p> {{ currentSection.description }} </p>
+                <p>{{ currentSection.description }}</p>
                 <p v-if="content && content.duration">
                   {{ learnString('suggestedTime') }}
                 </p>
-                <div
-                  :style="
-                    { margin: '0 auto', textAlign: 'center', width: '100%' }"
-                >
+                <div :style="{ margin: '0 auto', textAlign: 'center', width: '100%' }">
                   <span>{{ coreString('timeSpentLabel') }}:</span>
                   <TimeDuration
                     class="timer"
@@ -100,18 +111,65 @@
                   class="timer"
                   :seconds="content.duration"
                 />
-
               </div>
             </KPageContainer>
-            <KPageContainer style="overflow-x: visible;">
+            <KPageContainer style="overflow-x: visible">
               <KSelect
-                v-if="(windowIsSmall || windowIsMedium)"
-                style="margin-top: 1em;"
+                v-if="windowIsSmall || windowIsMedium"
+                style="margin-top: 1em"
                 :value="currentQuestionOption"
                 :options="questionSelectOptions"
                 @select="handleQuestionOptionChange"
-              />
-              <h2 v-else class="number-of-questions">
+              >
+                <template #display>
+                  <KIcon
+                    v-if="currentQuestionOption.disabled"
+                    class="dot"
+                    icon="warning"
+                    :color="$themePalette.yellow.v_1100"
+                  />
+                  <KIcon
+                    v-else
+                    class="dot"
+                    :icon="
+                      isAnswered(currentQuestionOption.value)
+                        ? 'unpublishedResource'
+                        : 'unpublishedChange'
+                    "
+                    :color="
+                      isAnswered(currentQuestionOption.value)
+                        ? $themeTokens.progress
+                        : $themeTokens.textDisabled
+                    "
+                  />
+                  <span>
+                    {{ currentQuestionOption.label }}
+                  </span>
+                </template>
+                <template #option="{ option }">
+                  <KIcon
+                    v-if="option.disabled"
+                    class="dot"
+                    icon="warning"
+                    :color="$themePalette.yellow.v_1100"
+                  />
+                  <KIcon
+                    v-else
+                    class="dot"
+                    :icon="isAnswered(option.value) ? 'unpublishedResource' : 'unpublishedChange'"
+                    :color="
+                      isAnswered(option.value) ? $themeTokens.progress : $themeTokens.textDisabled
+                    "
+                  />
+                  <span>
+                    {{ option.label }}
+                  </span>
+                </template>
+              </KSelect>
+              <h2
+                v-else
+                class="number-of-questions"
+              >
                 {{ $tr('question', { num: questionNumber + 1, total: exam.question_count }) }}
               </h2>
               <ContentRenderer
@@ -127,20 +185,21 @@
                 :answerState="currentAttempt.answer"
                 @interaction="saveAnswer"
               />
-              <ResourceSyncingUiAlert v-else :multiple="false" />
+              <ResourceSyncingUiAlert
+                v-else
+                :multiple="false"
+              />
             </KPageContainer>
           </main>
         </KGridItem>
       </KGrid>
       <BottomAppBar :maxWidth="null">
-
-        <component :is="windowIsSmall ? 'div' : 'KButtonGroup'">
+        <KButtonGroup :class="{ spread: !windowIsLarge }">
           <KButton
             :disabled="questionNumber === 0"
             :primary="true"
             :dir="layoutDirReset"
             :appearanceOverrides="navigationButtonStyle"
-            :class="{ 'left-align': windowIsSmall }"
             :aria-label="$tr('previousQuestion')"
             @click="goToPreviousQuestion"
           >
@@ -170,7 +229,22 @@
               />
             </template>
           </KButton>
-        </component>
+          <!-- below prev/next buttons in tab and DOM order -->
+          <KButton
+            v-if="!windowIsLarge && questionsUnanswered === 0"
+            :text="$tr('submitExam')"
+            :primary="true"
+            appearance="raised-button"
+            @click="finishExam"
+          />
+          <KButton
+            v-else-if="!windowIsLarge && !missingResources"
+            :text="$tr('submitExam')"
+            :primary="false"
+            appearance="flat-button"
+            @click="toggleModal"
+          />
+        </KButtonGroup>
 
         <!-- below prev/next buttons in tab and DOM order, in footer -->
         <div
@@ -178,7 +252,10 @@
           :dir="layoutDirReset"
           class="left-align"
         >
-          <div v-if="!missingResources" class="answered">
+          <div
+            v-if="!missingResources"
+            class="answered"
+          >
             {{ answeredText }}
           </div>
           <KButton
@@ -195,14 +272,15 @@
             appearance="flat-button"
             @click="toggleModal"
           />
-          <div v-if="missingResources" class="nosubmit">
+          <div
+            v-if="missingResources"
+            class="nosubmit"
+          >
             {{ $tr('unableToSubmit') }}
           </div>
         </div>
       </BottomAppBar>
     </div>
-
-
 
     <KModal
       v-if="submitModalOpen"
@@ -213,7 +291,7 @@
       @cancel="toggleModal"
     >
       <p v-if="questionsUnanswered">
-        {{ $tr('unanswered', { numLeft: questionsUnanswered } ) }}
+        {{ $tr('unanswered', { numLeft: questionsUnanswered }) }}
       </p>
       <p>{{ $tr('areYouSure') }}</p>
     </KModal>
@@ -224,7 +302,7 @@
 
 <script>
 
-  import { mapGetters, mapState } from 'vuex';
+  import { mapState } from 'vuex';
   import isEqual from 'lodash/isEqual';
   import { displaySectionTitle } from 'kolibri-common/strings/enhancedQuizManagementStrings';
   import debounce from 'lodash/debounce';
@@ -233,6 +311,7 @@
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import ImmersivePage from 'kolibri.coreVue.components.ImmersivePage';
   import TimeDuration from 'kolibri.coreVue.components.TimeDuration';
+  import { annotateSections } from 'kolibri.utils.exams';
   import ResourceSyncingUiAlert from '../ResourceSyncingUiAlert';
   import useProgressTracking from '../../composables/useProgressTracking';
   import { PageNames, ClassesPageNames } from '../../constants';
@@ -263,12 +342,8 @@
         startTrackingProgress,
         stopTrackingProgress,
       } = useProgressTracking();
-      const {
-        windowBreakpoint,
-        windowIsMedium,
-        windowIsLarge,
-        windowIsSmall,
-      } = useKResponsiveWindow();
+      const { windowBreakpoint, windowIsMedium, windowIsLarge, windowIsSmall } =
+        useKResponsiveWindow();
       return {
         displaySectionTitle,
         pastattempts,
@@ -295,51 +370,55 @@
       ...mapState({
         loading: state => state.core.loading,
       }),
-      ...mapGetters('examViewer', [
-        'currentQuestion',
-        'currentSection',
-        'currentSectionIndex',
-        'sectionSelectOptions',
-        'currentSectionOption',
-        'currentQuestionOption',
-      ]),
       ...mapState('examViewer', ['exam', 'contentNodeMap', 'questions', 'questionNumber']),
       questionSelectOptions() {
-        if (!this.currentSection) return { questions: [] };
+        if (!this.currentSection) return [];
         return (
           this.currentSection.questions.map((question, i) => ({
             label: this.$tr('question', {
-              num: i + 1,
-              total: this.currentSection.questions.length,
+              num: this.currentSection.startQuestionNumber + i + 1,
+              total: this.exam.question_count,
             }),
-            value: question.item,
+            value: this.currentSection.startQuestionNumber + i,
+            disabled: question.missing,
           })) || []
         );
       },
       currentQuestionOption() {
-        if (!this.currentQuestion) return {};
-        return this.questionSelectOptions.find(opt => opt.value === this.currentQuestion.item);
+        return this.questionSelectOptions[
+          this.questionNumber - this.currentSection.startQuestionNumber
+        ];
       },
-      currentSection() {
-        return this.sections.find(section =>
-          section.questions.map(q => q.item).includes(this.currentQuestion.item)
+      currentSectionIndex() {
+        return this.sections.findIndex(
+          section =>
+            section.startQuestionNumber <= this.questionNumber &&
+            section.endQuestionNumber >= this.questionNumber,
         );
       },
+      currentSection() {
+        return this.sections[this.currentSectionIndex];
+      },
       sections() {
-        return this.exam.question_sources || [];
+        return annotateSections(this.exam.question_sources || [], this.questions);
       },
-      /**
-       * @returns {Array} List of all question "item" in the exam - item being a unique identifier
-       * for a question in the form of `exercise_id:question_id` **in order** that they appear in
-       * the exam across all sections.
-       */
-      questionItemsList() {
-        return this.questions.map(question => question.item);
+      sectionSelectOptions() {
+        return this.sections.map((section, i) => ({
+          label: this.displaySectionTitle(section, i),
+          value: i,
+        }));
       },
-      questionItemsMap() {
-        return this.questions.reduce((qs, question) => {
-          qs[question.item] = question;
-          return qs;
+      currentSectionOption() {
+        return this.sectionSelectOptions[this.currentSectionIndex];
+      },
+      sectionCompletionMap() {
+        const answeredAttemptItems = this.pastattempts.filter(a => a.answer).map(a => a.item);
+        return this.sections.reduce((acc, { questions }, index) => {
+          acc[index] = questions
+            .filter(q => answeredAttemptItems.includes(q.item))
+            .map(q => q.item);
+
+          return acc;
         }, {});
       },
       gridStyle() {
@@ -387,13 +466,7 @@
         );
       },
       currentQuestion() {
-        return this.questionItemsMap[
-          // We have the index of the question item, so we get the item using that, then we get
-          // the appropriate question from the questionItemsMap
-          // Overall, this can and should be refactored as there is a lot of unnecessary processing
-          // happening throughout this feature
-          this.questionItemsList[this.questionNumber]
-        ];
+        return this.questions[this.questionNumber];
       },
       nodeId() {
         return this.currentQuestion ? this.currentQuestion.exercise_id : null;
@@ -419,7 +492,7 @@
               map[attempt.item] = true;
             }
             return map;
-          }, {})
+          }, {}),
         ).length;
       },
       questionsUnanswered() {
@@ -482,10 +555,43 @@
         });
     },
     methods: {
+      sectionQuestionsIconColor(index) {
+        const answered = this.sectionCompletionMap[index].length;
+        const total = this.sections[index].questions.length;
+        if (answered === total) {
+          return this.$themeTokens.progress;
+        } else if (answered > 0) {
+          return this.$themeTokens.progress;
+        }
+        return this.$themeTokens.textDisabled;
+      },
+      sectionQuestionsIcon(index) {
+        const answered = this.sectionCompletionMap[index].length;
+        const total = this.sections[index].questions.length;
+        if (answered === total) {
+          return 'unpublishedResource';
+        } else if (answered > 0) {
+          return 'unpublishedChange';
+        }
+        return 'unpublishedChange';
+      },
+      isAnswered(questionIndex) {
+        const question = this.questions[questionIndex];
+        const attempt = this.pastattempts.find(attempt => attempt.item === question.item);
+        return attempt && attempt.answer;
+      },
       handleSectionOptionChange(opt) {
-        this.goToQuestion(this.sections[opt.value].questions[0].item);
+        const index = opt.value;
+        if (index === this.currentSectionIndex) {
+          return;
+        }
+        this.goToQuestion(this.sections[index].startQuestionNumber);
       },
       handleQuestionOptionChange(opt) {
+        const index = opt.value;
+        if (index === this.questionNumber) {
+          return;
+        }
         this.goToQuestion(opt.value);
       },
       setAndSaveCurrentExamAttemptLog({ close, interaction } = {}) {
@@ -560,7 +666,7 @@
         });
       },
       goToNextQuestion() {
-        if (this.questionNumber >= this.questionItemsList.length) {
+        if (this.questionNumber >= this.questions.length) {
           return;
         }
         const questionNumber = this.questionNumber + 1;
@@ -575,8 +681,7 @@
           });
         });
       },
-      goToQuestion(questionItem) {
-        const questionNumber = this.questionItemsList.indexOf(questionItem);
+      goToQuestion(questionNumber) {
         const promise = this.debouncedSetAndSaveCurrentExamAttemptLog.flush() || Promise.resolve();
         promise.then(() => {
           this.$router.push({
@@ -688,6 +793,19 @@
     text-align: center;
   }
 
+  .spread {
+    display: flex;
+    justify-content: space-between;
+    // Swap the display order of the next and submit buttons
+    :nth-child(2) {
+      order: 3;
+    }
+
+    :nth-child(3) {
+      order: 2;
+    }
+  }
+
   .left-align {
     position: absolute;
     left: 10px;
@@ -752,6 +870,10 @@
     padding: 0;
     background-color: transparent;
     border: 0;
+  }
+
+  .dot {
+    margin-right: 5px;
   }
 
 </style>

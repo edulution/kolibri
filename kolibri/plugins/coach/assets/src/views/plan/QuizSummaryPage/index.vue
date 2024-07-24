@@ -1,8 +1,10 @@
 <template>
 
   <CoachAppBarPage>
-
-    <KGrid v-if="exam" gutter="16">
+    <KGrid
+      v-if="exam"
+      gutter="16"
+    >
       <KGridItem>
         <QuizLessonDetailsHeader
           :backlink="$router.getRoute('EXAMS')"
@@ -44,9 +46,7 @@
             </p>
 
             <QuestionListPreview
-              :fixedOrder="!quizIsRandomized"
-              :readOnly="true"
-              :selectedQuestions="selectedQuestions"
+              :sections="quiz.question_sources || []"
               :selectedExercises="selectedExercises"
             />
           </section>
@@ -99,10 +99,8 @@
     },
     mixins: [commonCoach, coachStringsMixin, commonCoreStrings],
     setup() {
-      const {
-        randomizedSectionOptionDescription$,
-        fixedSectionOptionDescription$,
-      } = enhancedQuizManagementStrings;
+      const { randomizedSectionOptionDescription$, fixedSectionOptionDescription$ } =
+        enhancedQuizManagementStrings;
       return {
         randomizedSectionOptionDescription$,
         fixedSectionOptionDescription$,
@@ -179,7 +177,7 @@
         if (action === 'EDIT_DETAILS') {
           this.$router.push({
             name: PageNames.EXAM_CREATION_ROOT,
-            params: { ...this.$route.params },
+            params: { ...this.$route.params, sectionIndex: 0 },
           });
         } else {
           this.currentAction = action;
@@ -189,10 +187,7 @@
         this.currentAction = '';
       },
       handleSubmitCopy({ classroomId, groupIds, adHocLearnerIds, examTitle }) {
-        const title = examTitle
-          .trim()
-          .substring(0, 100)
-          .trim();
+        const title = examTitle.trim().substring(0, 100).trim();
 
         const assignments = serverAssignmentPayload(groupIds, classroomId);
 

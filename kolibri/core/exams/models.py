@@ -23,13 +23,13 @@ def exam_assignment_lookup(question_sources):
     :return: a tuple of contentnode_id and metadata
     """
     for question_source in question_sources:
-        if "section_id" in question_source:
+        if "exercise_id" in question_source:
+            yield (question_source["exercise_id"], None)
+        else:
             questions = question_source.get("questions")
             if questions is not None:
                 for question in question_source["questions"]:
                     yield (question["exercise_id"], None)
-        else:
-            yield (question_source["exercise_id"], None)
 
 
 class AbstractExam(models.Model):
@@ -57,7 +57,6 @@ class AbstractExam(models.Model):
         [
             # Section 1
             {
-                  "section_id": <a uuid unique to this section>,
                   "section_title": <section title>,
                   "description": <section description>,
                   "question_count": <number of questions in section>,
@@ -159,8 +158,6 @@ class AbstractExam(models.Model):
     """
     data_model_version = models.SmallIntegerField(default=3)
 
-    date_created = models.DateTimeField(auto_now_add=True, null=True)
-
     def __str__(self):
         return self.title
 
@@ -196,6 +193,8 @@ class DraftExam(AbstractExam):
 
     assignments = JSONField(default=list, blank=True)
     learner_ids = JSONField(default=list, blank=True)
+
+    date_created = models.DateTimeField(auto_now_add=True, null=True)
 
     def to_exam(self):
         """
@@ -236,7 +235,7 @@ class Exam(AbstractExam, AbstractFacilityDataModel):
     # Is this exam currently active and visible to students to whom it is assigned?
     active = models.BooleanField(default=False)
 
-    date_created = models.DateTimeField(null=True)
+    date_created = models.DateTimeField(default=timezone.now)
 
     # To be set True when the quiz is first set to active=True
     date_activated = models.DateTimeField(default=None, null=True, blank=True)

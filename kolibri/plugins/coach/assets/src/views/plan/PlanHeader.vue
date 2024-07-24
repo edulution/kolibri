@@ -4,7 +4,7 @@
     <p>
       <BackLink
         v-if="classListPageEnabled || userIsMultiFacilityAdmin"
-        :to="$router.getRoute('HomePage', { classId: this.$route.params.classId })"
+        :to="$router.getRoute('HomePage', { classId: $route.params.classId })"
         :text="coreString('classHome')"
       />
     </p>
@@ -17,7 +17,6 @@
         :ariaLabel="$tr('coachPlan')"
         :activeTabId="activeTabId"
         :tabs="tabs"
-        :style="{ position: 'relative', top: '5px' }"
         @click="() => saveTabsClick(PLAN_TABS_ID)"
       />
     </HeaderTabs>
