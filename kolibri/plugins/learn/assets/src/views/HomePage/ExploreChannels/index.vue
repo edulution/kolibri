@@ -95,7 +95,7 @@
     },
     $trs: {
       header: {
-        message: 'Explore channels',
+        message: 'Your Playlists',
         context: "Heading in the 'Learn' section where users can view channels.",
       },
     },
