@@ -385,7 +385,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
       'A lesson is a linear learning pathway defined by a coach. The coach can select resources from any channel, add them to the lesson, define the ordering, and assign the lesson to learners in their class.',
   },
   libraryLabel: {
-    message: 'Library',
+    message: 'Playlists',
     context:
       "The 'Library' section displays channels available on Kolibri server, and allows learners to browse, explore and filter topics and resources on their own.",
   },
