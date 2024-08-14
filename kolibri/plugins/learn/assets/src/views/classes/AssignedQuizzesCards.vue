@@ -105,7 +105,7 @@
     },
     $trs: {
       yourQuizzesHeader: {
-        message: 'Your quizzes',
+        message: 'Your Quizzes',
         context:
           "AssignedQuizzesCards.yourQuizzesHeader\n\nHeading on the 'Learn' page for a section where a learner can see which quizzes have been assigned to them.",
       },
