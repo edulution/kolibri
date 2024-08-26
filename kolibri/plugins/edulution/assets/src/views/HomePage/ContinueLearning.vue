@@ -162,12 +162,12 @@
     },
     $trs: {
       continueLearningOnYourOwnHeader: {
-        message: 'Continue learning on your own',
+        message: 'Continue where you left off',
         context:
           'Option to continue interacting with the resources (lessons, quizzes) in a self-directed way or through free exploration, rather than via material that coaches have prepared and made available in classes.',
       },
       continueLearningFromClassesHeader: {
-        message: 'Continue learning from your classes',
+        message: 'Continue where you left off',
         context:
           'Option to continue interacting with the resources (lessons, quizzes) coaches have prepared and made available in the classes learner is enrolled into.',
       },
