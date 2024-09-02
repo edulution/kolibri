@@ -17,14 +17,6 @@
           :to="genContentLinkBackLinkCurrentPage(resource.contentNode.id, true)"
           :collectionTitle="getResourceClassName(resource)"
         />
-        <QuizCard
-          v-for="(quiz, idx) in resumableClassesQuizzes"
-          :key="`quiz-${idx}`"
-          :quiz="quiz"
-          :to="getClassQuizLink(quiz)"
-          :collectionTitle="getQuizClassName(quiz)"
-          showThumbnail
-        />
       </template>
       <template v-else>
         <ResourceCard
