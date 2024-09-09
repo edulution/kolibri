@@ -7,7 +7,12 @@ from django.db.models.fields import IntegerField
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from kolibri.core.query import annotate_array_aggregate
+from rest_framework import status
+from rest_framework import viewsets
 
+from kolibri.core.auth import models as auth_models
 from kolibri.core.api import ReadOnlyValuesViewset
 from kolibri.core.auth.models import Classroom
 from kolibri.core.auth.models import Facility
@@ -100,6 +105,26 @@ def _consolidate_lessons_data(request, lessons):
             missing_resource = missing_resource or not resource["contentnode"]
         lesson["missing_resource"] = missing_resource
 
+
+class LearnerGroupViewset(viewsets.GenericViewSet):
+    values = ("id", "name")
+
+    def retrieve(self, request, pk):
+        try:
+            classroom = get_object_or_404(auth_models.Classroom, id=pk)
+
+            output = {
+                "groups": serialize_groups(classroom.get_learner_groups())
+            }
+
+            return Response(output)
+        except:
+            return Response({"error": "Exam Assessment not found"}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+def serialize_groups(queryset):
+    queryset = annotate_array_aggregate(queryset, member_ids="membership__user__id")
+    return list(queryset.values("id", "name", "member_ids", "subscriptions"))
 
 class LearnerClassroomViewset(ReadOnlyValuesViewset):
     """

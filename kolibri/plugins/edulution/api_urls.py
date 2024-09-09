@@ -6,13 +6,14 @@ from .viewsets import LearnerClassroomViewset
 from .viewsets import LearnerLessonViewset
 from .viewsets import LearnHomePageHydrationView
 from .viewsets import LearnStateView
+from .viewsets import LearnerGroupViewset
 
 router = routers.SimpleRouter()
 router.register(
     r"learnerclassroom", LearnerClassroomViewset, basename="learnerclassroom"
 )
 router.register(r"learnerlesson", LearnerLessonViewset, basename="learnerlesson")
-
+router.register(r"learnergroup", LearnerGroupViewset, basename="learnergroup")
 
 urlpatterns = [
     url(r"^", include(router.urls)),
