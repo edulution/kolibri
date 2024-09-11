@@ -238,7 +238,7 @@
         return plugin_data.allowGuestAccess && !this.oidcProviderFlow;
       },
       versionMsg() {
-        return this.$tr('poweredBy', { version: __version });
+        return this.$tr('poweredBy', { version: this.$version });
       },
     },
     $trs: {
@@ -283,7 +283,7 @@
         context: 'Error message description',
       },
       photoCreditLabel: {
-        message: 'Photo credit: {photoCredit}',
+        message: ' ',
         context: 'Gives credit to the photographer of the background image.',
       },
     },
