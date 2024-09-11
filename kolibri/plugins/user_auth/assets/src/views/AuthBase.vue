@@ -155,14 +155,14 @@
   import loginComponents from 'kolibri.utils.loginComponents';
   import urls from 'kolibri.urls';
   import { ComponentMap } from '../constants';
-  import LanguageSwitcherFooter from '../views/LanguageSwitcherFooter';
+  // import LanguageSwitcherFooter from '../views/LanguageSwitcherFooter';
   import commonUserStrings from './commonUserStrings';
   import getUrlParameter from './getUrlParameter';
   import plugin_data from 'plugin_data';
 
   export default {
     name: 'AuthBase',
-    components: { CoreLogo, LanguageSwitcherFooter, PrivacyInfoModal },
+    components: { CoreLogo, PrivacyInfoModal },
     mixins: [commonCoreStrings, commonUserStrings],
     setup() {
       const { isLearnerOnlyImport } = useUser();
