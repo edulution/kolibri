@@ -345,7 +345,9 @@
         return this.isAppContext && !this.windowIsLarge;
       },
       footerMsg() {
-        return this.$tr('poweredBy', { version: __version });
+        // remove version number for Kolibri on the side Nav
+        return this.$tr('poweredBy', { version: this.$store.state.core.version });
+     
       },
       topComponents() {
         return navComponents
