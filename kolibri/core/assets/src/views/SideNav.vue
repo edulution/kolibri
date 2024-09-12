@@ -110,13 +110,13 @@
                   @toggleMenu="toggleNav"
                 />
                 <LogoutSideNavEntry v-if="isUserLoggedIn" />
-                <CoreMenuOption
+                <!-- <CoreMenuOption
                   :label="coreString('changeLanguageOption')"
                   icon="language"
                   class="pointer"
                   @select="handleShowLanguageModal"
                   @toggleMenu="toggleNav"
-                />
+                /> -->
                 <SideNavDivider />
               </template>
             </CoreMenu>
