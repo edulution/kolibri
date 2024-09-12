@@ -119,6 +119,7 @@
                 /> -->
                 <SideNavDivider />
               </template>
+              
             </CoreMenu>
 
             <div v-if="showSoudNotice" style="padding: 16px">
@@ -360,7 +361,9 @@
 
         return [...accountComponents]
           .filter(this.filterByRole)
-          .filter(this.filterByFullFacilityOnly);
+          .filter(this.filterByFullFacilityOnly)
+          // Removes 'My downloads' from Side Nav
+          .filter(component => component.label !== 'My downloads');
       },
       bottomMenuOptions() {
         return navComponents.filter(component => component.bottomBar == true);
