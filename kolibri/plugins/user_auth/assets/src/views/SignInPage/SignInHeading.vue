@@ -25,7 +25,8 @@
   .sign-in-text {
     margin-top: 24px;
     margin-bottom: 16px;
-    text-align: left;
+    text-align: center;
+    color: rgb(7, 29, 73);
   }
 
 </style>
