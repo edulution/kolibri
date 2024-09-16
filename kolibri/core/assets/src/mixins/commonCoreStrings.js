@@ -1570,7 +1570,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context: '',
   },
   yourLibrary: {
-    message: 'Your library',
+    message: 'Your playlist',
     context: '',
   },
 });
