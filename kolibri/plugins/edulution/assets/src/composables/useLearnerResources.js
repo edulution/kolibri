@@ -163,8 +163,13 @@ export default function useLearnerResources() {
    *                    in all their classes
    * @public
    */
+
+  const showQuizzes = false; // Set this to true to show quizzes
+
   const resumableClassesQuizzes = computed(() => {
-    return get(activeClassesQuizzes).filter(quiz => quiz.progress.started && !quiz.progress.closed);
+    return showQuizzes
+      ? get(activeClassesQuizzes).filter(quiz => quiz.progress.started && !quiz.progress.closed)
+      : [];
   });
 
    /**
