@@ -23,18 +23,18 @@ const sideNavConfig = {
         route: baseRoutes.library.path,
         name: baseRoutes.library.name,
       },
-      {
-        label: coreStrings.$tr('bookmarksLabel'),
-        icon: 'bookmark',
-        route: baseRoutes.bookmarks.path,
-        name: baseRoutes.bookmarks.name,
-      }, 
-      {
-        label: coreStrings.$tr('assessmentHistoryLabel'),
-        icon: 'history',
-        route: baseRoutes.assessmentHistory.path,
-        name: baseRoutes.assessmentHistory.name,
-      },
+      // {
+      //   label: coreStrings.$tr('bookmarksLabel'),
+      //   icon: 'bookmark',
+      //   route: baseRoutes.bookmarks.path,
+      //   name: baseRoutes.bookmarks.name,
+      // }, 
+      // {
+      //   label: coreStrings.$tr('assessmentHistoryLabel'),
+      //   icon: 'history',
+      //   route: baseRoutes.assessmentHistory.path,
+      //   name: baseRoutes.assessmentHistory.name,
+      // },
     ];
   },
   get label() {
