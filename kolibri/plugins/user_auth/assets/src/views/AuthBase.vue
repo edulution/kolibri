@@ -238,7 +238,7 @@
         return plugin_data.allowGuestAccess && !this.oidcProviderFlow;
       },
       versionMsg() {
-        return this.$tr('poweredBy', { version: this.$version });
+        return this.$tr('poweredBy', { version: __version });
       },
     },
     $trs: {
