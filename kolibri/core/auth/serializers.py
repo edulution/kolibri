@@ -117,6 +117,7 @@ class FacilityDatasetSerializer(serializers.ModelSerializer):
             "learner_can_delete_account",
             "learner_can_login_with_no_password",
             "show_download_button_in_learn",
+            "disable_recent_lessons",
             "extra_fields",
             "description",
             "location",
