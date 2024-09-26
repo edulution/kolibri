@@ -153,12 +153,11 @@
     computed: {
       ...mapGetters(['isUserLoggedIn', 'totalPoints', 'isLearner', 'isAppContext']),
       ...mapState({
-        username: state => state.core.session.username,
         fullName: state => state.core.session.full_name,
       }),
-      // temp hack for the VF plugin
+      // Only show the first name for display
       usernameForDisplay() {
-        return !hashedValuePattern.test(this.username) ? this.username : this.fullName;
+        return this.fullName ? this.fullName.split(' ')[0] : this.username;
       },
     },
     created() {
