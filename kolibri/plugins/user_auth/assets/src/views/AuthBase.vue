@@ -189,18 +189,18 @@
     computed: {
       ...mapGetters(['facilityConfig']),
       backgroundImageStyle() {
-        if (this.themeConfig.signIn.background) {
-          const scrimOpacity =
-            this.themeConfig.signIn.scrimOpacity !== undefined
-              ? this.themeConfig.signIn.scrimOpacity
-              : 0.7;
-          return {
-            backgroundColor: this.$themeTokens.primary,
-            backgroundImage: `linear-gradient(rgba(0, 0, 0, ${scrimOpacity}), rgba(0, 0, 0, ${scrimOpacity})), url(${this.themeConfig.signIn.background})`,
-          };
-        }
-        return { backgroundColor: this.$themeBrand.primary.v_900 };
-      },
+      if (this.themeConfig.signIn.background) {
+        // Reduce scrimOpacity to make the image more visible
+        const scrimOpacity = this.themeConfig.signIn.scrimOpacity !== undefined ? this.themeConfig.signIn.scrimOpacity : 0.3;
+        return {
+          backgroundColor: this.$themeTokens.primary,
+          // Importing background image from core/static/images
+          backgroundImage: `linear-gradient(rgba(0, 0, 0, ${scrimOpacity}), rgba(0, 0, 0, ${scrimOpacity})), url(/static/images/background8.jpg)`,
+        };
+      }
+      return { backgroundColor: this.$themeBrand.primary.v_900 };
+    },
+
       guestURL() {
         return urls['kolibri:core:guest']();
       },
