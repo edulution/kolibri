@@ -155,14 +155,14 @@
   import loginComponents from 'kolibri.utils.loginComponents';
   import urls from 'kolibri.urls';
   import { ComponentMap } from '../constants';
-  import LanguageSwitcherFooter from '../views/LanguageSwitcherFooter';
+  // import LanguageSwitcherFooter from '../views/LanguageSwitcherFooter';
   import commonUserStrings from './commonUserStrings';
   import getUrlParameter from './getUrlParameter';
   import plugin_data from 'plugin_data';
 
   export default {
     name: 'AuthBase',
-    components: { CoreLogo, LanguageSwitcherFooter, PrivacyInfoModal },
+    components: { CoreLogo, PrivacyInfoModal },
     mixins: [commonCoreStrings, commonUserStrings],
     setup() {
       const { isLearnerOnlyImport } = useUser();
@@ -238,7 +238,9 @@
         return plugin_data.allowGuestAccess && !this.oidcProviderFlow;
       },
       versionMsg() {
-        return this.$tr('poweredBy', { version: __version });
+        // Split the version string at the first occurrence of '.' after the third number
+        const version = __version.split('.').slice(0, 3).join('.');
+        return this.$tr('poweredBy', { version });
       },
     },
     $trs: {
@@ -283,7 +285,7 @@
         context: 'Error message description',
       },
       photoCreditLabel: {
-        message: 'Photo credit: {photoCredit}',
+        message: ' ',
         context: 'Gives credit to the photographer of the background image.',
       },
     },
