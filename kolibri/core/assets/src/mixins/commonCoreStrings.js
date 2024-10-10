@@ -1352,11 +1352,11 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context: 'Refers to content that has not been viewed nor engaged with yet.',
   },
   folder: {
-    message: 'Folder',
+    message: 'Topic',
     context: "Tab label in the 'Browse channel' page that allows to navigate through its topics.",
   },
   folders: {
-    message: 'Folders',
+    message: 'Topics',
     context: "Tab label in the 'Browse channel' page that allows to navigate through its topics.",
   },
   scoreLabel: {
@@ -1570,7 +1570,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context: '',
   },
   yourLibrary: {
-    message: 'Your library',
+    message: 'Your playlists',
     context: '',
   },
 });

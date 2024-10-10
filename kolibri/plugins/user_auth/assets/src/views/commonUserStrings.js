@@ -27,7 +27,7 @@ const commonUserStrings = createTranslator('CommonUserPageStrings', {
     context: 'Links to the beginning of the authentication flow.',
   },
   signingInLabel: {
-    message: "Login",
+    message: "EDULUTION",
     context: 'Generic label that conveys user is signing into their account'
   }
 });

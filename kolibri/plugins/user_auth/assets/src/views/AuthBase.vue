@@ -238,7 +238,9 @@
         return plugin_data.allowGuestAccess && !this.oidcProviderFlow;
       },
       versionMsg() {
-        return this.$tr('poweredBy', { version: __version });
+        // Split the version string at the first occurrence of '.' after the third number
+        const version = __version.split('.').slice(0, 3).join('.');
+        return this.$tr('poweredBy', { version });
       },
     },
     $trs: {
