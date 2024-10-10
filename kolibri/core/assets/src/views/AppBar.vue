@@ -1,112 +1,114 @@
 <template>
 
-  <div
-    v-show="!$isPrint"
-    :style="{ backgroundColor: $themeTokens.appBar }"
-  >
+  <div v-show="!$isPrint" :style="{ backgroundColor: $themeTokens.appBar }">
 
-    <header>
-      <SkipNavigationLink />
+    <SkipNavigationLink />
 
-      <UiToolbar
-        :title="title"
-        :removeNavIcon="isAppContext && !windowIsLarge"
-        type="clear"
-        textColor="white"
-        class="app-bar"
-        :style="{ height: topBarHeight + 'px' }"
-        :raised="false"
-        :removeBrandDivider="true"
-      >
-        <template
-          v-if="windowIsLarge || !isAppContext"
-          #icon
+    <UiToolbar
+      :title="title"
+      type="clear"
+      textColor="white"
+      class="app-bar"
+      :style="{ height: height + 'px' }"
+      :raised="false"
+      :removeBrandDivider="true"
+    >
+      <template #icon>
+        <KIconButton
+          icon="menu"
+          :color="$themeTokens.textInverted"
+          :ariaLabel="$tr('openNav')"
+          @click="$emit('toggleSideNav')"
+        />
+      </template>
+
+      <template #brand>
+        <img
+          v-if="themeConfig.appBar.topLogo"
+          :src="themeConfig.appBar.topLogo.src"
+          :alt="themeConfig.appBar.topLogo.alt"
+          :style="themeConfig.appBar.topLogo.style"
+          class="brand-logo"
         >
-          <KIconButton
-            icon="menu"
-            :color="$themeTokens.textInverted"
-            :ariaLabel="$tr('openNav')"
-            @click="$emit('toggleSideNav')"
-          />
-        </template>
+      </template>
 
-        <template #brand>
-          <img
-            v-if="themeConfig.appBar.topLogo"
-            :src="themeConfig.appBar.topLogo.src"
-            :alt="themeConfig.appBar.topLogo.alt"
-            :style="themeConfig.appBar.topLogo.style"
-            :class="isAppContext ? 'brand-logo-left' : 'brand-logo'"
+      <template #actions>
+        <div>
+          <slot name="app-bar-actions"></slot>
+          <div class="total-points">
+            <slot name="totalPointsMenuItem"></slot>
+          </div>
+
+          <UiButton
+            ref="userMenuButton"
+            type="primary"
+            color="clear"
+            class="user-menu-button"
+            :class="$computedClass({ ':focus': $coreOutline })"
+            :ariaLabel="$tr('userMenu')"
+            @click="handleUserMenuButtonClick"
           >
-        </template>
-
-        <template
-          v-if="windowIsLarge"
-          #navigation
-        >
-          <slot name="sub-nav"></slot>
-        </template>
-
-        <template #actions>
-          <div
-            aria-live="polite"
-            :style="{
-              paddingBottom: '6px',
-            }"
-          >
-            <slot name="app-bar-actions"></slot>
-            <span v-if="isLearner">
-              <KIconButton
-                ref="pointsButton"
-                icon="pointsActive"
-                :ariaLabel="$tr('pointsAriaLabel')"
-              />
-              <div v-if="!windowIsSmall" class="points-description">
-                {{ $formatNumber(totalPoints) }}
-              </div>
-              <div
-                v-if="pointsDisplayed"
-                class="points-popover"
-                :style="{
-                  color: $themeTokens.text,
-                  padding: '8px',
-                  backgroundColor: $themeTokens.surface,
-                }"
-              >
-                {{ $tr('pointsMessage', { points: totalPoints }) }}
-              </div>
-            </span>
-            <span
-              v-if="isUserLoggedIn"
-              tabindex="-1"
-            >
+            <template #icon>
               <KIcon
                 icon="person"
-                :style="{
-                  fill: $themeTokens.textInverted,
-                  height: '24px',
-                  width: '24px',
-                  margin: '4px',
-                  top: '8px',
-                }"
+                :style="{ fill: $themeTokens.textInverted, height: '24px', width: '24px', top: 0, }"
               />
-              <span class="username">
-                {{ usernameForDisplay }}
-              </span>
-            </span>
+            </template>
+            <span v-if="isUserLoggedIn" class="username" tabindex="-1">{{ dropdownName }}</span>
+            <KIcon
+              icon="dropdown"
+              :style="{ fill: $themeTokens.textInverted, height: '24px', width: '24px', top: 0, }"
+            />
+          </UiButton>
 
-          </div>
-        </template>
-      </UiToolbar>
-    </header>
-    <!-- IF making changes to the sub nav, make sure to make -->
-    <!-- corresponding changes in SideNav.vue in regards to  -->
-    <!-- Window size and app context. Changes may need to be made -->
-    <!-- in parallel in both files for non-breaking updates -->
-    <div
-      v-if="!windowIsLarge && !isAppContext"
-      class="subpage-nav"
-    >
+          <CoreMenu
+            v-show="userMenuDropdownIsOpen"
+            ref="userMenuDropdown"
+            class="user-menu-dropdown"
+            :isOpen="userMenuDropdownIsOpen"
+            :raised="true"
+            :containFocus="true"
+            :showActive="false"
+            :style="{ backgroundColor: $themeTokens.surface }"
+            @close="handleCoreMenuClose"
+            @shouldFocusFirstEl="findFirstEl()"
+          >
+            <template v-if="isUserLoggedIn" #header>
+              <TotalPoints class="points" />
+              <div>
+                <UserTypeDisplay
+                  :distinguishCoachTypes="false"
+                  :userType="getUserKind"
+                />
+              </div>
+              <div v-if="isSubsetOfUsersDevice && userIsLearner" data-test="syncStatusInDropdown">
+                <div class="sync-status">
+                  {{ $tr('deviceStatus') }}
+                </div>
+                <SyncStatusDisplay
+                  :syncStatus="mapSyncStatusOptionToLearner"
+                  displaySize="large"
+                />
+              </div>
+            </template>
+
+            <template #options>
+              <component :is="component" v-for="component in menuOptions" :key="component.name" />
+              <LogoutSideNavEntry v-if="isUserLoggedIn" />
+            </template>
+
+            <template #footer>
+              <!-- Only show this when on a SoUD -->
+              <div v-if="showSoudNotice" class="role" data-test="learnOnlyNotice">
+                <LearnOnlyDeviceNotice />
+              </div>
+            </template>
+          </CoreMenu>
+
+        </div>
+      </template>
+    </UiToolbar>
+    <div class="subpage-nav">
       <slot name="sub-nav"></slot>
     </div>
   </div>
@@ -116,14 +118,24 @@
 
 <script>
 
-  import { mapActions, mapGetters, mapState } from 'vuex';
+  import { mapGetters, mapState, mapActions } from 'vuex';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import UiToolbar from 'kolibri.coreVue.components.UiToolbar';
+  import LearnOnlyDeviceNotice from 'kolibri.coreVue.components.LearnOnlyDeviceNotice';
   import KIconButton from 'kolibri-design-system/lib/buttons-and-links/KIconButton';
+  import CoreMenu from 'kolibri.coreVue.components.CoreMenu';
+  import CoreMenuOption from 'kolibri.coreVue.components.CoreMenuOption';
+  import UserTypeDisplay from 'kolibri.coreVue.components.UserTypeDisplay';
+  import UiButton from 'kolibri-design-system/lib/keen/UiButton';
+  import navComponents from 'kolibri.utils.navComponents';
+  import { NavComponentSections, SyncStatus, UserKinds } from 'kolibri.coreVue.vuex.constants';
   import themeConfig from 'kolibri.themeConfig';
-  import useKResponsiveWindow from 'kolibri.coreVue.composables.useKResponsiveWindow';
+  import TotalPoints from 'kolibri.coreVue.components.TotalPoints';
   import navComponentsMixin from '../mixins/nav-components';
+  import LogoutSideNavEntry from './LogoutSideNavEntry';
   import SkipNavigationLink from './SkipNavigationLink';
+  import SyncStatusDisplay from './SyncStatusDisplay';
+  import plugin_data from 'plugin_data';
 
   const hashedValuePattern = /^[a-f0-9]{30}$/;
 
@@ -132,66 +144,142 @@
     components: {
       UiToolbar,
       KIconButton,
+      CoreMenu,
+      UiButton,
+      CoreMenuOption,
+      LearnOnlyDeviceNotice,
+      LogoutSideNavEntry,
+      UserTypeDisplay,
       SkipNavigationLink,
+      TotalPoints,
+      SyncStatusDisplay,
     },
     mixins: [commonCoreStrings, navComponentsMixin],
     setup() {
-      const { windowIsLarge, windowIsSmall } = useKResponsiveWindow();
-      return { themeConfig, windowIsLarge, windowIsSmall };
+      return { themeConfig };
     },
     props: {
       title: {
         type: String,
         required: true,
       },
+      height: {
+        type: Number,
+        required: true,
+      },
     },
     data() {
       return {
-        pointsDisplayed: false,
+        userMenuDropdownIsOpen: false,
+        userSyncStatus: null,
+        isPolling: false,
+        // poll every 10 seconds
+        pollingInterval: 10000,
+        isSubsetOfUsersDevice: plugin_data['isSubsetOfUsersDevice'],
       };
     },
     computed: {
-      ...mapGetters(['isUserLoggedIn', 'totalPoints', 'isLearner', 'isAppContext']),
+      ...mapGetters(['isUserLoggedIn', 'getUserKind', 'isAdmin', 'isCoach']),
       ...mapState({
         username: state => state.core.session.username,
         fullName: state => state.core.session.full_name,
+        userId: state => state.core.session.user_id,
       }),
-      // temp hack for the VF plugin
-      usernameForDisplay() {
-        return !hashedValuePattern.test(this.username) ? this.username : this.fullName;
+      userIsLearner() {
+        return this.getUserKind == UserKinds.LEARNER;
+      },
+      showSoudNotice() {
+        return this.isSubsetOfUsersDevice && (this.isAdmin || this.isCoach);
+      },
+      menuOptions() {
+        return navComponents
+          .filter(component => component.section === NavComponentSections.ACCOUNT)
+          .filter(this.filterByRole);
+      },
+      // Show first name instead of username
+      dropdownName() {
+         // Extract the first name
+        const firstName = this.fullName?.split(' ')[0];
+        return !hashedValuePattern.test(this.username) ? firstName : this.fullName;
+      },
+      mapSyncStatusOptionToLearner() {
+        if (this.userSyncStatus) {
+          return this.userSyncStatus.status;
+        }
+        return SyncStatus.NOT_CONNECTED;
       },
     },
     created() {
-      if (this.isLearner) {
-        this.fetchPoints();
-      }
       window.addEventListener('click', this.handleWindowClick);
-      window.addEventListener('keydown', this.handlePopoverByKeyboard, true);
     },
     beforeDestroy() {
       window.removeEventListener('click', this.handleWindowClick);
-      window.removeEventListener('keydown', this.handlePopoverByKeyboard, true);
+      this.isPolling = false;
     },
     methods: {
-      ...mapActions(['fetchPoints']),
-      handleWindowClick(event) {
-        if (this.$refs.pointsButton && this.$refs.pointsButton.$el) {
-          if (!this.$refs.pointsButton.$el.contains(event.target) && this.pointsDisplayed) {
-            this.pointsDisplayed = false;
-          } else if (
-            this.$refs.pointsButton &&
-            this.$refs.pointsButton.$el &&
-            this.$refs.pointsButton.$el.contains(event.target)
-          ) {
-            this.pointsDisplayed = !this.pointsDisplayed;
+      ...mapActions(['fetchUserSyncStatus']),
+      pollUserSyncStatusTask() {
+        this.fetchUserSyncStatus({ user: this.userId }).then(syncData => {
+          if (syncData && syncData[0]) {
+            this.userSyncStatus = syncData[0];
+            this.setPollingInterval(this.userSyncStatus.status);
           }
+        });
+        if (this.isPolling && this.isSubsetOfUsersDevice) {
+          setTimeout(() => {
+            this.pollUserSyncStatusTask();
+          }, this.pollingInterval);
+        }
+      },
+      setPollingInterval(status) {
+        if (status === SyncStatus.QUEUED) {
+          // check more frequently for updates if the user is waiting to sync,
+          // so that the sync isn't missed
+          this.pollingInterval = 1000;
+        } else {
+          this.pollingInterval = 10000;
+        }
+      },
+      handleUserMenuButtonClick(event) {
+        this.userMenuDropdownIsOpen = !this.userMenuDropdownIsOpen;
+        if (this.userMenuDropdownIsOpen) {
+          this.$nextTick(() => {
+            this.$refs.userMenuDropdown.$el.focus();
+            this.isPolling = true;
+            this.pollUserSyncStatusTask(this.userId);
+          });
+        } else if (!this.userMenuDropdownIsOpen) {
+          this.isPolling = false;
         }
         return event;
       },
-      handlePopoverByKeyboard(event) {
-        if ((event.key == 'Tab' || event.key == 'Escape') && this.pointsDisplayed) {
-          this.pointsDisplayed = false;
+      handleWindowClick(event) {
+        if (
+          !this.$refs.userMenuDropdown.$el.contains(event.target) &&
+          !this.$refs.userMenuButton.$el.contains(event.target) &&
+          this.userMenuDropdownIsOpen
+        ) {
+          this.userMenuDropdownIsOpen = false;
+          this.isPolling = false;
         }
+        return event;
+      },
+      handleCoreMenuClose() {
+        this.userMenuDropdownIsOpen = false;
+        this.isPolling = false;
+        if (this.$refs.userMenuButton) {
+          this.$refs.userMenuButton.$el.focus();
+        }
+      },
+      // handleChangeLanguage() {
+      //   this.$emit('showLanguageModal');
+      //   this.userMenuDropdownIsOpen = false;
+      //   this.isPolling = false;
+      // },
+      findFirstEl() {
+        this.$nextTick(() => {
+          this.$refs.userMenuDropdown.focusFirstEl();
+        });
       },
     },
     $trs: {
@@ -200,14 +288,20 @@
         context:
           "This message is providing additional context to the screen-reader users, but is not visible in the Kolibri UI.\n\nIn this case the screen-reader will announce the message when user navigates to the 'hamburger' button with the keyboard, to indicate that it allows them to open the sidebar navigation menu.",
       },
-      pointsMessage: {
-        message: 'You earned { points, number } points',
-        context: 'Notification indicating how many points a leaner has earned.',
-      },
-      pointsAriaLabel: {
-        message: 'Points earned',
+      // languageSwitchMenuOption: {
+      //   message: 'Change language',
+      //   context:
+      //     'General user setting where a user can choose the language they want to view the Kolibri interface in.',
+      // },
+      userMenu: {
+        message: 'User menu',
         context:
-          'Information for screen reader users about what information they will get by clicking a button',
+          'The user menu is located in the upper right corner of the interface. \n\nUsers can use it to adjust their settings like the language used in Kolibri or their name.',
+      },
+      deviceStatus: {
+        message: 'Device status',
+        context:
+          "Table column header in the 'Class learners' page. Indicates the status of an individual learner's device.",
       },
     },
   };
@@ -225,17 +319,12 @@
   }
 
   .username {
-    position: relative;
-    bottom: 3px;
     max-width: 200px;
     // overflow-x hidden seems to affect overflow-y also, so include a fixed height
     height: 16px;
-    padding-left: 8px;
     // overflow: hidden on both x and y so that the -y doesn't show scroll buttons
     // at certain zooms/screen sizes
     overflow: hidden;
-    font-size: small;
-    font-weight: bold;
     text-overflow: ellipsis;
   }
 
@@ -272,35 +361,25 @@
     font-weight: bold;
   }
 
+  .sync-status,
+  .notice-label {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-size: small;
+    font-weight: bold;
+  }
+
   .total-points {
     display: inline-block;
     margin-left: 16px;
   }
 
-  /deep/ .ui-toolbar__body {
-    display: inline-block;
-    margin-bottom: 12px;
+  /deep/ .ui-toolbar__brand {
+    min-width: inherit;
   }
 
   /deep/ .ui-toolbar__title {
-    display: flex;
-    align-items: center;
-  }
-
-  /deep/ .ui-toolbar__nav-icon {
-    display: flex;
-    align-items: center;
-  }
-
-  /deep/ .ui-toolbar__right {
-    display: flex;
-    align-items: center;
-  }
-
-  /deep/ .ui-toolbar__left {
-    display: flex;
-    align-items: center;
-    margin-left: 8px;
+    margin-right: 10px;
   }
 
   .brand-logo {
@@ -310,29 +389,9 @@
     vertical-align: middle;
   }
 
-  .brand-logo-left {
-    margin-left: -16px !important;
-  }
-
   // Hide the UiButton focus ring
   /deep/ .ui-button__focus-ring {
     display: none;
-  }
-
-  .points-popover {
-    @extend %dropshadow-4dp;
-
-    position: absolute;
-    right: 50px;
-    z-index: 24;
-    font-size: 12px;
-    border-radius: 8px;
-  }
-
-  .points-description {
-    display: inline-block;
-    margin-left: 8px;
-    font-size: 14px;
   }
 
 </style>

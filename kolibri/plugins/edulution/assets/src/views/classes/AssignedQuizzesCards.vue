@@ -105,7 +105,7 @@
     },
     $trs: {
       yourQuizzesHeader: {
-        message: 'Your Quizzes',
+        message: 'Your quizzes',
         context:
           "AssignedQuizzesCards.yourQuizzesHeader\n\nHeading on the 'Learn' page for a section where a learner can see which quizzes have been assigned to them.",
       },
@@ -114,7 +114,7 @@
         context: 'Message that a learner sees if a coach has not assigned any quizzes to them.',
       },
       recentQuizzesHeader: {
-        message: 'Your Quizzes',
+        message: 'Recent quizzes',
         context:
           "Section header on the learner's Home page, displaying the most recent quizzes that the coaches assigned to them.",
       },

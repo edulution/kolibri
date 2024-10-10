@@ -387,7 +387,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
   libraryLabel: {
     message: 'Playlists',
     context:
-      "The 'Library' section displays channels available on Kolibri server, and allows learners to browse, explore and filter topics and resources on their own.",
+      "The 'Playlist' section displays channels available on Kolibri server, and allows learners to browse, explore and filter topics and resources on their own.",
   },
   loadingLabel: {
     message: 'Loading…',
@@ -1570,7 +1570,7 @@ export const coreStrings = createTranslator('CommonCoreStrings', {
     context: '',
   },
   yourLibrary: {
-    message: 'Your library',
+    message: 'Your playlists',
     context: '',
   },
 });

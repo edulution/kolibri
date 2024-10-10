@@ -167,7 +167,7 @@
           'Option to continue interacting with the resources (lessons, quizzes) in a self-directed way or through free exploration, rather than via material that coaches have prepared and made available in classes.',
       },
       continueLearningFromClassesHeader: {
-        message: 'Continue learning on your own',
+        message: 'Continue learning from your classes',
         context:
           'Option to continue interacting with the resources (lessons, quizzes) coaches have prepared and made available in the classes learner is enrolled into.',
       },
