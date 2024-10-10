@@ -110,15 +110,16 @@
                   @toggleMenu="toggleNav"
                 />
                 <LogoutSideNavEntry v-if="isUserLoggedIn" />
-                <CoreMenuOption
+                <!-- <CoreMenuOption
                   :label="coreString('changeLanguageOption')"
                   icon="language"
                   class="pointer"
                   @select="handleShowLanguageModal"
                   @toggleMenu="toggleNav"
-                />
+                /> -->
                 <SideNavDivider />
               </template>
+              
             </CoreMenu>
 
             <div v-if="showSoudNotice" style="padding: 16px">
@@ -344,7 +345,9 @@
         return this.isAppContext && !this.windowIsLarge;
       },
       footerMsg() {
-        return this.$tr('poweredBy', { version: __version });
+        // Split the version string at the first occurrence of '.' after the third number
+        const mainVersion = __version.split('.').slice(0, 3).join('.');
+        return this.$tr('poweredBy', { version: mainVersion });
       },
       topComponents() {
         return navComponents
@@ -360,7 +363,9 @@
 
         return [...accountComponents]
           .filter(this.filterByRole)
-          .filter(this.filterByFullFacilityOnly);
+          .filter(this.filterByFullFacilityOnly)
+          // Removes 'My downloads' from Side Nav
+          .filter(component => component.label !== 'My downloads');
       },
       bottomMenuOptions() {
         return navComponents.filter(component => component.bottomBar == true);
