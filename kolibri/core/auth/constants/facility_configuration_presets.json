@@ -8,7 +8,7 @@
       "learner_can_delete_account": false,
       "learner_can_login_with_no_password": true,
       "show_download_button_in_learn": false,
-      "disable_recent_lessons": false
+      "learner_can_view_lessons": false
     }
   },
   "nonformal": {
@@ -21,7 +21,7 @@
       "learner_can_delete_account": true,
       "learner_can_login_with_no_password": false,
       "show_download_button_in_learn": true,
-      "disable_recent_lessons": true
+      "learner_can_view_lessons": true
     }
   },
   "informal": {
@@ -33,7 +33,7 @@
       "learner_can_delete_account": true,
       "learner_can_login_with_no_password": false,
       "show_download_button_in_learn": true,
-      "disable_recent_lessons": true
+      "learner_can_view_lessons": true
 
     }
   }

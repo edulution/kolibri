@@ -220,7 +220,7 @@ describe('facility config page actions', () => {
           learner_can_delete_account: true,
           learner_can_login_with_no_password: false,
           show_download_button_in_learn: true,
-          disable_recent_lessons: true
+          learner_can_view_lessons: true
         };
         client.mockResolvedValue({ data: expected });
         return store.dispatch('facilityConfig/resetFacilityConfig').then(() => {

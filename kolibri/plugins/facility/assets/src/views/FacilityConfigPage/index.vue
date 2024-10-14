@@ -254,7 +254,7 @@
     'learner_can_sign_up',
     'learner_can_login_with_no_password',
     'show_download_button_in_learn',
-    'disable_recent_lessons',
+    'learner_can_view_lessons',
   
   ];
 
@@ -458,7 +458,7 @@
         context: "Option on 'Facility settings' page.\n",
       },
          /*New Disable Recent Lessons Option */
-      disableRecentLessons: {
+      learnerCanViewLessons: {
         message: 'Disable recent lessons',
         context: "Option on 'Facility settings' page.",
       },
