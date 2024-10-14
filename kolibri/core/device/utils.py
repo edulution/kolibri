@@ -185,6 +185,7 @@ def check_facility_setting(name):
         "learner_can_delete_account",
         "learner_can_login_with_no_password",
         "show_download_button_in_learn",
+        "learner_can_view_lessons",
     ]
     _check_setting(
         name,
@@ -345,7 +346,8 @@ def provision_from_file(file_path):
             "learner_can_sign_up": true,
             "learner_can_delete_account": true,
             "learner_can_login_with_no_password": true,
-            "show_download_button_in_learn": true
+            "show_download_button_in_learn": true,
+            "learner_can_view_lessons": true
         },
         "device_settings": {
             "language_id": "en",
