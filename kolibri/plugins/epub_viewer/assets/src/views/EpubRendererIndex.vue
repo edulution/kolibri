@@ -171,7 +171,6 @@
   import Lockr from 'lockr';
   import FocusLock from 'vue-focus-lock';
   import CoreFullscreen from 'kolibri.coreVue.components.CoreFullscreen';
-  import responsiveElementMixin from 'kolibri-design-system/lib/KResponsiveElementMixin';
   import useKResponsiveWindow from 'kolibri-design-system/lib/composables/useKResponsiveWindow';
   import iFrameView from './SandboxIFrameView';
   import LoadingScreen from './LoadingScreen';
@@ -221,7 +220,6 @@
       SearchButton,
       LoadingError,
     },
-    mixins: [responsiveElementMixin],
     setup() {
       const { windowIsSmall } = useKResponsiveWindow();
       return {
@@ -360,7 +358,7 @@
       increaseFontSizeDisabled() {
         return this.fontSize === `${FONT_SIZE_MAX}px`;
       },
-      /* eslint-disable kolibri/vue-no-unused-properties */
+      /* eslint-disable vue/no-unused-properties */
       /**
        * @public
        */
@@ -371,7 +369,7 @@
         const seconds = (numberOfWords * 60) / WORDS_PER_MINUTE;
         return seconds;
       },
-      /* eslint-enable kolibri/vue-no-unused-properties */
+      /* eslint-enable vue/no-unused-properties */
       locationsAreReady() {
         return this.locations && this.locations.length > 0;
       },
