@@ -233,7 +233,14 @@ export default {
     }
   },
   computed: {
+    /*...mapGetters(['facilityConfig', 'isLearner', 'isCoach','getUserKind', 'currentUserId']),*/
     ...mapGetters(['getUserKind', 'currentUserId']),
+    /*canViewLessons() {
+        if (this.isLearner || this.isCoach) {
+          return this.facilityConfig.learner_can_view_lessons;
+        }
+        return true;
+      },*/
     isShort() {
       if (this.getUserKind === UserKinds.LEARNER) {
         return false;
