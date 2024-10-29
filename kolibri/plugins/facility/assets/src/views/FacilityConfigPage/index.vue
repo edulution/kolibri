@@ -459,7 +459,7 @@
       },
          /*New Disable Recent Lessons Option */
       learnerCanViewLessons: {
-        message: 'Disable recent lessons',
+        message: 'Allow learners to view Lessons/Recent Lessons',
         context: "Option on 'Facility settings' page.",
       },
       /* eslint-enable kolibri/vue-no-unused-translations */
