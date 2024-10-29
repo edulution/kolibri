@@ -140,7 +140,6 @@ def _has_permissions_class(obj):
 
 
 class FacilityDataSyncableModel(SyncableModel):
-
     morango_profile = morango_sync.PROFILE_FACILITY_DATA
 
     class Meta:
@@ -180,7 +179,7 @@ class FacilityDataset(FacilityDataSyncableModel):
     learner_can_delete_account = models.BooleanField(default=True)
     learner_can_login_with_no_password = models.BooleanField(default=False)
     show_download_button_in_learn = models.BooleanField(default=True)
-    learner_can_view_lessons = models.BooleanField(default=True)
+    learner_can_view_lessons = models.BooleanField(default=False)
     extra_fields = JSONField(
         null=True,
         blank=True,
@@ -634,7 +633,6 @@ class FacilityUserModelManager(SyncableModelManager, UserManager):
         return user
 
     def create_superuser(self, username, password, facility=None, full_name=None):
-
         # import here to avoid circularity
         from kolibri.core.device.models import DevicePermissions
 
@@ -742,6 +740,7 @@ def validate_role_kinds(kinds):
         raise InvalidRoleKind("kinds argument must only contain valid role kind names")
     return kinds
 
+
 # from .permissions.general import AllowCoach
 @python_2_unicode_compatible
 class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
@@ -785,7 +784,7 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
     )
 
     id_number = models.CharField(max_length=64, default="", blank=True)
-    
+
     @property
     def is_deleted(self):
         return self.deleted
@@ -793,7 +792,7 @@ class FacilityUser(KolibriAbstractBaseUser, AbstractFacilityDataModel):
     @is_deleted.setter
     def set_deleted(self, value):
         self.deleted = value
-    
+
     @classmethod
     def deserialize(cls, dict_model):
         # be defensive against blank passwords, set to `NOT_SPECIFIED` if blank
@@ -1408,7 +1407,6 @@ class CollectionProxyManager(SyncableModelManager):
 
 @python_2_unicode_compatible
 class Facility(Collection):
-
     # don't require that we have a dataset set during validation, so we're not forced to generate one unnecessarily
     FIELDS_TO_EXCLUDE_FROM_VALIDATION = ["dataset"]
 
@@ -1520,7 +1518,6 @@ class Facility(Collection):
 
 @python_2_unicode_compatible
 class Classroom(Collection):
-
     morango_model_name = "classroom"
     morango_model_dependencies = (Facility,)
     _KIND = collection_kinds.CLASSROOM
@@ -1591,7 +1588,6 @@ class Classroom(Collection):
 
 @python_2_unicode_compatible
 class LearnerGroup(Collection):
-
     morango_model_name = "learnergroup"
     morango_model_dependencies = (Classroom,)
     _KIND = collection_kinds.LEARNERGROUP
