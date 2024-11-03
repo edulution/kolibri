@@ -29,8 +29,8 @@
           <div
             class="progress-bar"
             :style="{
-              width: percent + '%',
-              backgroundColor: $themePalette.orange.v_400
+              width: getProgressPercent + '%',
+              backgroundColor: setProgressBarColor
             }"
           >
 
@@ -118,10 +118,19 @@
       topicKnowledgemap() {
         return get(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic.id )?.children || [];
       },
-      percent() {
+      getProgressPercent() {
         const progress = get(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic.id )?.progress_fraction || 0
         return Math.max(Math.min(progress * 100, 100), 0);
       },
+      setProgressBarColor(){
+        if(this.progress > 0.99){
+          return this.$themeTokens.mastered;
+        }
+        else{
+          return this.$themeTokens.progress;
+        }
+
+      }
     },
     methods: {
       onExpansionClick() {
