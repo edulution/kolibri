@@ -502,10 +502,12 @@
       };
     },
     computed: {
-      ...mapGetters(['getUserKind', 'currentUserId']),
+      ...mapGetters(['isLearner', 'getUserKind', 'currentUserId']),
       enableSearch(){
         /*TODO: Add facilityconfig and use that instead of hardcoded value*/
-        return false;
+        if(this.isLearner){
+          return false;
+        }
       },
       showRecentContent(){
         /*TODO: Add facilityconfig and use that instead of hardcoded value*/
