@@ -323,7 +323,7 @@
       showBookmark: {
         type: Boolean,
         required: false,
-        default: true,
+        default: false,
       },
       /**
        * Shows the download button when truthy
@@ -370,8 +370,8 @@
         return this.isDownloading;
       },
       allActions() {
-        const actions = [
-          {
+        const actions = [];
+          /*actions.push({
             id: 'view-resource-list',
             icon: 'resourceList',
             label: this.isLessonContext
@@ -379,9 +379,8 @@
               : this.$tr('viewTopicResources'),
             event: 'viewResourceList',
             dataTest: this.isLessonContext ? 'viewLessonPlanButton' : 'viewTopicResourcesButton',
-          },
-        ];
-        if (this.showBookmark) {
+          });*/
+        /*if (this.showBookmark) {
           actions.push({
             id: 'bookmark',
             icon: this.isBookmarked ? 'bookmark' : 'bookmarkEmpty',
@@ -392,7 +391,7 @@
             disabled: this.isBookmarked === null,
             dataTest: this.isBookmarked ? 'removeBookmarkButton' : 'addBookmarkButton',
           });
-        }
+        }*/
         if (this.showDownloadButton) {
           actions.push({
             id: 'download',
@@ -422,13 +421,13 @@
             event: 'completionModal',
           });
         }
-        actions.push({
+        /*actions.push({
           id: 'view-info',
           icon: 'info',
           label: this.coreString('viewInformation'),
           event: 'viewInfo',
           dataTest: 'viewInfoButton',
-        });
+        });*/
 
         return actions;
       },
