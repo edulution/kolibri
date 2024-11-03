@@ -17,8 +17,8 @@
       <div
         class="progress-bar"
         :style="{
-          width: percent + '%',
-          backgroundColor: progressColor || $themeTokens.primary
+          width: getProgressPercent + '%',
+          backgroundColor: setProgressBarColor
         }"
       >
 
@@ -68,9 +68,18 @@ export default {
         backgroundImage: this.thumbnail ? `url('${this.thumbnail}')` : '',
       };
     },
-    percent() {
+    getProgressPercent() {
       return Math.max(Math.min(this.progress * 100, 100), 0);
     },
+    setProgressBarColor(){
+      if(this.progress > 0.99){
+        return this.$themeTokens.mastered;
+      }
+      else{
+        return this.$themeTokens.progress;
+      }
+
+    }
   },
 };
 
