@@ -101,6 +101,7 @@
   "FacilityConfigPage.learnerCanEditPassword": "Allow learners and coaches to change their password when signed in",
   "FacilityConfigPage.learnerCanEditUsername": "Allow learners and coaches to edit their username",
   "FacilityConfigPage.learnerCanLoginWithNoPassword": "Allow learners to sign in with no password",
+  "FacilityConfigPage.disableRecentLessons": "Disable Recent Lessons",
   "FacilityConfigPage.learnerCanSignUp": "Allow learners to create accounts",
   "FacilityConfigPage.pageDescription": "Configure various settings",
   "FacilityConfigPage.pageHeader": "Facility settings",
