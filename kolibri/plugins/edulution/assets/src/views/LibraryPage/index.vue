@@ -795,6 +795,7 @@
   }
 
   .channels-label {
+    margin-top: 10%;
     margin-bottom: 12px;
   }
 
