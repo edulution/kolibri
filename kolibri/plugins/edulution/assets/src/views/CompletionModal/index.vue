@@ -84,7 +84,7 @@
                 />
               </CompletionModalSection>
 
-              <CompletionModalSection
+              <!-- <CompletionModalSection
                 ref="staySection"
                 :icon="(isQuiz || isSurvey) ? 'reports' : 'restart'"
                 :class="sectionClass"
@@ -93,10 +93,10 @@
                 :buttonLabel="(isQuiz || isSurvey) ?
                   $tr('reviewQuizButtonLabel') : $tr('stayButtonLabel')"
                 @buttonClick="$emit('close')"
-              />
+              /> -->
 
               <CompletionModalSection
-                v-if="recommendedContentNodes && recommendedContentNodes.length"
+                v-if="recommendedContentNodes && recommendedContentNodes.length && showRecommendedContent"
                 icon="alternativeRoute"
                 :class="sectionClass"
                 :title="$tr('helpfulResourcesTitle')"
@@ -244,6 +244,10 @@
       };
     },
     computed: {
+      showRecommendedContent(){
+        /*TODO: use facilityconfig instead of hardcoded value*/
+        return false;
+      },
       contentNodeId() {
         return this.contentNode && this.contentNode.id;
       },
