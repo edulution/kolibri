@@ -9,8 +9,7 @@
         <KLabeledIcon icon="classes" :label="className" />
       </h1>
 
-      <!-- <AssignedLessonsCards v-if="canViewLessons" :lessons="activeLessons" /> -->
-      <AssignedLessonsCards :lessons="activeLessons" />
+      <AssignedLessonsCards v-if="canViewLessons" :lessons="activeLessons" />
       <AssignedQuizzesCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
       <AssessmentCards :assessments="assessments" :style="{ marginTop: '44px' }" />
     </div>
@@ -26,7 +25,7 @@
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
   import useUser from 'kolibri.coreVue.composables.useUser';
-  /*import mapGetters from 'vuex';*/
+  import { mapGetters } from 'vuex';  
 
   import { PageNames, ClassesPageNames } from '../../constants';
 
@@ -105,13 +104,15 @@
       }
     },
     computed: {
-      /*...mapGetters(['facilityConfig', 'isLearner', 'isCoach']),
+      ...mapGetters(['facilityConfig', 'isLearner', 'isCoach']),
       canViewLessons() {
-        if (this.isLearner || this.isCoach) {
-          return this.facilityConfig.learner_can_view_lessons;
+        if(this.isLearner || this.isCoach){
+          /*TODO: use facilityconfig instead of hardcoded value*/
+          /*return this.facilityConfig.learner_can_view_lessons;*/
+          return false;
         }
-        return true;
-      },*/
+      },
+
       breadcrumbs() {
         return [
           {
