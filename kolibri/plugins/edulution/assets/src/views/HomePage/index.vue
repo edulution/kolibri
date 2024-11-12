@@ -18,7 +18,7 @@
           : 'continueLearningOnYourOwn'" 
       />
       <AssignedLessonsCards 
-        v-if="hasActiveClassesLessons" 
+        v-if="hasActiveClassesLessons && canViewLessons" 
         class="section" 
         :lessons="activeClassesLessons"
         displayClassName 
@@ -233,14 +233,7 @@ export default {
     }
   },
   computed: {
-    /*...mapGetters(['facilityConfig', 'isLearner', 'isCoach','getUserKind', 'currentUserId']),*/
-    ...mapGetters(['getUserKind', 'currentUserId']),
-    /*canViewLessons() {
-        if (this.isLearner || this.isCoach) {
-          return this.facilityConfig.learner_can_view_lessons;
-        }
-        return true;
-      },*/
+    ...mapGetters(['facilityConfig', 'isLearner', 'isCoach','getUserKind', 'currentUserId']),
     isShort() {
       if (this.getUserKind === UserKinds.LEARNER) {
         return false;
@@ -249,6 +242,14 @@ export default {
         this.hasActiveClassesLessons || this.hasActiveClassesQuizzes || 
         this.hasActiveClassesAssessments 
     },
+      canViewLessons() {
+        if(this.isLearner){
+          /*TODO: use facilityconfig instead of hardcoded value*/
+          /*return this.facilityConfig.learner_can_view_lessons;*/
+          return false;
+        }
+      },
+
     hasChannels() {
       return this.filteredChannels && this.filteredChannels.length > 0;
     },
@@ -270,7 +271,6 @@ export default {
       this.assessments = res;
     });
   },
-
 };
 
 </script>
