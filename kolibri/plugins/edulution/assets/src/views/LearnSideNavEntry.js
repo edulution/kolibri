@@ -18,7 +18,7 @@ const sideNavConfig = {
         name: baseRoutes.home.name,
       },
       {
-        label: coreStrings.$tr('libraryLabel'),
+        label: coreStrings.$tr('playlistsLabel'),
         icon: 'library',
         route: baseRoutes.library.path,
         name: baseRoutes.library.name,
