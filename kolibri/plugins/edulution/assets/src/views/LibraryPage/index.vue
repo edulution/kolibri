@@ -11,7 +11,7 @@
       class="main-grid"
       :style="gridOffset"
     >
-      <div v-if="!windowIsLarge && (!isLocalLibraryEmpty || deviceId)">
+      <div v-if="!windowIsLarge && (!isLocalLibraryEmpty || deviceId) && enableSearch">
         <KButton
           icon="filter"
           data-test="filter-button"
@@ -58,7 +58,7 @@
         <!-- ResumableContentGrid mostly handles whether it renders or not internally !-->
         <!-- but we conditionalize it based on whether we are on another device's library page !-->
         <ResumableContentGrid
-          v-if="!deviceId"
+          v-if="!deviceId && showRecentContent"
           data-test="resumable-content"
           :currentCardViewStyle="currentCardViewStyle"
           @setCardStyle="style => currentCardViewStyle = style"
@@ -66,7 +66,7 @@
         />
         <!-- Other Libraires -->
         <div
-          v-if="!deviceId && isUserLoggedIn"
+          v-if="!deviceId && isUserLoggedIn && showOtherLibraries"
           data-test="other-libraries"
         >
           <KGrid gutter="12">
@@ -194,7 +194,7 @@
 
     <!-- Side Panels for filtering and searching  -->
     <SearchFiltersPanel
-      v-if="(!isLocalLibraryEmpty || deviceId) && (windowIsLarge || mobileSidePanelIsOpen)"
+      v-if="(!isLocalLibraryEmpty || deviceId) && (windowIsLarge || mobileSidePanelIsOpen) && enableSearch"
       ref="sidePanel"
       v-model="searchTerms"
       data-test="side-panel"
@@ -502,7 +502,21 @@
       };
     },
     computed: {
-      ...mapGetters(['getUserKind', 'currentUserId']),
+      ...mapGetters(['isLearner', 'getUserKind', 'currentUserId']),
+      enableSearch(){
+        /*TODO: Add facilityconfig and use that instead of hardcoded value*/
+        if(this.isLearner){
+          return false;
+        }
+      },
+      showRecentContent(){
+        /*TODO: Add facilityconfig and use that instead of hardcoded value*/
+        return false;
+      },
+      showOtherLibraries(){
+        /*TODO: Add facilityconfig and use that instead of hardcoded value*/
+        return false
+      },
       allowDownloads() {
         return this.canAddDownloads && Boolean(this.deviceId);
       },
@@ -576,17 +590,24 @@
         return this.pinnedDevices.length > 0;
       },
       sidePanelWidth() {
-        if (
-          this.windowIsSmall ||
-          this.windowIsMedium ||
-          (this.isLocalLibraryEmpty && !this.deviceId)
-        ) {
+        if (this.enableSearch){
+            if (
+              this.windowIsSmall ||
+              this.windowIsMedium ||
+              (this.isLocalLibraryEmpty && !this.deviceId)
+            ) {
+              return 0;
+            } else if (this.windowBreakpoint < 4) {
+              return 234;
+            } else {
+              return 346;
+            }
+          }
+        else{
           return 0;
-        } else if (this.windowBreakpoint < 4) {
-          return 234;
-        } else {
-          return 346;
         }
+
+
       },
       showingAllLibrariesLabel() {
         const label = this.$tr('showingAllLibraries');
@@ -774,6 +795,7 @@
   }
 
   .channels-label {
+    margin-top: 10%;
     margin-bottom: 12px;
   }
 

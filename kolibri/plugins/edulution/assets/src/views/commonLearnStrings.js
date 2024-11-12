@@ -46,7 +46,7 @@ export const learnStrings = createTranslator('CommonLearnStrings', {
       'Added to create a complete alt-text description of a logo on a content card to indicate to the user what channel the resource belongs to. For example: From the channel Khan Academy - English',
   },
   resourceCompletedLabel: {
-    message: 'Resource completed',
+    message: 'Well done! 😃',
     context:
       'Message when the user successfully finishes a resource or marks a resource as complete',
   },

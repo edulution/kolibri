@@ -38,13 +38,13 @@
         >
           <template #sticky-sidebar>
             <ToggleHeaderTabs
-              v-if="!!windowIsLarge"
+              v-if="!!windowIsLarge && enableSearch"
               :topic="topic"
               :topics="topics"
               :width="sidePanelWidth"
             />
             <SearchFiltersPanel
-              v-if="!!windowIsLarge && searchActive"
+              v-if="!!windowIsLarge && searchActive && enableSearch"
               ref="sidePanel"
               v-model="searchTerms"
               class="side-panel"
@@ -53,7 +53,7 @@
               :style="sidePanelStyleOverrides"
             />
             <TopicsPanelModal
-              v-else-if="!!windowIsLarge"
+              v-else-if="!!windowIsLarge && enableSearch"
               ref="sidePanel"
               class="side-panel"
               :topics="topics"
@@ -82,7 +82,7 @@
 
           <div class="card-grid">
             <!-- Filter buttons - shown when not sidebar not visible -->
-            <div v-if="!windowIsLarge" data-test="tab-buttons">
+            <div v-if="!windowIsLarge && enableSearch" data-test="tab-buttons">
               <KButton
                 v-if="topics.length"
                 icon="topic"
@@ -242,6 +242,7 @@
 
 <script>
 
+  import { mapGetters } from 'vuex';
   import { get, set } from '@vueuse/core';
   import isEqual from 'lodash/isEqual';
   import lodashSet from 'lodash/set';
@@ -279,6 +280,7 @@
   import TopicSubsection from './TopicSubsection';
   import TopicsPanelModal from './TopicsPanelModal';
   import commonLearnStrings from './../commonLearnStrings';
+
 
   function _handleRootTopic(topic, currentChannel) {
     const isRoot = !topic.parent;
@@ -530,6 +532,13 @@
       };
     },
     computed: {
+      ...mapGetters(['isLearner']),
+      enableSearch(){
+        /*TODO: Add facilityconfig and use that instead of hardcoded value*/
+        if(this.isLearner){
+          return false;
+        }
+      },
       topicKnowledgemap() {
         return lodashGet(this.$store.state.examViewer.knowledgemap, 'results', []).find(d => d.id === this.topic?.id )?.children || [];
       },
@@ -665,13 +674,21 @@
         return false;
       },
       sidePanelWidth() {
-        if (!this.windowIsLarge) {
+
+        if (this.enableSearch){
+            if (!this.windowIsLarge) {
+              return 0;
+            } else if (this.windowBreakpoint < 4) {
+              return 234;
+            } else {
+              return 346;
+            }
+          }
+        else{
           return 0;
-        } else if (this.windowBreakpoint < 4) {
-          return 234;
-        } else {
-          return 346;
         }
+
+        
       },
       gridStyle() {
         let style = {};
