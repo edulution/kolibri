@@ -45,7 +45,7 @@
           },
           {
             isHidden: !this.canAccessUnassignedContent,
-            title: this.coreString('libraryLabel'),
+            title: this.coreString('playlistsLabel'),
             link: this.$router.getRoute(PageNames.LIBRARY),
             icon: 'library',
             color: this.$themeTokens.textInverted,
