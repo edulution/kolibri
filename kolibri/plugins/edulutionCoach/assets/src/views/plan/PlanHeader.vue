@@ -74,11 +74,11 @@
             label: this.coreString('quizzesLabel'),
             to: this.classRoute(PageNames.EXAMS),
           },
-          {
+/*          {
             id: PlanTabs.ASSESSMENT,
             label: this.coreString('assessmentLabel'),
             to: this.classRoute(PageNames.ASSESSMENTS),
-          },
+          },*/
           {
             id: PlanTabs.GROUPS,
             label: this.coachString('groupsLabel'),

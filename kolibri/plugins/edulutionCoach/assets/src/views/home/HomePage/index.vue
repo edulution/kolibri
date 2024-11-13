@@ -20,9 +20,9 @@
       </KGridItem>
       <KGridItem :layout12="{ span: 6 }">
         <KGrid gutter="16">
-          <KGridItem>
+          <!-- <KGridItem>
             <AssessmentBlock />
-          </KGridItem>
+          </KGridItem> -->
           <KGridItem>
             <AttendanceBlock />
           </KGridItem>
@@ -45,7 +45,7 @@
   import LessonsBlock from './LessonsBlock';
   import QuizzesBlock from './QuizzesBlock';
   import AttendanceBlock from './AttendanceBlock';
-  import AssessmentBlock from './AssessmentBlock.vue';
+  /*import AssessmentBlock from './AssessmentBlock.vue';*/
 
   export default {
     name: 'HomePage',
@@ -56,7 +56,7 @@
     LessonsBlock,
     QuizzesBlock,
     AttendanceBlock,
-    AssessmentBlock
+    /*AssessmentBlock*/
 },
     mixins: [commonCoach],
   };
