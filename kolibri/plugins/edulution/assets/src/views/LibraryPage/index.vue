@@ -531,7 +531,7 @@
             return this.$tr('libraryOf', { device: this.deviceName });
           }
         } else {
-          return this.coreString('yourLibrary');
+          return this.coreString('yourPlaylists');
         }
       },
       channelsToDisplay() {
