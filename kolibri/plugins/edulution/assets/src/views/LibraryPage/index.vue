@@ -45,7 +45,7 @@
           data-test="nothing-in-lib-label"
           class="nothing-in-lib-label"
         >
-          {{ coreString('nothingInLibraryLearner') }}
+          {{ coreString('noPlaylistsLearner') }}
         </p>
         <ChannelCardGroupGrid
           v-if="!isLocalLibraryEmpty"
