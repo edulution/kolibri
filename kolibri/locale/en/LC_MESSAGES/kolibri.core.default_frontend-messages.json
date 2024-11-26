@@ -244,6 +244,7 @@
   "CommonCoreStrings.noUsersExistLabel": "No users exist",
   "CommonCoreStrings.notStartedLabel": "Not started",
   "CommonCoreStrings.nothingInLibraryLearner": "There is nothing in your library yet. Explore libraries around you and start adding materials to your own.",
+  "CommonCoreStrings.noPlaylistsLearner": "You do not have access to any playlists. Please notify your Coach.",
   "CommonCoreStrings.numbersOnly": "Enter numbers only",
   "CommonCoreStrings.numeracy": "Numeracy",
   "CommonCoreStrings.oldestResource": "Oldest",
