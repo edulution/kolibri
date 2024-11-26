@@ -11,7 +11,7 @@ module.exports = [
       entry: './assets/src/views/LearnSideNavEntry.js',
     },
   },
-  {
+/*  {
     bundle_id: 'my_downloads_app',
     webpack_config: {
       entry: './assets/src/my_downloads/app.js',
@@ -22,5 +22,5 @@ module.exports = [
     webpack_config: {
       entry: './assets/src/my_downloads/views/MyDownloadsSideNavEntry.js',
     },
-  },
+  },*/
 ];
