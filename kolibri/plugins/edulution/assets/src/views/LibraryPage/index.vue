@@ -53,7 +53,6 @@
           class="grid"
           :contents="filteredChannels"
           :deviceId="deviceId"
-          :progress="progress"
         />
         <!-- ResumableContentGrid mostly handles whether it renders or not internally !-->
         <!-- but we conditionalize it based on whether we are on another device's library page !-->
