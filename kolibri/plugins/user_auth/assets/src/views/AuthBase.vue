@@ -89,7 +89,6 @@
       </div>
       <div class="table-row">
         <div class="footer-cell table-cell" :style="{ backgroundColor: $themeTokens.surface }">
-          <LanguageSwitcherFooter />
           <div class="small-text">
             <span class="version-string">
               {{ versionMsg }}
@@ -155,7 +154,6 @@
   import loginComponents from 'kolibri.utils.loginComponents';
   import urls from 'kolibri.urls';
   import { ComponentMap } from '../constants';
-  // import LanguageSwitcherFooter from '../views/LanguageSwitcherFooter';
   import commonUserStrings from './commonUserStrings';
   import getUrlParameter from './getUrlParameter';
   import plugin_data from 'plugin_data';
