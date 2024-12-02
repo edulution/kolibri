@@ -9,7 +9,7 @@
       type="clear"
       textColor="white"
       class="app-bar"
-      :style="{ height: height + 'px' }"
+      :style="{ height: topBarHeight + 'px' }"
       :raised="false"
       :removeBrandDivider="true"
     >
@@ -162,11 +162,7 @@
       title: {
         type: String,
         required: true,
-      },
-      height: {
-        type: Number,
-        required: true,
-      },
+      }
     },
     data() {
       return {
