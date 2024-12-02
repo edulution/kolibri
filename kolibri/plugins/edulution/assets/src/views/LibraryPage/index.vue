@@ -329,6 +329,7 @@
         fetchMoreResumableContentNodes,
       } = useLearnerResources();
 
+
       const {
         windowBreakpoint,
         windowIsLarge,
@@ -650,11 +651,6 @@
         }
         document.documentElement.style.position = '';
       },
-    },
-    mounted(){
-      const {fetchContentNodeProgress} = useLearnerResources()
-        const params = { resume: true, max_results: 12, ordering: '-last_interacted' };
-        fetchContentNodeProgress(params)
     },
     created() {
       const welcomeDismissalKey = 'DEVICE_WELCOME_MODAL_DISMISSED';
