@@ -124,10 +124,10 @@
       },
       setProgressBarColor(){
         if(this.progress > 0.99){
-          return this.$themeTokens.mastered;
+          return this.$themeTokens.correct;
         }
         else{
-          return this.$themeTokens.progress;
+          return this.$themeTokens.mastered;
         }
 
       }

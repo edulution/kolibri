@@ -407,7 +407,7 @@
           actions.push({
             id: 'mark-complete',
             icon: 'star',
-            iconColor: this.$themeTokens.mastered,
+            iconColor: this.$themeTokens.correct,
             label: this.learnString('markResourceAsCompleteLabel'),
             event: 'markComplete',
             dataTest: 'markCompleteButton',

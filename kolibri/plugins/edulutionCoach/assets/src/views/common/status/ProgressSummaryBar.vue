@@ -23,7 +23,7 @@
       barStyleCompleted() {
         return {
           width: `${Math.ceil((100 * this.completed) / this.total)}%`,
-          backgroundColor: this.$themeTokens.mastered,
+          backgroundColor: this.$themeTokens.correct,
         };
       },
       barStyleStarted() {
@@ -31,7 +31,7 @@
         return {
           marginLeft: `${Math.ceil((100 * this.completed) / this.total)}%`,
           width: `${Math.ceil(100 * widthRatio)}%`,
-          backgroundColor: this.$themeTokens.progress,
+          backgroundColor: this.$themeTokens.mastered,
         };
       },
       helpLineStyle() {

@@ -73,10 +73,14 @@ export default {
     },
     setProgressBarColor(){
       if(this.progress > 0.99){
-        return this.$themeTokens.mastered;
+        /*Progress bar colored green when a ContentNode is completed*/
+        /*"Correct" color in KDS is green*/
+        return this.$themeTokens.correct;
       }
       else{
-        return this.$themeTokens.progress;
+        /*Progress bar is colored yellow when a ContentNode is still in progress*/
+        /*"Mastered" color in KDS is yellow*/
+        return this.$themeTokens.mastered;
       }
 
     }

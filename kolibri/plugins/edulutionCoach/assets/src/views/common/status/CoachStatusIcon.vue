@@ -31,10 +31,10 @@
       },
       color() {
         if (this.icon === ICONS.clock) {
-          return this.$themeTokens.progress;
+          return this.$themeTokens.mastered;
         }
         if (this.icon === ICONS.star) {
-          return this.$themeTokens.mastered;
+          return this.$themeTokens.correct;
         }
         if (this.icon === ICONS.help) {
           return this.$themeTokens.incorrect;
