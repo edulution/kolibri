@@ -1,5 +1,5 @@
 module.exports = [
-  {
+/*  {
     bundle_id: 'app',
     webpack_config: {
       entry: './assets/src/app.js',
@@ -22,5 +22,5 @@ module.exports = [
     webpack_config: {
       entry: './assets/src/my_downloads/views/MyDownloadsSideNavEntry.js',
     },
-  },
+  },*/
 ];
