@@ -24,8 +24,6 @@ router.register(
     r"contentnode_tree", ContentNodeTreeViewset, basename="contentnode_tree"
 )
 
-router.register(r'knowledgemap', KnowledgeMapViewset, base_name='knowledgemap')
-
 router.register(
     r"contentnode_search", ContentNodeSearchViewset, basename="contentnode_search"
 )
