@@ -17,6 +17,6 @@ const component = {
   section: NavComponentSections.ACCOUNT,
 };
 
-navComponents.register(component);
+/*navComponents.register(component);
 
-export default component;
+export default component;*/
