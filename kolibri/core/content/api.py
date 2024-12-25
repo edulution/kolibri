@@ -209,30 +209,17 @@ class RemoteViewSet(ReadOnlyValuesViewset, RemoteMixin):
 class ChannelMetadataFilter(FilterSet):
     available = BooleanFilter(method="filter_available", label="Available")
     has_exercise = BooleanFilter(method="filter_has_exercise", label="Has exercises")
-    has_assessment = BooleanFilter(method="filter_has_assessment", label="Has assessments")
+    # has_assessment = BooleanFilter(method="filter_has_assessment", label="Has assessments")
 
     class Meta:
         model = models.ChannelMetadata
-        fields = ("available", "has_exercise", "has_assessment")
+        fields = ("available", "has_exercise")
 
     def filter_has_exercise(self, queryset, name, value):
         queryset = queryset.annotate(
             has_exercise=Exists(
                 models.ContentNode.objects.filter(
                     kind=content_kinds.EXERCISE,
-                    available=True,
-                    channel_id=OuterRef("id"),
-                )
-            )
-        )
-
-        return queryset.filter(has_exercise=True)
-
-    def filter_has_assessment(self, queryset, name, value):
-        queryset = queryset.annotate(
-            has_exercise=Exists(
-                models.ContentNode.objects.filter(
-                    kind=content_kinds.ASSESSMENT,
                     available=True,
                     channel_id=OuterRef("id"),
                 )
@@ -1147,42 +1134,6 @@ class ContentNodeTreeViewset(BaseContentNodeTreeViewset, RemoteMixin):
             return self._hande_proxied_request(request)
         return super(ContentNodeTreeViewset, self).retrieve(request, pk=pk)
 
-class KnowledgeMapViewset(ReadOnlyModelViewSet):
-    def retrieve(self, request, pk=None):
-        def get_progress(node):
-            serializer = ContentNodeProgressViewsetForKnowledge.serializer_class(node)
-            serializer.context['request'] = request
-            return serializer.data['progress_fraction']
-
-        def get_progress_by_id(id):
-            nodes = ContentNode.objects.filter(id=id)
-            return 0.0 if len(nodes) == 0 else get_progress(nodes[0])
-
-        def filter_pending(prereqs):
-            return filter(lambda p: p['progress'] < 1.0, prereqs)
-
-        def info(nodes):
-            return map(lambda n: {'title': n.title,
-                                  'content_id': n.content_id,
-                                  'progress': get_progress(n),
-                                  'id': n.id}, nodes)
-
-        def get_children(parent_id):
-            children = ContentNode.objects.filter(parent=parent_id, available=True)
-
-            serialized = ContentNodeSlimSerializer(children, many=True).data
-
-            for c, s in zip(children, serialized):
-                s['progress_fraction'] = get_progress(c)
-                s['pendingPrerequisites'] = filter_pending(info(c.has_prerequisite.all()))
-            return serialized
-
-        children = get_children(pk)
-        for child in children:
-            grand_children = get_children(child['id'])
-            child['children'] = grand_children
-        return Response({'results': children, 'progress': get_progress_by_id(pk)})
-
 
 # return the result of and-ing a list of queries
 def intersection(queries):
@@ -1688,18 +1639,6 @@ def mean(data):
 
     return mean
 
-class ContentNodeProgressFilter(IdFilter):
-    class Meta:
-        model = models.ContentNode
-        fields = ['ids', ]
-
-class ContentNodeProgressViewsetForKnowledge(viewsets.ReadOnlyModelViewSet):
-    serializer_class = serializers.ContentNodeProgressSerializer
-    filter_backends = (DjangoFilterBackend,)
-    filter_class = ContentNodeProgressFilter
-
-    def get_queryset(self):
-        return models.ContentNode.objects.all()
 
 class ContentNodeProgressViewset(
     TreeQueryMixin, viewsets.GenericViewSet, ListModelMixin
