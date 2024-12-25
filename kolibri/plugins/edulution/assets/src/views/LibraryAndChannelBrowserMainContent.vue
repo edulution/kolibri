@@ -93,7 +93,7 @@
     computed: {
       componentType() {
         if (this.windowIsSmall) {
-          return 'ResourceCard';
+          return 'HybridLearningContentCard';
         }
         if (this.currentCardViewStyle === 'card') {
           return 'HybridLearningContentCard';
