@@ -17,6 +17,6 @@ const sideNavConfig = {
   section: NavComponentSections.ACCOUNT,
 };
 
-navComponents.register(sideNavConfig);
+/*navComponents.register(sideNavConfig);
 
-export default sideNavConfig;
+export default sideNavConfig;*/
