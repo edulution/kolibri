@@ -1,7 +1,7 @@
 import every from 'lodash/every';
 import uniq from 'lodash/uniq';
 import { assessmentMetaDataState } from 'kolibri.coreVue.vuex.mappers';
-import { ExamResource, AssessmentDetailsResource, ContentNodeResource } from 'kolibri.resources';
+import { ExamResource, ContentNodeResource } from 'kolibri.resources';
 
 /*
  * Converts from v0 exam structures to v1
@@ -84,8 +84,6 @@ function annotateQuestionsWithItem(questions) {
 
 export function convertExamQuestionSources(exam, extraArgs = {}) {
   const { data_model_version } = exam;
-  const questionSources = extraArgs.type === 'ASSESSMENT' ? exam.current_question_sources : exam.question_sources
-
   if (data_model_version === 0) {
     // TODO contentNodes are only needed for V0 -> V2 conversion, but a request to the
     // ContentNode API is made regardless of the version being converted
@@ -103,13 +101,13 @@ export function convertExamQuestionSources(exam, extraArgs = {}) {
       questionIds[node.id] = assessmentMetaDataState(node).assessmentIds;
     });
     return annotateQuestionsWithItem(
-      convertExamQuestionSourcesV0V2(questionSources, exam.seed, questionIds)
+      convertExamQuestionSourcesV0V2(exam.question_sources, exam.seed, questionIds)
     );
   }
   if (data_model_version === 1) {
-    return annotateQuestionsWithItem(convertExamQuestionSourcesV1V2(questionSources));
+    return annotateQuestionsWithItem(convertExamQuestionSourcesV1V2(exam.question_sources));
   }
-  return annotateQuestionsWithItem(questionSources);
+  return annotateQuestionsWithItem(exam.question_sources);
 }
 
 export function fetchNodeDataAndConvertExam(exam) {
@@ -152,59 +150,6 @@ export function annotateQuestionSourcesWithCounter(questionSources) {
 export function getExamReport(examId, tryIndex = 0, questionNumber = 0, interactionIndex = 0) {
   return new Promise((resolve, reject) => {
     const examPromise = ExamResource.fetchModel({ id: examId });
-
-    examPromise.then(
-      exam => {
-        const questionSources = exam.question_sources;
-
-        let contentPromise;
-
-        if (questionSources.length) {
-          contentPromise = ContentNodeResource.fetchCollection({
-            getParams: {
-              ids: uniq(questionSources.map(item => item.exercise_id)),
-              no_available_filtering: true,
-            },
-          });
-        } else {
-          contentPromise = Promise.resolve([]);
-        }
-
-        contentPromise.then(
-          contentNodes => {
-            const questions = convertExamQuestionSources(exam, { contentNodes });
-
-            // When all the Exercises are not available on the server
-            if (questions.length === 0) {
-              return resolve({ exam });
-            }
-
-            const exercise = contentNodes.find(
-              node => node.id === questions[questionNumber].exercise_id
-            );
-
-            const payload = {
-              exerciseContentNodes: [...contentNodes],
-              exam,
-              questions,
-              tryIndex: Number(tryIndex),
-              questionNumber: Number(questionNumber),
-              exercise,
-              interactionIndex: Number(interactionIndex),
-            };
-            resolve(payload);
-          },
-          error => reject(error)
-        );
-      },
-      error => reject(error)
-    );
-  });
-}
-
-export function getAssessmentReport(examId, tryIndex = 0, questionNumber = 0, interactionIndex = 0) {
-  return new Promise((resolve, reject) => {
-    const examPromise = AssessmentDetailsResource.fetchModel({ id: examId });
 
     examPromise.then(
       exam => {
