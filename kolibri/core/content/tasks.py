@@ -9,11 +9,14 @@ from six.moves.urllib.parse import urljoin
 from kolibri.core.auth.models import FacilityDataset
 from kolibri.core.content.models import ChannelMetadata
 from kolibri.core.content.models import ContentRequest
+from kolibri.core.content.models import ContentRequestReason
 from kolibri.core.content.models import ContentRequestStatus
 from kolibri.core.content.models import ContentRequestType
 from kolibri.core.content.utils.channel_import import import_channel_from_data
 from kolibri.core.content.utils.channels import get_mounted_drive_by_id
 from kolibri.core.content.utils.channels import read_channel_metadata_from_db_file
+from kolibri.core.content.utils.content_request import incomplete_removals_queryset
+from kolibri.core.content.utils.content_request import process_content_removal_requests
 from kolibri.core.content.utils.content_request import process_content_requests
 from kolibri.core.content.utils.content_request import synchronize_content_requests
 from kolibri.core.content.utils.paths import get_channel_lookup_url
@@ -97,6 +100,7 @@ class ChannelResourcesValidator(ChannelValidator):
 
 class ChannelResourcesImportValidator(ChannelResourcesValidator):
     update = serializers.BooleanField(default=False)
+    renderable_only = serializers.BooleanField(default=True)
     fail_on_error = serializers.BooleanField(default=False)
     new_version = serializers.IntegerField(required=False)
     all_thumbnails = serializers.BooleanField(default=False)
@@ -106,6 +110,7 @@ class ChannelResourcesImportValidator(ChannelResourcesValidator):
         job_data["kwargs"].update(
             {
                 "update": data.get("update"),
+                "renderable_only": data.get("renderable_only"),
                 "fail_on_error": data.get("fail_on_error"),
                 "all_thumbnails": data.get("all_thumbnails"),
             }
@@ -155,6 +160,7 @@ def diskcontentimport(
     update=False,
     node_ids=None,
     exclude_node_ids=None,
+    renderable_only=True,
     fail_on_error=False,
     all_thumbnails=False,
 ):
@@ -168,6 +174,7 @@ def diskcontentimport(
         drive_id=drive_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
+        renderable_only=renderable_only,
         fail_on_error=fail_on_error,
         all_thumbnails=all_thumbnails,
     )
@@ -244,6 +251,7 @@ def remotecontentimport(
     node_ids=None,
     exclude_node_ids=None,
     update=False,
+    renderable_only=True,
     fail_on_error=False,
     all_thumbnails=False,
 ):
@@ -256,6 +264,7 @@ def remotecontentimport(
         peer_id=peer_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
+        renderable_only=renderable_only,
         fail_on_error=fail_on_error,
         all_thumbnails=all_thumbnails,
     )
@@ -395,6 +404,21 @@ def automatic_resource_import():
 
 
 @register_task(
+    queue=QUEUE,
+    long_running=True,
+    status_fn=get_status,
+)
+def automatic_user_imported_resource_cleanup():
+    """
+    Processes content removal requests
+    """
+    incomplete_user_removals = incomplete_removals_queryset().filter(
+        reason=ContentRequestReason.UserInitiated
+    )
+    process_content_removal_requests(incomplete_user_removals)
+
+
+@register_task(
     long_running=True,
     status_fn=get_status,
 )
@@ -507,6 +531,7 @@ def remoteimport(
     node_ids=None,
     exclude_node_ids=None,
     update=False,
+    renderable_only=True,
     fail_on_error=False,
     all_thumbnails=False,
 ):
@@ -531,6 +556,7 @@ def remoteimport(
         peer_id=peer_id,
         node_ids=node_ids,
         exclude_node_ids=exclude_node_ids,
+        renderable_only=renderable_only,
         fail_on_error=fail_on_error,
         all_thumbnails=all_thumbnails,
     )
@@ -552,6 +578,7 @@ def diskimport(
     update=False,
     node_ids=None,
     exclude_node_ids=None,
+    renderable_only=True,
     fail_on_error=False,
     all_thumbnails=False,
 ):
@@ -578,6 +605,7 @@ def diskimport(
         path=drive.datafolder,
         drive_id=drive_id,
         node_ids=node_ids,
+        renderable_only=renderable_only,
         exclude_node_ids=exclude_node_ids,
         fail_on_error=fail_on_error,
         all_thumbnails=all_thumbnails,
