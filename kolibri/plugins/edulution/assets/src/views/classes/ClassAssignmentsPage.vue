@@ -3,15 +3,15 @@
   <LearnAppBarPage
     :appBarTitle="learnString('learnLabel')"
   >
-    <div id="main" role="main">
+    <KCircularLoader v-if="loading" />
+    <div v-else id="main" role="main">
       <KBreadcrumbs :items="breadcrumbs" :ariaLabel="learnString('classesAndAssignmentsLabel')" />
       <h1 class="classroom-name">
         <KLabeledIcon icon="classes" :label="className" />
       </h1>
 
-      <AssignedLessonsCards v-if="canViewLessons" :lessons="activeLessons" />
+      <AssignedLessonsCards :lessons="activeLessons" />
       <AssignedQuizzesCards :quizzes="activeQuizzes" :style="{ marginTop: '44px' }" />
-      <AssessmentCards :assessments="assessments" :style="{ marginTop: '44px' }" />
     </div>
   </LearnAppBarPage>
 
@@ -24,17 +24,14 @@
   import { get } from '@vueuse/core';
   import KBreadcrumbs from 'kolibri-design-system/lib/KBreadcrumbs';
   import commonCoreStrings from 'kolibri.coreVue.mixins.commonCoreStrings';
-  import useUser from 'kolibri.coreVue.composables.useUser';
-  import { mapGetters } from 'vuex';  
 
   import { PageNames, ClassesPageNames } from '../../constants';
 
-  import useLearnerResources, { getLearnerAssessments } from '../../composables/useLearnerResources';
+  import useLearnerResources from '../../composables/useLearnerResources';
   import commonLearnStrings from './../commonLearnStrings';
   import LearnAppBarPage from './../LearnAppBarPage';
   import AssignedQuizzesCards from './AssignedQuizzesCards';
   import AssignedLessonsCards from './AssignedLessonsCards';
-  import AssessmentCards from './AssessmentCards';
 
   export default {
     name: 'ClassAssignmentsPage',
@@ -48,7 +45,6 @@
       AssignedLessonsCards,
       KBreadcrumbs,
       LearnAppBarPage,
-      AssessmentCards
     },
     mixins: [commonCoreStrings, commonLearnStrings],
     setup(_, { root }) {
@@ -57,20 +53,18 @@
         getClass,
         getClassActiveLessons,
         getClassActiveQuizzes,
-        getClassActiveAssessments,
       } = useLearnerResources();
 
-      const { currentUserId } = useUser();
       const classId = root.$router.currentRoute.params.classId;
       const classroom = computed(() => getClass(classId));
       const className = computed(() => (get(classroom) ? get(classroom).name : ''));
       const activeLessons = computed(() => getClassActiveLessons(get(classId)));
       const activeQuizzes = computed(() => getClassActiveQuizzes(get(classId)));
-      const activeAssessments = computed(() => getClassActiveAssessments(get(classId)));
+
+      let pollTimeoutId;
 
       function schedulePoll() {
-        const timeoutId = setTimeout(pollForUpdates, 30000);
-        return timeoutId;
+        pollTimeoutId = setTimeout(pollForUpdates, 30000);
       }
 
       function pollForUpdates() {
@@ -79,10 +73,8 @@
         });
       }
 
-      let pollTimeoutId;
-
       onBeforeMount(() => {
-        pollTimeoutId = schedulePoll();
+        schedulePoll();
       });
 
       onBeforeUnmount(() => {
@@ -93,26 +85,15 @@
         className,
         activeLessons,
         activeQuizzes,
-        activeAssessments,
-        currentUserId: get(currentUserId),
-        classId: get(classId),
       };
     },
-    data() {
-      return {
-        assessments: [],
-      }
+    props: {
+      loading: {
+        type: Boolean,
+        default: false,
+      },
     },
     computed: {
-      ...mapGetters(['facilityConfig', 'isLearner', 'isCoach']),
-      canViewLessons() {
-        if(this.isLearner || this.isCoach){
-          /*TODO: use facilityconfig instead of hardcoded value*/
-          /*return this.facilityConfig.learner_can_view_lessons;*/
-          return false;
-        }
-      },
-
       breadcrumbs() {
         return [
           {
@@ -128,11 +109,6 @@
           },
         ];
       },
-    },
-    created() {
-      getLearnerAssessments(this.currentUserId, this.classId).then(res => {
-        this.assessments = res;
-      });
     },
     $trs: {
       documentTitle: {
