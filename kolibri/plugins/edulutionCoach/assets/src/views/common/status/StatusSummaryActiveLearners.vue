@@ -28,7 +28,7 @@
     <ActiveLearnerCount
       v-else-if="total === notActive && !showAll"
       class="item"
-      :style="{ color: $coreGrey300 }"
+      :style="{ color: $themePalette.grey.v_100 }"
       :verb="VERBS.notActive"
       :icon="ICONS.nothing"
       :total="total"
@@ -52,7 +52,7 @@
       <ActiveLearnerCount
         v-if="showItem(!verbose)"
         class="item"
-        :style="{ color: $coreGrey300 }"
+        :style="{ color: $themePalette.grey.v_100 }"
         :verb="VERBS.notActive"
         :icon="ICONS.nothing"
         :total="total"
